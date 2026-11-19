@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version to publish. Empty derives <latest major.minor>.<UTC YYYYMMDD><NN> (NN: that day's revision, 01 first); pass one to move major or minor."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve Release
+        id: binary
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          LATEST=$(git ls-remote --tags --refs origin | sed 's|.*refs/tags/||' |
+            grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1 || true)
+          if [ -z "$VERSION" ]; then
+            if [ -z "$LATEST" ]; then
+              echo "::error::no package tag to derive major.minor from; pass version"
+              exit 1
+            fi
+            TODAY=$(date -u +%Y%m%d)
+            PATCH=${LATEST##*.}
+            REVISION=1
+            if [ "${PATCH:0:8}" = "$TODAY" ]; then
+              REVISION=$((10#${PATCH:8} + 1))
+            fi
+            VERSION="${LATEST%.*}.$TODAY$(printf '%02d' "$REVISION")"
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must be semantic, for example 0.1.2026111901: $VERSION"
+            exit 1
+          fi
+          if [ -n "$LATEST" ]; then
+            NEWEST=$(printf '%s\n%s\n' "$LATEST" "$VERSION" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+            if [ "$LATEST" = "$VERSION" ] || [ "$NEWEST" != "$VERSION" ]; then
+              echo "::error::version must be newer than $LATEST: $VERSION"
+              exit 1
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          TAG="binary.$(git ls-files -s ish.ref build.sh Kernel | git hash-object --stdin | cut -c1-12)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Binary
+        if: steps.binary.outputs.exists != 'true'
+        run: |
+          brew install meson llvm lld
+          ./build.sh
+          ditto -c -k --keepParent Frameworks/CSwiptermKit.xcframework build/CSwiptermKit.xcframework.zip
+          gh release create "$TAG" build/CSwiptermKit.xcframework.zip \
+            --title "$TAG" --notes "ish-arm64 $(cat ish.ref)" --prerelease
+        env:
+          TAG: ${{ steps.binary.outputs.tag }}
+
+      - name: Download Binary
+        if: steps.binary.outputs.exists == 'true'
+        run: |
+          gh release download "$TAG" --pattern CSwiptermKit.xcframework.zip --dir build
+          ditto -x -k build/CSwiptermKit.xcframework.zip Frameworks
+        env:
+          TAG: ${{ steps.binary.outputs.tag }}
+
+      - name: Test Package
+        run: |
+          cp Package.local.swift Package.swift
+          xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS'
+          xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS Simulator'
+
+      - name: Generate Manifest
+        run: |
+          CHECKSUM="$(swift package compute-checksum build/CSwiptermKit.xcframework.zip)"
+          URL="https://github.com/${{ github.repository }}/releases/download/$TAG/CSwiptermKit.xcframework.zip"
+          perl -pe "s|path: \"Frameworks/CSwiptermKit.xcframework\"|url: \"$URL\",\n            checksum: \"$CHECKSUM\"|" \
+            Package.local.swift > Package.swift
+          git diff Package.swift
+        env:
+          TAG: ${{ steps.binary.outputs.tag }}
+
+      - name: Publish
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Package.swift
+          git commit -m "release: $VERSION" || true
+          git push
+          gh release create "$VERSION" --target "$(git rev-parse HEAD)" --title "$VERSION" \
+            --notes "ish-arm64 $(cat ish.ref)"
+        env:
+          VERSION: ${{ steps.binary.outputs.version }}

@@ -1,0 +1,4 @@
+module CSwiptermKit {
+    header "swipterm.h"
+    export *
+}
