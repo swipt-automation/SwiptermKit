@@ -2,101 +2,153 @@ import CSwiptermKit
 import Foundation
 
 public final class LinuxTerminal: @unchecked Sendable {
-    public enum Termination: Sendable, Equatable {
-        case exited(Int32)
-        case signaled(Int32)
+    public struct Size: Hashable, Sendable {
+        public var columns: UInt16
+        public var rows: UInt16
 
-        init(status: Int32) {
-            let signal = status & 0x7F
-            self = signal != 0 ? .signaled(signal) : .exited((status >> 8) & 0xFF)
+        public init(columns: UInt16, rows: UInt16) {
+            self.columns = columns
+            self.rows = rows
         }
     }
 
-    private final class Handlers {
-        let output: @Sendable (Data) -> Void
-        let termination: @Sendable (Termination) -> Void
+    private final class Request: @unchecked Sendable {
+        let maxLength: Int
+        var continuation: CheckedContinuation<Data?, Never>?
+        var cancelled = false
 
-        init(output: @escaping @Sendable (Data) -> Void, termination: @escaping @Sendable (Termination) -> Void) {
-            self.output = output
-            self.termination = termination
+        init(maxLength: Int) {
+            self.maxLength = maxLength
         }
     }
 
-    private let handle: OpaquePointer
-    private let handlers: Unmanaged<Handlers>
+    let handle: OpaquePointer
+    private let notifyDescriptor: Int32
     private let queue = DispatchQueue(label: "SwiptermKit.LinuxTerminal")
-    private let lock = NSLock()
-    private var closed = false
+    private let inputQueue = DispatchQueue(label: "SwiptermKit.LinuxTerminal.Input")
+    private let events: DispatchEventSource
+    private var requests: [Request] = []
+    private var ended = false
 
-    public init(
-        arguments: [String],
-        environment: [String],
-        columns: UInt16,
-        rows: UInt16,
-        output: @escaping @Sendable (Data) -> Void,
-        termination: @escaping @Sendable (Termination) -> Void
-    ) throws {
-        let handlers = Unmanaged.passRetained(Handlers(output: output, termination: termination))
+    init(size: Size) throws(LinuxError) {
         var error: Int32 = 0
-        let handle = withCStringArray(arguments) { argv in
-            withCStringArray(environment) { envp in
-                swipterm_terminal_open(argv, envp, columns, rows, swipterm_terminal_handlers(
-                    context: handlers.toOpaque(),
-                    output: { context, data, length in
-                        Unmanaged<Handlers>.fromOpaque(context!).takeUnretainedValue()
-                            .output(Data(bytes: data!, count: length))
-                    },
-                    exit: { context, status in
-                        Unmanaged<Handlers>.fromOpaque(context!).takeUnretainedValue()
-                            .termination(Termination(status: status))
-                    }
-                ), &error)
-            }
-        }
-        guard let handle else {
-            handlers.release()
+        guard let handle = swipterm_terminal_create(size.columns, size.rows, &error) else {
             throw LinuxError(code: error)
         }
         self.handle = handle
-        self.handlers = handlers
+        notifyDescriptor = swipterm_terminal_notify_fd(handle)
+        let source = DispatchSource.makeReadSource(fileDescriptor: notifyDescriptor, queue: queue)
+        events = DispatchEventSource(source)
+        source.setEventHandler { [weak self] in
+            self?.serve()
+        }
+        let releasedHandle = UnsafeSendable(value: handle)
+        source.setCancelHandler {
+            swipterm_terminal_release(releasedHandle.value)
+        }
     }
 
-    private var isOpen: Bool {
-        lock.withLock { !closed }
+    deinit {
+        swipterm_terminal_close(handle)
+        events.cancel()
     }
 
-    public func sendInput(_ data: Data) {
-        queue.async { [self] in
-            guard isOpen else { return }
-            data.withUnsafeBytes { buffer in
-                swipterm_terminal_send_input(handle, buffer.baseAddress, buffer.count)
+    public func read(maxLength: Int = 65536) async -> Data? {
+        precondition(maxLength > 0)
+        let request = Request(maxLength: maxLength)
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                queue.async {
+                    if request.cancelled {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    request.continuation = continuation
+                    self.requests.append(request)
+                    self.serve()
+                }
+            }
+        } onCancel: {
+            queue.async {
+                request.cancelled = true
+                if let continuation = request.continuation {
+                    request.continuation = nil
+                    self.requests.removeAll { $0 === request }
+                    continuation.resume(returning: nil)
+                }
             }
         }
     }
 
-    public func resize(columns: UInt16, rows: UInt16) {
-        queue.async { [self] in
-            guard isOpen else { return }
-            swipterm_terminal_resize(handle, columns, rows)
+    public var output: Output {
+        Output(terminal: self)
+    }
+
+    public func write(_ data: Data) async {
+        await withCheckedContinuation { continuation in
+            inputQueue.async {
+                data.withUnsafeBytes { buffer in
+                    _ = swipterm_terminal_write(self.handle, buffer.baseAddress, buffer.count)
+                }
+                continuation.resume()
+            }
         }
     }
 
-    public func setOutputSuspended(_ suspended: Bool) {
-        lock.withLock {
-            guard !closed else { return }
-            swipterm_terminal_set_output_suspended(handle, suspended)
-        }
+    public func resize(_ size: Size) {
+        swipterm_terminal_resize(handle, size.columns, size.rows)
     }
 
     public func close() {
-        let wasClosed = lock.withLock {
-            defer { closed = true }
-            return closed
+        swipterm_terminal_close(handle)
+    }
+
+    private func complete(_ data: Data?) {
+        let request = requests.removeFirst()
+        request.continuation?.resume(returning: data)
+        request.continuation = nil
+    }
+
+    private func serve() {
+        var byte: UInt8 = 0
+        while Darwin.read(notifyDescriptor, &byte, 1) > 0 {}
+        while let request = requests.first {
+            if ended {
+                complete(nil)
+                continue
+            }
+            var data = Data(count: request.maxLength)
+            let count = data.withUnsafeMutableBytes { swipterm_terminal_read(handle, $0.baseAddress, $0.count) }
+            if count > 0 {
+                data.count = count
+                complete(data)
+            } else if count == 0 {
+                ended = true
+            } else {
+                events.activate()
+                return
+            }
         }
-        guard !wasClosed else { return }
-        queue.async { [self] in
-            swipterm_terminal_close(handle)
-            handlers.release()
+        events.deactivate()
+    }
+}
+
+extension LinuxTerminal {
+    public struct Output: AsyncSequence, Sendable {
+        public typealias Element = Data
+
+        let terminal: LinuxTerminal
+
+        public struct AsyncIterator: AsyncIteratorProtocol {
+            let terminal: LinuxTerminal
+
+            public mutating func next() async -> Data? {
+                await terminal.read()
+            }
+        }
+
+        public func makeAsyncIterator() -> AsyncIterator {
+            AsyncIterator(terminal: terminal)
         }
     }
 }

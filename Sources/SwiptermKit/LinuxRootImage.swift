@@ -1,0 +1,100 @@
+import CSwiptermKit
+import Foundation
+
+public struct LinuxRootImageError: LocalizedError, Sendable {
+    public let message: String
+
+    public var errorDescription: String? {
+        message
+    }
+}
+
+public struct LinuxRootImage: Sendable {
+    private enum Source: Sendable {
+        case file(URL)
+        case data(Data)
+    }
+
+    private let source: Source
+
+    public static func archive(at url: URL) -> LinuxRootImage {
+        LinuxRootImage(source: .file(url))
+    }
+
+    public static func archive(data: Data) -> LinuxRootImage {
+        LinuxRootImage(source: .data(data))
+    }
+
+    public func install(to root: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws {
+        let parent = root.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        let temporary = parent.appending(path: ".\(root.lastPathComponent).\(UUID().uuidString)", directoryHint: .isDirectory)
+        let source = source
+        do {
+            try await Self.run(progress) { context, report, message in
+                temporary.withUnsafeFileSystemRepresentation { rootPath in
+                    switch source {
+                    case .file(let url):
+                        url.withUnsafeFileSystemRepresentation { archivePath in
+                            swipterm_image_import_file(archivePath, rootPath, context, report, message)
+                        }
+                    case .data(let data):
+                        data.withUnsafeBytes { buffer in
+                            swipterm_image_import_memory(buffer.baseAddress, buffer.count, rootPath, context, report, message)
+                        }
+                    }
+                }
+            }
+            try FileManager.default.moveItem(at: temporary, to: root)
+        } catch {
+            try? FileManager.default.removeItem(at: temporary)
+            throw error
+        }
+    }
+
+    public static func export(from root: URL, to archive: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws {
+        try await run(progress) { context, report, message in
+            root.withUnsafeFileSystemRepresentation { rootPath in
+                archive.withUnsafeFileSystemRepresentation { archivePath in
+                    swipterm_image_export(rootPath, archivePath, context, report, message)
+                }
+            }
+        }
+    }
+
+    private final class ProgressReporter {
+        let report: @Sendable (Double) -> Void
+        var reported = -1
+
+        init(_ report: @escaping @Sendable (Double) -> Void) {
+            self.report = report
+        }
+    }
+
+    private static func run(
+        _ progress: (@Sendable (Double) -> Void)?,
+        _ body: @escaping @Sendable (
+            UnsafeMutableRawPointer?,
+            swipterm_progress_handler?,
+            UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>
+        ) -> Bool
+    ) async throws {
+        try await blocking {
+            let reporter = progress.map(ProgressReporter.init)
+            var message: UnsafeMutablePointer<CChar>?
+            let succeeded = withExtendedLifetime(reporter) {
+                body(reporter.map { Unmanaged.passUnretained($0).toOpaque() }, reporter == nil ? nil : { context, fraction in
+                    let reporter = Unmanaged<ProgressReporter>.fromOpaque(context!).takeUnretainedValue()
+                    let percent = Int(fraction * 100)
+                    guard percent != reporter.reported else { return }
+                    reporter.reported = percent
+                    reporter.report(fraction)
+                }, &message)
+            }
+            guard succeeded else {
+                defer { free(message) }
+                throw LinuxRootImageError(message: message.map { String(cString: $0) } ?? "")
+            }
+        }
+    }
+}

@@ -7,12 +7,16 @@ let package = Package(
     platforms: [.iOS(.v16)],
     products: [
         .library(name: "SwiptermKit", targets: ["SwiptermKit"]),
+        .library(name: "SwiptermAlpineRootfs", targets: ["SwiptermAlpineRootfs"]),
     ],
     targets: [
         .binaryTarget(
             name: "CSwiptermKit",
-            url: "https://github.com/swipt-automation/libswipterm-spm/releases/download/binary.0f00958b0443/CSwiptermKit.xcframework.zip",
-            checksum: "e695accba0a0f4b44ed0ddafa988ffd44cf212d63f7b4ff37f84399fad000067"
+            path: "Frameworks/CSwiptermKit.xcframework"
+        ),
+        .binaryTarget(
+            name: "CSwiptermAlpineRootfs",
+            path: "Frameworks/CSwiptermAlpineRootfs.xcframework"
         ),
         .target(
             name: "SwiptermKit",
@@ -22,6 +26,18 @@ let package = Package(
                 .linkedLibrary("resolv"),
                 .linkedLibrary("sqlite3"),
             ]
+        ),
+        .target(
+            name: "SwiptermAlpineRootfs",
+            dependencies: ["SwiptermKit", "CSwiptermAlpineRootfs"]
+        ),
+        .testTarget(
+            name: "SwiptermKitTests",
+            dependencies: ["SwiptermKit", "SwiptermAlpineRootfs"]
+        ),
+        .testTarget(
+            name: "SwiptermKitProcessModeTests",
+            dependencies: ["SwiptermKit", "SwiptermAlpineRootfs"]
         ),
     ]
 )

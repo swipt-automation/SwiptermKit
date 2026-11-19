@@ -1,0 +1,13 @@
+diff --git a/fs/mount.c b/fs/mount.c
+index 2e4b751..1afb343 100644
+--- a/fs/mount.c
++++ b/fs/mount.c
+@@ -208,6 +208,8 @@ dword_t sys_mount(addr_t source_addr, addr_t point_addr, addr_t type_addr, dword
+     }
+     if (fs == NULL)
+         return _EINVAL;
++    if (fs == &realfs)
++        return _EPERM;
+ 
+     struct statbuf stat;
+     int err = generic_statat(AT_PWD, point_raw, &stat, true);

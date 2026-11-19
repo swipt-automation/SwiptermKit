@@ -1,0 +1,91 @@
+diff --git a/tools/fakefs.c b/tools/fakefs.c
+index 3e91ec0..e0a0c39 100644
+--- a/tools/fakefs.c
++++ b/tools/fakefs.c
+@@ -77,7 +77,7 @@ static const char *schema = Q(
+     pragma user_version=3;
+ );
+ 
+-bool fakefs_import(const char *archive_path, const char *fs, struct fakefsify_error *err_out, struct progress p) {
++static bool import_archive(struct archive *archive, size_t archive_bytes, const char *fs, struct fakefsify_error *err_out, struct progress p) {
+     int err = mkdir(fs, 0777);
+     if (err < 0)
+         POSIX_ERR();
+@@ -99,20 +99,6 @@ bool fakefs_import(const char *archive_path, const char *fs, struct fakefsify_er
+     EXEC("begin");
+     EXEC(schema);
+ 
+-    // open the archive
+-    struct archive *archive = archive_read_new();
+-    if (archive == NULL)
+-        ARCHIVE_ERR(archive);
+-    archive_read_support_filter_gzip(archive);
+-    archive_read_support_format_tar(archive);
+-    if (archive_read_open_filename(archive, archive_path, 65536) != ARCHIVE_OK)
+-        ARCHIVE_ERR(archive);
+-
+-    struct stat real_stat;
+-    if (stat(archive_path, &real_stat) < 0)
+-        POSIX_ERR();
+-    size_t archive_bytes = real_stat.st_size;
+-
+     sqlite3_stmt *insert_stat = PREPARE("insert into stats (stat) values (?)");
+     sqlite3_stmt *insert_path = PREPARE("insert or replace into paths values (?, ?)");
+     sqlite3_stmt *insert_hardlink = PREPARE("insert or replace into paths values (?, (select inode from paths where path = ? limit 1))");
+@@ -263,6 +249,36 @@ bool fakefs_import(const char *archive_path, const char *fs, struct fakefsify_er
+     return true;
+ }
+ 
++static struct archive *archive_read_tar_gz(void) {
++    struct archive *archive = archive_read_new();
++    if (archive != NULL) {
++        archive_read_support_filter_gzip(archive);
++        archive_read_support_format_tar(archive);
++    }
++    return archive;
++}
++
++bool fakefs_import(const char *archive_path, const char *fs, struct fakefsify_error *err_out, struct progress p) {
++    struct stat real_stat;
++    if (stat(archive_path, &real_stat) < 0)
++        POSIX_ERR();
++    struct archive *archive = archive_read_tar_gz();
++    if (archive == NULL)
++        ARCHIVE_ERR(archive);
++    if (archive_read_open_filename(archive, archive_path, 65536) != ARCHIVE_OK)
++        ARCHIVE_ERR(archive);
++    return import_archive(archive, real_stat.st_size, fs, err_out, p);
++}
++
++bool fakefs_import_memory(const void *data, size_t size, const char *fs, struct fakefsify_error *err_out, struct progress p) {
++    struct archive *archive = archive_read_tar_gz();
++    if (archive == NULL)
++        ARCHIVE_ERR(archive);
++    if (archive_read_open_memory(archive, data, size) != ARCHIVE_OK)
++        ARCHIVE_ERR(archive);
++    return import_archive(archive, size, fs, err_out, p);
++}
++
+ bool fakefs_export(const char *fs, const char *archive_path, struct fakefsify_error *err_out, struct progress p) {
+     // open the archive
+     struct archive *archive = archive_write_new();
+diff --git a/tools/fakefs.h b/tools/fakefs.h
+index a273255..c24abf6 100644
+--- a/tools/fakefs.h
++++ b/tools/fakefs.h
+@@ -1,6 +1,7 @@
+ #ifndef FS_FAKEFSIFY_H
+ #define FS_FAKEFSIFY_H
+ #include <stdbool.h>
++#include <stddef.h>
+ 
+ struct fakefsify_error {
+     int line;
+@@ -20,6 +21,7 @@ struct progress {
+ };
+ 
+ bool fakefs_import(const char *archive_path, const char *fs, struct fakefsify_error *err_out, struct progress progress);
++bool fakefs_import_memory(const void *data, size_t size, const char *fs, struct fakefsify_error *err_out, struct progress progress);
+ bool fakefs_export(const char *fs, const char *archive_path, struct fakefsify_error *err_out, struct progress progress);
+ 
+ #endif

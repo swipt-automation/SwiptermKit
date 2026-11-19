@@ -1,0 +1,111 @@
+diff --git a/kernel/calls.h b/kernel/calls.h
+index e2795f5..3b09b5e 100644
+--- a/kernel/calls.h
++++ b/kernel/calls.h
+@@ -35,6 +35,13 @@ dword_t sys_fork(void);
+ dword_t sys_vfork(void);
+ dword_t sys_execve(addr_t file, addr_t argv, addr_t envp);
+ int do_execve(const char *file, size_t argc, const char *argv, const char *envp);
++#define ARGV_MAX 32 * PAGE_SIZE
++// Applies the policies of execve(2) to an exec requested by the host. Takes ownership of
++// argv and envp, which are malloc'ed buffers of ARGV_MAX bytes.
++int execve_packed(const char *file, size_t argc, char *argv, char *envp);
++// Called by execve(2) with the arguments as given. Returns 0 to let execve run the file, or a
++// negative errno to fail the exec; when it runs the exec itself, it does not return.
++extern int (*exec_hook)(const char *file, size_t argc, const char *argv, const char *envp);
+ dword_t sys_exit(dword_t status);
+ noreturn void do_exit(int status);
+ noreturn void do_exit_group(int status);
+diff --git a/kernel/exec.c b/kernel/exec.c
+index 11eb35f..781aa1f 100644
+--- a/kernel/exec.c
++++ b/kernel/exec.c
+@@ -21,8 +21,6 @@
+ #include "kernel/native_offload.h"
+ #include "tools/ptraceomatic-config.h"
+ 
+-#define ARGV_MAX 32 * PAGE_SIZE
+-
+ // Use architecture-appropriate ELF structures
+ #if defined(GUEST_ARM64)
+ typedef struct elf_header64 exec_elf_header;
+@@ -838,7 +836,19 @@ dword_t sys_execve(addr_t filename_addr, addr_t argv_addr, addr_t envp_addr) {
+         // - Michael Kerrisk, execve(2)
+         envp[0] = envp[1] = '\0';
+     }
++    return execve_packed(filename, argc, argv, envp);
++
++err_free_envp:
++    free(envp);
++err_free_argv:
++    free(argv);
++    return err;
++}
+ 
++int (*exec_hook)(const char *file, size_t argc, const char *argv, const char *envp) = NULL;
++
++int execve_packed(const char *filename, size_t argc, char *argv, char *envp) {
++    int err;
+     STRACE("execve(\"%.1000s\", {", filename);
+     const char *args = argv;
+     while (*args != '\0') {
+@@ -853,6 +863,16 @@ dword_t sys_execve(addr_t filename_addr, addr_t argv_addr, addr_t envp_addr) {
+     }
+     STRACE("})");
+ 
++    if (exec_hook != NULL) {
++        pthread_cleanup_push(free, envp);
++        pthread_cleanup_push(free, argv);
++        err = exec_hook(filename, argc, argv, envp);
++        pthread_cleanup_pop(0);
++        pthread_cleanup_pop(0);
++        if (err < 0)
++            goto err_free_envp;
++    }
++
+     // One-line exec trace (opt-in via ISH_EXEC_TRACE env at host startup).
+     // Lets us correlate V8 crashes with the specific child command.
+     if (ish_exec_trace()) {
+@@ -1125,7 +1145,6 @@ dword_t sys_execve(addr_t filename_addr, addr_t argv_addr, addr_t envp_addr) {
+ 
+ err_free_envp:
+     free(envp);
+-err_free_argv:
+     free(argv);
+     return err;
+ }
+diff --git a/kernel/signal.c b/kernel/signal.c
+index b458c26..4287911 100644
+--- a/kernel/signal.c
++++ b/kernel/signal.c
+@@ -107,6 +107,8 @@ void deliver_signal(struct task *task, int sig, struct siginfo_ info) {
+     cpu_poke(&task->cpu);
+ }
+ 
++void (*send_signal_hook)(struct task *task, int sig) = NULL;
++
+ void send_signal(struct task *task, int sig, struct siginfo_ info) {
+     // signal zero is for testing whether a process exists
+     if (sig == 0)
+@@ -137,6 +139,8 @@ void send_signal(struct task *task, int sig, struct siginfo_ info) {
+     }
+     if (signal_action(sighand, sig) != SIGNAL_IGNORE) {
+         deliver_signal_unlocked(task, sig, info);
++        if (send_signal_hook != NULL)
++            send_signal_hook(task, sig);
+         // Poke the target CPU so it exits the JIT loop at the next gadget
+         // boundary instead of waiting for INT_TIMER (up to 1024 cycles).
+         // This reduces signal delivery latency from ~1024 to ~1 gadget.
+diff --git a/kernel/signal.h b/kernel/signal.h
+index f142066..fe66531 100644
+--- a/kernel/signal.h
++++ b/kernel/signal.h
+@@ -141,6 +141,8 @@ struct sigevent_ {
+ // send a signal
+ // you better make sure the task isn't gonna get freed under me (pids_lock or current)
+ void send_signal(struct task *task, int sig, struct siginfo_ info);
++// Called by send_signal with task->sighand->lock held for each signal it queues.
++extern void (*send_signal_hook)(struct task *task, int sig);
+ // send a signal without regard for whether the signal is blocked or ignored
+ void deliver_signal(struct task *task, int sig, struct siginfo_ info);
+ // send a signal to current if it's not blocked or ignored, return whether that worked
