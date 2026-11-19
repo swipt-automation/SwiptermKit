@@ -1,0 +1,5 @@
+/build/
+/Frameworks/
+/.build/
+/.swiftpm/
+.DS_Store
