@@ -19,11 +19,9 @@ env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
-  resolve:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 10
-    outputs:
-      version: ${{ steps.release.outputs.version }}
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -63,27 +61,59 @@ jobs:
             fi
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          BINARY_TAG="binary.$(git ls-files -s Makefile VMM Guest/swiptermd/protocol.h Guest/swiptermd/wire_format.h | git hash-object --stdin | cut -c1-12)"
+          echo "binary-tag=$BINARY_TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$BINARY_TAG" >/dev/null 2>&1; then
+            echo "binary-exists=true" >> "$GITHUB_OUTPUT"
+          fi
 
-  release:
-    needs: resolve
-    runs-on: macos-26
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Build Binary
+        if: steps.release.outputs.binary-exists != 'true'
+        run: make -j"$(sysctl -n hw.ncpu)"
 
-      - name: Build macOS
-        run: swift build
+      - name: Download Binary
+        if: steps.release.outputs.binary-exists == 'true'
+        run: |
+          gh release download "$BINARY_TAG" --pattern CSwiptermKit.xcframework.zip --dir build
+          ditto -x -k build/CSwiptermKit.xcframework.zip Frameworks
+        env:
+          BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
 
-      - name: Build iOS
-        run: xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS'
+      - name: Test Package
+        run: |
+          cp Package.local.swift Package.swift
+          swift build
+          xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS'
+          xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS Simulator' ARCHS=arm64
 
-      - name: Build iOS Simulator
-        run: xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS Simulator' ARCHS=arm64
+      - name: Publish Binary
+        if: steps.release.outputs.binary-exists != 'true'
+        run: |
+          gh release create "$BINARY_TAG" build/CSwiptermKit.xcframework.zip --target "$GITHUB_SHA" \
+            --title "$BINARY_TAG" --notes "CSwiptermKit $(git rev-parse --short HEAD)" --prerelease
+        env:
+          BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
+
+      - name: Generate Manifest
+        run: |
+          CHECKSUM="$(swift package compute-checksum build/CSwiptermKit.xcframework.zip)"
+          URL="https://github.com/${{ github.repository }}/releases/download/$BINARY_TAG/CSwiptermKit.xcframework.zip"
+          perl -pe "s|path: \"Frameworks/CSwiptermKit.xcframework\"|url: \"$URL\",\n            checksum: \"$CHECKSUM\"|" \
+            Package.local.swift > Package.swift
+          git diff Package.swift
+        env:
+          BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
 
       - name: Publish
         run: |
-          gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" \
-            --notes "SwiptermKit $VERSION ($(git rev-parse --short HEAD))"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --detach
+          git add Package.swift
+          git commit -m "release: $VERSION"
+          git push origin "HEAD:refs/tags/$VERSION"
+          gh release create "$VERSION" --verify-tag --title "$VERSION" \
+            --notes "SwiptermKit $VERSION ($BINARY_TAG)"
         env:
-          VERSION: ${{ needs.resolve.outputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
+          BINARY_TAG: ${{ steps.release.outputs.binary-tag }}

@@ -1,7 +1,14 @@
 ARCH_VM ?= arch
-TARGETS := all initramfs kernel install digest check clean
+TARGETS := all initramfs kernel install clean
 
-.PHONY: $(TARGETS)
+.PHONY: $(TARGETS) digest check
+
+RESOURCES := $(abspath $(CURDIR)/../Sources/SwiptermKit/Resources)
+KERNEL_FRAGMENTS := $(sort $(wildcard $(CURDIR)/kernel/*.config))
+ARTIFACTS := Image.gz initramfs.cpio.gz
+INPUTS := Makefile $(patsubst $(CURDIR)/%,%,$(KERNEL_FRAGMENTS)) $(sort $(wildcard swiptermd/*.[ch]))
+LOCK = { printf '%s  inputs\n' "$$(sha256sum $(INPUTS) | sha256sum | cut -d' ' -f1)"; \
+	cd $(RESOURCES) && sha256sum $(ARTIFACTS); }
 
 ifneq ($(shell uname -s),Linux)
 
@@ -30,7 +37,6 @@ E2FSPROGS_CONFIGURE := \
 	"LDFLAGS_STATIC=-static -Wl,--gc-sections"
 
 BUILD := $(CURDIR)/build
-RESOURCES := $(abspath $(CURDIR)/../Sources/SwiptermKit/Resources)
 LINUX_WORK ?= $(or $(XDG_CACHE_HOME),$(HOME)/.cache)/swipterm-guest
 JOBS ?= $(shell nproc)
 SOURCE_DATE_EPOCH ?= 0
@@ -44,7 +50,6 @@ E2FSPROGS_SRC := $(LINUX_WORK)/e2fsprogs-$(E2FSPROGS_VERSION)
 KMAKE = $(MAKE) -C $(LINUX_SRC) O=$(KBUILD) ARCH=arm64 \
 	KBUILD_BUILD_USER=swipterm KBUILD_BUILD_HOST=swipterm KBUILD_BUILD_VERSION=1 \
 	KBUILD_BUILD_TIMESTAMP="$$(LC_ALL=C date -u -d @$(SOURCE_DATE_EPOCH))"
-KERNEL_FRAGMENTS := $(sort $(wildcard $(CURDIR)/kernel/*.config))
 
 ifeq ($(origin CC),default)
 CC := $(shell command -v musl-gcc >/dev/null 2>&1 && echo musl-gcc || echo gcc)
@@ -76,11 +81,6 @@ END { exit failed }
 endef
 export VERIFY_CONFIG
 
-ARTIFACTS := Image.gz initramfs.cpio.gz
-INPUTS := Makefile $(patsubst $(CURDIR)/%,%,$(KERNEL_FRAGMENTS)) $(sort $(wildcard swiptermd/*.[ch]))
-LOCK = { printf '%s  inputs\n' "$$(sha256sum $(INPUTS) | sha256sum | cut -d' ' -f1)"; \
-	cd $(RESOURCES) && sha256sum $(ARTIFACTS); }
-
 all: kernel initramfs
 kernel: $(BUILD)/Image.gz
 initramfs: $(BUILD)/initramfs.cpio.gz
@@ -88,12 +88,6 @@ initramfs: $(BUILD)/initramfs.cpio.gz
 install: all
 	install -D -m 0644 -t $(RESOURCES) $(addprefix $(BUILD)/,$(ARTIFACTS))
 	$(LOCK) > artifacts.lock
-
-digest:
-	$(LOCK) > artifacts.lock
-
-check:
-	$(LOCK) | diff -u artifacts.lock - || { echo "error: Guest/artifacts.lock does not match; run make -C Guest install" >&2; exit 1; }
 
 clean:
 	rm -rf $(BUILD)
@@ -188,3 +182,9 @@ $(BUILD)/Image.gz: $(BUILD)/kernel.config
 	gzip -9n < $(KBUILD)/arch/arm64/boot/Image > $@
 
 endif
+
+digest:
+	$(LOCK) > artifacts.lock
+
+check:
+	$(LOCK) | diff -u artifacts.lock - || { echo "error: Guest/artifacts.lock does not match; run make -C Guest install" >&2; exit 1; }
