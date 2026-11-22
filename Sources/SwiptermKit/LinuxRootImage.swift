@@ -13,6 +13,7 @@ public struct LinuxRootImage: Sendable {
     private enum Source: Sendable {
         case file(URL)
         case data(Data)
+        case daxMemory(UnsafeSendable<UnsafeRawBufferPointer>)
     }
 
     private let source: Source
@@ -23,6 +24,40 @@ public struct LinuxRootImage: Sendable {
 
     public static func archive(data: Data) -> LinuxRootImage {
         LinuxRootImage(source: .data(data))
+    }
+
+    public static func daxMemory(_ buffer: UnsafeRawBufferPointer) -> LinuxRootImage {
+        LinuxRootImage(source: .daxMemory(UnsafeSendable(value: buffer)))
+    }
+
+    func withCRootImage<Result>(_ body: (swipterm_root_image) throws -> Result) rethrows -> Result {
+        switch source {
+        case .file(let url):
+            return try url.withUnsafeFileSystemRepresentation { path in
+                try body(swipterm_root_image(
+                    kind: SWIPTERM_ROOT_IMAGE_ARCHIVE_FILE,
+                    path: path,
+                    data: nil,
+                    size: 0
+                ))
+            }
+        case .data(let data):
+            return try data.withUnsafeBytes { buffer in
+                try body(swipterm_root_image(
+                    kind: SWIPTERM_ROOT_IMAGE_ARCHIVE_MEMORY,
+                    path: nil,
+                    data: buffer.baseAddress,
+                    size: buffer.count
+                ))
+            }
+        case .daxMemory(let buffer):
+            return try body(swipterm_root_image(
+                kind: SWIPTERM_ROOT_IMAGE_DAX_EROFS_MEMORY,
+                path: nil,
+                data: buffer.value.baseAddress,
+                size: buffer.value.count
+            ))
+        }
     }
 
     public func install(to root: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws {
@@ -42,10 +77,17 @@ public struct LinuxRootImage: Sendable {
                         data.withUnsafeBytes { buffer in
                             swipterm_image_import_memory(buffer.baseAddress, buffer.count, rootPath, context, report, message)
                         }
+                    case .daxMemory(let buffer):
+                        swipterm_image_import_memory(buffer.value.baseAddress, buffer.value.count, rootPath, context, report, message)
                     }
                 }
             }
-            try FileManager.default.moveItem(at: temporary, to: root)
+            let fm = FileManager.default
+            if fm.fileExists(atPath: root.path(percentEncoded: false)) {
+                _ = try fm.replaceItemAt(root, withItemAt: temporary)
+            } else {
+                try fm.moveItem(at: temporary, to: root)
+            }
         } catch {
             try? FileManager.default.removeItem(at: temporary)
             throw error

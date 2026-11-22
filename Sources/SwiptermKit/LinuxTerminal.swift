@@ -23,6 +23,7 @@ public final class LinuxTerminal: @unchecked Sendable {
     }
 
     let handle: OpaquePointer
+    private let runtime: LinuxRuntime
     private let notifyDescriptor: Int32
     private let queue = DispatchQueue(label: "SwiptermKit.LinuxTerminal")
     private let inputQueue = DispatchQueue(label: "SwiptermKit.LinuxTerminal.Input")
@@ -30,11 +31,15 @@ public final class LinuxTerminal: @unchecked Sendable {
     private var requests: [Request] = []
     private var ended = false
 
-    init(size: Size) throws(LinuxError) {
-        var error: Int32 = 0
-        guard let handle = swipterm_terminal_create(size.columns, size.rows, &error) else {
-            throw LinuxError(code: error)
+    init(runtime: LinuxRuntime, size: Size) throws(LinuxError) {
+        let handle = try runtime.withActiveHandle { runtimeHandle throws(LinuxError) -> OpaquePointer in
+            var error: Int32 = 0
+            guard let handle = swipterm_terminal_create(runtimeHandle, size.columns, size.rows, &error) else {
+                throw LinuxError(code: error)
+            }
+            return handle
         }
+        self.runtime = runtime
         self.handle = handle
         notifyDescriptor = swipterm_terminal_notify_fd(handle)
         let source = DispatchSource.makeReadSource(fileDescriptor: notifyDescriptor, queue: queue)

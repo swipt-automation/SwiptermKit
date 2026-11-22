@@ -1,0 +1,994 @@
+#include "swiptermd.h"
+
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/random.h>
+#include <linux/rtc.h>
+#include <linux/vm_sockets.h>
+#include <poll.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mount.h>
+#include <sys/random.h>
+#include <sys/reboot.h>
+#include <sys/signalfd.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/timerfd.h>
+#include <sys/timex.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+daemon_state_t g_daemon = {
+    .epfd = -1,
+    .ctrl_fd = -1,
+    .data_listen_fd = -1,
+    .root_fd = -1,
+    .next_req_id = 1,
+    .container_init_pid = -1,
+    .container_pid_ns_fd = -1,
+    .container_mnt_ns_fd = -1,
+    .container_uts_ns_fd = -1,
+    .container_ipc_ns_fd = -1,
+    .container_cgroup_ns_fd = -1,
+};
+
+enum {
+    STOP_GRACE_SEC = 20,
+    REAP_GRACE_MS = 5000,
+    FINAL_REPORT_TIMEOUT_SEC = 2,
+};
+
+typedef struct ctrl_tx_buf {
+    uint8_t *data;
+    size_t len;
+    size_t cap;
+    size_t off;
+} ctrl_tx_buf_t;
+
+typedef struct ctrl_rx_buf {
+    uint8_t hdr[SWIPTERMD_FRAME_HEADER_SIZE];
+    size_t hdr_got;
+    swiptermd_frame_hdr_t cur;
+    uint8_t *body;
+    size_t body_cap;
+    size_t body_got;
+} ctrl_rx_buf_t;
+
+static ev_node_t g_ctrl_ev;
+static ev_node_t g_data_listen_ev;
+static ev_node_t g_sig_ev;
+static ev_node_t g_stop_timer_ev;
+static ctrl_tx_buf_t g_ctrl_tx;
+static ctrl_rx_buf_t g_ctrl_rx;
+static struct epoll_event g_ep_events[64];
+static int g_ep_count;
+static int g_ep_index;
+
+int set_nonblock(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0)
+        return -errno;
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0)
+        return -errno;
+    return 0;
+}
+
+int write_file(int dir_fd, const char *path, const char *text, int flags, mode_t mode) {
+    int fd = openat(dir_fd, path, O_WRONLY | O_CLOEXEC | flags, mode);
+    if (fd < 0)
+        return -errno;
+    int rc = write_all_blocking(fd, text, strlen(text));
+    if (close(fd) < 0 && rc == 0)
+        rc = -errno;
+    return rc;
+}
+
+void ensure_dir(const char *path, mode_t mode) {
+    if (mkdir(path, mode) < 0 && errno != EEXIST)
+        return;
+    chmod(path, mode);
+}
+
+void console_log(const char *format, ...) {
+    int fd = open("/dev/console", O_WRONLY | O_NOCTTY | O_CLOEXEC);
+    if (fd < 0)
+        return;
+    char msg[512];
+    va_list args;
+    va_start(args, format);
+    int n = vsnprintf(msg, sizeof(msg), format, args);
+    va_end(args);
+    if (n > 0)
+        (void)write(fd, msg, (size_t)n < sizeof(msg) ? (size_t)n : sizeof(msg) - 1);
+    close(fd);
+}
+
+void boot_err_log(const char *step, int rc) {
+    if (rc < 0)
+        console_log("swiptermd: %s failed: %s\n", step, strerror(-rc));
+    else
+        console_log("swiptermd: %s failed with status %d\n", step, rc);
+}
+
+int write_all_blocking(int fd, const void *buf, size_t len) {
+    const uint8_t *p = buf;
+    while (len > 0) {
+        ssize_t n = write(fd, p, len);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            return -errno;
+        }
+        p += (size_t)n;
+        len -= (size_t)n;
+    }
+    return 0;
+}
+
+int read_all_blocking(int fd, void *buf, size_t len) {
+    uint8_t *p = buf;
+    while (len > 0) {
+        ssize_t n = read(fd, p, len);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            return -errno;
+        }
+        if (n == 0)
+            return -EPIPE;
+        p += (size_t)n;
+        len -= (size_t)n;
+    }
+    return 0;
+}
+
+int ev_add(ev_node_t *node, int fd, uint32_t events, ev_cb_t cb, void *ctx) {
+    node->fd = fd;
+    node->events = events;
+    node->cb = cb;
+    node->ctx = ctx;
+    struct epoll_event ev = {.events = events, .data.ptr = node};
+    if (epoll_ctl(g_daemon.epfd, EPOLL_CTL_ADD, fd, &ev) < 0)
+        return -errno;
+    node->registered = true;
+    return 0;
+}
+
+int ev_mod(ev_node_t *node, uint32_t events) {
+    if (!node->registered)
+        return -ENOENT;
+    if (node->events == events)
+        return 0;
+    struct epoll_event ev = {.events = events, .data.ptr = node};
+    if (epoll_ctl(g_daemon.epfd, EPOLL_CTL_MOD, node->fd, &ev) < 0)
+        return -errno;
+    node->events = events;
+    return 0;
+}
+
+void ev_del(ev_node_t *node) {
+    for (int i = g_ep_index + 1; i < g_ep_count; i++) {
+        if (g_ep_events[i].data.ptr == node)
+            g_ep_events[i].data.ptr = NULL;
+    }
+    if (!node->registered)
+        return;
+    epoll_ctl(g_daemon.epfd, EPOLL_CTL_DEL, node->fd, NULL);
+    node->registered = false;
+    node->events = 0;
+}
+
+uint32_t ctrl_alloc_req_id(void) {
+    uint32_t id = g_daemon.next_req_id++;
+    if (id == 0)
+        id = g_daemon.next_req_id++;
+    return id;
+}
+
+static void ctrl_tx_compact(void) {
+    if (g_ctrl_tx.off == 0)
+        return;
+    size_t rem = g_ctrl_tx.len - g_ctrl_tx.off;
+    if (rem > 0)
+        memmove(g_ctrl_tx.data, g_ctrl_tx.data + g_ctrl_tx.off, rem);
+    g_ctrl_tx.len = rem;
+    g_ctrl_tx.off = 0;
+}
+
+static int ctrl_tx_flush(void) {
+    while (g_ctrl_tx.off < g_ctrl_tx.len) {
+        ssize_t n = send(g_daemon.ctrl_fd, g_ctrl_tx.data + g_ctrl_tx.off,
+                         g_ctrl_tx.len - g_ctrl_tx.off, MSG_NOSIGNAL);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            return -errno;
+        }
+        g_ctrl_tx.off += (size_t)n;
+    }
+    if (g_ctrl_tx.off == g_ctrl_tx.len) {
+        g_ctrl_tx.off = 0;
+        g_ctrl_tx.len = 0;
+        ev_mod(&g_ctrl_ev, EPOLLIN);
+    } else {
+        if (g_ctrl_tx.off > 65536)
+            ctrl_tx_compact();
+        ev_mod(&g_ctrl_ev, EPOLLIN | EPOLLOUT);
+    }
+    return 0;
+}
+
+int ctrl_send_frame(uint16_t opcode, uint32_t req_id, const void *body, uint32_t body_len) {
+    if (g_daemon.ctrl_fd < 0 || body_len > SWIPTERMD_MAX_BODY_LEN)
+        return -EINVAL;
+    size_t total = SWIPTERMD_FRAME_HEADER_SIZE + (size_t)body_len;
+    if (g_ctrl_tx.len + total > g_ctrl_tx.cap) {
+        ctrl_tx_compact();
+        if (g_ctrl_tx.len + total > g_ctrl_tx.cap) {
+            size_t ncap = g_ctrl_tx.cap ? g_ctrl_tx.cap * 2 : 65536;
+            while (ncap < g_ctrl_tx.len + total)
+                ncap *= 2;
+            uint8_t *nb = realloc(g_ctrl_tx.data, ncap);
+            if (!nb)
+                return -ENOMEM;
+            g_ctrl_tx.data = nb;
+            g_ctrl_tx.cap = ncap;
+        }
+    }
+    swiptermd_frame_hdr_t hdr = {
+        .body_len = body_len,
+        .version = SWIPTERMD_PROTO_VERSION,
+        .opcode = opcode,
+        .req_id = req_id,
+    };
+    swiptermd_frame_hdr_encode(g_ctrl_tx.data + g_ctrl_tx.len, &hdr);
+    g_ctrl_tx.len += SWIPTERMD_FRAME_HEADER_SIZE;
+    if (body_len > 0) {
+        memcpy(g_ctrl_tx.data + g_ctrl_tx.len, body, body_len);
+        g_ctrl_tx.len += body_len;
+    }
+    return ctrl_tx_flush();
+}
+
+int ctrl_send_err_reply(uint16_t opcode, uint32_t req_id, int32_t err) {
+    uint8_t buf[SWIPTERMD_ERR_REPLY_SIZE];
+    swiptermd_enc_err(buf, err);
+    return ctrl_send_frame((uint16_t)(opcode | SWIPTERMD_OP_REPLY_FLAG), req_id, buf, sizeof(buf));
+}
+
+int vsock_connect_stream(uint32_t role, uint32_t resource_id, uint64_t token) {
+    int fd = socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd < 0)
+        return -errno;
+    struct sockaddr_vm addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.svm_family = AF_VSOCK;
+    addr.svm_cid = SWIPTERMD_HOST_CID;
+    addr.svm_port = SWIPTERMD_DATA_PORT;
+
+    while (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        if (errno == EINTR)
+            continue;
+        int err = -errno;
+        close(fd);
+        return err;
+    }
+
+    swiptermd_attach_hdr_t ah = {
+        .session_nonce = g_daemon.session_nonce,
+        .role = role,
+        .resource_id = resource_id,
+        .token = token,
+    };
+    uint8_t wire[SWIPTERMD_ATTACH_HEADER_SIZE];
+    swiptermd_attach_hdr_encode(wire, &ah);
+    int err = write_all_blocking(fd, wire, sizeof(wire));
+    if (err < 0) {
+        close(fd);
+        return err;
+    }
+    err = set_nonblock(fd);
+    if (err < 0) {
+        close(fd);
+        return err;
+    }
+    return fd;
+}
+
+
+static void setup_initramfs_mounts(void) {
+    ensure_dir("/proc", 0555);
+    ensure_dir("/sys", 0555);
+    ensure_dir("/dev", 0755);
+    ensure_dir("/run", 0755);
+    ensure_dir("/mnt", 0755);
+    ensure_dir("/mnt/lower", 0755);
+    ensure_dir("/mnt/upper", 0755);
+    ensure_dir("/mnt/merged", 0755);
+
+    (void)mount("proc", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
+    (void)mount("sysfs", "/sys", "sysfs", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
+    (void)mount("devtmpfs", "/dev", "devtmpfs", MS_NOSUID, "mode=0755");
+    ensure_dir("/dev/pts", 0755);
+    ensure_dir("/dev/shm", 01777);
+    (void)mount("devpts", "/dev/pts", "devpts", MS_NOSUID | MS_NOEXEC, "gid=5,mode=0620,ptmxmode=0666");
+    (void)mount("tmpfs", "/dev/shm", "tmpfs", MS_NOSUID | MS_NODEV, "mode=1777");
+    (void)mount("tmpfs", "/run", "tmpfs", MS_NOSUID | MS_NODEV, "mode=0755");
+}
+
+static int sync_realtime_from_rtc(void) {
+    int fd = open("/dev/rtc0", O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return -errno;
+    struct timespec before;
+    struct timespec after;
+    struct rtc_time rtc;
+    clock_gettime(CLOCK_REALTIME, &before);
+    int rc = ioctl(fd, RTC_RD_TIME, &rtc) < 0 ? -errno : 0;
+    clock_gettime(CLOCK_REALTIME, &after);
+    close(fd);
+    if (rc < 0)
+        return rc;
+
+    struct tm utc = {
+        .tm_sec = rtc.tm_sec, .tm_min = rtc.tm_min, .tm_hour = rtc.tm_hour,
+        .tm_mday = rtc.tm_mday, .tm_mon = rtc.tm_mon, .tm_year = rtc.tm_year,
+    };
+    const int64_t nsec_per_sec = 1000000000;
+    int64_t rtc_start = (int64_t)timegm(&utc) * nsec_per_sec;
+    int64_t before_ns = (int64_t)before.tv_sec * nsec_per_sec + before.tv_nsec;
+    int64_t after_ns = (int64_t)after.tv_sec * nsec_per_sec + after.tv_nsec;
+    if (after_ns >= rtc_start && before_ns < rtc_start + nsec_per_sec)
+        return 0;
+
+    int64_t delta = rtc_start + nsec_per_sec / 2 - (before_ns + (after_ns - before_ns) / 2);
+    int64_t delta_sec = delta / nsec_per_sec;
+    int64_t delta_nsec = delta % nsec_per_sec;
+    if (delta_nsec < 0) {
+        delta_nsec += nsec_per_sec;
+        delta_sec--;
+    }
+    struct timex adjust = {
+        .modes = ADJ_SETOFFSET | ADJ_NANO,
+        .time = { .tv_sec = (time_t)delta_sec, .tv_usec = (suseconds_t)delta_nsec },
+    };
+    return clock_adjtime(CLOCK_REALTIME, &adjust) < 0 ? -errno : 0;
+}
+
+static int bind_boot_virtio(unsigned addr) {
+    char name[32];
+    int len = snprintf(name, sizeof(name), "%x.virtio_mmio", addr);
+    int fd = open("/sys/bus/platform/drivers/virtio-mmio/bind", O_WRONLY | O_CLOEXEC);
+    if (fd < 0)
+        return -errno;
+    ssize_t n = write(fd, name, (size_t)len);
+    int rc = 0;
+    if (n < 0) {
+        rc = (errno == EBUSY) ? 0 : -errno;
+    } else if (n != len) {
+        rc = -EIO;
+    }
+    close(fd);
+    return rc;
+}
+
+static int reseed_boot_random(void) {
+    struct {
+        int entropy_count;
+        int buf_size;
+        uint8_t data[32];
+    } seed = { .entropy_count = 256, .buf_size = 32 };
+    int fd = -1;
+    for (int attempt = 0; attempt < 50; attempt++) {
+        fd = open("/dev/hwrng", O_RDONLY | O_CLOEXEC);
+        if (fd >= 0)
+            break;
+        if (errno != ENOENT && errno != ENODEV && errno != EINTR)
+            return -errno;
+        usleep(1000);
+    }
+    if (fd < 0)
+        return -errno;
+    size_t count = 0;
+    int rc = 0;
+    int retries = 0;
+    while (count < sizeof(seed.data)) {
+        ssize_t n = read(fd, seed.data + count, sizeof(seed.data) - count);
+        if (n < 0 && errno == EINTR)
+            continue;
+        if ((n < 0 && (errno == ENODATA || errno == EAGAIN)) || n == 0) {
+            if (++retries <= 200) {
+                usleep(1000);
+                continue;
+            }
+            rc = n < 0 ? -errno : -EIO;
+            break;
+        }
+        if (n < 0) {
+            rc = -errno;
+            break;
+        }
+        retries = 0;
+        count += (size_t)n;
+    }
+    close(fd);
+    if (rc == 0) {
+        fd = open("/dev/random", O_WRONLY | O_CLOEXEC);
+        if (fd < 0) {
+            rc = -errno;
+        } else {
+            if (ioctl(fd, RNDADDENTROPY, &seed) < 0) {
+                rc = -errno;
+            } else {
+                uint8_t ready_byte = 0;
+                ssize_t gr;
+                do {
+                    gr = getrandom(&ready_byte, 1, 0);
+                } while (gr < 0 && errno == EINTR);
+                if (gr != 1 || ioctl(fd, RNDRESEEDCRNG, 0) < 0)
+                    rc = -errno;
+            }
+            close(fd);
+        }
+    }
+    explicit_bzero(seed.data, sizeof(seed.data));
+    return rc;
+}
+
+static int setup_boot_devices(void) {
+    int rc = sync_realtime_from_rtc();
+    if (rc < 0)
+        return rc;
+    rc = bind_boot_virtio(0x0a000800);
+    if (rc < 0)
+        return rc;
+    rc = reseed_boot_random();
+    if (rc < 0)
+        return rc;
+    for (unsigned addr = 0x0a000000; addr < 0x0a000800; addr += 0x200) {
+        rc = bind_boot_virtio(addr);
+        if (rc < 0)
+            return rc;
+    }
+    return 0;
+}
+
+static int setup_lower(void) {
+    int lower_ok = -1;
+    if (mount("/dev/pmem0", "/mnt/lower", "erofs", MS_RDONLY, "dax=always") == 0)
+        lower_ok = 0;
+    else if (mount("/dev/pmem0", "/mnt/lower", "erofs", MS_RDONLY, NULL) == 0)
+        lower_ok = 0;
+    else if (mount("/dev/vdb", "/mnt/lower", "erofs", MS_RDONLY, NULL) == 0)
+        lower_ok = 0;
+    else if (mount("/dev/vdb", "/mnt/lower", "ext4", MS_RDONLY, NULL) == 0)
+        lower_ok = 0;
+    return lower_ok == 0 ? 0 : -ENODEV;
+}
+
+void ready_announce(uint32_t level) {
+    uint32_t bit = 1U << level;
+    if (g_daemon.ready_mask & bit)
+        return;
+    g_daemon.ready_mask |= bit;
+    uint8_t msg[SWIPTERMD_READY_NOTIFY_SIZE];
+    swiptermd_enc_u32_notify(msg, level);
+    ctrl_send_frame(SWIPTERMD_OP_READY, 0, msg, sizeof(msg));
+}
+
+static void ctrl_flush_blocking(void) {
+    if (g_daemon.ctrl_fd < 0 || g_ctrl_tx.off >= g_ctrl_tx.len)
+        return;
+    struct timeval timeout = {.tv_sec = FINAL_REPORT_TIMEOUT_SEC};
+    (void)setsockopt(g_daemon.ctrl_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+    int flags = fcntl(g_daemon.ctrl_fd, F_GETFL, 0);
+    if (flags >= 0)
+        (void)fcntl(g_daemon.ctrl_fd, F_SETFL, flags & ~O_NONBLOCK);
+    (void)write_all_blocking(g_daemon.ctrl_fd, g_ctrl_tx.data + g_ctrl_tx.off, g_ctrl_tx.len - g_ctrl_tx.off);
+    g_ctrl_tx.off = g_ctrl_tx.len = 0;
+}
+
+static void on_stop_deadline(ev_node_t *node, uint32_t events) {
+    (void)events;
+    uint64_t expirations;
+    (void)read(node->fd, &expirations, sizeof(expirations));
+    if (g_daemon.container_init_pid > 0)
+        g_daemon.stop_flags |= SWIPTERMD_STOP_FORCED;
+    g_daemon.shutdown_requested = true;
+}
+
+void shutdown_check_done(void) {
+    if (g_daemon.stopping && g_daemon.container_init_pid <= 0)
+        g_daemon.shutdown_requested = true;
+}
+
+void shutdown_begin(bool reboot) {
+    if (g_daemon.stopping)
+        return;
+    g_daemon.stopping = true;
+    g_daemon.reboot_requested = reboot;
+    if (g_daemon.container_init_pid <= 0) {
+        g_daemon.shutdown_requested = true;
+        return;
+    }
+    int timer = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+    struct itimerspec deadline = {.it_value = {.tv_sec = STOP_GRACE_SEC}};
+    if (timer < 0 || timerfd_settime(timer, 0, &deadline, NULL) < 0 ||
+        ev_add(&g_stop_timer_ev, timer, EPOLLIN, on_stop_deadline, NULL) < 0) {
+        boot_err_log("arm the shutdown deadline", -errno);
+        if (timer >= 0)
+            close(timer);
+        g_daemon.stop_flags |= SWIPTERMD_STOP_FORCED;
+        g_daemon.shutdown_requested = true;
+        return;
+    }
+    ns_request_stop(reboot);
+}
+
+static void handle_host_halt(uint32_t req_id, const uint8_t *body, uint32_t len) {
+    uint32_t flags = 0;
+    (void)swiptermd_dec_halt_req(body, len, &flags);
+    ctrl_send_err_reply(SWIPTERMD_OP_HALT, req_id, 0);
+    shutdown_begin(flags == 1);
+}
+
+static void reap_children(int timeout_ms) {
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (;;) {
+        int status;
+        pid_t pid = waitpid(-1, &status, WNOHANG);
+        if (pid > 0)
+            continue;
+        if (pid < 0 && errno == EINTR)
+            continue;
+        if (pid < 0)
+            return;
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long elapsed = (now.tv_sec - start.tv_sec) * 1000 + (now.tv_nsec - start.tv_nsec) / 1000000;
+        if (elapsed >= timeout_ms || !g_sig_ev.registered) {
+            boot_err_log("wait for guest helpers", -ETIMEDOUT);
+            return;
+        }
+        struct pollfd pfd = {.fd = g_sig_ev.fd, .events = POLLIN};
+        if (poll(&pfd, 1, (int)(timeout_ms - elapsed)) > 0) {
+            struct signalfd_siginfo si;
+            while (read(g_sig_ev.fd, &si, sizeof(si)) > 0) {}
+        }
+    }
+}
+
+static void finish(void) {
+    if (g_daemon.container_init_pid > 0) {
+        g_daemon.stop_flags |= SWIPTERMD_STOP_FORCED;
+        ns_kill_container();
+    }
+    proc_pty_shutdown();
+    host_cmd_cuse_shutdown();
+    notify_close();
+    sessions_shutdown();
+    reap_children(REAP_GRACE_MS);
+    ns_close_namespaces();
+    if (g_daemon.root_fd >= 0) {
+        close(g_daemon.root_fd);
+        g_daemon.root_fd = -1;
+    }
+    fs_unmount_all();
+    if (!storage_teardown())
+        g_daemon.stop_flags |= SWIPTERMD_STOP_STORAGE_ERROR;
+    if (g_daemon.ctrl_fd >= 0) {
+        uint8_t msg[SWIPTERMD_STOPPED_NOTIFY_SIZE];
+        swiptermd_enc_u32_notify(msg, g_daemon.stop_flags);
+        ctrl_send_frame(SWIPTERMD_OP_STOPPED, 0, msg, sizeof(msg));
+        ctrl_flush_blocking();
+    }
+    reboot(g_daemon.reboot_requested ? RB_AUTOBOOT : RB_POWER_OFF);
+}
+
+static void on_signal(ev_node_t *node, uint32_t events) {
+    (void)events;
+    struct signalfd_siginfo si;
+    while (read(node->fd, &si, sizeof(si)) > 0) {
+        int sig = (int)si.ssi_signo;
+        if (sig == SIGPWR || sig == SIGRTMIN + 3 || sig == SIGRTMIN + 4)
+            shutdown_begin(false);
+        else if (sig == SIGRTMIN + 5)
+            shutdown_begin(true);
+    }
+    for (;;) {
+        int status;
+        pid_t pid = waitpid(-1, &status, WNOHANG);
+        if (pid < 0 && errno == EINTR)
+            continue;
+        if (pid <= 0)
+            break;
+        if (pid == g_daemon.container_init_pid)
+            ns_init_exited(status);
+    }
+}
+
+static void dispatch_ctrl_frame(const swiptermd_frame_hdr_t *hdr, const uint8_t *body) {
+    if (hdr->version != SWIPTERMD_PROTO_VERSION)
+        return;
+
+    if (hdr->opcode & SWIPTERMD_OP_REPLY_FLAG) {
+        uint16_t base_op = (uint16_t)(hdr->opcode & ~SWIPTERMD_OP_REPLY_FLAG);
+        if (base_op == SWIPTERMD_OP_HELLO)
+            return;
+        if (base_op == SWIPTERMD_OP_CMD_START) {
+            host_cmd_handle_start_reply(hdr->req_id, body, hdr->body_len);
+            return;
+        }
+        (void)cuse_handle_reply(base_op, hdr->req_id, body, hdr->body_len);
+        return;
+    }
+
+    switch (hdr->opcode) {
+    case SWIPTERMD_OP_CONFIGURE_INIT:
+        ns_handle_configure_init(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_START_INIT:
+        ns_handle_start_init(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_HALT:
+        handle_host_halt(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_SUSPEND:
+        sync();
+        ctrl_send_err_reply(SWIPTERMD_OP_SUSPEND, hdr->req_id, 0);
+        break;
+    case SWIPTERMD_OP_RESUME:
+        ctrl_send_err_reply(SWIPTERMD_OP_RESUME, hdr->req_id, sync_realtime_from_rtc());
+        break;
+    case SWIPTERMD_OP_SPAWN:
+        proc_handle_spawn(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_LOGIN:
+        proc_handle_login(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_PROCESS_SIGNAL:
+        proc_handle_signal(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_PTY_CREATE:
+        pty_handle_create(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_PTY_RESIZE:
+        pty_handle_resize(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_PTY_CLOSE:
+        pty_handle_close(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_FS_STAT:
+        fs_handle_stat(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_FS_READ:
+        fs_handle_read(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_FS_WRITE:
+        fs_handle_write(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_FS_LIST:
+        fs_handle_list(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_FS_MKDIR:
+        fs_handle_mkdir(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_FS_REMOVE:
+        fs_handle_remove(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_FS_MOUNT_VIRTIOFS:
+        fs_handle_mount_virtiofs(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_FS_UNMOUNT:
+        fs_handle_unmount(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_SYNC_DNS:
+        fs_handle_sync_dns(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_REGISTER_CMD:
+        host_cmd_handle_register(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_CMD_FINISH:
+        host_cmd_handle_finish(body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_REGISTER_DEVICE:
+        cuse_handle_register_device(hdr->req_id, body, hdr->body_len);
+        break;
+    default:
+        ctrl_send_err_reply(hdr->opcode, hdr->req_id, -ENOSYS);
+        break;
+    }
+}
+
+static void on_ctrl_event(ev_node_t *node, uint32_t events) {
+    (void)node;
+    if (events & (EPOLLERR | EPOLLHUP)) {
+        g_daemon.shutdown_requested = true;
+        return;
+    }
+    if (events & EPOLLOUT) {
+        if (ctrl_tx_flush() < 0) {
+            g_daemon.shutdown_requested = true;
+            return;
+        }
+    }
+    if (!(events & EPOLLIN))
+        return;
+
+    for (;;) {
+        if (g_ctrl_rx.hdr_got < SWIPTERMD_FRAME_HEADER_SIZE) {
+            ssize_t n = recv(g_daemon.ctrl_fd, g_ctrl_rx.hdr + g_ctrl_rx.hdr_got,
+                             SWIPTERMD_FRAME_HEADER_SIZE - g_ctrl_rx.hdr_got, 0);
+            if (n < 0) {
+                if (errno == EINTR)
+                    continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    return;
+                g_daemon.shutdown_requested = true;
+                return;
+            }
+            if (n == 0) {
+                g_daemon.shutdown_requested = true;
+                return;
+            }
+            g_ctrl_rx.hdr_got += (size_t)n;
+            if (g_ctrl_rx.hdr_got < SWIPTERMD_FRAME_HEADER_SIZE)
+                return;
+
+            swiptermd_frame_hdr_decode(g_ctrl_rx.hdr, &g_ctrl_rx.cur);
+            if (g_ctrl_rx.cur.body_len > SWIPTERMD_MAX_BODY_LEN) {
+                g_daemon.shutdown_requested = true;
+                return;
+            }
+            if (g_ctrl_rx.cur.body_len > g_ctrl_rx.body_cap) {
+                uint8_t *nb = realloc(g_ctrl_rx.body, g_ctrl_rx.cur.body_len);
+                if (!nb) {
+                    g_daemon.shutdown_requested = true;
+                    return;
+                }
+                g_ctrl_rx.body = nb;
+                g_ctrl_rx.body_cap = g_ctrl_rx.cur.body_len;
+            }
+            g_ctrl_rx.body_got = 0;
+        }
+
+        while (g_ctrl_rx.body_got < g_ctrl_rx.cur.body_len) {
+            ssize_t n = recv(g_daemon.ctrl_fd, g_ctrl_rx.body + g_ctrl_rx.body_got,
+                             g_ctrl_rx.cur.body_len - g_ctrl_rx.body_got, 0);
+            if (n < 0) {
+                if (errno == EINTR)
+                    continue;
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    return;
+                g_daemon.shutdown_requested = true;
+                return;
+            }
+            if (n == 0) {
+                g_daemon.shutdown_requested = true;
+                return;
+            }
+            g_ctrl_rx.body_got += (size_t)n;
+        }
+
+        swiptermd_frame_hdr_t frame = g_ctrl_rx.cur;
+        g_ctrl_rx.hdr_got = 0;
+        g_ctrl_rx.body_got = 0;
+        dispatch_ctrl_frame(&frame, g_ctrl_rx.body);
+    }
+}
+
+static void on_data_accept(ev_node_t *node, uint32_t events) {
+    (void)node;
+    if (!(events & EPOLLIN))
+        return;
+
+    for (;;) {
+        int cfd = accept4(g_daemon.data_listen_fd, NULL, NULL, SOCK_CLOEXEC);
+        if (cfd < 0) {
+            if (errno == EINTR)
+                continue;
+            return;
+        }
+        uint8_t wire[SWIPTERMD_ATTACH_HEADER_SIZE];
+        if (read_all_blocking(cfd, wire, sizeof(wire)) < 0) {
+            close(cfd);
+            continue;
+        }
+        swiptermd_attach_hdr_t ah;
+        swiptermd_attach_hdr_decode(wire, &ah);
+        if (ah.session_nonce != g_daemon.session_nonce) {
+            close(cfd);
+            continue;
+        }
+        if (ah.role == SWIPTERMD_STREAM_TCP_MIRROR) {
+            if (set_nonblock(cfd) < 0) {
+                close(cfd);
+                continue;
+            }
+            sock_mirror_handle_incoming(cfd, ah.resource_id);
+        } else {
+            close(cfd);
+        }
+    }
+}
+
+static int connect_control_vsock(void) {
+    for (int attempt = 0; attempt < 200; attempt++) {
+        int fd = socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0);
+        if (fd < 0)
+            return -errno;
+        struct sockaddr_vm addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.svm_family = AF_VSOCK;
+        addr.svm_cid = SWIPTERMD_HOST_CID;
+        addr.svm_port = SWIPTERMD_CONTROL_PORT;
+        if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0)
+            return fd;
+        close(fd);
+        usleep(10000);
+    }
+    return -ETIMEDOUT;
+}
+
+static int listen_data_vsock(void) {
+    int fd = socket(AF_VSOCK, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    if (fd < 0)
+        return -errno;
+    struct sockaddr_vm addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.svm_family = AF_VSOCK;
+    addr.svm_cid = VMADDR_CID_ANY;
+    addr.svm_port = SWIPTERMD_DATA_PORT;
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0 || listen(fd, 64) < 0) {
+        int err = -errno;
+        close(fd);
+        return err;
+    }
+    return fd;
+}
+
+static int setup_signals(void) {
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGCHLD);
+    sigaddset(&mask, SIGPWR);
+    sigaddset(&mask, SIGRTMIN + 3);
+    sigaddset(&mask, SIGRTMIN + 4);
+    sigaddset(&mask, SIGRTMIN + 5);
+    if (sigprocmask(SIG_BLOCK, &mask, NULL) < 0)
+        return -errno;
+    int sfd = signalfd(-1, &mask, SFD_NONBLOCK | SFD_CLOEXEC);
+    if (sfd < 0)
+        return -errno;
+    int rc = ev_add(&g_sig_ev, sfd, EPOLLIN, on_signal, NULL);
+    if (rc < 0)
+        close(sfd);
+    return rc;
+}
+
+static int setup_guest(void) {
+    static const struct {
+        const char *step;
+        int (*run)(void);
+    } steps[] = {
+        {"cgroup setup", cgroup_setup},
+        {"mount the root filesystem", storage_mount_root},
+        {"network setup", network_setup},
+        {"container assembly", container_assemble},
+    };
+    for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
+        int rc = steps[i].run();
+        if (rc < 0) {
+            boot_err_log(steps[i].step, rc);
+            return rc;
+        }
+    }
+    int rc = storage_mount_modules();
+    if (rc < 0)
+        boot_err_log("mount the kernel module overlay", rc);
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], SESSIONS_ANCHOR_COMMAND) == 0)
+        return sessions_anchor_main();
+    if (getpid() != 1) {
+        fprintf(stderr, "usage: %s " SESSIONS_ANCHOR_COMMAND "\n", argv[0]);
+        return 64;
+    }
+
+    umask(0);
+    signal(SIGPIPE, SIG_IGN);
+
+    setup_initramfs_mounts();
+    int boot_rc = setup_lower();
+    if (boot_rc < 0) {
+        boot_err_log("setup_lower", boot_rc);
+        reboot(RB_POWER_OFF);
+        return 1;
+    }
+    __asm__ volatile("hvc #0x5357" ::: "x0", "memory");
+    boot_rc = setup_boot_devices();
+    if (boot_rc < 0) {
+        boot_err_log("setup_boot_devices", boot_rc);
+        reboot(RB_POWER_OFF);
+        return 1;
+    }
+
+    g_daemon.epfd = epoll_create1(EPOLL_CLOEXEC);
+    if (g_daemon.epfd < 0 || setup_signals() < 0 || setup_guest() < 0) {
+        finish();
+        return 1;
+    }
+
+    strcpy(g_daemon.host_cmd_dir, "/run/host-bin");
+    boot_rc = host_cmd_setup(g_daemon.host_cmd_dir);
+    if (boot_rc < 0)
+        boot_err_log("host command setup", boot_rc);
+
+    boot_rc = notify_setup();
+    if (boot_rc < 0) {
+        boot_err_log("notify socket", boot_rc);
+        finish();
+        return 1;
+    }
+
+    if (getrandom(&g_daemon.session_nonce, sizeof(g_daemon.session_nonce), 0) !=
+        (ssize_t)sizeof(g_daemon.session_nonce)) {
+        boot_err_log("getrandom", -errno);
+        finish();
+        return 1;
+    }
+
+    g_daemon.ctrl_fd = connect_control_vsock();
+    if (g_daemon.ctrl_fd < 0) {
+        boot_err_log("connect_control_vsock", g_daemon.ctrl_fd);
+        g_daemon.ctrl_fd = -1;
+        finish();
+        return 1;
+    }
+    (void)set_nonblock(g_daemon.ctrl_fd);
+    ev_add(&g_ctrl_ev, g_daemon.ctrl_fd, EPOLLIN, on_ctrl_event, NULL);
+
+    g_daemon.data_listen_fd = listen_data_vsock();
+    if (g_daemon.data_listen_fd >= 0)
+        ev_add(&g_data_listen_ev, g_daemon.data_listen_fd, EPOLLIN, on_data_accept, NULL);
+
+    proc_pty_init();
+    sock_mirror_init();
+
+    uint8_t hello[SWIPTERMD_HELLO_REQ_SIZE];
+    swiptermd_enc_hello(hello, g_daemon.session_nonce,
+                        SWIPTERMD_CAP_READY | SWIPTERMD_CAP_LOGIN | SWIPTERMD_CAP_STOP_STATUS);
+    ctrl_send_frame(SWIPTERMD_OP_HELLO, ctrl_alloc_req_id(), hello, sizeof(hello));
+
+    while (!g_daemon.shutdown_requested) {
+        int n = epoll_wait(g_daemon.epfd, g_ep_events, 64, -1);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+        g_ep_count = n;
+        for (g_ep_index = 0; g_ep_index < g_ep_count; g_ep_index++) {
+            ev_node_t *node = g_ep_events[g_ep_index].data.ptr;
+            if (node && node->cb)
+                node->cb(node, g_ep_events[g_ep_index].events);
+        }
+        g_ep_count = 0;
+        g_ep_index = 0;
+    }
+
+    finish();
+    return 0;
+}

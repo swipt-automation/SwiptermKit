@@ -1,7 +1,9 @@
     .section __TEXT,__const
-    .p2align 4
+    .p2align 14
 swipterm_alpine_rootfs_bytes:
+#ifdef ROOTFS_ARCHIVE
     .incbin ROOTFS_ARCHIVE
+#endif
 swipterm_alpine_rootfs_end:
 
     .section __DATA,__const

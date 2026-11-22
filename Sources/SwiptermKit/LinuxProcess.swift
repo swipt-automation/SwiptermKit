@@ -88,26 +88,72 @@ public final class LinuxProcess: @unchecked Sendable {
     public let standardInput: LinuxPipeWriter?
     public let standardOutput: LinuxPipeReader?
     public let standardError: LinuxPipeReader?
+    private let runtime: LinuxRuntime
     private let handle: OpaquePointer
     private let state: State
     private let terminals: [LinuxTerminal]
 
-    init(_ configuration: Configuration, environment: [String: String]) async throws {
-        let state = State()
+    private struct Launch: Sendable {
+        let handle: UnsafeSendable<OpaquePointer>
+        let pid: Int32
+        let descriptors: [Int32]
+    }
+
+    convenience init(runtime: LinuxRuntime, _ configuration: Configuration, environment: [String: String]) async throws {
         let terminals = [configuration.standardInput, configuration.standardOutput, configuration.standardError]
             .compactMap { io -> LinuxTerminal? in
                 if case .terminal(let terminal) = io { terminal } else { nil }
             }
+        try await self.init(runtime: runtime, terminals: terminals) { runtimeHandle, context in
+            try Self.spawn(runtimeHandle: runtimeHandle, configuration, environment: environment, context: context)
+        }
+    }
+
+    convenience init(
+        runtime: LinuxRuntime,
+        loginAs user: String,
+        on terminal: LinuxTerminal,
+        environment: [String: String]
+    ) async throws {
+        let environment = environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+        let terminalHandle = UnsafeSendable(value: terminal.handle)
+        try await self.init(runtime: runtime, terminals: [terminal]) { runtimeHandle, context in
+            var handle: OpaquePointer?
+            var pid: Int32 = 0
+            let code = withCStringArray(environment) { envp in
+                user.withCString { user in
+                    var options = swipterm_login_options(
+                        terminal: terminalHandle.value,
+                        user: user,
+                        envp: envp,
+                        context: context.value
+                    )
+                    return swipterm_login(runtimeHandle, &options, &handle, &pid)
+                }
+            }
+            try check(code)
+            return Launch(handle: UnsafeSendable(value: handle!), pid: pid, descriptors: [-1, -1, -1])
+        }
+    }
+
+    private init(
+        runtime: LinuxRuntime,
+        terminals: [LinuxTerminal],
+        launch: @escaping @Sendable (OpaquePointer, UnsafeSendable<UnsafeMutableRawPointer>) throws -> Launch
+    ) async throws {
+        let state = State()
         let context = Unmanaged.passRetained(state)
-        let spawned: (handle: UnsafeSendable<OpaquePointer>, pid: Int32, descriptors: [Int32])
+        let spawned: Launch
         do {
-            spawned = try await blocking {
-                try Self.spawn(configuration, environment: environment, context: UnsafeSendable(value: context.toOpaque()))
+            let contextPointer = UnsafeSendable(value: context.toOpaque())
+            spawned = try await runtime.withActiveHandleBlocking { runtimeHandle in
+                try launch(runtimeHandle, contextPointer)
             }
         } catch {
             context.release()
             throw error
         }
+        self.runtime = runtime
         self.state = state
         self.terminals = terminals
         handle = spawned.handle.value
@@ -122,10 +168,11 @@ public final class LinuxProcess: @unchecked Sendable {
     }
 
     private static func spawn(
+        runtimeHandle: OpaquePointer,
         _ configuration: Configuration,
         environment: [String: String],
         context: UnsafeSendable<UnsafeMutableRawPointer>
-    ) throws -> (handle: UnsafeSendable<OpaquePointer>, pid: Int32, descriptors: [Int32]) {
+    ) throws -> Launch {
         func stdio(_ io: StandardIO) -> swipterm_stdio {
             switch io {
             case .null:
@@ -159,14 +206,14 @@ public final class LinuxProcess: @unchecked Sendable {
                             context: context.value
                         )
                         return descriptors.withUnsafeMutableBufferPointer {
-                            swipterm_spawn(&options, &handle, &pid, $0.baseAddress)
+                            swipterm_spawn(runtimeHandle, &options, &handle, &pid, $0.baseAddress)
                         }
                     }
                 }
             }
         }
         try check(code)
-        return (UnsafeSendable(value: handle!), pid, descriptors)
+        return Launch(handle: UnsafeSendable(value: handle!), pid: pid, descriptors: descriptors)
     }
 
     public var termination: Termination {

@@ -2,4 +2,12 @@
 /Frameworks/
 /.build/
 /.swiftpm/
+/Guest/swiptermd/swiptermd
+/Guest/swiptermd/cmd_stub
+/Guest/swiptermd/modprobe
+/Guest/swiptermd/initramfs.cpio
+/Guest/swiptermd/.initramfs_stage/
+/Tools/a64_check/a64_check
+/Tools/a64_check/*.o
+__pycache__/
 .DS_Store

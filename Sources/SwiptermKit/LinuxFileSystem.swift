@@ -67,34 +67,45 @@ public struct LinuxDirectoryEntry: Hashable, Sendable {
 }
 
 public struct LinuxFileSystem: Sendable {
+    private let runtime: LinuxRuntime
+
+    init(runtime: LinuxRuntime) {
+        self.runtime = runtime
+    }
+
     public func stat(_ path: String, followSymlinks: Bool = true) async throws -> LinuxFileStat {
-        try await blocking {
+        try await runtime.withActiveHandleBlocking { runtimeHandle in
             var stat = swipterm_stat()
-            try check(swipterm_stat_path(path, followSymlinks, &stat))
+            try check(swipterm_stat_path(runtimeHandle, path, followSymlinks, &stat))
             return LinuxFileStat(stat)
         }
     }
 
     public func contents(of path: String) async throws -> Data {
-        try await blocking {
+        try await runtime.withActiveHandleBlocking { runtimeHandle in
             var data: UnsafeMutableRawPointer?
             var length = 0
-            try check(swipterm_read_file(path, &data, &length))
-            return Data(bytesNoCopy: data!, count: length, deallocator: .free)
+            try check(swipterm_read_file(runtimeHandle, path, &data, &length))
+            guard let data else {
+                return Data()
+            }
+            return Data(bytesNoCopy: data, count: length, deallocator: .free)
         }
     }
 
     public func writeFile(_ path: String, contents: Data, permissions: UInt32 = 0o644) async throws {
-        try await blocking {
-            try check(contents.withUnsafeBytes { swipterm_write_file(path, $0.baseAddress, $0.count, permissions) })
+        try await runtime.withActiveHandleBlocking { runtimeHandle in
+            try check(contents.withUnsafeBytes {
+                swipterm_write_file(runtimeHandle, path, $0.baseAddress, $0.count, permissions)
+            })
         }
     }
 
     public func listDirectory(_ path: String) async throws -> [LinuxDirectoryEntry] {
-        try await blocking {
+        try await runtime.withActiveHandleBlocking { runtimeHandle in
             var entries: UnsafeMutablePointer<swipterm_directory_entry>?
             var count = 0
-            try check(swipterm_list_directory(path, &entries, &count))
+            try check(swipterm_list_directory(runtimeHandle, path, &entries, &count))
             defer { swipterm_free_directory_entries(entries, count) }
             return (0..<count).map {
                 LinuxDirectoryEntry(name: String(cString: entries![$0].name), type: LinuxFileType(mode: entries![$0].mode))
@@ -107,14 +118,14 @@ public struct LinuxFileSystem: Sendable {
         permissions: UInt32 = 0o755,
         withIntermediateDirectories: Bool = false
     ) async throws {
-        try await blocking {
-            try check(swipterm_create_directory(path, permissions, withIntermediateDirectories))
+        try await runtime.withActiveHandleBlocking { runtimeHandle in
+            try check(swipterm_create_directory(runtimeHandle, path, permissions, withIntermediateDirectories))
         }
     }
 
     public func removeItem(_ path: String, recursive: Bool = false) async throws {
-        try await blocking {
-            try check(swipterm_remove(path, recursive))
+        try await runtime.withActiveHandleBlocking { runtimeHandle in
+            try check(swipterm_remove(runtimeHandle, path, recursive))
         }
     }
 }

@@ -4,10 +4,11 @@ import PackageDescription
 
 let package = Package(
     name: "SwiptermKit",
-    platforms: [.iOS(.v16)],
+    platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
         .library(name: "SwiptermKit", targets: ["SwiptermKit"]),
         .library(name: "SwiptermAlpineRootfs", targets: ["SwiptermAlpineRootfs"]),
+        .library(name: "SwiptermDebianRootfs", targets: ["SwiptermDebianRootfs"]),
     ],
     targets: [
         .binaryTarget(
@@ -18,26 +19,27 @@ let package = Package(
             name: "CSwiptermAlpineRootfs",
             path: "Frameworks/CSwiptermAlpineRootfs.xcframework"
         ),
+        .binaryTarget(
+            name: "CSwiptermDebianRootfs",
+            path: "Frameworks/CSwiptermDebianRootfs.xcframework"
+        ),
         .target(
             name: "SwiptermKit",
             dependencies: ["CSwiptermKit"],
             linkerSettings: [
                 .linkedLibrary("archive"),
+                .linkedLibrary("lzma"),
                 .linkedLibrary("resolv"),
-                .linkedLibrary("sqlite3"),
+                .linkedLibrary("z"),
             ]
         ),
         .target(
             name: "SwiptermAlpineRootfs",
             dependencies: ["SwiptermKit", "CSwiptermAlpineRootfs"]
         ),
-        .testTarget(
-            name: "SwiptermKitTests",
-            dependencies: ["SwiptermKit", "SwiptermAlpineRootfs"]
-        ),
-        .testTarget(
-            name: "SwiptermKitProcessModeTests",
-            dependencies: ["SwiptermKit", "SwiptermAlpineRootfs"]
+        .target(
+            name: "SwiptermDebianRootfs",
+            dependencies: ["SwiptermKit", "CSwiptermDebianRootfs"]
         ),
     ]
 )
