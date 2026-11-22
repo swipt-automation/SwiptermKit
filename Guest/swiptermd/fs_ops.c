@@ -24,8 +24,8 @@ static size_t g_mount_count;
 static uint8_t g_resolver[4096];
 static size_t g_resolver_len;
 
-static void sync_upper_fs(void) {
-    int fd = open("/mnt/upper", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+static void sync_root_fs(void) {
+    int fd = open(GUEST_ROOT, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (fd >= 0) {
         (void)syncfs(fd);
         close(fd);
@@ -428,7 +428,7 @@ void fs_handle_write(uint32_t req_id, const uint8_t *body, uint32_t len) {
         err = fs_write_file_jailed(path, data.ptr, data.len, mode);
     }
     if (err == 0)
-        sync_upper_fs();
+        sync_root_fs();
     ctrl_send_err_reply(SWIPTERMD_OP_FS_WRITE, req_id, err);
 }
 
@@ -536,7 +536,7 @@ void fs_handle_mkdir(uint32_t req_id, const uint8_t *body, uint32_t len) {
         }
     }
     if (err == 0)
-        sync_upper_fs();
+        sync_root_fs();
     ctrl_send_err_reply(SWIPTERMD_OP_FS_MKDIR, req_id, err);
 }
 
@@ -643,7 +643,7 @@ void fs_handle_remove(uint32_t req_id, const uint8_t *body, uint32_t len) {
 
     close(pfd);
     if (err == 0)
-        sync_upper_fs();
+        sync_root_fs();
     ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, err);
 }
 

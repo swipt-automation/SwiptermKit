@@ -15,6 +15,7 @@ enum {
     SWIPTERMD_ERR_REPLY_SIZE = 4,
     SWIPTERMD_HALT_REQ_SIZE = 4,
     SWIPTERMD_HALT_NOTIFY_SIZE = 8,
+    SWIPTERMD_RESUME_REQ_SIZE = 8,
     SWIPTERMD_READY_NOTIFY_SIZE = 4,
     SWIPTERMD_STOPPED_NOTIFY_SIZE = 4,
     SWIPTERMD_SPAWN_REPLY_SIZE = 8,
@@ -353,6 +354,18 @@ static inline bool swiptermd_dec_halt_notify(const uint8_t *in, size_t len,
     *reason = swiptermd_r_u32(&r);
     *status = swiptermd_r_i32(&r);
     return !r.underflow;
+}
+
+static inline size_t swiptermd_enc_resume_req(uint8_t out[SWIPTERMD_RESUME_REQ_SIZE], int64_t realtime_ns) {
+    swiptermd_put_be64(out, (uint64_t)realtime_ns);
+    return SWIPTERMD_RESUME_REQ_SIZE;
+}
+
+static inline bool swiptermd_dec_resume_req(const uint8_t *buf, size_t len, int64_t *realtime_ns) {
+    if (len < SWIPTERMD_RESUME_REQ_SIZE)
+        return false;
+    *realtime_ns = (int64_t)swiptermd_get_be64(buf);
+    return true;
 }
 
 static inline size_t swiptermd_enc_u32_notify(uint8_t out[4], uint32_t value) {

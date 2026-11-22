@@ -1241,7 +1241,7 @@ void slirp_pollfds_poll(Slirp *slirp, int select_error,
                     /*
                      * Continue tcp_input
                      */
-                    tcp_input((struct mbuf *)NULL, sizeof(struct ip), so,
+                    tcp_input((struct mbuf *)NULL, sizeof(struct slirp_ip), so,
                               so->so_ffamily);
                     /* continue; */
                 } else {
@@ -1441,7 +1441,7 @@ void slirp_input(Slirp *slirp, const uint8_t *pkt, int pkt_len)
 static int if_encap4(Slirp *slirp, struct mbuf *ifm, struct ethhdr *eh,
                      uint8_t ethaddr[ETH_ALEN])
 {
-    const struct ip *iph = (const struct ip *)ifm->m_data;
+    const struct slirp_ip *iph = (const struct slirp_ip *)ifm->m_data;
 
     if (!arp_table_search(slirp, iph->ip_dst.s_addr, ethaddr)) {
         uint8_t arp_req[2 + ETH_HLEN + sizeof(struct slirp_arphdr)];
@@ -1521,7 +1521,7 @@ int if_encap(Slirp *slirp, struct mbuf *ifm)
     uint8_t buf[IF_MTU_MAX + 100];
     struct ethhdr *eh = (struct ethhdr *)(buf + 2);
     uint8_t ethaddr[ETH_ALEN];
-    const struct ip *iph = (const struct ip *)ifm->m_data;
+    const struct slirp_ip *iph = (const struct slirp_ip *)ifm->m_data;
     int ret;
     char ethaddr_str[ETH_ADDRSTRLEN];
 

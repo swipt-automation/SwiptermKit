@@ -37,7 +37,7 @@
 /*
  * Tcp+ip header, after ip options removed.
  */
-struct tcpiphdr {
+struct slirp_tcpiphdr {
     struct mbuf_ptr ih_mbuf; /* backpointer to mbuf */
     union {
         struct {
@@ -55,7 +55,7 @@ struct tcpiphdr {
     } ti;
     uint16_t ti_x0;
     uint16_t ti_len; /* protocol length */
-    struct tcphdr ti_t; /* tcp header */
+    struct slirp_tcphdr ti_t; /* tcp header */
 };
 #define ti_mbuf ih_mbuf.mptr
 #define ti_pr ti.ti_i4.ih_pr
@@ -78,19 +78,19 @@ struct tcpiphdr {
 #define tcpiphdr2qlink(T) \
     ((struct qlink *)(((char *)(T)) - sizeof(struct qlink)))
 #define qlink2tcpiphdr(Q) \
-    ((struct tcpiphdr *)(((char *)(Q)) + sizeof(struct qlink)))
+    ((struct slirp_tcpiphdr *)(((char *)(Q)) + sizeof(struct qlink)))
 #define tcpiphdr_next(T) qlink2tcpiphdr(tcpiphdr2qlink(T)->next)
 #define tcpiphdr_prev(T) qlink2tcpiphdr(tcpiphdr2qlink(T)->prev)
 #define tcpfrag_list_first(T) qlink2tcpiphdr((T)->seg_next)
 #define tcpfrag_list_end(F, T) (tcpiphdr2qlink(F) == (struct qlink *)(T))
-#define tcpfrag_list_empty(T) ((T)->seg_next == (struct tcpiphdr *)(T))
+#define tcpfrag_list_empty(T) ((T)->seg_next == (struct slirp_tcpiphdr *)(T))
 
 /* This is the difference between the size of a tcpiphdr structure, and the
  * size of actual ip+tcp headers, rounded up since we need to align data.  */
 #define TCPIPHDR_DELTA                                     \
     (MAX(0, ((int) sizeof(struct qlink) + \
-             (int) sizeof(struct tcpiphdr) - (int) sizeof(struct ip) - \
-             (int) sizeof(struct tcphdr) + 7) & \
+             (int) sizeof(struct slirp_tcpiphdr) - (int) sizeof(struct slirp_ip) - \
+             (int) sizeof(struct slirp_tcphdr) + 7) & \
                 ~7))
 
 /*
@@ -98,7 +98,7 @@ struct tcpiphdr {
  * of the packet
  */
 struct tcpiphdr_2 {
-    struct tcpiphdr dummy;
+    struct slirp_tcpiphdr dummy;
     char first_char;
 };
 

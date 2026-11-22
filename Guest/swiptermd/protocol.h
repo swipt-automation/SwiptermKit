@@ -78,6 +78,8 @@ typedef enum swiptermd_capability {
     SWIPTERMD_CAP_READY = 1U << 0,
     SWIPTERMD_CAP_LOGIN = 1U << 1,
     SWIPTERMD_CAP_STOP_STATUS = 1U << 2,
+    SWIPTERMD_CAP_DEVICES = 1U << 3,
+    SWIPTERMD_CAP_VIRTIOFS = 1U << 4,
 } swiptermd_capability_t;
 
 typedef enum swiptermd_ready_level {

@@ -831,6 +831,14 @@ bool cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, ui
     }
 }
 
+bool cuse_available(void) {
+    int fd = open("/dev/cuse", O_RDWR | O_CLOEXEC);
+    if (fd < 0)
+        return false;
+    close(fd);
+    return true;
+}
+
 void cuse_handle_register_device(uint32_t req_id, const uint8_t *body, uint32_t len) {
     swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
     uint32_t device_id = swiptermd_r_u32(&r);
@@ -844,7 +852,7 @@ void cuse_handle_register_device(uint32_t req_id, const uint8_t *body, uint32_t 
     snprintf(devname, sizeof(devname), "swipterm-%u", device_id);
     int cuse_fd = open("/dev/cuse", O_RDWR | O_CLOEXEC);
     if (cuse_fd < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_REGISTER_DEVICE, req_id, -errno);
+        ctrl_send_err_reply(SWIPTERMD_OP_REGISTER_DEVICE, req_id, errno == ENOENT ? -ENODEV : -errno);
         return;
     }
 

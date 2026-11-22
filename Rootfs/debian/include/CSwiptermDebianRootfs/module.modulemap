@@ -1,4 +1,0 @@
-module CSwiptermDebianRootfs {
-    header "swipterm_debian_rootfs.h"
-    export *
-}

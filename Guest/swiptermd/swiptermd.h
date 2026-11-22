@@ -12,7 +12,7 @@
 #include <sys/epoll.h>
 #include <sys/types.h>
 
-#define GUEST_ROOT "/mnt/merged"
+#define GUEST_ROOT "/mnt/root"
 #define GUEST_RUN_HOST "/run/host"
 #define GUEST_NOTIFY_SOCKET GUEST_RUN_HOST "/notify"
 #define GUEST_TOOL_PATH GUEST_RUN_HOST "/swiptermd"
@@ -83,7 +83,6 @@ void shutdown_begin(bool reboot);
 void shutdown_check_done(void);
 
 int storage_mount_root(void);
-int storage_mount_modules(void);
 bool storage_teardown(void);
 
 int network_setup(void);
@@ -155,6 +154,7 @@ void host_cmd_handle_register(uint32_t req_id, const uint8_t *body, uint32_t len
 void host_cmd_handle_finish(const uint8_t *body, uint32_t len);
 void host_cmd_handle_start_reply(uint32_t req_id, const uint8_t *body, uint32_t len);
 
+bool cuse_available(void);
 void cuse_handle_register_device(uint32_t req_id, const uint8_t *body, uint32_t len);
 bool cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, uint32_t len);
 

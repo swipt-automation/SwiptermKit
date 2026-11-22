@@ -186,7 +186,7 @@ static void bootp_reply(Slirp *slirp,
     m->m_data += IF_MAXLINKHDR;
     m_inc(m, sizeof(struct bootp_t) + DHCP_OPT_LEN);
     rbp = (struct bootp_t *)m->m_data;
-    m->m_data += sizeof(struct udpiphdr);
+    m->m_data += sizeof(struct slirp_udpiphdr);
     memset(rbp, 0, sizeof(struct bootp_t) + DHCP_OPT_LEN);
 
     if (dhcp_msg_type == DHCPDISCOVER) {
@@ -414,7 +414,7 @@ static void bootp_reply(Slirp *slirp,
 
     assert(q <= end);
 
-    m->m_len = sizeof(struct bootp_t) + (end - rbp->bp_vend) - sizeof(struct ip) - sizeof(struct udphdr);
+    m->m_len = sizeof(struct bootp_t) + (end - rbp->bp_vend) - sizeof(struct slirp_ip) - sizeof(struct slirp_udphdr);
     udp_output(NULL, m, &saddr, &daddr, IPTOS_LOWDELAY);
 }
 

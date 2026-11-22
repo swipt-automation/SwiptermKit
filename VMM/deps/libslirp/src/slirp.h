@@ -320,13 +320,13 @@ int ip6_output(struct socket *, struct mbuf *, int fast);
 /* Process TCP datagram coming from the guest */
 void tcp_input(register struct mbuf *, int, struct socket *, unsigned short af);
 /* Determine a reasonable value for maxseg size */
-int tcp_mss(register struct tcpcb *, unsigned offer);
+int tcp_mss(register struct slirp_tcpcb *, unsigned offer);
 
 /* tcp_output.c */
 /* Send TCP datagram to the guest */
-int tcp_output(register struct tcpcb *);
+int tcp_output(register struct slirp_tcpcb *);
 /* Start/restart persistence timer */
-void tcp_setpersist(register struct tcpcb *);
+void tcp_setpersist(register struct slirp_tcpcb *);
 
 /* tcp_subr.c */
 /* Called from slirp_new */
@@ -339,28 +339,28 @@ void tcp_cleanup(Slirp *);
  * in a skeletal tcp/ip header, minimizing the amount of work
  * necessary when the connection is used.
  */
-void tcp_template(struct tcpcb *);
+void tcp_template(struct slirp_tcpcb *);
 /*
  * Send a single message to the TCP at address specified by
  * the given TCP/IP header.
  */
-void tcp_respond(struct tcpcb *, register struct tcpiphdr *,
+void tcp_respond(struct slirp_tcpcb *, register struct slirp_tcpiphdr *,
                  register struct mbuf *, tcp_seq, tcp_seq, int, unsigned short);
 /*
  * Create a new TCP control block, making an
  * empty reassembly queue and hooking it to the argument
  * protocol control block.
  */
-struct tcpcb *tcp_newtcpcb(struct socket *);
+struct slirp_tcpcb *tcp_newtcpcb(struct socket *);
 /*
  * Close a TCP control block:
  *	discard all space held by the tcp
  *	discard internet protocol block
  *	wake up any sleepers
  */
-struct tcpcb *tcp_close(register struct tcpcb *);
+struct slirp_tcpcb *tcp_close(register struct slirp_tcpcb *);
 /* The Internet socket got closed, tell the guest */
-void tcp_sockclosed(struct tcpcb *);
+void tcp_sockclosed(struct slirp_tcpcb *);
 /*
  * Connect to a host on the Internet
  * Called by tcp_input
@@ -388,7 +388,7 @@ int tcp_ctl(struct socket *);
  * the specified error.  If connection is synchronized,
  * then send a RST to peer.
  */
-struct tcpcb *tcp_drop(struct tcpcb *tp, int err);
+struct slirp_tcpcb *tcp_drop(struct slirp_tcpcb *tp, int err);
 
 /* Find the socket for the guest address and port */
 struct socket *slirp_find_ctl_socket(Slirp *slirp, struct in_addr guest_addr,

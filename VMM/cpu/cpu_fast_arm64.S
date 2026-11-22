@@ -1,3 +1,5 @@
+#if defined(__aarch64__)
+
 #include "cpu_fast_layout.h"
 
 .arch_extension crc
@@ -2146,3 +2148,5 @@ _cpu_fast_offsets:
 #include "cpu_fast_ops.inc"
 
 .subsections_via_symbols
+
+#endif

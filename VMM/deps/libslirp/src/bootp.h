@@ -99,8 +99,8 @@
 #define DHCP_OPT_LEN 312
 
 struct bootp_t {
-    struct ip ip;
-    struct udphdr udp;
+    struct slirp_ip ip;
+    struct slirp_udphdr udp;
     uint8_t bp_op;
     uint8_t bp_htype;
     uint8_t bp_hlen;

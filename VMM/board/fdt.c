@@ -283,13 +283,6 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     fdt_prop_reg2(&w, VMM_RAM_BASE, (uint64_t)vm->ram_size);
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
 
-    if (vm->pmem && vm->pmem_size > 0) {
-        fdt_begin_node(&w, "pmem@100000000");
-        fdt_prop(&w, "compatible", "pmem-region", sizeof("pmem-region"));
-        fdt_prop_reg2(&w, VMM_PMEM_BASE, (uint64_t)vm->pmem_size);
-        buf_put_be32(&w.dt_struct, FDT_END_NODE);
-    }
-
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
     buf_put_be32(&w.dt_struct, FDT_END);
 

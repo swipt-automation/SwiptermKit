@@ -15,7 +15,6 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include <zlib.h>
 
 #if defined(__APPLE__)
 #include <mach/mach.h>
@@ -23,7 +22,7 @@
 #endif
 
 #define VMM_SNAPSHOT_MAGIC 0x53575054534e4150ULL
-#define VMM_SNAPSHOT_VERSION 3U
+#define VMM_SNAPSHOT_VERSION 4U
 #define VMM_SNAPSHOT_PREBOOT 1U
 #define VMM_SNAPSHOT_WRITE_MAX ((size_t)16 << 20)
 #define ARM64_IMAGE_MAGIC 0x644d5241U
@@ -39,7 +38,6 @@ typedef struct vmm_snapshot_header {
     uint32_t uart_state_size;
     uint32_t rtc_state_size;
     uint32_t flags;
-    uint64_t pmem_size;
     uint8_t key[32];
 } vmm_snapshot_header_t;
 
@@ -778,6 +776,18 @@ bool vmm_handle_psci(vcpu_t *cpu) {
     }
 }
 
+static void preboot_return(vcpu_t *cpu) {
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    cpu->x[0] = (uint64_t)now.tv_sec * 1000000000ULL + (uint64_t)now.tv_nsec;
+    uint64_t seed[4];
+    arc4random_buf(seed, sizeof(seed));
+    for (size_t i = 0; i < 4; i++) {
+        cpu->x[1 + i] = seed[i];
+    }
+    cpu->pc += 4;
+}
+
 bool vmm_preboot_trap(vcpu_t *cpu) {
     vmm_machine_priv_t *priv = vmm_priv(cpu->vm);
     if (!priv) {
@@ -790,13 +800,12 @@ bool vmm_preboot_trap(vcpu_t *cpu) {
         atomic_store(&cpu->stop_requested, true);
         atomic_store(&priv->preboot_phase, VMM_PREBOOT_REACHED);
         pthread_cond_broadcast(&priv->suspend_cond);
-    } else if (phase == VMM_PREBOOT_RELEASED) {
+    } else if (phase == VMM_PREBOOT_RELEASED || phase == VMM_PREBOOT_DISABLED) {
         atomic_store(&priv->preboot_phase, VMM_PREBOOT_COMPLETE);
-        cpu->x[0] = 0;
-        cpu->pc += 4;
+        preboot_return(cpu);
     }
     pthread_mutex_unlock(&priv->state_lock);
-    return phase != VMM_PREBOOT_DISABLED && phase != VMM_PREBOOT_COMPLETE;
+    return phase != VMM_PREBOOT_COMPLETE;
 }
 
 bool vmm_is_warm_boot(vmm_machine_t *vm) {
@@ -905,149 +914,6 @@ void vmm_mmio_write(vmm_machine_t *vm, vcpu_t *cpu, uint64_t gpa, uint32_t size,
     }
 }
 
-static int setup_pmem(vmm_machine_t *vm, const vmm_config_t *config) {
-    size_t raw_size = 0;
-    bool use_fd = config->lower_erofs_fd >= 0;
-
-    if (use_fd) {
-        raw_size = config->lower_erofs_size;
-        if (raw_size == 0) {
-            struct stat st;
-            if (fstat(config->lower_erofs_fd, &st) < 0) {
-                return -errno;
-            }
-            if (st.st_size <= 0) {
-                return 0;
-            }
-            raw_size = (size_t)st.st_size;
-        }
-    } else if (config->lower_erofs_ptr && config->lower_erofs_size > 0) {
-        raw_size = config->lower_erofs_size;
-    } else {
-        return 0;
-    }
-
-    // Linux arm64 ZONE_DEVICE / OF_PMEM requires 128 MiB section alignment.
-    size_t padded_size = (raw_size + (size_t)VMM_PMEM_ALIGN - 1) & ~((size_t)VMM_PMEM_ALIGN - 1);
-    void *base = mmap(NULL, padded_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (base == MAP_FAILED) {
-        return -errno;
-    }
-
-    if (use_fd) {
-        size_t page = (size_t)getpagesize();
-        size_t map_len = (raw_size + page - 1) & ~(page - 1);
-        if (map_len > padded_size) {
-            map_len = padded_size;
-        }
-        void *m = mmap(base, map_len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED,
-                       config->lower_erofs_fd, 0);
-        if (m == MAP_FAILED) {
-            m = mmap(base, map_len, PROT_READ, MAP_PRIVATE | MAP_FIXED,
-                     config->lower_erofs_fd, 0);
-        }
-        if (m != base) {
-            int err = errno;
-            munmap(base, padded_size);
-            return -err;
-        }
-    } else {
-        bool remapped = false;
-#if defined(__APPLE__)
-        size_t page = (size_t)getpagesize();
-        if ((((uintptr_t)config->lower_erofs_ptr) & (page - 1)) == 0 && raw_size >= page) {
-            size_t full_pages = raw_size & ~(page - 1);
-            vm_address_t dst = (vm_address_t)base;
-            vm_prot_t cur_prot = VM_PROT_READ | VM_PROT_WRITE;
-            vm_prot_t max_prot = VM_PROT_READ | VM_PROT_WRITE;
-            kern_return_t kr = vm_remap_new(
-                mach_task_self(), &dst, full_pages, 0,
-                VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE,
-                mach_task_self(), (vm_address_t)config->lower_erofs_ptr,
-                TRUE, &cur_prot, &max_prot, VM_INHERIT_NONE);
-            if (kr == KERN_SUCCESS && dst == (vm_address_t)base) {
-                if (raw_size > full_pages) {
-                    memcpy((uint8_t *)base + full_pages,
-                           (const uint8_t *)config->lower_erofs_ptr + full_pages,
-                           raw_size - full_pages);
-                }
-                remapped = true;
-            }
-        }
-#endif
-        if (!remapped) {
-            memcpy(base, config->lower_erofs_ptr, raw_size);
-        }
-    }
-
-    vm->pmem = (uint8_t *)base;
-    vm->pmem_size = padded_size;
-    vm->pmem_owned = true;
-    return 0;
-}
-
-static int gunzip_kernel_buffer(const uint8_t *src, size_t src_len,
-                                uint8_t **out_buf, size_t *out_len) {
-    const size_t max_out = 128ULL << 20;
-    z_stream zs = {0};
-    zs.next_in = (Bytef *)src;
-    zs.avail_in = (uInt)(src_len > UINT32_MAX ? UINT32_MAX : src_len);
-    if (inflateInit2(&zs, 16 + MAX_WBITS) != Z_OK) {
-        return -EINVAL;
-    }
-    size_t cap = src_len * 3U;
-    if (cap < (8ULL << 20)) {
-        cap = 8ULL << 20;
-    }
-    if (cap > max_out) {
-        cap = max_out;
-    }
-    uint8_t *buf = malloc(cap);
-    if (!buf) {
-        inflateEnd(&zs);
-        return -ENOMEM;
-    }
-    size_t used = 0;
-    int zrc = Z_OK;
-    for (;;) {
-        if (used == cap) {
-            if (cap >= max_out) {
-                free(buf);
-                inflateEnd(&zs);
-                return -ENOSPC;
-            }
-            size_t ncap = cap * 2U;
-            if (ncap > max_out) {
-                ncap = max_out;
-            }
-            uint8_t *nbuf = realloc(buf, ncap);
-            if (!nbuf) {
-                free(buf);
-                inflateEnd(&zs);
-                return -ENOMEM;
-            }
-            buf = nbuf;
-            cap = ncap;
-        }
-        zs.next_out = buf + used;
-        zs.avail_out = (uInt)((cap - used) > UINT32_MAX ? UINT32_MAX : (cap - used));
-        zrc = inflate(&zs, Z_NO_FLUSH);
-        used = cap - zs.avail_out;
-        if (zrc == Z_STREAM_END) {
-            break;
-        }
-        if (zrc != Z_OK) {
-            free(buf);
-            inflateEnd(&zs);
-            return -EINVAL;
-        }
-    }
-    inflateEnd(&zs);
-    *out_buf = buf;
-    *out_len = used;
-    return 0;
-}
-
 static int load_kernel_and_dtb(vmm_machine_priv_t *priv, const vmm_config_t *config) {
     vmm_machine_t *vm = &priv->pub;
     uint64_t kernel_load = VMM_KERNEL_ADDR;
@@ -1056,29 +922,6 @@ static int load_kernel_and_dtb(vmm_machine_priv_t *priv, const vmm_config_t *con
     if (config->kernel_image && config->kernel_size > 0) {
         const uint8_t *img_ptr = (const uint8_t *)config->kernel_image;
         size_t img_len = config->kernel_size;
-        uint8_t *decompressed = NULL;
-
-        if (img_len >= 2 && img_ptr[0] == 0x1f && img_ptr[1] == 0x8b) {
-            int zrc = gunzip_kernel_buffer(img_ptr, img_len, &decompressed, &img_len);
-            if (zrc < 0) {
-                return zrc;
-            }
-            img_ptr = decompressed;
-        } else if (img_len >= 40 && img_ptr[0] == 'M' && img_ptr[1] == 'Z' &&
-                   memcmp(img_ptr + 4, "zimg", 4) == 0) {
-            uint32_t pay_off = 0, pay_sz = 0;
-            memcpy(&pay_off, img_ptr + 8, 4);
-            memcpy(&pay_sz, img_ptr + 12, 4);
-            if (memcmp(img_ptr + 24, "gzip", 4) == 0 &&
-                (uint64_t)pay_off + (uint64_t)pay_sz <= img_len) {
-                int zrc = gunzip_kernel_buffer(img_ptr + pay_off, pay_sz, &decompressed, &img_len);
-                if (zrc < 0) {
-                    return zrc;
-                }
-                img_ptr = decompressed;
-            }
-        }
-
         uint64_t text_offset = 0;
         uint64_t hdr_img_size = 0;
         if (img_len >= 64) {
@@ -1097,11 +940,9 @@ static int load_kernel_and_dtb(vmm_machine_priv_t *priv, const vmm_config_t *con
         uint64_t offset_in_ram = kernel_load - VMM_RAM_BASE;
         uint64_t reserved_span = hdr_img_size > img_len ? hdr_img_size : (uint64_t)img_len;
         if (offset_in_ram >= vm->ram_size || reserved_span > vm->ram_size - offset_in_ram) {
-            free(decompressed);
             return -ENOSPC;
         }
         memcpy(vm->ram + offset_in_ram, img_ptr, img_len);
-        free(decompressed);
         kernel_end = kernel_load + reserved_span;
     }
 
@@ -1153,7 +994,7 @@ static int try_restore_snapshot(vmm_machine_priv_t *priv, const vmm_config_t *co
     rc = pread_all(fd, &hdr, sizeof(hdr), (off_t)footer.state_offset);
     if (rc < 0 || hdr.magic != VMM_SNAPSHOT_MAGIC || hdr.version != VMM_SNAPSHOT_VERSION ||
         hdr.cpu_count != requested_cpu_count || hdr.ram_size != requested_ram_size ||
-        hdr.ram_size != footer.state_offset || hdr.pmem_size != priv->pub.pmem_size ||
+        hdr.ram_size != footer.state_offset ||
         hdr.flags != (config->preboot_checkpoint ? VMM_SNAPSHOT_PREBOOT : 0) ||
         memcmp(hdr.key, config->snapshot_key, sizeof(hdr.key)) != 0 ||
         hdr.online_mask == 0 || (hdr.online_mask >> hdr.cpu_count) != 0 ||
@@ -1276,11 +1117,11 @@ static int try_restore_snapshot(vmm_machine_priv_t *priv, const vmm_config_t *co
 
 static int attach_default_virtio(vmm_machine_priv_t *priv, const vmm_config_t *config) {
     vmm_machine_t *vm = &priv->pub;
-    if (config->upper_ext4_path && config->upper_ext4_path[0] != '\0') {
+    if (config->root_disk_path && config->root_disk_path[0] != '\0') {
         bool read_only = false;
-        int fd = open(config->upper_ext4_path, O_RDWR);
+        int fd = open(config->root_disk_path, O_RDWR | O_CLOEXEC);
         if (fd < 0 && (errno == EACCES || errno == EROFS)) {
-            fd = open(config->upper_ext4_path, O_RDONLY);
+            fd = open(config->root_disk_path, O_RDONLY | O_CLOEXEC);
             read_only = true;
         }
         if (fd < 0) {
@@ -1357,15 +1198,7 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
     vm->on_halt = config->on_halt;
     vm->on_panic = config->on_panic;
 
-    int rc = setup_pmem(vm, config);
-    if (rc < 0) {
-        vmm_destroy(vm);
-        if (err_out) {
-            *err_out = -rc;
-        }
-        return NULL;
-    }
-
+    int rc = 0;
     size_t ram_size = config->ram_size ? config->ram_size : (256ULL << 20);
     if (ram_size > SIZE_MAX - (size_t)VMM_RAM_ALIGN ||
         ram_size < (VMM_KERNEL_ADDR - VMM_RAM_BASE) + VMM_PAGE_SIZE) {
@@ -1390,13 +1223,16 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
     int snap_rc = 0;
     if (config->snapshot_path && config->snapshot_path[0] != '\0') {
         snap_rc = try_restore_snapshot(priv, config, ram_size, cpu_count);
-        if (snap_rc < 0) {
-            vmm_destroy(vm);
-            if (err_out) {
-                *err_out = -snap_rc;
-            }
-            return NULL;
+    }
+    if (config->snapshot_required && (snap_rc == 0 || snap_rc == -EINVAL)) {
+        snap_rc = -ESTALE;
+    }
+    if (snap_rc < 0) {
+        vmm_destroy(vm);
+        if (err_out) {
+            *err_out = -snap_rc;
         }
+        return NULL;
     }
 
     if (snap_rc == 0) {
@@ -1665,10 +1501,6 @@ void vmm_destroy(vmm_machine_t *vm) {
     }
     free((void *)vm->icache_ram_bitmap);
     vm->icache_ram_bitmap = NULL;
-    if (vm->pmem && vm->pmem_size > 0 && vm->pmem_owned) {
-        munmap(vm->pmem, vm->pmem_size);
-        vm->pmem = NULL;
-    }
     if (priv->blk_fd >= 0) {
         close(priv->blk_fd);
         priv->blk_fd = -1;
@@ -1747,7 +1579,6 @@ int vmm_save_snapshot(vmm_machine_t *vm, const char *path) {
             .uart_state_size = (uint32_t)sizeof(pl011_snapshot_t),
             .rtc_state_size = (uint32_t)sizeof(pl031_snapshot_t),
             .flags = phase == VMM_PREBOOT_REACHED ? VMM_SNAPSHOT_PREBOOT : 0,
-            .pmem_size = vm->pmem_size,
         };
         memcpy(hdr.key, priv->snapshot_key, sizeof(hdr.key));
         for (uint32_t i = 0; i < vm->cpu_count; i++) {

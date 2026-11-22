@@ -1,4 +1,0 @@
-module CSwiptermAlpineRootfs {
-    header "swipterm_alpine_rootfs.h"
-    export *
-}

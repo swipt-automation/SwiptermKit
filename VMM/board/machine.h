@@ -17,12 +17,10 @@ typedef struct vmm_config {
     size_t kernel_size;
     const void *initramfs;
     size_t initramfs_size;
-    const void *lower_erofs_ptr;
-    size_t lower_erofs_size;
-    int lower_erofs_fd;
-    const char *upper_ext4_path;
+    const char *root_disk_path;
     const char *snapshot_path;
     bool preboot_checkpoint;
+    bool snapshot_required;
     uint8_t snapshot_key[32];
     const char *cmdline;
     void *callback_ctx;
@@ -44,9 +42,6 @@ typedef struct vmm_icache_shootdown {
 struct vmm_machine {
     uint8_t *ram;
     size_t ram_size;
-    uint8_t *pmem;
-    size_t pmem_size;
-    bool pmem_owned;
 
     uint32_t cpu_count;
     vcpu_t *cpus[VMM_MAX_VCPUS];

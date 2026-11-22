@@ -28,7 +28,7 @@
 
 static int slirp_tcp_post_load(void *opaque, int version)
 {
-    tcp_template((struct tcpcb *)opaque);
+    tcp_template((struct slirp_tcpcb *)opaque);
 
     return 0;
 }
@@ -37,47 +37,47 @@ static const VMStateDescription vmstate_slirp_tcp = {
     .name = "slirp-tcp",
     .version_id = 0,
     .post_load = slirp_tcp_post_load,
-    .fields = (VMStateField[]){ VMSTATE_INT16(t_state, struct tcpcb),
-                                VMSTATE_INT16_ARRAY(t_timer, struct tcpcb,
+    .fields = (VMStateField[]){ VMSTATE_INT16(t_state, struct slirp_tcpcb),
+                                VMSTATE_INT16_ARRAY(t_timer, struct slirp_tcpcb,
                                                     TCPT_NTIMERS),
-                                VMSTATE_INT16(t_rxtshift, struct tcpcb),
-                                VMSTATE_INT16(t_rxtcur, struct tcpcb),
-                                VMSTATE_INT16(t_dupacks, struct tcpcb),
-                                VMSTATE_UINT16(t_maxseg, struct tcpcb),
-                                VMSTATE_UINT8(t_force, struct tcpcb),
-                                VMSTATE_UINT16(t_flags, struct tcpcb),
-                                VMSTATE_UINT32(snd_una, struct tcpcb),
-                                VMSTATE_UINT32(snd_nxt, struct tcpcb),
-                                VMSTATE_UINT32(snd_up, struct tcpcb),
-                                VMSTATE_UINT32(snd_wl1, struct tcpcb),
-                                VMSTATE_UINT32(snd_wl2, struct tcpcb),
-                                VMSTATE_UINT32(iss, struct tcpcb),
-                                VMSTATE_UINT32(snd_wnd, struct tcpcb),
-                                VMSTATE_UINT32(rcv_wnd, struct tcpcb),
-                                VMSTATE_UINT32(rcv_nxt, struct tcpcb),
-                                VMSTATE_UINT32(rcv_up, struct tcpcb),
-                                VMSTATE_UINT32(irs, struct tcpcb),
-                                VMSTATE_UINT32(rcv_adv, struct tcpcb),
-                                VMSTATE_UINT32(snd_max, struct tcpcb),
-                                VMSTATE_UINT32(snd_cwnd, struct tcpcb),
-                                VMSTATE_UINT32(snd_ssthresh, struct tcpcb),
-                                VMSTATE_INT16(t_idle, struct tcpcb),
-                                VMSTATE_INT16(t_rtt, struct tcpcb),
-                                VMSTATE_UINT32(t_rtseq, struct tcpcb),
-                                VMSTATE_INT16(t_srtt, struct tcpcb),
-                                VMSTATE_INT16(t_rttvar, struct tcpcb),
-                                VMSTATE_UINT16(t_rttmin, struct tcpcb),
-                                VMSTATE_UINT32(max_sndwnd, struct tcpcb),
-                                VMSTATE_UINT8(t_oobflags, struct tcpcb),
-                                VMSTATE_UINT8(t_iobc, struct tcpcb),
-                                VMSTATE_INT16(t_softerror, struct tcpcb),
-                                VMSTATE_UINT8(snd_scale, struct tcpcb),
-                                VMSTATE_UINT8(rcv_scale, struct tcpcb),
-                                VMSTATE_UINT8(request_r_scale, struct tcpcb),
-                                VMSTATE_UINT8(requested_s_scale, struct tcpcb),
-                                VMSTATE_UINT32(ts_recent, struct tcpcb),
-                                VMSTATE_UINT32(ts_recent_age, struct tcpcb),
-                                VMSTATE_UINT32(last_ack_sent, struct tcpcb),
+                                VMSTATE_INT16(t_rxtshift, struct slirp_tcpcb),
+                                VMSTATE_INT16(t_rxtcur, struct slirp_tcpcb),
+                                VMSTATE_INT16(t_dupacks, struct slirp_tcpcb),
+                                VMSTATE_UINT16(t_maxseg, struct slirp_tcpcb),
+                                VMSTATE_UINT8(t_force, struct slirp_tcpcb),
+                                VMSTATE_UINT16(t_flags, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_una, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_nxt, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_up, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_wl1, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_wl2, struct slirp_tcpcb),
+                                VMSTATE_UINT32(iss, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_wnd, struct slirp_tcpcb),
+                                VMSTATE_UINT32(rcv_wnd, struct slirp_tcpcb),
+                                VMSTATE_UINT32(rcv_nxt, struct slirp_tcpcb),
+                                VMSTATE_UINT32(rcv_up, struct slirp_tcpcb),
+                                VMSTATE_UINT32(irs, struct slirp_tcpcb),
+                                VMSTATE_UINT32(rcv_adv, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_max, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_cwnd, struct slirp_tcpcb),
+                                VMSTATE_UINT32(snd_ssthresh, struct slirp_tcpcb),
+                                VMSTATE_INT16(t_idle, struct slirp_tcpcb),
+                                VMSTATE_INT16(t_rtt, struct slirp_tcpcb),
+                                VMSTATE_UINT32(t_rtseq, struct slirp_tcpcb),
+                                VMSTATE_INT16(t_srtt, struct slirp_tcpcb),
+                                VMSTATE_INT16(t_rttvar, struct slirp_tcpcb),
+                                VMSTATE_UINT16(t_rttmin, struct slirp_tcpcb),
+                                VMSTATE_UINT32(max_sndwnd, struct slirp_tcpcb),
+                                VMSTATE_UINT8(t_oobflags, struct slirp_tcpcb),
+                                VMSTATE_UINT8(t_iobc, struct slirp_tcpcb),
+                                VMSTATE_INT16(t_softerror, struct slirp_tcpcb),
+                                VMSTATE_UINT8(snd_scale, struct slirp_tcpcb),
+                                VMSTATE_UINT8(rcv_scale, struct slirp_tcpcb),
+                                VMSTATE_UINT8(request_r_scale, struct slirp_tcpcb),
+                                VMSTATE_UINT8(requested_s_scale, struct slirp_tcpcb),
+                                VMSTATE_UINT32(ts_recent, struct slirp_tcpcb),
+                                VMSTATE_UINT32(ts_recent_age, struct slirp_tcpcb),
+                                VMSTATE_UINT32(last_ack_sent, struct slirp_tcpcb),
                                 VMSTATE_END_OF_LIST() }
 };
 
@@ -86,7 +86,7 @@ static const VMStateDescription vmstate_slirp_tcp = {
  * pre_save/post_load on a tmp structure.
  */
 struct sbuf_tmp {
-    struct sbuf *parent;
+    struct slirp_sbuf *parent;
     uint32_t roff, woff;
 };
 
@@ -133,11 +133,11 @@ static const VMStateDescription vmstate_slirp_sbuf_tmp = {
 static const VMStateDescription vmstate_slirp_sbuf = {
     .name = "slirp-sbuf",
     .version_id = 0,
-    .fields = (VMStateField[]){ VMSTATE_UINT32(sb_cc, struct sbuf),
-                                VMSTATE_UINT32(sb_datalen, struct sbuf),
-                                VMSTATE_WITH_TMP(struct sbuf, struct sbuf_tmp,
+    .fields = (VMStateField[]){ VMSTATE_UINT32(sb_cc, struct slirp_sbuf),
+                                VMSTATE_UINT32(sb_datalen, struct slirp_sbuf),
+                                VMSTATE_WITH_TMP(struct slirp_sbuf, struct sbuf_tmp,
                                                  vmstate_slirp_sbuf_tmp),
-                                VMSTATE_VBUFFER_UINT32(sb_data, struct sbuf, 0,
+                                VMSTATE_VBUFFER_UINT32(sb_data, struct slirp_sbuf, 0,
                                                        NULL, sb_datalen),
                                 VMSTATE_END_OF_LIST() }
 };
@@ -282,11 +282,11 @@ static const VMStateDescription vmstate_slirp_socket = {
             VMSTATE_UINT8(so_type, struct socket),
             VMSTATE_INT32(so_state, struct socket),
             VMSTATE_STRUCT(so_rcv, struct socket, 0, vmstate_slirp_sbuf,
-                           struct sbuf),
+                           struct slirp_sbuf),
             VMSTATE_STRUCT(so_snd, struct socket, 0, vmstate_slirp_sbuf,
-                           struct sbuf),
+                           struct slirp_sbuf),
             VMSTATE_STRUCT_POINTER(so_tcpcb, struct socket, vmstate_slirp_tcp,
-                                   struct tcpcb),
+                                   struct slirp_tcpcb),
             VMSTATE_END_OF_LIST() }
 };
 

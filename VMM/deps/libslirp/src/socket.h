@@ -52,7 +52,7 @@ struct socket {
     struct mbuf *so_m; /* Pointer to the original SYN packet,
                         * for non-blocking connect()'s, and
                         * PING reply's */
-    struct tcpiphdr *so_ti; /* Pointer to the original ti within
+    struct slirp_tcpiphdr *so_ti; /* Pointer to the original ti within
                              * so_mconn, for non-blocking connections */
     uint32_t so_urgc;
     union slirp_sockaddr fhost; /* Foreign host */
@@ -76,7 +76,7 @@ struct socket {
                       * states. */
     int32_t so_state; /* internal state flags SS_*, below */
 
-    struct tcpcb *so_tcpcb; /* pointer to TCP protocol control block */
+    struct slirp_tcpcb *so_tcpcb; /* pointer to TCP protocol control block */
     unsigned so_expire; /* When the socket will expire */
 
     int so_queued; /* Number of packets queued from this socket */
@@ -84,8 +84,8 @@ struct socket {
                      * Used to determine when to "downgrade" a session
                      * from fastq to batchq */
 
-    struct sbuf so_rcv; /* Receive buffer */
-    struct sbuf so_snd; /* Send buffer */
+    struct slirp_sbuf so_rcv; /* Receive buffer */
+    struct slirp_sbuf so_snd; /* Send buffer */
 };
 
 

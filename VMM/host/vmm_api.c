@@ -22,7 +22,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
-#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
@@ -35,7 +34,7 @@
 
 enum {
     TERMINAL_RING_CAPACITY = 256 * 1024,
-    CONTROL_BOOT_TIMEOUT_MS = 30000,
+    CONTROL_BOOT_TIMEOUT_MS = 90000,
     SHUTDOWN_TIMEOUT_SEC = 30,
     STOP_REPORT_TIMEOUT_SEC = 1,
     SUSPEND_SYNC_TIMEOUT_SEC = 3,
@@ -164,14 +163,14 @@ struct swipterm_runtime {
     swipterm_mirror_t *mirror;
     swipterm_callbacks callbacks;
 
-    int lower_erofs_fd;
     int root_lock_fd;
-    int control_fd;
+    _Atomic int control_fd;
     int shutdown_pipe[2];
     pthread_mutex_t control_tx_lock;
     pthread_t control_rx_thread;
     bool control_rx_started;
 
+    _Atomic bool booting;
     _Atomic bool halt_initiated;
     _Atomic bool shutting_down;
     _Atomic bool finalized;
@@ -199,6 +198,7 @@ struct swipterm_runtime {
     uint32_t guest_caps;
     uint32_t ready_mask;
     swipterm_halt_info halt_info;
+    swipterm_boot_info boot_info;
 
     pending_req_t *pending_reqs;
     stream_route_t *routes;
@@ -210,6 +210,13 @@ struct swipterm_runtime {
     device_entry_t *devices;
     device_file_entry_t *device_files;
 };
+
+static bool guest_has_capability(swipterm_runtime *rt, uint32_t capability) {
+    pthread_mutex_lock(&rt->state_lock);
+    bool supported = (rt->guest_caps & capability) != 0;
+    pthread_mutex_unlock(&rt->state_lock);
+    return supported;
+}
 
 static void set_nosigpipe(int fd) {
     int one = 1;
@@ -338,7 +345,7 @@ static int control_rpc(swipterm_runtime *rt, uint16_t opcode,
     pthread_cond_init(&req.cond, NULL);
 
     pthread_mutex_lock(&rt->state_lock);
-    if (atomic_load(&rt->shutting_down)) {
+    if (atomic_load(&rt->shutting_down) || atomic_load(&rt->halted) || atomic_load(&rt->vm_powered_off)) {
         pthread_mutex_unlock(&rt->state_lock);
         pthread_mutex_destroy(&req.lock);
         pthread_cond_destroy(&req.cond);
@@ -1580,13 +1587,16 @@ static void vmm_on_halt(void *ctx) {
     bool first = !atomic_exchange(&rt->halted, true);
     pthread_mutex_lock(&rt->state_lock);
     pthread_cond_broadcast(&rt->halt_cond);
-    pthread_cond_broadcast(&rt->hello_cond);
-    pthread_cond_broadcast(&rt->ready_cond);
     pthread_mutex_unlock(&rt->state_lock);
+    fail_all_pending_reqs(rt);
     if (rt->vsock) {
         virtio_vsock_notify_halt(rt->vsock);
     }
-    if (first && !atomic_load(&rt->shutting_down) && rt->callbacks.halt) {
+    int control_fd = rt->control_fd;
+    if (control_fd >= 0) {
+        (void)shutdown(control_fd, SHUT_RDWR);
+    }
+    if (first && !atomic_load(&rt->shutting_down) && !atomic_load(&rt->booting) && rt->callbacks.halt) {
         pthread_mutex_lock(&rt->state_lock);
         swipterm_halt_info info = rt->halt_info;
         pthread_mutex_unlock(&rt->state_lock);
@@ -1596,14 +1606,15 @@ static void vmm_on_halt(void *ctx) {
 
 static void vmm_on_panic(void *ctx, const char *message) {
     swipterm_runtime *rt = ctx;
-    if (rt->callbacks.panic) {
+    if (!atomic_load(&rt->booting) && rt->callbacks.panic) {
         rt->callbacks.panic(rt->callbacks.context, message);
     }
 }
 
 static size_t default_ram_size(void) {
-    const uint64_t min_size = 256ULL * 1024ULL * 1024ULL;
-    const uint64_t max_size = 2ULL * 1024ULL * 1024ULL * 1024ULL;
+    const uint64_t step = 16ULL << 20;
+    const uint64_t min_size = 256ULL << 20;
+    const uint64_t max_size = 2ULL << 30;
 #if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
     uint64_t target = os_proc_available_memory() / 2;
 #else
@@ -1620,7 +1631,7 @@ static size_t default_ram_size(void) {
     if (target > max_size) {
         target = max_size;
     }
-    return (size_t)(target & ~(uint64_t)(16 * 1024 * 1024 - 1));
+    return (size_t)(target & ~(step - 1));
 }
 
 static uint32_t default_cpu_count(void) {
@@ -1638,127 +1649,346 @@ static uint32_t default_cpu_count(void) {
     return (uint32_t)ncpu;
 }
 
-static pthread_once_t g_guest_blob_hash_once = PTHREAD_ONCE_INIT;
-static uint8_t g_guest_blob_hash[CC_SHA256_DIGEST_LENGTH];
+typedef struct initramfs_cache {
+    char *path;
+    dev_t dev;
+    ino_t ino;
+    off_t size;
+    struct timespec mtime;
+    uint8_t digest[CC_SHA256_DIGEST_LENGTH];
+    uint8_t *data;
+    size_t data_size;
+} initramfs_cache_t;
 
-static void sha256_update_bytes(CC_SHA256_CTX *ctx, const void *data, size_t len) {
-    const uint8_t *p = (const uint8_t *)data;
-    while (len > 0) {
-        size_t chunk = len > (1U << 30) ? (1U << 30) : len;
-        CC_SHA256_Update(ctx, p, (CC_LONG)chunk);
-        p += chunk;
-        len -= chunk;
-    }
+static pthread_mutex_t g_initramfs_lock = PTHREAD_MUTEX_INITIALIZER;
+static initramfs_cache_t g_initramfs;
+
+static bool initramfs_cache_matches(const char *path, const struct stat *st) {
+    return g_initramfs.path && strcmp(g_initramfs.path, path) == 0 && g_initramfs.dev == st->st_dev &&
+           g_initramfs.ino == st->st_ino && g_initramfs.size == st->st_size &&
+           g_initramfs.mtime.tv_sec == st->st_mtimespec.tv_sec &&
+           g_initramfs.mtime.tv_nsec == st->st_mtimespec.tv_nsec;
 }
 
-static void compute_guest_blob_hash(void) {
-    CC_SHA256_CTX ctx;
-    CC_SHA256_Init(&ctx);
-    if (swipterm_guest_kernel_data && swipterm_guest_kernel_size > 0) {
-        sha256_update_bytes(&ctx, swipterm_guest_kernel_data, swipterm_guest_kernel_size);
-    }
-    if (swipterm_guest_initramfs_data && swipterm_guest_initramfs_size > 0) {
-        sha256_update_bytes(&ctx, swipterm_guest_initramfs_data, swipterm_guest_initramfs_size);
-    }
-    CC_SHA256_Final(g_guest_blob_hash, &ctx);
-}
-
-static int map_blob_source(const swipterm_blob *blob, const void *embedded_ptr, size_t embedded_size,
-                           const void **ptr_out, size_t *size_out, void **mapped_out, size_t *mapped_len_out) {
-    *ptr_out = NULL;
-    *size_out = 0;
-    *mapped_out = NULL;
-    *mapped_len_out = 0;
-
-    if (!blob || blob->kind == SWIPTERM_BLOB_EMBEDDED) {
-        *ptr_out = embedded_ptr;
-        *size_out = embedded_size;
-        return 0;
-    }
-    if (blob->kind == SWIPTERM_BLOB_MEMORY) {
-        if (!blob->data || blob->size == 0) {
-            return -LINUX_EINVAL;
-        }
-        *ptr_out = blob->data;
-        *size_out = blob->size;
-        return 0;
-    }
-    if (blob->kind == SWIPTERM_BLOB_FILE) {
-        if (!blob->path || blob->path[0] == '\0') {
-            return -LINUX_EINVAL;
-        }
-        int fd = open(blob->path, O_RDONLY | O_CLOEXEC);
-        if (fd < 0) {
-            return -errno;
-        }
-        struct stat st;
-        if (fstat(fd, &st) != 0 || st.st_size <= 0) {
-            int e = (st.st_size <= 0) ? LINUX_EINVAL : errno;
-            close(fd);
-            return -e;
-        }
-        void *p = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-        close(fd);
-        if (p == MAP_FAILED) {
-            return -errno;
-        }
-        *ptr_out = p;
-        *size_out = (size_t)st.st_size;
-        *mapped_out = p;
-        *mapped_len_out = (size_t)st.st_size;
-        return 0;
-    }
-    return -LINUX_EINVAL;
-}
-
-static int install_fresh_upper(const char *upper_path) {
-    char pending_upper[1024];
-    if (snprintf(pending_upper, sizeof(pending_upper), "%s.XXXXXX", upper_path) >= (int)sizeof(pending_upper)) {
-        return -LINUX_EINVAL;
-    }
-    int fd = mkstemp(pending_upper);
+static int initramfs_refresh(const char *path, const struct stat *st) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
-        return -LINUX_EIO;
-    }
-    close(fd);
-    int rc = swipterm_upper_create(pending_upper);
-    if (rc == 0 && rename(pending_upper, upper_path) < 0) {
-        rc = -LINUX_EIO;
-    }
-    if (rc < 0) {
-        unlink(pending_upper);
-    }
-    return rc;
-}
-
-int swipterm_reset_upper(const char *root_path) {
-    if (!root_path) {
-        return -LINUX_EINVAL;
-    }
-    char metadata_path[1024];
-    char upper_path[1024];
-    if (snprintf(metadata_path, sizeof(metadata_path), "%s/swipterm.json", root_path) >= (int)sizeof(metadata_path) ||
-        snprintf(upper_path, sizeof(upper_path), "%s/upper.ext4", root_path) >= (int)sizeof(upper_path)) {
-        return -LINUX_EINVAL;
-    }
-    int lock_fd = open(root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (lock_fd < 0) {
         return errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
     }
-    int rc = 0;
-    if (flock(lock_fd, LOCK_EX | LOCK_NB) < 0) {
-        rc = errno == EWOULDBLOCK ? -LINUX_EBUSY : -LINUX_EIO;
-    } else if (access(metadata_path, F_OK) != 0) {
-        rc = -LINUX_ENOENT;
-    } else {
-        rc = install_fresh_upper(upper_path);
+    size_t size = (size_t)st->st_size;
+    uint8_t *file = malloc(size > 0 ? size : 1);
+    size_t done = 0;
+    while (file && done < size) {
+        ssize_t n = read(fd, file + done, size - done);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n <= 0) {
+            break;
+        }
+        done += (size_t)n;
     }
-    close(lock_fd);
+    close(fd);
+    if (!file || done != size) {
+        free(file);
+        return file ? -LINUX_EIO : -LINUX_ENOMEM;
+    }
+    initramfs_cache_t next = {
+        .dev = st->st_dev,
+        .ino = st->st_ino,
+        .size = st->st_size,
+        .mtime = st->st_mtimespec,
+    };
+    CC_SHA256(file, (CC_LONG)size, next.digest);
+    int rc = swipterm_decompress(file, size, 512U << 20, &next.data, &next.data_size);
+    free(file);
+    next.path = rc == 0 ? strdup(path) : NULL;
+    if (rc < 0 || !next.path) {
+        free(next.data);
+        return rc == -ENOMEM || rc == 0 ? -LINUX_ENOMEM : -LINUX_EIO;
+    }
+    free(g_initramfs.path);
+    free(g_initramfs.data);
+    g_initramfs = next;
+    return 0;
+}
+
+static int initramfs_get(const char *path, uint8_t digest[CC_SHA256_DIGEST_LENGTH],
+                         const uint8_t *modules, size_t modules_size, uint8_t **initrd_out, size_t *initrd_size_out) {
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
+    }
+    pthread_mutex_lock(&g_initramfs_lock);
+    int rc = initramfs_cache_matches(path, &st) ? 0 : initramfs_refresh(path, &st);
+    if (rc == 0) {
+        memcpy(digest, g_initramfs.digest, CC_SHA256_DIGEST_LENGTH);
+    }
+    if (rc == 0 && initrd_out) {
+        size_t aligned = (g_initramfs.data_size + 3U) & ~(size_t)3U;
+        uint8_t *initrd = calloc(1, aligned + modules_size);
+        if (initrd) {
+            memcpy(initrd, g_initramfs.data, g_initramfs.data_size);
+            if (modules_size > 0) {
+                memcpy(initrd + aligned, modules, modules_size);
+            }
+            *initrd_out = initrd;
+            *initrd_size_out = aligned + modules_size;
+        } else {
+            rc = -LINUX_ENOMEM;
+        }
+    }
+    pthread_mutex_unlock(&g_initramfs_lock);
     return rc;
+}
+
+static void compute_snapshot_key(const uint8_t initramfs_digest[CC_SHA256_DIGEST_LENGTH], const boot_plan_t *plan,
+                                 const char *cmdline, uint8_t key[CC_SHA256_DIGEST_LENGTH]) {
+    static const char tag[] = "swipterm-boot-4";
+    CC_SHA256_CTX ctx;
+    CC_SHA256_Init(&ctx);
+    CC_SHA256_Update(&ctx, tag, sizeof(tag));
+    CC_SHA256_Update(&ctx, initramfs_digest, CC_SHA256_DIGEST_LENGTH);
+    CC_SHA256_Update(&ctx, boot_plan_identity(plan), CC_SHA256_DIGEST_LENGTH);
+    CC_SHA256_Update(&ctx, cmdline, (CC_LONG)strlen(cmdline));
+    CC_SHA256_Final(key, &ctx);
+}
+
+static int host_error(int rc) {
+    switch (rc) {
+    case -ENOMEM:
+        return -LINUX_ENOMEM;
+    case -ENOENT:
+        return -LINUX_ENOENT;
+    case -EINVAL:
+        return -LINUX_EINVAL;
+    default:
+        return -LINUX_EIO;
+    }
+}
+
+static int start_machine(swipterm_runtime *rt, const char *save_path) {
+    rt->vsock = rt->vm->virtio_devs[VMM_VIRTIO_SLOT_VSOCK];
+    if (!rt->vsock) {
+        return -LINUX_ENODEV;
+    }
+    if (virtio_vsock_listen_host(rt->vsock, SWIPTERMD_CONTROL_PORT, NULL, NULL) != 0 ||
+        virtio_vsock_listen_host(rt->vsock, SWIPTERMD_DATA_PORT, on_data_stream_accept, rt) != 0) {
+        return -LINUX_EIO;
+    }
+    rt->mirror = swipterm_mirror_create(rt->vsock, 0);
+    if (vmm_start(rt->vm) < 0) {
+        return -LINUX_EIO;
+    }
+    int save_error = 0;
+    if (vmm_finish_preboot(rt->vm, save_path, &save_error) < 0) {
+        return -LINUX_EIO;
+    }
+    return 0;
+}
+
+static int connect_guest(swipterm_runtime *rt) {
+    rt->control_fd = virtio_vsock_accept_control(rt->vsock, SWIPTERMD_CONTROL_PORT, CONTROL_BOOT_TIMEOUT_MS);
+    if (rt->control_fd < 0) {
+        return atomic_load(&rt->halted) ? -LINUX_EIO : -LINUX_ETIMEDOUT;
+    }
+    set_nosigpipe(rt->control_fd);
+    set_cloexec(rt->control_fd);
+    if (pthread_create(&rt->control_rx_thread, NULL, control_rx_main, rt) != 0) {
+        return -LINUX_EAGAIN;
+    }
+    rt->control_rx_started = true;
+
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += CONTROL_BOOT_TIMEOUT_MS / 1000;
+    pthread_mutex_lock(&rt->state_lock);
+    while (!rt->hello_done && !rt->control_rx_done && !atomic_load(&rt->shutting_down) &&
+           !atomic_load(&rt->halted)) {
+        if (pthread_cond_timedwait(&rt->hello_cond, &rt->state_lock, &deadline) == ETIMEDOUT) {
+            break;
+        }
+    }
+    bool hello_ok = rt->hello_done;
+    bool stopped = rt->control_rx_done || atomic_load(&rt->halted);
+    pthread_mutex_unlock(&rt->state_lock);
+    if (hello_ok) {
+        return 0;
+    }
+    return stopped ? -LINUX_EIO : -LINUX_ETIMEDOUT;
+}
+
+static void discard_machine(swipterm_runtime *rt) {
+    pthread_mutex_lock(&rt->control_tx_lock);
+    if (rt->control_fd >= 0) {
+        (void)shutdown(rt->control_fd, SHUT_RDWR);
+    }
+    pthread_mutex_unlock(&rt->control_tx_lock);
+    if (rt->control_rx_started) {
+        pthread_join(rt->control_rx_thread, NULL);
+        rt->control_rx_started = false;
+    }
+    swipterm_mirror_destroy(rt->mirror);
+    rt->mirror = NULL;
+    if (rt->vm) {
+        vmm_stop(rt->vm);
+        vmm_destroy(rt->vm);
+        rt->vm = NULL;
+    }
+    pthread_mutex_lock(&rt->control_tx_lock);
+    if (rt->control_fd >= 0) {
+        close(rt->control_fd);
+        rt->control_fd = -1;
+    }
+    pthread_mutex_unlock(&rt->control_tx_lock);
+    rt->vsock = NULL;
+    atomic_store(&rt->halted, false);
+    atomic_store(&rt->vm_powered_off, false);
+    pthread_mutex_lock(&rt->state_lock);
+    rt->hello_done = false;
+    rt->control_rx_done = false;
+    rt->session_nonce = 0;
+    rt->guest_caps = 0;
+    rt->ready_mask = 0;
+    rt->halt_info = (swipterm_halt_info){0};
+    pthread_mutex_unlock(&rt->state_lock);
+}
+
+static const char *boot_snapshot_path(const swipterm_options *options, const boot_plan_t *plan, char *buf,
+                                      size_t size) {
+    const char *path = getenv("SWIPTERM_BOOT_SNAPSHOT");
+    if (path) {
+        return path[0] == '\0' || strcmp(path, "0") == 0 || strcmp(path, "off") == 0 ? NULL : path;
+    }
+    const char *name = boot_plan_is_bundled(plan) ? ".preboot_snapshot.bundled" : ".preboot_snapshot";
+    return snprintf(buf, size, "%s/%s", options->root_path, name) < (int)size ? buf : NULL;
+}
+
+static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, boot_plan_t *plan,
+                        const char *disk_path, const char *cmdline) {
+    uint8_t initramfs_digest[CC_SHA256_DIGEST_LENGTH];
+    int rc = initramfs_get(options->initramfs_path, initramfs_digest, NULL, 0, NULL, NULL);
+    if (rc < 0) {
+        return rc;
+    }
+    const vmm_config_t base = {
+        .ram_size = options->ram_size ? options->ram_size : default_ram_size(),
+        .cpu_count = options->cpu_count ? options->cpu_count : default_cpu_count(),
+        .root_disk_path = disk_path,
+        .preboot_checkpoint = true,
+        .cmdline = cmdline,
+        .callback_ctx = rt,
+        .console_output = vmm_on_console,
+        .on_halt = vmm_on_halt,
+        .on_panic = vmm_on_panic,
+    };
+    bool save_snapshots = getenv("SWIPTERM_BOOT_SNAPSHOT_READONLY") == NULL;
+    bool restore_snapshot = true;
+    atomic_store(&rt->booting, true);
+    for (;;) {
+        char snapshot_buf[1024];
+        const char *snapshot_path = boot_snapshot_path(options, plan, snapshot_buf, sizeof(snapshot_buf));
+        const char *save_path = save_snapshots ? snapshot_path : NULL;
+        vmm_config_t cfg = base;
+        int err = 0;
+        bool restored = false;
+        if (snapshot_path && restore_snapshot) {
+            compute_snapshot_key(initramfs_digest, plan, cmdline, cfg.snapshot_key);
+            cfg.snapshot_path = snapshot_path;
+            cfg.snapshot_required = true;
+            rt->vm = vmm_create(&cfg, &err);
+            if (!rt->vm && err == EWOULDBLOCK) {
+                return -LINUX_EBUSY;
+            }
+            restored = rt->vm != NULL;
+        }
+
+        if (!restored) {
+            uint8_t *kernel = NULL;
+            uint8_t *modules = NULL;
+            size_t kernel_size = 0;
+            size_t modules_size = 0;
+            rc = boot_plan_load(plan, &kernel, &kernel_size, &modules, &modules_size);
+            if (rc == -EAGAIN) {
+                restore_snapshot = true;
+                continue;
+            }
+            if (rc < 0) {
+                return host_error(rc);
+            }
+            uint8_t *initrd = NULL;
+            size_t initrd_size = 0;
+            rc = initramfs_get(options->initramfs_path, initramfs_digest, modules, modules_size, &initrd,
+                               &initrd_size);
+            free(modules);
+            if (rc < 0) {
+                free(kernel);
+                return rc;
+            }
+            compute_snapshot_key(initramfs_digest, plan, cmdline, cfg.snapshot_key);
+            cfg.snapshot_path = NULL;
+            cfg.snapshot_required = false;
+            cfg.kernel_image = kernel;
+            cfg.kernel_size = kernel_size;
+            cfg.initramfs = initrd;
+            cfg.initramfs_size = initrd_size;
+            rt->vm = vmm_create(&cfg, &err);
+            free(kernel);
+            free(initrd);
+            if (!rt->vm) {
+                if (err == EWOULDBLOCK || err == ENOMEM || boot_plan_is_bundled(plan) ||
+                    atomic_load(&rt->shutting_down)) {
+                    return err == EWOULDBLOCK ? -LINUX_EBUSY : err == ENOMEM ? -LINUX_ENOMEM : -LINUX_EIO;
+                }
+                rc = boot_plan_next(plan, "could not be loaded into guest memory");
+                if (rc < 0) {
+                    return host_error(rc);
+                }
+                restore_snapshot = true;
+                continue;
+            }
+        }
+
+        rc = start_machine(rt, restored ? NULL : save_path);
+        bool reached_checkpoint = rc == 0;
+        if (reached_checkpoint) {
+            rc = connect_guest(rt);
+        }
+        if (rc == 0) {
+            atomic_store(&rt->booting, false);
+            return 0;
+        }
+        bool guest_failed = reached_checkpoint ? rc == -LINUX_EIO || rc == -LINUX_ETIMEDOUT : !restored;
+        discard_machine(rt);
+        if (!guest_failed || atomic_load(&rt->shutting_down)) {
+            return rc;
+        }
+        if (reached_checkpoint && save_path) {
+            (void)unlink(save_path);
+        }
+        if (restored) {
+            restore_snapshot = false;
+            continue;
+        }
+        if (boot_plan_is_bundled(plan)) {
+            return rc;
+        }
+        const char *reason = !reached_checkpoint ? "did not reach the boot checkpoint"
+                             : rc == -LINUX_EIO  ? "stopped during initialization"
+                                                 : "timed out during initialization";
+        rc = boot_plan_next(plan, reason);
+        if (rc < 0) {
+            return host_error(rc);
+        }
+        restore_snapshot = true;
+    }
 }
 
 int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out) {
-    if (!options || !options->root_path || !runtime_out) {
+    if (!options || !options->root_path || !options->initramfs_path || !runtime_out ||
+        (options->kernel != SWIPTERM_KERNEL_INSTALLED && options->kernel != SWIPTERM_KERNEL_BUNDLED &&
+         options->kernel != SWIPTERM_KERNEL_RELEASE) ||
+        (options->kernel == SWIPTERM_KERNEL_RELEASE && (!options->kernel_release || !options->kernel_release[0]))) {
         return -LINUX_EINVAL;
     }
     *runtime_out = NULL;
@@ -1768,7 +1998,6 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
         return -LINUX_ENOMEM;
     }
     rt->callbacks = options->callbacks;
-    rt->lower_erofs_fd = -1;
     rt->root_lock_fd = -1;
     rt->control_fd = -1;
     rt->shutdown_pipe[0] = -1;
@@ -1789,282 +2018,49 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
 
     rt->root_lock_fd = open(options->root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (rt->root_lock_fd < 0 || flock(rt->root_lock_fd, LOCK_EX | LOCK_NB) < 0) {
-        int rc = errno == EWOULDBLOCK ? -LINUX_EBUSY : -LINUX_EIO;
+        int rc = errno == EWOULDBLOCK ? -LINUX_EBUSY : errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
         swipterm_shutdown(rt);
         return rc;
     }
 
-    const void *lower_ptr = NULL;
-    size_t lower_size = 0;
-
-    if (options->root_image.kind == SWIPTERM_ROOT_IMAGE_DAX_EROFS_MEMORY &&
-        options->root_image.data != NULL && options->root_image.size >= 2048) {
-        lower_ptr = options->root_image.data;
-        lower_size = options->root_image.size;
-        const uint8_t *bytes = lower_ptr;
-        if (bytes[1024] == 0xE2 && bytes[1025] == 0xE1 && bytes[1026] == 0xF5 && bytes[1027] == 0xE0) {
-            swipterm_dax_register(bytes + 1024 + 0x30, lower_ptr, lower_size);
-        }
-    } else if (options->root_image.kind == SWIPTERM_ROOT_IMAGE_DAX_EROFS_FILE &&
-               options->root_image.path != NULL) {
-        rt->lower_erofs_fd = open(options->root_image.path, O_RDONLY);
-    }
-
-    if (!lower_ptr && rt->lower_erofs_fd < 0) {
-        char lower_path[1024];
-        if (snprintf(lower_path, sizeof(lower_path), "%s/lower.erofs", options->root_path) < (int)sizeof(lower_path)) {
-            rt->lower_erofs_fd = open(lower_path, O_RDONLY);
-        }
-    }
-    if (!lower_ptr && rt->lower_erofs_fd < 0) {
-        uint8_t uuid[16];
-        if (swipterm_root_read_dax_uuid(options->root_path, uuid)) {
-            (void)swipterm_dax_lookup(uuid, &lower_ptr, &lower_size);
-        }
-    }
-    if (!lower_ptr && rt->lower_erofs_fd < 0) {
-        swipterm_shutdown(rt);
-        return -LINUX_ENOENT;
-    }
-
-    char upper_path[1024];
-    if (snprintf(upper_path, sizeof(upper_path), "%s/upper.ext4", options->root_path) >= (int)sizeof(upper_path)) {
+    char disk_path[1024];
+    if (snprintf(disk_path, sizeof(disk_path), "%s/root.ext4", options->root_path) >= (int)sizeof(disk_path)) {
         swipterm_shutdown(rt);
         return -LINUX_EINVAL;
     }
-    struct stat st;
-    if (stat(upper_path, &st) != 0) {
-        int rc = errno == ENOENT ? install_fresh_upper(upper_path) : -LINUX_EIO;
-        if (rc < 0) {
-            swipterm_shutdown(rt);
-            return rc;
-        }
+    int disk_fd = open(disk_path, O_RDONLY | O_CLOEXEC);
+    if (disk_fd < 0) {
+        int rc = errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
+        swipterm_shutdown(rt);
+        return rc;
+    }
+    boot_plan_t *plan = NULL;
+    int rc = boot_plan_resolve(disk_fd, options->bundled_kernel_path, options->kernel, options->kernel_release, &plan);
+    if (rc < 0) {
+        close(disk_fd);
+        swipterm_shutdown(rt);
+        return host_error(rc);
     }
 
     char cmdline[1024];
     if (options->extra_cmdline && options->extra_cmdline[0] != '\0') {
-        snprintf(cmdline, sizeof(cmdline),
-                 "console=ttyAMA0 earlycon root=/dev/pmem0 rootfstype=erofs ro quiet %s",
-                 options->extra_cmdline);
+        snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1 %s", options->extra_cmdline);
     } else {
-        snprintf(cmdline, sizeof(cmdline),
-                 "console=ttyAMA0 earlycon root=/dev/pmem0 rootfstype=erofs ro quiet");
+        snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1");
     }
 
-    const void *kernel_ptr = NULL, *initrd_ptr = NULL, *mod_ptr = NULL;
-    size_t kernel_size = 0, initrd_size = 0, mod_size = 0;
-    void *kernel_map = NULL, *initrd_map = NULL, *mod_map = NULL;
-    size_t kernel_map_len = 0, initrd_map_len = 0, mod_map_len = 0;
-    uint8_t *combined_initrd = NULL;
-
-    int krc = map_blob_source(&options->kernel_image,
-                              swipterm_guest_kernel_data, swipterm_guest_kernel_size,
-                              &kernel_ptr, &kernel_size, &kernel_map, &kernel_map_len);
-    if (krc < 0 || !kernel_ptr || kernel_size == 0) {
-        if (kernel_map) munmap(kernel_map, kernel_map_len);
-        swipterm_shutdown(rt);
-        return krc < 0 ? krc : -LINUX_ENOENT;
+    rc = boot_machine(rt, options, plan, disk_path, cmdline);
+    if (rc == 0) {
+        snprintf(rt->boot_info.release, sizeof(rt->boot_info.release), "%s", boot_plan_release(plan));
+        rt->boot_info.bundled = boot_plan_is_bundled(plan);
+        const char *reason = boot_plan_fallback_reason(plan);
+        snprintf(rt->boot_info.fallback_reason, sizeof(rt->boot_info.fallback_reason), "%s", reason ? reason : "");
     }
-    int irc = map_blob_source(&options->initramfs,
-                              swipterm_guest_initramfs_data, swipterm_guest_initramfs_size,
-                              &initrd_ptr, &initrd_size, &initrd_map, &initrd_map_len);
-    if (irc < 0) {
-        if (kernel_map) munmap(kernel_map, kernel_map_len);
-        if (initrd_map) munmap(initrd_map, initrd_map_len);
-        swipterm_shutdown(rt);
-        return irc;
-    }
-    if (options->modules_initramfs.kind != SWIPTERM_BLOB_EMBEDDED) {
-        int mrc = map_blob_source(&options->modules_initramfs, NULL, 0,
-                                  &mod_ptr, &mod_size, &mod_map, &mod_map_len);
-        if (mrc < 0) {
-            if (kernel_map) munmap(kernel_map, kernel_map_len);
-            if (initrd_map) munmap(initrd_map, initrd_map_len);
-            if (mod_map) munmap(mod_map, mod_map_len);
-            swipterm_shutdown(rt);
-            return mrc;
-        }
-        if (mod_ptr && mod_size > 0 && initrd_ptr && initrd_size > 0) {
-            size_t aligned = (initrd_size + 3U) & ~(size_t)3U;
-            combined_initrd = calloc(1, aligned + mod_size);
-            if (!combined_initrd) {
-                if (kernel_map) munmap(kernel_map, kernel_map_len);
-                if (initrd_map) munmap(initrd_map, initrd_map_len);
-                if (mod_map) munmap(mod_map, mod_map_len);
-                swipterm_shutdown(rt);
-                return -LINUX_ENOMEM;
-            }
-            memcpy(combined_initrd, initrd_ptr, initrd_size);
-            memcpy(combined_initrd + aligned, mod_ptr, mod_size);
-            initrd_ptr = combined_initrd;
-            initrd_size = aligned + mod_size;
-        }
-    }
-
-    char default_snap_path[1024];
-    const char *snapshot_path = getenv("SWIPTERM_BOOT_SNAPSHOT");
-    if (snapshot_path) {
-        if (!snapshot_path[0] || strcmp(snapshot_path, "0") == 0 || strcmp(snapshot_path, "off") == 0) {
-            snapshot_path = NULL;
-        }
-    } else if (snprintf(default_snap_path, sizeof(default_snap_path), "%s/.preboot_snapshot",
-                        options->root_path) < (int)sizeof(default_snap_path)) {
-        snapshot_path = default_snap_path;
-    }
-
-    vmm_config_t cfg = {
-        .preboot_checkpoint = true,
-        .snapshot_path = snapshot_path,
-        .ram_size = options->ram_size ? options->ram_size : default_ram_size(),
-        .cpu_count = options->cpu_count ? options->cpu_count : default_cpu_count(),
-        .kernel_image = kernel_ptr,
-        .kernel_size = kernel_size,
-        .initramfs = initrd_ptr,
-        .initramfs_size = initrd_size,
-        .lower_erofs_ptr = lower_ptr,
-        .lower_erofs_size = lower_size,
-        .lower_erofs_fd = rt->lower_erofs_fd,
-        .upper_ext4_path = upper_path,
-        .cmdline = cmdline,
-        .callback_ctx = rt,
-        .console_output = vmm_on_console,
-        .on_halt = vmm_on_halt,
-        .on_panic = vmm_on_panic,
-    };
-
-    if (snapshot_path) {
-        CC_SHA256_CTX key;
-        CC_SHA256_Init(&key);
-        if (kernel_ptr == swipterm_guest_kernel_data &&
-            initrd_ptr == swipterm_guest_initramfs_data &&
-            combined_initrd == NULL) {
-            pthread_once(&g_guest_blob_hash_once, compute_guest_blob_hash);
-            CC_SHA256_Update(&key, g_guest_blob_hash, sizeof(g_guest_blob_hash));
-        } else {
-            uint8_t custom_tag[4] = { 'D', 'Y', 'N', 'K' };
-            CC_SHA256_Update(&key, custom_tag, sizeof(custom_tag));
-            uint64_t ksz = (uint64_t)kernel_size;
-            uint64_t isz = (uint64_t)initrd_size;
-            CC_SHA256_Update(&key, &ksz, sizeof(ksz));
-            sha256_update_bytes(&key, kernel_ptr, kernel_size);
-            CC_SHA256_Update(&key, &isz, sizeof(isz));
-            if (initrd_ptr && initrd_size > 0) {
-                sha256_update_bytes(&key, initrd_ptr, initrd_size);
-            }
-        }
-        CC_SHA256_Update(&key, cmdline, (CC_LONG)strlen(cmdline));
-        if (rt->lower_erofs_fd >= 0) {
-            if (fstat(rt->lower_erofs_fd, &st) != 0) {
-                free(combined_initrd);
-                if (mod_map) munmap(mod_map, mod_map_len);
-                if (initrd_map) munmap(initrd_map, initrd_map_len);
-                if (kernel_map) munmap(kernel_map, kernel_map_len);
-                swipterm_shutdown(rt);
-                return -LINUX_EIO;
-            }
-            CC_SHA256_Update(&key, &st.st_dev, sizeof(st.st_dev));
-            CC_SHA256_Update(&key, &st.st_ino, sizeof(st.st_ino));
-            CC_SHA256_Update(&key, &st.st_size, sizeof(st.st_size));
-            CC_SHA256_Update(&key, &st.st_mtimespec, sizeof(st.st_mtimespec));
-            CC_SHA256_Update(&key, &st.st_ctimespec, sizeof(st.st_ctimespec));
-            uint8_t erofs_uuid[16];
-            if (pread(rt->lower_erofs_fd, erofs_uuid, sizeof(erofs_uuid), 1024 + 0x30) == (ssize_t)sizeof(erofs_uuid)) {
-                CC_SHA256_Update(&key, erofs_uuid, sizeof(erofs_uuid));
-            }
-        } else {
-            uint64_t lsz = (uint64_t)lower_size;
-            CC_SHA256_Update(&key, &lsz, sizeof(lsz));
-            const uint8_t *lp = (const uint8_t *)lower_ptr;
-            size_t head_n = lower_size < 65536 ? lower_size : 65536;
-            CC_SHA256_Update(&key, lp, (CC_LONG)head_n);
-            if (lower_size > 65536) {
-                size_t tail_off = lower_size - 65536;
-                if (tail_off < 65536) {
-                    tail_off = 65536;
-                }
-                for (size_t off = 65536; off < tail_off; off += (2U << 20)) {
-                    size_t chunk = (tail_off - off) < 4096 ? (tail_off - off) : 4096;
-                    CC_SHA256_Update(&key, lp + off, (CC_LONG)chunk);
-                }
-                CC_SHA256_Update(&key, lp + tail_off, (CC_LONG)(lower_size - tail_off));
-            }
-        }
-        CC_SHA256_Final(cfg.snapshot_key, &key);
-    }
-
-    int err = 0;
-    rt->vm = vmm_create(&cfg, &err);
-    if (!rt->vm && snapshot_path && (err == EINVAL || err == EIO || err == ELOOP || err == EACCES)) {
-        cfg.snapshot_path = NULL;
-        rt->vm = vmm_create(&cfg, &err);
-    }
-    free(combined_initrd);
-    if (mod_map) munmap(mod_map, mod_map_len);
-    if (initrd_map) munmap(initrd_map, initrd_map_len);
-    if (kernel_map) munmap(kernel_map, kernel_map_len);
-    if (!rt->vm) {
-        swipterm_shutdown(rt);
-        return err == EWOULDBLOCK ? -LINUX_EBUSY : -LINUX_EIO;
-    }
-
-    rt->vsock = rt->vm->virtio_devs[VMM_VIRTIO_SLOT_VSOCK];
-    if (!rt->vsock) {
-        swipterm_shutdown(rt);
-        return -LINUX_ENODEV;
-    }
-
-    if (virtio_vsock_listen_host(rt->vsock, SWIPTERMD_CONTROL_PORT, NULL, NULL) != 0 ||
-        virtio_vsock_listen_host(rt->vsock, SWIPTERMD_DATA_PORT, on_data_stream_accept, rt) != 0) {
-        swipterm_shutdown(rt);
-        return -LINUX_EIO;
-    }
-    rt->mirror = swipterm_mirror_create(rt->vsock, 0);
-
-    int start_rc = vmm_start(rt->vm);
-    if (start_rc < 0) {
-        swipterm_shutdown(rt);
-        return start_rc;
-    }
-
-    int save_error = 0;
-    const char *save_path = getenv("SWIPTERM_BOOT_SNAPSHOT_READONLY") ? NULL : snapshot_path;
-    int preboot_rc = vmm_finish_preboot(rt->vm, save_path, &save_error);
-    if (preboot_rc < 0) {
-        swipterm_shutdown(rt);
-        return -LINUX_EIO;
-    }
-
-    rt->control_fd = virtio_vsock_accept_control(rt->vsock, SWIPTERMD_CONTROL_PORT, CONTROL_BOOT_TIMEOUT_MS);
-    if (rt->control_fd < 0) {
-        int rc = atomic_load(&rt->halted) ? -LINUX_EIO : -LINUX_ETIMEDOUT;
+    boot_plan_free(plan);
+    close(disk_fd);
+    if (rc < 0) {
         swipterm_shutdown(rt);
         return rc;
-    }
-    set_nosigpipe(rt->control_fd);
-    set_cloexec(rt->control_fd);
-
-    if (pthread_create(&rt->control_rx_thread, NULL, control_rx_main, rt) != 0) {
-        swipterm_shutdown(rt);
-        return -LINUX_EIO;
-    }
-    rt->control_rx_started = true;
-
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += 30;
-    pthread_mutex_lock(&rt->state_lock);
-    while (!rt->hello_done && !atomic_load(&rt->shutting_down) && !atomic_load(&rt->halted)) {
-        if (pthread_cond_timedwait(&rt->hello_cond, &rt->state_lock, &ts) == ETIMEDOUT) {
-            break;
-        }
-    }
-    bool hello_ok = rt->hello_done;
-    bool halted = atomic_load(&rt->halted);
-    pthread_mutex_unlock(&rt->state_lock);
-
-    if (!hello_ok) {
-        swipterm_shutdown(rt);
-        return halted ? -LINUX_EIO : -LINUX_ETIMEDOUT;
     }
 
     size_t cfg_size = 4 + rpc_str_wire_size(options->hostname) +
@@ -2177,13 +2173,6 @@ void swipterm_shutdown(swipterm_runtime *rt) {
         rt->control_rx_started = false;
     }
 
-    pthread_mutex_lock(&rt->control_tx_lock);
-    if (rt->control_fd >= 0) {
-        close(rt->control_fd);
-        rt->control_fd = -1;
-    }
-    pthread_mutex_unlock(&rt->control_tx_lock);
-
     swipterm_mirror_destroy(rt->mirror);
     rt->mirror = NULL;
 
@@ -2193,13 +2182,16 @@ void swipterm_shutdown(swipterm_runtime *rt) {
         rt->vm = NULL;
     }
 
+    pthread_mutex_lock(&rt->control_tx_lock);
+    if (rt->control_fd >= 0) {
+        close(rt->control_fd);
+        rt->control_fd = -1;
+    }
+    pthread_mutex_unlock(&rt->control_tx_lock);
+
     if (rt->root_lock_fd >= 0) {
         close(rt->root_lock_fd);
         rt->root_lock_fd = -1;
-    }
-    if (rt->lower_erofs_fd >= 0) {
-        close(rt->lower_erofs_fd);
-        rt->lower_erofs_fd = -1;
     }
 
     pthread_mutex_lock(&rt->state_lock);
@@ -2392,7 +2384,11 @@ void swipterm_resume(swipterm_runtime *rt) {
         return;
     }
     (void)vmm_resume(rt->vm);
-    (void)control_send(rt, SWIPTERMD_OP_RESUME, 0, NULL, 0);
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    uint8_t req[SWIPTERMD_RESUME_REQ_SIZE];
+    swiptermd_enc_resume_req(req, (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec);
+    (void)control_send(rt, SWIPTERMD_OP_RESUME, 0, req, sizeof(req));
 }
 
 int swipterm_sync_dns(swipterm_runtime *rt) {
@@ -2472,6 +2468,13 @@ int swipterm_wait_ready(swipterm_runtime *rt, swipterm_readiness readiness, int 
     }
     pthread_mutex_unlock(&rt->state_lock);
     return rc;
+}
+
+void swipterm_get_boot_info(swipterm_runtime *rt, swipterm_boot_info *info_out) {
+    if (!rt || !info_out) {
+        return;
+    }
+    *info_out = rt->boot_info;
 }
 
 void swipterm_get_halt_info(swipterm_runtime *rt, swipterm_halt_info *info_out) {
@@ -3279,6 +3282,9 @@ int swipterm_mount(swipterm_runtime *rt, const char *host_path, const char *gues
     if (!rt || !rt->vm || !host_path || !guest_path) {
         return -LINUX_EINVAL;
     }
+    if (!guest_has_capability(rt, SWIPTERMD_CAP_VIRTIOFS)) {
+        return -LINUX_ENODEV;
+    }
     struct stat host_st;
     bool is_directory = (stat(host_path, &host_st) == 0 && S_ISDIR(host_st.st_mode));
 
@@ -3485,6 +3491,9 @@ void swipterm_invocation_release(swipterm_invocation *inv) {
 int swipterm_register_device(swipterm_runtime *rt, const char *path, void *context) {
     if (!rt || !path || path[0] == '\0') {
         return -LINUX_EINVAL;
+    }
+    if (!guest_has_capability(rt, SWIPTERMD_CAP_DEVICES)) {
+        return -LINUX_ENODEV;
     }
     uint32_t dev_id = atomic_fetch_add(&rt->next_dev_id, 1) + 1;
 

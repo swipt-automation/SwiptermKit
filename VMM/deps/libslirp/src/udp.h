@@ -42,7 +42,7 @@
  * Udp protocol header.
  * Per RFC 768, September, 1981.
  */
-struct udphdr {
+struct slirp_udphdr {
     uint16_t uh_sport; /* source port */
     uint16_t uh_dport; /* destination port */
     int16_t uh_ulen; /* udp length */
@@ -52,9 +52,9 @@ struct udphdr {
 /*
  * UDP kernel structures and variables.
  */
-struct udpiphdr {
-    struct ipovly ui_i; /* overlaid ip structure */
-    struct udphdr ui_u; /* udp header */
+struct slirp_udpiphdr {
+    struct slirp_ipovly ui_i; /* overlaid ip structure */
+    struct slirp_udphdr ui_u; /* udp header */
 };
 #define ui_mbuf ui_i.ih_mbuf.mptr
 #define ui_x1 ui_i.ih_x1

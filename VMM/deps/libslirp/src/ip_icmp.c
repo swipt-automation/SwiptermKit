@@ -195,7 +195,7 @@ static bool icmp_send_winhelper(struct socket *so, struct mbuf *m, int hlen, int
 
     bool fHandled = true;
     if (pReply->Status == IP_SUCCESS) {
-        struct ip *ip = mtod(so->so_m, struct ip *);
+        struct slirp_ip *ip = mtod(so->so_m, struct slirp_ip *);
         ip->ip_ttl = pReply->Options.Ttl ? pReply->Options.Ttl : MAXTTL;
         icmp_reflect(so->so_m);
         so->so_m = NULL;
@@ -224,7 +224,7 @@ static int icmp_send(struct socket *so, struct mbuf *m, int hlen)
     Slirp *slirp = m->slirp;
 
     struct sockaddr_in addr = { 0 };
-    struct ip *ip = mtod(m, struct ip *);
+    struct slirp_ip *ip = mtod(m, struct slirp_ip *);
     int ttl = ip->ip_ttl - IPTTLDEC;
 
     /* Expire at the NAT hop even when the host cannot open ICMP sockets. */
@@ -286,7 +286,7 @@ static int icmp_send(struct socket *so, struct mbuf *m, int hlen)
 
     slirp_register_poll_socket(so);
     M_DUP_DEBUG(slirp, m, 0, 0);
-    ip = mtod(m, struct ip *);
+    ip = mtod(m, struct slirp_ip *);
 
     so->so_m = m;
     so->so_faddr = ip->ip_dst;
@@ -340,8 +340,8 @@ void icmp_input(struct mbuf *m, int hlen)
     Slirp *slirp = m->slirp;
     M_DUP_DEBUG(slirp, m, 0, 0);
 
-    register struct icmp *icp;
-    register struct ip *ip = mtod(m, struct ip *);
+    register struct slirp_icmp *icp;
+    register struct slirp_ip *ip = mtod(m, struct slirp_ip *);
     int icmplen = ip->ip_len;
 
     DEBUG_CALL("icmp_input");
@@ -360,7 +360,7 @@ void icmp_input(struct mbuf *m, int hlen)
 
     m->m_len -= hlen;
     m->m_data += hlen;
-    icp = mtod(m, struct icmp *);
+    icp = mtod(m, struct slirp_icmp *);
     if (cksum(m, icmplen)) {
         goto freeit;
     }
@@ -483,8 +483,8 @@ void icmp_forward_error(struct mbuf *msrc, uint8_t type, uint8_t code, int minsi
                         const char *message, struct in_addr *src)
 {
     unsigned hlen, shlen, s_ip_len;
-    register struct ip *ip;
-    register struct icmp *icp;
+    register struct slirp_ip *ip;
+    register struct slirp_icmp *icp;
     register struct mbuf *m;
 
     DEBUG_CALL("icmp_send_error");
@@ -497,7 +497,7 @@ void icmp_forward_error(struct mbuf *msrc, uint8_t type, uint8_t code, int minsi
     /* check msrc */
     if (!msrc)
         goto end_error;
-    ip = mtod(msrc, struct ip *);
+    ip = mtod(msrc, struct slirp_ip *);
     if (slirp_debug & SLIRP_DBG_MISC) {
         char addr_src[INET_ADDRSTRLEN];
         char addr_dst[INET_ADDRSTRLEN];
@@ -517,7 +517,7 @@ void icmp_forward_error(struct mbuf *msrc, uint8_t type, uint8_t code, int minsi
     shlen = ip->ip_hl << 2;
     s_ip_len = ip->ip_len;
     if (ip->ip_p == IPPROTO_ICMP) {
-        icp = (struct icmp *)((char *)ip + shlen);
+        icp = (struct slirp_icmp *)((char *)ip + shlen);
         /*
          *	Assume any unknown ICMP type is an error. This isn't
          *	specified by the RFC, but think about it..
@@ -535,7 +535,7 @@ void icmp_forward_error(struct mbuf *msrc, uint8_t type, uint8_t code, int minsi
     {
         int new_m_size;
         new_m_size =
-            sizeof(struct ip) + ICMP_MINLEN + msrc->m_len + ICMP_MAXDATALEN;
+            sizeof(struct slirp_ip) + ICMP_MINLEN + msrc->m_len + ICMP_MAXDATALEN;
         if (new_m_size > m->m_size)
             m_inc(m, new_m_size);
     }
@@ -543,14 +543,14 @@ void icmp_forward_error(struct mbuf *msrc, uint8_t type, uint8_t code, int minsi
     m->m_len = msrc->m_len; /* copy msrc to m */
 
     /* make the header of the reply packet */
-    ip = mtod(m, struct ip *);
-    hlen = sizeof(struct ip); /* no options in reply */
+    ip = mtod(m, struct slirp_ip *);
+    hlen = sizeof(struct slirp_ip); /* no options in reply */
 
     /* fill in icmp */
     m->m_data += hlen;
     m->m_len -= hlen;
 
-    icp = mtod(m, struct icmp *);
+    icp = mtod(m, struct slirp_icmp *);
 
     if (minsize)
         s_ip_len = shlen + ICMP_MINLEN; /* return header+8b only */
@@ -562,7 +562,7 @@ void icmp_forward_error(struct mbuf *msrc, uint8_t type, uint8_t code, int minsi
 
     m->m_len = ICMP_MINLEN + s_ip_len; /* 8 bytes ICMP header */
 
-    /* min. size = 8+sizeof(struct ip)+8 */
+    /* min. size = 8+sizeof(struct slirp_ip)+8 */
 
     icp->icmp_type = type;
     icp->icmp_code = code;
@@ -620,10 +620,10 @@ void icmp_send_error(struct mbuf *msrc, uint8_t type, uint8_t code, int minsize,
  */
 void icmp_reflect(struct mbuf *m)
 {
-    register struct ip *ip = mtod(m, struct ip *);
+    register struct slirp_ip *ip = mtod(m, struct slirp_ip *);
     int hlen = ip->ip_hl << 2;
-    int optlen = hlen - sizeof(struct ip);
-    register struct icmp *icp;
+    int optlen = hlen - sizeof(struct slirp_ip);
+    register struct slirp_icmp *icp;
 
     /*
      * Send an icmp packet back to the ip level,
@@ -631,7 +631,7 @@ void icmp_reflect(struct mbuf *m)
      */
     m->m_data += hlen;
     m->m_len -= hlen;
-    icp = mtod(m, struct icmp *);
+    icp = mtod(m, struct slirp_icmp *);
 
     icp->icmp_type = ICMP_ECHOREPLY;
     icp->icmp_cksum = 0;
@@ -721,14 +721,14 @@ static bool icmp_receive_error_queue(struct socket *so)
 void icmp_receive(struct socket *so)
 {
     struct mbuf *m = so->so_m;
-    struct ip *ip = mtod(m, struct ip *);
+    struct slirp_ip *ip = mtod(m, struct slirp_ip *);
     int hlen = ip->ip_hl << 2;
     uint8_t error_code;
     struct in_addr icmp_src = ip->ip_dst;
     uint8_t icmp_ttl = MAXTTL;
     bool f_have_icmp_ttl = false;
-    struct icmp *icp;
-    struct icmp *icp_rx;
+    struct slirp_icmp *icp;
+    struct slirp_icmp *icp_rx;
     unsigned char *buf;
     struct sockaddr_storage srcaddr;
 #ifndef __linux__
@@ -745,7 +745,7 @@ void icmp_receive(struct socket *so)
 
     m->m_data += hlen;
     m->m_len -= hlen;
-    icp = mtod(m, struct icmp *);
+    icp = mtod(m, struct slirp_icmp *);
 
     id = icp->icmp_id;
     room = M_ROOM(m);
@@ -791,13 +791,13 @@ void icmp_receive(struct socket *so)
 #endif
     if (len > 0 && srcaddr.ss_family == AF_INET)
         icmp_src = ((struct sockaddr_in *)&srcaddr)->sin_addr;
-    icp_rx = (struct icmp *)buf;
+    icp_rx = (struct slirp_icmp *)buf;
 
     if (so->so_type == IPPROTO_IP && len > 0) {
-        if (len >= sizeof(struct ip)) {
-            struct ip *inner_ip = (struct ip *)buf;
+        if (len >= sizeof(struct slirp_ip)) {
+            struct slirp_ip *inner_ip = (struct slirp_ip *)buf;
             int inner_hlen = inner_ip->ip_hl << 2;
-            if (inner_hlen < (int)sizeof(struct ip) || inner_hlen > len) {
+            if (inner_hlen < (int)sizeof(struct slirp_ip) || inner_hlen > len) {
                 len = -1;
                 errno = EINVAL;
             } else {
@@ -806,7 +806,7 @@ void icmp_receive(struct socket *so)
                 f_have_icmp_ttl = true;
                 icmp_src = inner_ip->ip_src;
                 len -= inner_hlen;
-                icp_rx = (struct icmp *)(buf + inner_hlen);
+                icp_rx = (struct slirp_icmp *)(buf + inner_hlen);
             }
         } else {
             len = -1;
@@ -836,23 +836,23 @@ void icmp_receive(struct socket *so)
         } else if (icp_rx->icmp_type == ICMP_TIMXCEED || icp_rx->icmp_type == ICMP_UNREACH) {
             /* Raw sockets also receive errors for other probes. Only forward
              * a quote that identifies this socket's original echo request. */
-            struct ip *quoted = (struct ip *)((char *)icp_rx + ICMP_MINLEN);
+            struct slirp_ip *quoted = (struct slirp_ip *)((char *)icp_rx + ICMP_MINLEN);
             int quoted_hlen;
-            struct icmp *quoted_icmp;
+            struct slirp_icmp *quoted_icmp;
 
-            if (len < ICMP_MINLEN + sizeof(struct ip)) {
+            if (len < ICMP_MINLEN + sizeof(struct slirp_ip)) {
                 g_free(buf);
                 return;
             }
             quoted_hlen = quoted->ip_hl << 2;
             if (quoted->ip_v != IPVERSION || quoted->ip_p != IPPROTO_ICMP ||
-                quoted_hlen < sizeof(struct ip) ||
+                quoted_hlen < sizeof(struct slirp_ip) ||
                 len < ICMP_MINLEN + quoted_hlen + ICMP_MINLEN ||
                 quoted->ip_dst.s_addr != ip->ip_dst.s_addr) {
                 g_free(buf);
                 return;
             }
-            quoted_icmp = (struct icmp *)((char *)quoted + quoted_hlen);
+            quoted_icmp = (struct slirp_icmp *)((char *)quoted + quoted_hlen);
             if (quoted_icmp->icmp_type != ICMP_ECHO ||
                 quoted_icmp->icmp_seq != icp->icmp_seq ||
                 (so->so_type == IPPROTO_IP && quoted_icmp->icmp_id != id)) {
@@ -868,7 +868,7 @@ void icmp_receive(struct socket *so)
             /* VirtualBox/virtualbox#479: Copy real Echo Replies into so_m and preserve their received TTL. */
             m->m_data += hlen;
             m->m_len -= hlen;
-            icp = mtod(m, struct icmp *);
+            icp = mtod(m, struct slirp_icmp *);
             memcpy(icp, icp_rx, len);
             icp->icmp_id = id;
             m->m_data -= hlen;

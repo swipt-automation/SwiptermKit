@@ -340,12 +340,6 @@ void *mmu_gpa_to_hva(const vmm_machine_t *vm, uint64_t gpa, size_t len) {
             return vm->ram + off;
         }
     }
-    if (vm->pmem && vm->pmem_size > 0 && gpa >= VMM_PMEM_BASE) {
-        uint64_t off = gpa - VMM_PMEM_BASE;
-        if (off <= vm->pmem_size && len <= vm->pmem_size - off) {
-            return vm->pmem + off;
-        }
-    }
     return NULL;
 }
 
@@ -669,10 +663,6 @@ bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va, uint64_t *pa_out) {
         }
         if (vm->ram && hva - (uintptr_t)vm->ram < vm->ram_size) {
             *pa_out = VMM_RAM_BASE + (hva - (uintptr_t)vm->ram) + (va & VMM_PAGE_MASK);
-            return true;
-        }
-        if (vm->pmem && hva - (uintptr_t)vm->pmem < vm->pmem_size) {
-            *pa_out = VMM_PMEM_BASE + (hva - (uintptr_t)vm->pmem) + (va & VMM_PAGE_MASK);
             return true;
         }
     }

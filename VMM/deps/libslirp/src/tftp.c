@@ -55,7 +55,7 @@ static void tftp_session_terminate(struct tftp_session *spt)
 }
 
 static int tftp_session_allocate(Slirp *slirp, struct sockaddr_storage *srcsas,
-                                 struct tftphdr *hdr)
+                                 struct slirp_tftphdr *hdr)
 {
     struct tftp_session *spt;
     int k;
@@ -89,7 +89,7 @@ found:
 }
 
 static int tftp_session_find(Slirp *slirp, struct sockaddr_storage *srcsas,
-                             struct tftphdr *hdr)
+                             struct slirp_tftphdr *hdr)
 {
     struct tftp_session *spt;
     int k;
@@ -158,10 +158,10 @@ static struct tftp_t *tftp_prep_mbuf_data(struct tftp_session *spt,
     if (spt->client_addr.ss_family == AF_INET6) {
         m->m_data += sizeof(struct ip6);
     } else {
-        m->m_data += sizeof(struct ip);
+        m->m_data += sizeof(struct slirp_ip);
     }
     tp = (void *)m->m_data;
-    m->m_data += sizeof(struct udphdr);
+    m->m_data += sizeof(struct slirp_udphdr);
 
     return tp;
 }
@@ -173,15 +173,15 @@ static size_t tftp_room(struct tftp_session *spt)
     if (spt->client_addr.ss_family == AF_INET6) {
         room = spt->slirp->if_mtu6 - sizeof(struct ip6);
     } else {
-        room = spt->slirp->if_mtu - sizeof(struct ip);
+        room = spt->slirp->if_mtu - sizeof(struct slirp_ip);
     }
-    room -= sizeof(struct udphdr);
+    room -= sizeof(struct slirp_udphdr);
 
     return room;
 }
 
 static void tftp_udp_output(struct tftp_session *spt, struct mbuf *m,
-                            struct tftphdr *hdr)
+                            struct slirp_tftphdr *hdr)
 {
     if (spt->client_addr.ss_family == AF_INET6) {
         struct sockaddr_in6 sa6, da6;
@@ -267,7 +267,7 @@ out:
 }
 
 static void tftp_send_next_block(struct tftp_session *spt,
-                                 struct tftphdr *hdr)
+                                 struct slirp_tftphdr *hdr)
 {
     struct mbuf *m;
     struct tftp_t *tp;
@@ -464,7 +464,7 @@ static void tftp_handle_rrq(Slirp *slirp, struct sockaddr_storage *srcsas,
 }
 
 static void tftp_handle_ack(Slirp *slirp, struct sockaddr_storage *srcsas,
-                            struct tftphdr *hdr)
+                            struct slirp_tftphdr *hdr)
 {
     int s;
 
@@ -478,7 +478,7 @@ static void tftp_handle_ack(Slirp *slirp, struct sockaddr_storage *srcsas,
 }
 
 static void tftp_handle_error(Slirp *slirp, struct sockaddr_storage *srcsas,
-                              struct tftphdr *hdr)
+                              struct slirp_tftphdr *hdr)
 {
     int s;
 
@@ -493,7 +493,7 @@ static void tftp_handle_error(Slirp *slirp, struct sockaddr_storage *srcsas,
 
 void tftp_input(struct sockaddr_storage *srcsas, struct mbuf *m)
 {
-    struct tftphdr *hdr = mtod_check(m, sizeof(struct tftphdr));
+    struct slirp_tftphdr *hdr = mtod_check(m, sizeof(struct slirp_tftphdr));
 
     if (hdr == NULL) {
         return;

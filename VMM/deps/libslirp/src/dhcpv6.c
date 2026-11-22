@@ -148,7 +148,7 @@ static void dhcpv6_info_request(Slirp *slirp, struct sockaddr_in6 *srcsas,
     }
     memset(m->m_data, 0, m->m_size);
     m->m_data += IF_MAXLINKHDR;
-    resp = (uint8_t *)m->m_data + sizeof(struct ip6) + sizeof(struct udphdr);
+    resp = (uint8_t *)m->m_data + sizeof(struct ip6) + sizeof(struct slirp_udphdr);
 
     /* Fill in response */
     *resp++ = MSGTYPE_REPLY;
@@ -220,7 +220,7 @@ static void dhcpv6_info_request(Slirp *slirp, struct sockaddr_in6 *srcsas,
     sa6.sin6_port = DHCPV6_SERVER_PORT;
     da6.sin6_addr = srcsas->sin6_addr;
     da6.sin6_port = srcsas->sin6_port;
-    m->m_data += sizeof(struct ip6) + sizeof(struct udphdr);
+    m->m_data += sizeof(struct ip6) + sizeof(struct slirp_udphdr);
     m->m_len = resp - (uint8_t *)m->m_data;
     udp6_output(NULL, m, &sa6, &da6);
 }
@@ -230,8 +230,8 @@ static void dhcpv6_info_request(Slirp *slirp, struct sockaddr_in6 *srcsas,
  */
 void dhcpv6_input(struct sockaddr_in6 *srcsas, struct mbuf *m)
 {
-    uint8_t *data = (uint8_t *)m->m_data + sizeof(struct udphdr);
-    int data_len = m->m_len - sizeof(struct udphdr);
+    uint8_t *data = (uint8_t *)m->m_data + sizeof(struct slirp_udphdr);
+    int data_len = m->m_len - sizeof(struct slirp_udphdr);
     uint32_t xid;
 
     if (data_len < 4) {

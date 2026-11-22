@@ -53,16 +53,16 @@ int ip_output(struct socket *so, struct mbuf *m0)
     Slirp *slirp = m0->slirp;
     M_DUP_DEBUG(slirp, m0, 0, 0);
 
-    register struct ip *ip;
+    register struct slirp_ip *ip;
     register struct mbuf *m = m0;
-    register int hlen = sizeof(struct ip);
+    register int hlen = sizeof(struct slirp_ip);
     int len, off, error = 0;
 
     DEBUG_CALL("ip_output");
     DEBUG_ARG("so = %p", so);
     DEBUG_ARG("m0 = %p", m0);
 
-    ip = mtod(m, struct ip *);
+    ip = mtod(m, struct slirp_ip *);
     /*
      * Fill in IP header.
      */
@@ -108,16 +108,16 @@ int ip_output(struct socket *so, struct mbuf *m0)
          * make new header and copy data of each part and link onto chain.
          */
         m0 = m;
-        mhlen = sizeof(struct ip);
+        mhlen = sizeof(struct slirp_ip);
         for (off = hlen + len; off < (uint16_t)ip->ip_len; off += len) {
-            register struct ip *mhip;
+            register struct slirp_ip *mhip;
             m = m_get(slirp);
             if (m == NULL) {
                 error = -1;
                 goto sendorfree;
             }
             m->m_data += IF_MAXLINKHDR;
-            mhip = mtod(m, struct ip *);
+            mhip = mtod(m, struct slirp_ip *);
             *mhip = *ip;
 
             m->m_len = mhlen;

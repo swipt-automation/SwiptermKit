@@ -14,28 +14,12 @@ typedef struct swipterm_invocation swipterm_invocation;
 
 typedef void (*swipterm_progress_handler)(void *context, double fraction);
 
-typedef enum {
-    SWIPTERM_ROOT_IMAGE_NONE = 0,
-    SWIPTERM_ROOT_IMAGE_DAX_EROFS_MEMORY = 1,
-    SWIPTERM_ROOT_IMAGE_DAX_EROFS_FILE = 2,
-    SWIPTERM_ROOT_IMAGE_ARCHIVE_FILE = 3,
-    SWIPTERM_ROOT_IMAGE_ARCHIVE_MEMORY = 4,
-} swipterm_root_image_kind;
-
-typedef struct {
-    swipterm_root_image_kind kind;
-    const char *path;
-    const void *data;
-    size_t size;
-} swipterm_root_image;
-
-bool swipterm_image_import_file(const char *archive_path, const char *root_path,
-                                void *context, swipterm_progress_handler progress, char **error_message);
-bool swipterm_image_import_memory(const void *data, size_t size, const char *root_path,
-                                  void *context, swipterm_progress_handler progress, char **error_message);
-bool swipterm_image_export(const char *root_path, const char *archive_path,
-                           void *context, swipterm_progress_handler progress, char **error_message);
-int swipterm_reset_upper(const char *root_path);
+bool swipterm_root_import_file(const char *archive_path, const char *root_path, uint64_t disk_size,
+                               void *context, swipterm_progress_handler progress, char **error_message);
+bool swipterm_root_import_memory(const void *data, size_t size, const char *root_path, uint64_t disk_size,
+                                 void *context, swipterm_progress_handler progress, char **error_message);
+bool swipterm_root_export(const char *root_path, const char *archive_path,
+                          void *context, swipterm_progress_handler progress, char **error_message);
 
 typedef enum {
     SWIPTERM_HALT_NONE = 0,
@@ -62,31 +46,30 @@ typedef struct {
 } swipterm_callbacks;
 
 typedef enum {
-    SWIPTERM_BLOB_EMBEDDED = 0,
-    SWIPTERM_BLOB_FILE = 1,
-    SWIPTERM_BLOB_MEMORY = 2,
-} swipterm_blob_kind;
-
-typedef struct {
-    swipterm_blob_kind kind;
-    const char *path;
-    const void *data;
-    size_t size;
-} swipterm_blob;
+    SWIPTERM_KERNEL_INSTALLED = 0,
+    SWIPTERM_KERNEL_BUNDLED = 1,
+    SWIPTERM_KERNEL_RELEASE = 2,
+} swipterm_kernel_selection;
 
 typedef struct {
     const char *root_path;
-    swipterm_root_image root_image;
     const char *hostname;
     const char *host_commands_directory;
     size_t ram_size;
     uint32_t cpu_count;
     swipterm_callbacks callbacks;
-    swipterm_blob kernel_image;
-    swipterm_blob initramfs;
-    swipterm_blob modules_initramfs;
+    const char *bundled_kernel_path;
+    const char *initramfs_path;
+    swipterm_kernel_selection kernel;
+    const char *kernel_release;
     const char *extra_cmdline;
 } swipterm_options;
+
+typedef struct {
+    char release[65];
+    bool bundled;
+    char fallback_reason[256];
+} swipterm_boot_info;
 
 int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out);
 void swipterm_begin_shutdown(swipterm_runtime *runtime);
@@ -96,6 +79,7 @@ int swipterm_start_init(swipterm_runtime *runtime, const char *path,
 void swipterm_suspend(swipterm_runtime *runtime);
 void swipterm_resume(swipterm_runtime *runtime);
 int swipterm_sync_dns(swipterm_runtime *runtime);
+void swipterm_get_boot_info(swipterm_runtime *runtime, swipterm_boot_info *info_out);
 
 typedef enum {
     SWIPTERM_READY_LOGIN = 1,

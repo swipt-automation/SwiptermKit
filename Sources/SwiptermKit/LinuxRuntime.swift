@@ -2,32 +2,6 @@ import CSwiptermKit
 import Foundation
 import Network
 
-public enum LinuxBlobSource: Sendable, Equatable {
-    case embedded
-    case file(URL)
-    case data(Data)
-
-    func withCBlob<Result>(_ body: (swipterm_blob) throws -> Result) rethrows -> Result {
-        switch self {
-        case .embedded:
-            return try body(swipterm_blob(kind: SWIPTERM_BLOB_EMBEDDED, path: nil, data: nil, size: 0))
-        case .file(let url):
-            return try url.withUnsafeFileSystemRepresentation { path in
-                try body(swipterm_blob(kind: SWIPTERM_BLOB_FILE, path: path, data: nil, size: 0))
-            }
-        case .data(let data):
-            return try data.withUnsafeBytes { buffer in
-                try body(swipterm_blob(
-                    kind: SWIPTERM_BLOB_MEMORY,
-                    path: nil,
-                    data: buffer.baseAddress,
-                    size: buffer.count
-                ))
-            }
-        }
-    }
-}
-
 public final class LinuxRuntime: @unchecked Sendable {
     public struct Configuration: Sendable {
         public enum InitMode: Hashable, Sendable {
@@ -37,16 +11,20 @@ public final class LinuxRuntime: @unchecked Sendable {
             case managed
         }
 
+        public enum Kernel: Hashable, Sendable {
+            /// The newest kernel installed in the root that can boot this machine, or the bundled kernel when there is none.
+            case installed
+            case bundled
+            /// The installed kernel with this release, or the bundled kernel when it cannot boot this machine.
+            case release(String)
+        }
+
         public var root: URL
-        public var initialImage: LinuxRootImage?
-        public var installationProgress: (@Sendable (Double) -> Void)?
         public var initMode: InitMode
+        public var kernel: Kernel
         public var hostname: String?
         public var hostCommandsDirectory: String?
         public var autoSyncDNS: Bool
-        public var kernelImage: LinuxBlobSource
-        public var initramfs: LinuxBlobSource
-        public var modulesInitramfs: LinuxBlobSource?
         public var extraKernelArguments: String?
         public var consoleOutput: (@Sendable (Data) -> Void)?
         public var panicHandler: (@Sendable (String) -> Void)?
@@ -54,34 +32,43 @@ public final class LinuxRuntime: @unchecked Sendable {
 
         public init(
             root: URL,
-            initialImage: LinuxRootImage? = nil,
-            installationProgress: (@Sendable (Double) -> Void)? = nil,
             initMode: InitMode = .system,
+            kernel: Kernel = .installed,
             hostname: String? = nil,
             hostCommandsDirectory: String? = "/run/host-bin",
             autoSyncDNS: Bool = true,
-            kernelImage: LinuxBlobSource = .embedded,
-            initramfs: LinuxBlobSource = .embedded,
-            modulesInitramfs: LinuxBlobSource? = nil,
             extraKernelArguments: String? = nil,
             consoleOutput: (@Sendable (Data) -> Void)? = nil,
             panicHandler: (@Sendable (String) -> Void)? = nil,
             haltHandler: (@Sendable (HaltReason) -> Void)? = nil
         ) {
             self.root = root
-            self.initialImage = initialImage
-            self.installationProgress = installationProgress
             self.initMode = initMode
+            self.kernel = kernel
             self.hostname = hostname
             self.hostCommandsDirectory = hostCommandsDirectory
             self.autoSyncDNS = autoSyncDNS
-            self.kernelImage = kernelImage
-            self.initramfs = initramfs
-            self.modulesInitramfs = modulesInitramfs
             self.extraKernelArguments = extraKernelArguments
             self.consoleOutput = consoleOutput
             self.panicHandler = panicHandler
             self.haltHandler = haltHandler
+        }
+    }
+
+    public struct BootedKernel: Hashable, Sendable {
+        public let release: String
+        public let isBundled: Bool
+        /// Why the kernel that `Configuration.kernel` asked for did not boot; `nil` when it did.
+        public let fallbackReason: String?
+
+        init(_ info: swipterm_boot_info) {
+            var info = info
+            release = withUnsafeBytes(of: &info.release) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+            isBundled = info.bundled
+            let reason = withUnsafeBytes(of: &info.fallback_reason) {
+                String(cString: $0.bindMemory(to: CChar.self).baseAddress!)
+            }
+            fallbackReason = reason.isEmpty ? nil : reason
         }
     }
 
@@ -114,6 +101,7 @@ public final class LinuxRuntime: @unchecked Sendable {
     }
 
     public let defaultEnvironment: [String: String]
+    public let bootedKernel: BootedKernel
     public var fileSystem: LinuxFileSystem {
         LinuxFileSystem(runtime: self)
     }
@@ -131,7 +119,7 @@ public final class LinuxRuntime: @unchecked Sendable {
     private static let systemPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     private static let readinessPollInterval = Duration.milliseconds(250)
 
-    private init(configuration: Configuration, handle: OpaquePointer, callbacks: RuntimeCallbacks) {
+    private init(configuration: Configuration, handle: OpaquePointer, callbacks: RuntimeCallbacks, bootedKernel: BootedKernel) {
         var path = Self.systemPath
         if let directory = configuration.hostCommandsDirectory {
             path += ":" + directory
@@ -143,6 +131,7 @@ public final class LinuxRuntime: @unchecked Sendable {
         ]
         self.handle = handle
         self.callbacks = callbacks
+        self.bootedKernel = bootedKernel
     }
 
     deinit {
@@ -219,16 +208,8 @@ public final class LinuxRuntime: @unchecked Sendable {
         _ configuration: Configuration,
         prepare: @Sendable (LinuxRuntime) async throws -> Void = { _ in }
     ) async throws -> LinuxRuntime {
-        let metadataFile = configuration.root.appending(path: "swipterm.json")
-        let upperImage = configuration.root.appending(path: "upper.ext4")
-        let fm = FileManager.default
-        let hasRoot = fm.fileExists(atPath: metadataFile.path(percentEncoded: false)) &&
-            fm.fileExists(atPath: upperImage.path(percentEncoded: false))
-        if !hasRoot {
-            guard let image = configuration.initialImage else {
-                throw LinuxError.ENOENT
-            }
-            try await image.install(to: configuration.root, progress: configuration.installationProgress)
+        guard LinuxRootImage.isInstalled(at: configuration.root) else {
+            throw LinuxError.ENOENT
         }
 
         let callbacks = RuntimeCallbacks(
@@ -236,11 +217,16 @@ public final class LinuxRuntime: @unchecked Sendable {
             haltHandler: configuration.haltHandler,
             panicHandler: configuration.panicHandler
         )
-        let bootedHandle = try await blocking {
+        let booted = try await blocking {
             try bootKernel(configuration, callbacks: callbacks)
         }
 
-        let runtime = LinuxRuntime(configuration: configuration, handle: bootedHandle.value, callbacks: callbacks)
+        let runtime = LinuxRuntime(
+            configuration: configuration,
+            handle: booted.handle.value,
+            callbacks: callbacks,
+            bootedKernel: booted.kernel
+        )
         let initCommand: (path: String, arguments: [String], environment: [String])?
         switch configuration.initMode {
         case .managed:
@@ -299,45 +285,51 @@ public final class LinuxRuntime: @unchecked Sendable {
     private static func bootKernel(
         _ configuration: Configuration,
         callbacks: RuntimeCallbacks
-    ) throws(LinuxError) -> UnsafeSendable<OpaquePointer> {
+    ) throws(LinuxError) -> (handle: UnsafeSendable<OpaquePointer>, kernel: BootedKernel) {
+        guard let kernelImage = Bundle.module.url(forResource: "Image", withExtension: "gz"),
+              let initramfs = Bundle.module.url(forResource: "initramfs.cpio", withExtension: "gz")
+        else {
+            throw .ENOENT
+        }
         let callbackTable = callbacks.makeTable(
             includeConsoleOutput: callbacks.consoleOutput != nil,
             includePanic: configuration.panicHandler != nil
         )
+        let selection: swipterm_kernel_selection
+        let release: String?
+        switch configuration.kernel {
+        case .installed:
+            selection = SWIPTERM_KERNEL_INSTALLED
+            release = nil
+        case .bundled:
+            selection = SWIPTERM_KERNEL_BUNDLED
+            release = nil
+        case .release(let name):
+            selection = SWIPTERM_KERNEL_RELEASE
+            release = name
+        }
         var handle: OpaquePointer?
-        let code = configuration.root.path(percentEncoded: false).withCString { root in
-            withOptionalCString(configuration.hostname) { hostname in
-                withOptionalCString(configuration.hostCommandsDirectory) { hostCommandsDirectory in
-                    withOptionalCString(configuration.extraKernelArguments) { extraCmdline in
-                        configuration.kernelImage.withCBlob { kernelBlob in
-                            configuration.initramfs.withCBlob { initramfsBlob in
-                                let modulesSource = configuration.modulesInitramfs ?? .embedded
-                                return modulesSource.withCBlob { modulesBlob in
-                                    func callBoot(_ rootImage: swipterm_root_image) -> Int32 {
-                                        var options = swipterm_options(
-                                            root_path: root,
-                                            root_image: rootImage,
-                                            hostname: hostname,
-                                            host_commands_directory: hostCommandsDirectory,
-                                            ram_size: 0,
-                                            cpu_count: 0,
-                                            callbacks: callbackTable,
-                                            kernel_image: kernelBlob,
-                                            initramfs: initramfsBlob,
-                                            modules_initramfs: modulesBlob,
-                                            extra_cmdline: extraCmdline
-                                        )
-                                        return swipterm_boot(&options, &handle)
-                                    }
-                                    if let image = configuration.initialImage {
-                                        return image.withCRootImage(callBoot)
-                                    }
-                                    return callBoot(swipterm_root_image(
-                                        kind: SWIPTERM_ROOT_IMAGE_NONE,
-                                        path: nil,
-                                        data: nil,
-                                        size: 0
-                                    ))
+        let code = configuration.root.withUnsafeFileSystemRepresentation { root in
+            kernelImage.withUnsafeFileSystemRepresentation { kernelPath in
+                initramfs.withUnsafeFileSystemRepresentation { initramfsPath in
+                    withOptionalCString(configuration.hostname) { hostname in
+                        withOptionalCString(configuration.hostCommandsDirectory) { hostCommandsDirectory in
+                            withOptionalCString(configuration.extraKernelArguments) { extraCmdline in
+                                withOptionalCString(release) { release in
+                                    var options = swipterm_options(
+                                        root_path: root,
+                                        hostname: hostname,
+                                        host_commands_directory: hostCommandsDirectory,
+                                        ram_size: 0,
+                                        cpu_count: 0,
+                                        callbacks: callbackTable,
+                                        bundled_kernel_path: kernelPath,
+                                        initramfs_path: initramfsPath,
+                                        kernel: selection,
+                                        kernel_release: release,
+                                        extra_cmdline: extraCmdline
+                                    )
+                                    return swipterm_boot(&options, &handle)
                                 }
                             }
                         }
@@ -346,7 +338,9 @@ public final class LinuxRuntime: @unchecked Sendable {
             }
         }
         try check(code)
-        return UnsafeSendable(value: handle!)
+        var info = swipterm_boot_info()
+        swipterm_get_boot_info(handle, &info)
+        return (UnsafeSendable(value: handle!), BootedKernel(info))
     }
 
     public func suspend() {
@@ -402,12 +396,6 @@ public final class LinuxRuntime: @unchecked Sendable {
         environment: [String: String] = [:]
     ) async throws -> LinuxProcess {
         try await LinuxProcess(runtime: self, loginAs: user, on: terminal, environment: environment)
-    }
-
-    /// Replaces the writable layer of the stopped root at `root` with an empty one, keeping its root image.
-    /// Throws `LinuxError.EBUSY` while a runtime uses `root`.
-    public static func resetUpper(at root: URL) throws(LinuxError) {
-        try check(root.withUnsafeFileSystemRepresentation { swipterm_reset_upper($0) })
     }
 
     public func makeTerminal(size: LinuxTerminal.Size) throws(LinuxError) -> LinuxTerminal {

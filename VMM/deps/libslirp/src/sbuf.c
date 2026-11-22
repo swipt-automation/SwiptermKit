@@ -7,14 +7,14 @@
 
 #include <limits.h>
 
-static void sbappendsb(struct sbuf *sb, const struct mbuf *m);
+static void sbappendsb(struct slirp_sbuf *sb, const struct mbuf *m);
 
-void sbfree(struct sbuf *sb)
+void sbfree(struct slirp_sbuf *sb)
 {
     g_free(sb->sb_data);
 }
 
-bool sbdrop(struct sbuf *sb, size_t num)
+bool sbdrop(struct slirp_sbuf *sb, size_t num)
 {
     uint32_t limit = sb->sb_datalen / 2;
 
@@ -39,7 +39,7 @@ bool sbdrop(struct sbuf *sb, size_t num)
     return false;
 }
 
-void sbreserve(struct sbuf *sb, size_t size)
+void sbreserve(struct slirp_sbuf *sb, size_t size)
 {
     if (sizeof(size) > sizeof(uint32_t) && size > UINT32_MAX)
         g_error("sbreserve: sizeof(size) > sizeof(uint32_t), size = %" SLIRP_PRIsize_t "\n", size);
@@ -115,7 +115,7 @@ void sbappend(struct socket *so, struct mbuf *m)
  * Copy the data from m into sb
  * The caller is responsible to make sure there's enough room
  */
-static void sbappendsb(struct sbuf *sb, const struct mbuf *m)
+static void sbappendsb(struct slirp_sbuf *sb, const struct mbuf *m)
 {
     int len;
     slirp_ssize_t n;
@@ -150,7 +150,7 @@ static void sbappendsb(struct sbuf *sb, const struct mbuf *m)
         sb->sb_wptr -= sb->sb_datalen;
 }
 
-void sbcopy(struct sbuf *sb, size_t off, size_t len, char *to)
+void sbcopy(struct slirp_sbuf *sb, size_t off, size_t len, char *to)
 {
     char *from;
     const char *right_edge = sb->sb_data + sb->sb_datalen;

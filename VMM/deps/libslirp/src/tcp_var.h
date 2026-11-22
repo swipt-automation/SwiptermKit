@@ -40,9 +40,9 @@
 /*
  * Tcp control block, one per tcp; fields:
  */
-struct tcpcb {
-    struct tcpiphdr *seg_next; /* sequencing queue */
-    struct tcpiphdr *seg_prev;
+struct slirp_tcpcb {
+    struct slirp_tcpiphdr *seg_next; /* sequencing queue */
+    struct slirp_tcpiphdr *seg_prev;
     short t_state; /* state of this connection */
     short t_timer[TCPT_NTIMERS]; /* tcp timers */
     short t_rxtshift; /* log(2) of rexmt exp. backoff */
@@ -62,7 +62,7 @@ struct tcpcb {
 #define TF_RCVD_TSTMP 0x0100 /* a timestamp was received in SYN */
 #define TF_SACK_PERMIT 0x0200 /* other side said I could SACK */
 
-    struct tcpiphdr t_template; /* static skeletal packet for xmit */
+    struct slirp_tcpiphdr t_template; /* static skeletal packet for xmit */
 
     struct socket *t_socket; /* back pointer to socket */
     /*

@@ -14,7 +14,7 @@ void udp6_input(struct mbuf *m)
     M_DUP_DEBUG(slirp, m, 0, 0);
 
     struct ip6 *ip, save_ip;
-    struct udphdr *uh;
+    struct slirp_udphdr *uh;
     int iphlen = sizeof(struct ip6);
     int len;
     struct socket *so;
@@ -31,7 +31,7 @@ void udp6_input(struct mbuf *m)
     ip = mtod(m, struct ip6 *);
     m->m_len -= iphlen;
     m->m_data += iphlen;
-    uh = mtod_check(m, sizeof(struct udphdr));
+    uh = mtod_check(m, sizeof(struct slirp_udphdr));
     if (uh == NULL) {
         goto bad;
     }
@@ -112,7 +112,7 @@ void udp6_input(struct mbuf *m)
     so->so_faddr6 = ip->ip_dst; /* XXX */
     so->so_fport6 = uh->uh_dport; /* XXX */
 
-    iphlen += sizeof(struct udphdr);
+    iphlen += sizeof(struct slirp_udphdr);
     m->m_len -= iphlen;
     m->m_data += iphlen;
 
@@ -159,19 +159,19 @@ int udp6_output(struct socket *so, struct mbuf *m, const struct sockaddr_in6 *sa
                 const struct sockaddr_in6 *daddr)
 {
     Slirp *slirp = m->slirp;
-    M_DUP_DEBUG(slirp, m, 0, sizeof(struct ip6) + sizeof(struct udphdr));
+    M_DUP_DEBUG(slirp, m, 0, sizeof(struct ip6) + sizeof(struct slirp_udphdr));
 
     struct ip6 *ip;
-    struct udphdr *uh;
+    struct slirp_udphdr *uh;
 
     DEBUG_CALL("udp6_output");
     DEBUG_ARG("so = %p", so);
     DEBUG_ARG("m = %p", m);
 
     /* adjust for header */
-    m->m_data -= sizeof(struct udphdr);
-    m->m_len += sizeof(struct udphdr);
-    uh = mtod(m, struct udphdr *);
+    m->m_data -= sizeof(struct slirp_udphdr);
+    m->m_len += sizeof(struct slirp_udphdr);
+    uh = mtod(m, struct slirp_udphdr *);
     m->m_data -= sizeof(struct ip6);
     m->m_len += sizeof(struct ip6);
     ip = mtod(m, struct ip6 *);

@@ -79,7 +79,7 @@ typedef uint32_t n_long; /* long as received from the net */
  * Structure of an internet header, naked of options.
  */
 SLIRP_PACKED_BEGIN
-struct ip {
+struct slirp_ip {
 #if (G_BYTE_ORDER == G_BIG_ENDIAN) && !defined(_MSC_VER)
     uint8_t ip_v : 4, /* version */
         ip_hl : 4; /* header length */
@@ -143,7 +143,7 @@ struct ip {
  * Time stamp option structure.
  */
 SLIRP_PACKED_BEGIN
-struct ip_timestamp {
+struct slirp_ip_timestamp {
     uint8_t ipt_code; /* IPOPT_TS */
     uint8_t ipt_len; /* size of structure (variable) */
     uint8_t ipt_ptr; /* index of current entry */
@@ -154,9 +154,9 @@ struct ip_timestamp {
     uint8_t ipt_flg : 4, /* flags, see below */
         ipt_oflw : 4; /* overflow counter */
 #endif
-    union ipt_timestamp {
+    union slirp_ipt_timestamp {
         n_long ipt_time[1];
-        struct ipt_ta {
+        struct slirp_ipt_ta {
             struct in_addr ipt_addr;
             n_long ipt_time;
         } ipt_ta[1];
@@ -207,7 +207,7 @@ struct qlink {
  * Overlay for ip header used by other protocols (tcp, udp).
  */
 SLIRP_PACKED_BEGIN
-struct ipovly {
+struct slirp_ipovly {
     struct mbuf_ptr ih_mbuf; /* backpointer to mbuf */
     uint8_t ih_x1; /* (unused) */
     uint8_t ih_pr; /* protocol */
@@ -234,7 +234,7 @@ struct ipas {
     struct qlink link;
     union {
         struct ipq ipq;
-        struct ip ipf_ip;
+        struct slirp_ip ipf_ip;
     };
 };
 

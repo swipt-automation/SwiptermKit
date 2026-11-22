@@ -1,3 +1,7 @@
+#if !defined(__aarch64__)
+#error "SwiptermKit requires an arm64 host"
+#endif
+
 #include "cpu_internal.h"
 #include "generated/a64_decode.inc"
 #include "generated/a64_sysreg_gen.inc"

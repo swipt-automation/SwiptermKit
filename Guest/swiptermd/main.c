@@ -2,8 +2,8 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <linux/random.h>
-#include <linux/rtc.h>
 #include <linux/vm_sockets.h>
 #include <poll.h>
 #include <signal.h>
@@ -18,9 +18,9 @@
 #include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/timerfd.h>
-#include <sys/timex.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -39,7 +39,11 @@ daemon_state_t g_daemon = {
     .container_cgroup_ns_fd = -1,
 };
 
+#define BOOT_MODULES_LIST "/swipterm/modules.load"
+#define BOOT_MODULES_DIR "/swipterm/modules"
+
 enum {
+    NSEC_PER_SEC = 1000000000,
     STOP_GRACE_SEC = 20,
     REAP_GRACE_MS = 5000,
     FINAL_REPORT_TIMEOUT_SEC = 2,
@@ -311,9 +315,7 @@ static void setup_initramfs_mounts(void) {
     ensure_dir("/dev", 0755);
     ensure_dir("/run", 0755);
     ensure_dir("/mnt", 0755);
-    ensure_dir("/mnt/lower", 0755);
-    ensure_dir("/mnt/upper", 0755);
-    ensure_dir("/mnt/merged", 0755);
+    ensure_dir(GUEST_ROOT, 0755);
 
     (void)mount("proc", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
     (void)mount("sysfs", "/sys", "sysfs", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);
@@ -325,48 +327,139 @@ static void setup_initramfs_mounts(void) {
     (void)mount("tmpfs", "/run", "tmpfs", MS_NOSUID | MS_NODEV, "mode=0755");
 }
 
-static int sync_realtime_from_rtc(void) {
-    int fd = open("/dev/rtc0", O_RDONLY | O_CLOEXEC);
+static int load_module(const char *path) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0)
         return -errno;
-    struct timespec before;
-    struct timespec after;
-    struct rtc_time rtc;
-    clock_gettime(CLOCK_REALTIME, &before);
-    int rc = ioctl(fd, RTC_RD_TIME, &rtc) < 0 ? -errno : 0;
-    clock_gettime(CLOCK_REALTIME, &after);
+    int rc = syscall(SYS_finit_module, fd, "", 0) < 0 && errno != EEXIST ? -errno : 0;
     close(fd);
-    if (rc < 0)
-        return rc;
+    (void)unlink(path);
+    return rc;
+}
 
-    struct tm utc = {
-        .tm_sec = rtc.tm_sec, .tm_min = rtc.tm_min, .tm_hour = rtc.tm_hour,
-        .tm_mday = rtc.tm_mday, .tm_mon = rtc.tm_mon, .tm_year = rtc.tm_year,
-    };
-    const int64_t nsec_per_sec = 1000000000;
-    int64_t rtc_start = (int64_t)timegm(&utc) * nsec_per_sec;
-    int64_t before_ns = (int64_t)before.tv_sec * nsec_per_sec + before.tv_nsec;
-    int64_t after_ns = (int64_t)after.tv_sec * nsec_per_sec + after.tv_nsec;
-    if (after_ns >= rtc_start && before_ns < rtc_start + nsec_per_sec)
-        return 0;
-
-    int64_t delta = rtc_start + nsec_per_sec / 2 - (before_ns + (after_ns - before_ns) / 2);
-    int64_t delta_sec = delta / nsec_per_sec;
-    int64_t delta_nsec = delta % nsec_per_sec;
-    if (delta_nsec < 0) {
-        delta_nsec += nsec_per_sec;
-        delta_sec--;
+static int load_boot_modules(void) {
+    FILE *list = fopen(BOOT_MODULES_LIST, "re");
+    if (!list) {
+        if (errno == ENOENT)
+            return 0;
+        int err = -errno;
+        boot_err_log(BOOT_MODULES_LIST, err);
+        return err;
     }
-    struct timex adjust = {
-        .modes = ADJ_SETOFFSET | ADJ_NANO,
-        .time = { .tv_sec = (time_t)delta_sec, .tv_usec = (suseconds_t)delta_nsec },
+    char *line = NULL;
+    size_t cap = 0;
+    ssize_t len;
+    int rc = 0;
+    while (rc == 0 && (len = getline(&line, &cap, list)) >= 0) {
+        if (len > 0 && line[len - 1] == '\n')
+            line[--len] = '\0';
+        if (len == 0)
+            continue;
+        if (len < 3 || (line[0] != 'R' && line[0] != 'O') || line[1] != ' ') {
+            rc = -EINVAL;
+            boot_err_log(BOOT_MODULES_LIST, rc);
+            break;
+        }
+        const char *name = line + 2;
+        char path[PATH_MAX];
+        if (snprintf(path, sizeof(path), name[0] == '/' ? "%s" : BOOT_MODULES_DIR "/%s", name) >=
+            (int)sizeof(path)) {
+            rc = -ENAMETOOLONG;
+            boot_err_log(name, rc);
+            break;
+        }
+        int err = load_module(path);
+        if (err < 0) {
+            boot_err_log(path, err);
+            if (line[0] == 'R')
+                rc = err;
+        }
+    }
+    if (rc == 0 && ferror(list)) {
+        rc = -EIO;
+        boot_err_log(BOOT_MODULES_LIST, rc);
+    }
+    free(line);
+    fclose(list);
+    (void)unlink(BOOT_MODULES_LIST);
+    return rc;
+}
+
+static int set_realtime_ns(uint64_t realtime_ns) {
+    struct timespec now = {
+        .tv_sec = (time_t)(realtime_ns / NSEC_PER_SEC),
+        .tv_nsec = (long)(realtime_ns % NSEC_PER_SEC),
     };
-    return clock_adjtime(CLOCK_REALTIME, &adjust) < 0 ? -errno : 0;
+    return clock_settime(CLOCK_REALTIME, &now) < 0 ? -errno : 0;
+}
+
+typedef struct boot_seed {
+    int entropy_count;
+    int buf_size;
+    uint8_t data[32];
+} boot_seed_t;
+
+static int credit_boot_seed(const boot_seed_t *seed) {
+    int fd = open("/dev/random", O_WRONLY | O_CLOEXEC);
+    if (fd < 0)
+        return -errno;
+    int rc = ioctl(fd, RNDADDENTROPY, seed) < 0 ? -errno : 0;
+    if (rc == 0 && ioctl(fd, RNDRESEEDCRNG, 0) < 0 && errno != EINVAL && errno != ENODATA && errno != ENOTTY)
+        rc = -errno;
+    close(fd);
+    return rc;
+}
+
+static __attribute__((noinline)) void read_host_boot_info(uint64_t *realtime_ns, uint64_t seed[4]) {
+    uint64_t x0, x1, x2, x3, x4;
+    __asm__ volatile("mov x0, xzr\n\t"
+                     "mov x1, xzr\n\t"
+                     "mov x2, xzr\n\t"
+                     "mov x3, xzr\n\t"
+                     "mov x4, xzr\n\t"
+                     "hvc #0x5357\n\t"
+                     "mov %0, x0\n\t"
+                     "mov %1, x1\n\t"
+                     "mov %2, x2\n\t"
+                     "mov %3, x3\n\t"
+                     "mov %4, x4"
+                     : "=r"(x0), "=r"(x1), "=r"(x2), "=r"(x3), "=r"(x4)
+                     :
+                     : "x0", "x1", "x2", "x3", "x4", "memory");
+    *realtime_ns = x0;
+    seed[0] = x1;
+    seed[1] = x2;
+    seed[2] = x3;
+    seed[3] = x4;
+}
+
+static int apply_host_boot_info(void) {
+    uint64_t realtime_ns;
+    uint64_t words[4];
+    read_host_boot_info(&realtime_ns, words);
+
+    boot_seed_t seed = {.entropy_count = 8 * sizeof(seed.data), .buf_size = sizeof(seed.data)};
+    bool has_seed = (words[0] | words[1] | words[2] | words[3]) != 0;
+    memcpy(seed.data, words, sizeof(seed.data));
+    explicit_bzero(words, sizeof(words));
+
+    int rc = realtime_ns != 0 ? set_realtime_ns(realtime_ns) : 0;
+    if (rc < 0)
+        boot_err_log("set the realtime clock", rc);
+    int seed_rc = has_seed ? credit_boot_seed(&seed) : 0;
+    explicit_bzero(seed.data, sizeof(seed.data));
+    if (seed_rc < 0)
+        boot_err_log("seed the random pool", seed_rc);
+    return rc < 0 ? rc : seed_rc;
 }
 
 static int bind_boot_virtio(unsigned addr) {
     char name[32];
     int len = snprintf(name, sizeof(name), "%x.virtio_mmio", addr);
+    char driver[80];
+    snprintf(driver, sizeof(driver), "/sys/bus/platform/devices/%s/driver", name);
+    if (access(driver, F_OK) == 0)
+        return 0;
     int fd = open("/sys/bus/platform/drivers/virtio-mmio/bind", O_WRONLY | O_CLOEXEC);
     if (fd < 0)
         return -errno;
@@ -382,22 +475,10 @@ static int bind_boot_virtio(unsigned addr) {
 }
 
 static int reseed_boot_random(void) {
-    struct {
-        int entropy_count;
-        int buf_size;
-        uint8_t data[32];
-    } seed = { .entropy_count = 256, .buf_size = 32 };
-    int fd = -1;
-    for (int attempt = 0; attempt < 50; attempt++) {
-        fd = open("/dev/hwrng", O_RDONLY | O_CLOEXEC);
-        if (fd >= 0)
-            break;
-        if (errno != ENOENT && errno != ENODEV && errno != EINTR)
-            return -errno;
-        usleep(1000);
-    }
+    int fd = open("/dev/hwrng", O_RDONLY | O_CLOEXEC);
     if (fd < 0)
-        return -errno;
+        return errno == ENOENT || errno == ENODEV ? 0 : -errno;
+    boot_seed_t seed = {.entropy_count = 8 * sizeof(seed.data), .buf_size = sizeof(seed.data)};
     size_t count = 0;
     int rc = 0;
     int retries = 0;
@@ -414,41 +495,23 @@ static int reseed_boot_random(void) {
             break;
         }
         if (n < 0) {
-            rc = -errno;
+            rc = errno == ENODEV ? 0 : -errno;
             break;
         }
         retries = 0;
         count += (size_t)n;
     }
     close(fd);
-    if (rc == 0) {
-        fd = open("/dev/random", O_WRONLY | O_CLOEXEC);
-        if (fd < 0) {
-            rc = -errno;
-        } else {
-            if (ioctl(fd, RNDADDENTROPY, &seed) < 0) {
-                rc = -errno;
-            } else {
-                uint8_t ready_byte = 0;
-                ssize_t gr;
-                do {
-                    gr = getrandom(&ready_byte, 1, 0);
-                } while (gr < 0 && errno == EINTR);
-                if (gr != 1 || ioctl(fd, RNDRESEEDCRNG, 0) < 0)
-                    rc = -errno;
-            }
-            close(fd);
-        }
-    }
+    if (rc == 0 && count == sizeof(seed.data))
+        rc = credit_boot_seed(&seed);
     explicit_bzero(seed.data, sizeof(seed.data));
     return rc;
 }
 
 static int setup_boot_devices(void) {
-    int rc = sync_realtime_from_rtc();
-    if (rc < 0)
-        return rc;
-    rc = bind_boot_virtio(0x0a000800);
+    int rc = bind_boot_virtio(0x0a000800);
+    if (rc == -ENODEV && access("/sys/bus/virtio/drivers/virtio_rng", F_OK) != 0)
+        rc = 0;
     if (rc < 0)
         return rc;
     rc = reseed_boot_random();
@@ -462,17 +525,19 @@ static int setup_boot_devices(void) {
     return 0;
 }
 
-static int setup_lower(void) {
-    int lower_ok = -1;
-    if (mount("/dev/pmem0", "/mnt/lower", "erofs", MS_RDONLY, "dax=always") == 0)
-        lower_ok = 0;
-    else if (mount("/dev/pmem0", "/mnt/lower", "erofs", MS_RDONLY, NULL) == 0)
-        lower_ok = 0;
-    else if (mount("/dev/vdb", "/mnt/lower", "erofs", MS_RDONLY, NULL) == 0)
-        lower_ok = 0;
-    else if (mount("/dev/vdb", "/mnt/lower", "ext4", MS_RDONLY, NULL) == 0)
-        lower_ok = 0;
-    return lower_ok == 0 ? 0 : -ENODEV;
+static bool virtiofs_available(void) {
+    FILE *filesystems = fopen("/proc/filesystems", "re");
+    if (!filesystems)
+        return false;
+    char line[128];
+    bool found = false;
+    while (!found && fgets(line, sizeof(line), filesystems)) {
+        line[strcspn(line, "\n")] = '\0';
+        const char *name = strrchr(line, '\t');
+        found = strcmp(name ? name + 1 : line, "virtiofs") == 0;
+    }
+    fclose(filesystems);
+    return found;
 }
 
 void ready_announce(uint32_t level) {
@@ -647,9 +712,14 @@ static void dispatch_ctrl_frame(const swiptermd_frame_hdr_t *hdr, const uint8_t 
         sync();
         ctrl_send_err_reply(SWIPTERMD_OP_SUSPEND, hdr->req_id, 0);
         break;
-    case SWIPTERMD_OP_RESUME:
-        ctrl_send_err_reply(SWIPTERMD_OP_RESUME, hdr->req_id, sync_realtime_from_rtc());
+    case SWIPTERMD_OP_RESUME: {
+        int64_t realtime_ns = 0;
+        int rc = 0;
+        if (swiptermd_dec_resume_req(body, hdr->body_len, &realtime_ns) && realtime_ns > 0)
+            rc = set_realtime_ns((uint64_t)realtime_ns);
+        ctrl_send_err_reply(SWIPTERMD_OP_RESUME, hdr->req_id, rc);
         break;
+    }
     case SWIPTERMD_OP_SPAWN:
         proc_handle_spawn(hdr->req_id, body, hdr->body_len);
         break;
@@ -893,9 +963,6 @@ static int setup_guest(void) {
             return rc;
         }
     }
-    int rc = storage_mount_modules();
-    if (rc < 0)
-        boot_err_log("mount the kernel module overlay", rc);
     return 0;
 }
 
@@ -911,13 +978,13 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
 
     setup_initramfs_mounts();
-    int boot_rc = setup_lower();
-    if (boot_rc < 0) {
-        boot_err_log("setup_lower", boot_rc);
+    int boot_rc = write_file(AT_FDCWD, "/proc/sys/kernel/modprobe", "/sbin/modprobe\n", O_TRUNC, 0);
+    if (boot_rc < 0 && boot_rc != -ENOENT)
+        boot_err_log("set the kernel modprobe path", boot_rc);
+    if (load_boot_modules() < 0 || apply_host_boot_info() < 0) {
         reboot(RB_POWER_OFF);
         return 1;
     }
-    __asm__ volatile("hvc #0x5357" ::: "x0", "memory");
     boot_rc = setup_boot_devices();
     if (boot_rc < 0) {
         boot_err_log("setup_boot_devices", boot_rc);
@@ -967,9 +1034,13 @@ int main(int argc, char **argv) {
     proc_pty_init();
     sock_mirror_init();
 
+    uint32_t caps = SWIPTERMD_CAP_READY | SWIPTERMD_CAP_LOGIN | SWIPTERMD_CAP_STOP_STATUS;
+    if (cuse_available())
+        caps |= SWIPTERMD_CAP_DEVICES;
+    if (virtiofs_available())
+        caps |= SWIPTERMD_CAP_VIRTIOFS;
     uint8_t hello[SWIPTERMD_HELLO_REQ_SIZE];
-    swiptermd_enc_hello(hello, g_daemon.session_nonce,
-                        SWIPTERMD_CAP_READY | SWIPTERMD_CAP_LOGIN | SWIPTERMD_CAP_STOP_STATUS);
+    swiptermd_enc_hello(hello, g_daemon.session_nonce, caps);
     ctrl_send_frame(SWIPTERMD_OP_HELLO, ctrl_alloc_req_id(), hello, sizeof(hello));
 
     while (!g_daemon.shutdown_requested) {

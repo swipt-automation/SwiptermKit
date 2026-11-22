@@ -9,7 +9,7 @@
 /* How many bytes are free in the sbuf */
 #define sbspace(sb) ((sb)->sb_datalen - (sb)->sb_cc)
 
-struct sbuf {
+struct slirp_sbuf {
     uint32_t sb_cc; /* actual chars in buffer */
     uint32_t sb_datalen; /* Length of data  */
     char *sb_wptr; /* write pointer. points to where the next
@@ -20,13 +20,13 @@ struct sbuf {
 };
 
 /* Release the sbuf */
-void sbfree(struct sbuf *sb);
+void sbfree(struct slirp_sbuf *sb);
 
 /* Drop len bytes from the reading end of the sbuf */
-bool sbdrop(struct sbuf *sb, size_t len);
+bool sbdrop(struct slirp_sbuf *sb, size_t len);
 
 /* (re)Allocate sbuf buffer to store size bytes */
-void sbreserve(struct sbuf *sb, size_t size);
+void sbreserve(struct slirp_sbuf *sb, size_t size);
 
 /*
  * Try and write() to the socket, whatever doesn't get written
@@ -41,6 +41,6 @@ void sbappend(struct socket *sb, struct mbuf *mb);
  * Don't update the sbuf rptr, this will be
  * done in sbdrop when the data is acked
  */
-void sbcopy(struct sbuf *sb, size_t off, size_t len, char *p);
+void sbcopy(struct slirp_sbuf *sb, size_t off, size_t len, char *p);
 
 #endif

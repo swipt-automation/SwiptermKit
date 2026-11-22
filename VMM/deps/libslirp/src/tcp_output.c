@@ -51,14 +51,14 @@ static const uint8_t tcp_outflags[TCP_NSTATES] = {
 /*
  * Tcp output routine: figure out what should be sent and send it.
  */
-int tcp_output(struct tcpcb *tp)
+int tcp_output(struct slirp_tcpcb *tp)
 {
     register struct socket *so = tp->t_socket;
     register long len, win;
     int off, flags, error;
     register struct mbuf *m;
-    register struct tcpiphdr *ti, tcpiph_save;
-    struct ip *ip;
+    register struct slirp_tcpiphdr *ti, tcpiph_save;
+    struct slirp_ip *ip;
     struct ip6 *ip6;
     uint8_t opt[MAX_TCPOPTLEN];
     unsigned optlen, hdrlen;
@@ -256,10 +256,10 @@ send:
      * NOTE: we assume that the IP/TCP header plus TCP options
      * always fit in a single mbuf, leaving room for a maximum
      * link header, i.e.
-     *	max_linkhdr + sizeof (struct tcpiphdr) + optlen <= MHLEN
+     *	max_linkhdr + sizeof (struct slirp_tcpiphdr) + optlen <= MHLEN
      */
     optlen = 0;
-    hdrlen = sizeof(struct tcpiphdr);
+    hdrlen = sizeof(struct slirp_tcpiphdr);
     if (flags & TH_SYN) {
         tp->snd_nxt = tp->iss;
         if ((tp->t_flags & TF_NOOPT) == 0) {
@@ -319,9 +319,9 @@ send:
         m->m_len = hdrlen;
     }
 
-    ti = mtod(m, struct tcpiphdr *);
+    ti = mtod(m, struct slirp_tcpiphdr *);
 
-    memcpy((char *)ti, &tp->t_template, sizeof(struct tcpiphdr));
+    memcpy((char *)ti, &tp->t_template, sizeof(struct slirp_tcpiphdr));
 
     /*
      * Fill in fields, remembering maximum advertised
@@ -351,7 +351,7 @@ send:
     ti->ti_ack = htonl(tp->rcv_nxt);
     if (optlen) {
         memcpy((char *)(ti + 1), (char *)opt, optlen);
-        ti->ti_off = (sizeof(struct tcphdr) + optlen) >> 2;
+        ti->ti_off = (sizeof(struct slirp_tcphdr) + optlen) >> 2;
     }
     ti->ti_flags = flags;
     /*
@@ -383,7 +383,7 @@ send:
      * checksum extended header and data.
      */
     if (len + optlen)
-        ti->ti_len = htons((uint16_t)(sizeof(struct tcphdr) + optlen + len));
+        ti->ti_len = htons((uint16_t)(sizeof(struct slirp_tcphdr) + optlen + len));
     ti->ti_sum = cksum(m, (int)(hdrlen + len));
 
     /*
@@ -442,15 +442,15 @@ send:
      * the template, but need a way to checksum without them.
      */
     m->m_len = hdrlen + len; /* XXX Needed? m_len should be correct */
-    tcpiph_save = *mtod(m, struct tcpiphdr *);
+    tcpiph_save = *mtod(m, struct slirp_tcpiphdr *);
 
     switch (so->so_ffamily) {
     case AF_INET:
         m->m_data +=
-            sizeof(struct tcpiphdr) - sizeof(struct tcphdr) - sizeof(struct ip);
+            sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr) - sizeof(struct slirp_ip);
         m->m_len -=
-            sizeof(struct tcpiphdr) - sizeof(struct tcphdr) - sizeof(struct ip);
-        ip = mtod(m, struct ip *);
+            sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr) - sizeof(struct slirp_ip);
+        ip = mtod(m, struct slirp_ip *);
 
         ip->ip_len = m->m_len;
         ip->ip_dst = tcpiph_save.ti_dst;
@@ -463,9 +463,9 @@ send:
         break;
 
     case AF_INET6:
-        m->m_data += sizeof(struct tcpiphdr) - sizeof(struct tcphdr) -
+        m->m_data += sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr) -
                      sizeof(struct ip6);
-        m->m_len -= sizeof(struct tcpiphdr) - sizeof(struct tcphdr) -
+        m->m_len -= sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr) -
                     sizeof(struct ip6);
         ip6 = mtod(m, struct ip6 *);
 
@@ -502,7 +502,7 @@ send:
     return (0);
 }
 
-void tcp_setpersist(struct tcpcb *tp)
+void tcp_setpersist(struct slirp_tcpcb *tp)
 {
     int t = ((tp->t_srtt >> 2) + tp->t_rttvar) >> 1;
 

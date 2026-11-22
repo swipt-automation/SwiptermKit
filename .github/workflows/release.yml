@@ -24,13 +24,12 @@ jobs:
     timeout-minutes: 10
     outputs:
       version: ${{ steps.release.outputs.version }}
-      binary-tag: ${{ steps.release.outputs.binary-tag }}
-      rootfs-tag: ${{ steps.release.outputs.rootfs-tag }}
-      binary-exists: ${{ steps.release.outputs.binary-exists }}
-      rootfs-exists: ${{ steps.release.outputs.rootfs-exists }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Check Guest Artifacts
+        run: make -C Guest check
 
       - name: Resolve Release
         id: release
@@ -64,163 +63,27 @@ jobs:
             fi
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          BINARY_TAG="binary.$(git ls-files -s build.sh VMM Guest Tools | git hash-object --stdin | cut -c1-12)"
-          ROOTFS_TAG="rootfs.$(git ls-files -s build.sh Rootfs VMM/host/erofs_archive.c VMM/host/ext4_upper.c VMM/host/host_internal.h VMM/include/CSwiptermKit/swipterm.h Guest/swiptermd/protocol.h Guest/swiptermd/wire_format.h | git hash-object --stdin | cut -c1-12)"
-          echo "binary-tag=$BINARY_TAG" >> "$GITHUB_OUTPUT"
-          echo "rootfs-tag=$ROOTFS_TAG" >> "$GITHUB_OUTPUT"
-          if gh release view "$BINARY_TAG" >/dev/null 2>&1; then
-            echo "binary-exists=true" >> "$GITHUB_OUTPUT"
-          fi
-          if gh release view "$ROOTFS_TAG" >/dev/null 2>&1; then
-            echo "rootfs-exists=true" >> "$GITHUB_OUTPUT"
-          fi
-
-  build-guest:
-    needs: resolve
-    if: needs.resolve.outputs.binary-exists != 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Build Guest Kernel and Initramfs
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bc bison cpio curl flex gcc libelf-dev libssl-dev make patch xz-utils
-          OUT_DIR="$PWD/build/guest" ./Guest/build_guest.sh
-
-      - name: Upload Guest Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: guest-artifacts
-          path: |
-            build/guest/Image
-            build/guest/initramfs.cpio
-
-  build-debian-rootfs:
-    needs: resolve
-    if: needs.resolve.outputs.rootfs-exists != 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Build Debian Rootfs Tarball
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mmdebstrap debian-archive-keyring
-          sudo ./Rootfs/debian/build_debian.sh "$PWD/build/rootfs/debian-trixie-arm64.tar"
-          sudo chown "$(id -u):$(id -g)" "$PWD/build/rootfs/debian-trixie-arm64.tar"
-
-      - name: Upload Debian Rootfs Tarball
-        uses: actions/upload-artifact@v4
-        with:
-          name: debian-rootfs-tar
-          path: build/rootfs/debian-trixie-arm64.tar
 
   release:
-    needs: [resolve, build-guest, build-debian-rootfs]
-    if: always() && needs.resolve.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    needs: resolve
     runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Download Guest Artifacts
-        if: needs.resolve.outputs.binary-exists != 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: guest-artifacts
-          path: build/guest
+      - name: Build macOS
+        run: swift build
 
-      - name: Build Binary
-        if: needs.resolve.outputs.binary-exists != 'true'
-        run: |
-          SWIPTERM_PREBUILT_KERNEL="$PWD/build/guest/Image" \
-          SWIPTERM_PREBUILT_INITRAMFS="$PWD/build/guest/initramfs.cpio" \
-          ./build.sh kernel
-          ditto -c -k --keepParent Frameworks/CSwiptermKit.xcframework build/CSwiptermKit.xcframework.zip
-          gh release create "$TAG" build/CSwiptermKit.xcframework.zip \
-            --title "$TAG" --notes "VMM + guest kernel $(git rev-parse --short HEAD)" --prerelease
-        env:
-          TAG: ${{ needs.resolve.outputs.binary-tag }}
+      - name: Build iOS
+        run: xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS'
 
-      - name: Download Binary
-        if: needs.resolve.outputs.binary-exists == 'true'
-        run: |
-          gh release download "$TAG" --pattern CSwiptermKit.xcframework.zip --dir build
-          ditto -x -k build/CSwiptermKit.xcframework.zip Frameworks
-        env:
-          TAG: ${{ needs.resolve.outputs.binary-tag }}
-
-      - name: Download Debian Rootfs Tarball
-        if: needs.resolve.outputs.rootfs-exists != 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: debian-rootfs-tar
-          path: build/rootfs
-
-      - name: Build Rootfs
-        if: needs.resolve.outputs.rootfs-exists != 'true'
-        run: |
-          ./build.sh rootfs
-          ditto -c -k --keepParent Frameworks/CSwiptermAlpineRootfs.xcframework build/CSwiptermAlpineRootfs.xcframework.zip
-          ditto -c -k --keepParent Frameworks/CSwiptermDebianRootfs.xcframework build/CSwiptermDebianRootfs.xcframework.zip
-          gh release create "$TAG" \
-            build/CSwiptermAlpineRootfs.xcframework.zip \
-            build/CSwiptermDebianRootfs.xcframework.zip \
-            --title "$TAG" --notes "Alpine + Debian EROFS rootfs $(git rev-parse --short HEAD)" --prerelease
-        env:
-          TAG: ${{ needs.resolve.outputs.rootfs-tag }}
-
-      - name: Download Rootfs
-        if: needs.resolve.outputs.rootfs-exists == 'true'
-        run: |
-          gh release download "$TAG" \
-            --pattern CSwiptermAlpineRootfs.xcframework.zip \
-            --pattern CSwiptermDebianRootfs.xcframework.zip \
-            --dir build
-          ditto -x -k build/CSwiptermAlpineRootfs.xcframework.zip Frameworks
-          ditto -x -k build/CSwiptermDebianRootfs.xcframework.zip Frameworks
-        env:
-          TAG: ${{ needs.resolve.outputs.rootfs-tag }}
-
-      - name: Test Package
-        run: |
-          cp Package.local.swift Package.swift
-          xcodebuild build -quiet -scheme SwiptermKit-Package -destination 'generic/platform=iOS'
-          xcodebuild build -quiet -scheme SwiptermKit-Package -destination 'generic/platform=iOS Simulator' ARCHS=arm64
-
-      - name: Generate Manifest
-        run: |
-          RELEASES="https://github.com/${{ github.repository }}/releases/download"
-          BINARY_CHECKSUM="$(swift package compute-checksum build/CSwiptermKit.xcframework.zip)"
-          ALPINE_CHECKSUM="$(swift package compute-checksum build/CSwiptermAlpineRootfs.xcframework.zip)"
-          DEBIAN_CHECKSUM="$(swift package compute-checksum build/CSwiptermDebianRootfs.xcframework.zip)"
-          perl -pe "s|path: \"Frameworks/CSwiptermKit.xcframework\"|url: \"$RELEASES/$BINARY_TAG/CSwiptermKit.xcframework.zip\",\n            checksum: \"$BINARY_CHECKSUM\"|; s|path: \"Frameworks/CSwiptermAlpineRootfs.xcframework\"|url: \"$RELEASES/$ROOTFS_TAG/CSwiptermAlpineRootfs.xcframework.zip\",\n            checksum: \"$ALPINE_CHECKSUM\"|; s|path: \"Frameworks/CSwiptermDebianRootfs.xcframework\"|url: \"$RELEASES/$ROOTFS_TAG/CSwiptermDebianRootfs.xcframework.zip\",\n            checksum: \"$DEBIAN_CHECKSUM\"|" \
-            Package.local.swift > Package.swift
-          if grep -q 'path: "Frameworks/' Package.swift; then
-            echo "::error::Package.swift still refers to a local framework"
-            exit 1
-          fi
-          git diff Package.swift
-        env:
-          BINARY_TAG: ${{ needs.resolve.outputs.binary-tag }}
-          ROOTFS_TAG: ${{ needs.resolve.outputs.rootfs-tag }}
+      - name: Build iOS Simulator
+        run: xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS Simulator' ARCHS=arm64
 
       - name: Publish
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Package.swift
-          git commit -m "release: $VERSION" || true
-          git push
-          gh release create "$VERSION" --target "$(git rev-parse HEAD)" --title "$VERSION" \
-            --notes "SwiptermKit $VERSION ($BINARY_TAG, $ROOTFS_TAG)"
+          gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" \
+            --notes "SwiptermKit $VERSION ($(git rev-parse --short HEAD))"
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
-          BINARY_TAG: ${{ needs.resolve.outputs.binary-tag }}
-          ROOTFS_TAG: ${{ needs.resolve.outputs.rootfs-tag }}

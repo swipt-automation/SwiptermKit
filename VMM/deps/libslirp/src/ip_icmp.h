@@ -44,21 +44,21 @@ typedef uint32_t n_time;
 /*
  * Structure of an icmp header.
  */
-struct icmp {
+struct slirp_icmp {
     uint8_t icmp_type; /* type of message, see below */
     uint8_t icmp_code; /* type sub code */
     uint16_t icmp_cksum; /* ones complement cksum of struct */
     union {
         uint8_t ih_pptr; /* ICMP_PARAMPROB */
         struct in_addr ih_gwaddr; /* ICMP_REDIRECT */
-        struct ih_idseq {
+        struct slirp_ih_idseq {
             uint16_t icd_id;
             uint16_t icd_seq;
         } ih_idseq;
         int ih_void;
 
         /* ICMP_UNREACH_NEEDFRAG -- Path MTU Discovery (RFC1191) */
-        struct ih_pmtu {
+        struct slirp_ih_pmtu {
             uint16_t ipm_void;
             uint16_t ipm_nextmtu;
         } ih_pmtu;
@@ -71,13 +71,13 @@ struct icmp {
 #define icmp_pmvoid icmp_hun.ih_pmtu.ipm_void
 #define icmp_nextmtu icmp_hun.ih_pmtu.ipm_nextmtu
     union {
-        struct id_ts {
+        struct slirp_id_ts {
             n_time its_otime;
             n_time its_rtime;
             n_time its_ttime;
         } id_ts;
-        struct id_ip {
-            struct ip idi_ip;
+        struct slirp_id_ip {
+            struct slirp_ip idi_ip;
             /* options and then 64 bits of data */
         } id_ip;
         uint32_t id_mask;
@@ -102,7 +102,7 @@ struct icmp {
 #define ICMP_MINLEN 8 /* abs minimum */
 #define ICMP_TSLEN (8 + 3 * sizeof(n_time)) /* timestamp */
 #define ICMP_MASKLEN 12 /* address mask */
-#define ICMP_ADVLENMIN (8 + sizeof(struct ip) + 8) /* min */
+#define ICMP_ADVLENMIN (8 + sizeof(struct slirp_ip) + 8) /* min */
 #define ICMP_ADVLEN(p) (8 + ((p)->icmp_ip.ip_hl << 2) + 8)
 /* N.B.: must separately check that ip_hl >= 5 */
 

@@ -59,10 +59,10 @@ void tcp_cleanup(Slirp *slirp)
     }
 }
 
-void tcp_template(struct tcpcb *tp)
+void tcp_template(struct slirp_tcpcb *tp)
 {
     struct socket *so = tp->t_socket;
-    register struct tcpiphdr *n = &tp->t_template;
+    register struct slirp_tcpiphdr *n = &tp->t_template;
 
     n->ti_mbuf = NULL;
     memset(&n->ti, 0, sizeof(n->ti));
@@ -70,7 +70,7 @@ void tcp_template(struct tcpcb *tp)
     switch (so->so_ffamily) {
     case AF_INET:
         n->ti_pr = IPPROTO_TCP;
-        n->ti_len = htons(sizeof(struct tcphdr));
+        n->ti_len = htons(sizeof(struct slirp_tcphdr));
         n->ti_src = so->so_faddr;
         n->ti_dst = so->so_laddr;
         n->ti_sport = so->so_fport;
@@ -79,7 +79,7 @@ void tcp_template(struct tcpcb *tp)
 
     case AF_INET6:
         n->ti_nh6 = IPPROTO_TCP;
-        n->ti_len = htons(sizeof(struct tcphdr));
+        n->ti_len = htons(sizeof(struct slirp_tcphdr));
         n->ti_src6 = so->so_faddr6;
         n->ti_dst6 = so->so_laddr6;
         n->ti_sport = so->so_fport6;
@@ -113,7 +113,7 @@ void tcp_template(struct tcpcb *tp)
  * In any case the ack and sequence number of the transmitted
  * segment are as specified by the parameters.
  */
-void tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
+void tcp_respond(struct slirp_tcpcb *tp, struct slirp_tcpiphdr *ti, struct mbuf *m,
                  tcp_seq ack, tcp_seq seq, int flags, unsigned short af)
 {
     register int tlen;
@@ -134,8 +134,8 @@ void tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
             return;
         tlen = 0;
         m->m_data += IF_MAXLINKHDR;
-        *mtod(m, struct tcpiphdr *) = *ti;
-        ti = mtod(m, struct tcpiphdr *);
+        *mtod(m, struct slirp_tcpiphdr *) = *ti;
+        ti = mtod(m, struct slirp_tcpiphdr *);
         switch (af) {
         case AF_INET:
             ti->ti.ti_i4.ih_x1 = 0;
@@ -154,7 +154,7 @@ void tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
          */
         m->m_data = (char *)ti;
 
-        m->m_len = sizeof(struct tcpiphdr);
+        m->m_len = sizeof(struct slirp_tcpiphdr);
         tlen = 0;
 #define xchg(a, b, type) \
     {                    \
@@ -177,8 +177,8 @@ void tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
         }
 #undef xchg
     }
-    ti->ti_len = htons((uint16_t)(sizeof(struct tcphdr) + tlen));
-    tlen += sizeof(struct tcpiphdr);
+    ti->ti_len = htons((uint16_t)(sizeof(struct slirp_tcphdr) + tlen));
+    tlen += sizeof(struct slirp_tcpiphdr);
     m->m_len = tlen;
 
     ti->ti_mbuf = NULL;
@@ -186,7 +186,7 @@ void tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
     ti->ti_seq = htonl(seq);
     ti->ti_ack = htonl(ack);
     ti->ti_x2 = 0;
-    ti->ti_off = sizeof(struct tcphdr) >> 2;
+    ti->ti_off = sizeof(struct slirp_tcphdr) >> 2;
     ti->ti_flags = flags;
     if (tp)
         ti->ti_win = htons((uint16_t)(win >> tp->rcv_scale));
@@ -196,17 +196,17 @@ void tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
     ti->ti_sum = 0;
     ti->ti_sum = cksum(m, tlen);
 
-    struct tcpiphdr tcpiph_save = *(mtod(m, struct tcpiphdr *));
-    struct ip *ip;
+    struct slirp_tcpiphdr tcpiph_save = *(mtod(m, struct slirp_tcpiphdr *));
+    struct slirp_ip *ip;
     struct ip6 *ip6;
 
     switch (af) {
     case AF_INET:
         m->m_data +=
-            sizeof(struct tcpiphdr) - sizeof(struct tcphdr) - sizeof(struct ip);
+            sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr) - sizeof(struct slirp_ip);
         m->m_len -=
-            sizeof(struct tcpiphdr) - sizeof(struct tcphdr) - sizeof(struct ip);
-        ip = mtod(m, struct ip *);
+            sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr) - sizeof(struct slirp_ip);
+        ip = mtod(m, struct slirp_ip *);
         ip->ip_len = m->m_len;
         ip->ip_dst = tcpiph_save.ti_dst;
         ip->ip_src = tcpiph_save.ti_src;
@@ -222,9 +222,9 @@ void tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
         break;
 
     case AF_INET6:
-        m->m_data += sizeof(struct tcpiphdr) - sizeof(struct tcphdr) -
+        m->m_data += sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr) -
                      sizeof(struct ip6);
-        m->m_len -= sizeof(struct tcpiphdr) - sizeof(struct tcphdr) -
+        m->m_len -= sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr) -
                     sizeof(struct ip6);
         ip6 = mtod(m, struct ip6 *);
         ip6->ip_pl = tcpiph_save.ti_len;
@@ -240,12 +240,12 @@ void tcp_respond(struct tcpcb *tp, struct tcpiphdr *ti, struct mbuf *m,
     }
 }
 
-struct tcpcb *tcp_newtcpcb(struct socket *so)
+struct slirp_tcpcb *tcp_newtcpcb(struct socket *so)
 {
-    register struct tcpcb *tp;
+    register struct slirp_tcpcb *tp;
 
-    tp = g_new0(struct tcpcb, 1);
-    tp->seg_next = tp->seg_prev = (struct tcpiphdr *)tp;
+    tp = g_new0(struct slirp_tcpcb, 1);
+    tp->seg_next = tp->seg_prev = (struct slirp_tcpiphdr *)tp;
     /*
      * 40: length of IPv4 header (20) + TCP header (20)
      * 60: length of IPv6 header (40) + TCP header (20)
@@ -281,7 +281,7 @@ struct tcpcb *tcp_newtcpcb(struct socket *so)
     return (tp);
 }
 
-struct tcpcb *tcp_drop(struct tcpcb *tp, int err)
+struct slirp_tcpcb *tcp_drop(struct slirp_tcpcb *tp, int err)
 {
     DEBUG_CALL("tcp_drop");
     DEBUG_ARG("tp = %p", tp);
@@ -294,9 +294,9 @@ struct tcpcb *tcp_drop(struct tcpcb *tp, int err)
     return (tcp_close(tp));
 }
 
-struct tcpcb *tcp_close(struct tcpcb *tp)
+struct slirp_tcpcb *tcp_close(struct slirp_tcpcb *tp)
 {
-    register struct tcpiphdr *t;
+    register struct slirp_tcpiphdr *t;
     struct socket *so = tp->t_socket;
     Slirp *slirp = so->slirp;
     register struct mbuf *m;
@@ -320,7 +320,7 @@ struct tcpcb *tcp_close(struct tcpcb *tp)
     slirp_unregister_poll_socket(so);
     closesocket(so->s);
     sofree(so);
-    return ((struct tcpcb *)0);
+    return ((struct slirp_tcpcb *)0);
 }
 
 /*
@@ -337,7 +337,7 @@ struct tcpcb *tcp_close(struct tcpcb *tp)
  * for peer to send FIN or not respond to keep-alives, etc.
  * We can let the user exit from the close as soon as the FIN is acked.
  */
-void tcp_sockclosed(struct tcpcb *tp)
+void tcp_sockclosed(struct slirp_tcpcb *tp)
 {
     DEBUG_CALL("tcp_sockclosed");
     DEBUG_ARG("tp = %p", tp);
@@ -499,7 +499,7 @@ void tcp_connect(struct socket *inso)
     struct socket *so;
     struct sockaddr_storage addr;
     socklen_t addrlen;
-    struct tcpcb *tp;
+    struct slirp_tcpcb *tp;
     slirp_os_socket s;
     int opt, ret;
     /* AF_INET6 addresses are bigger than AF_INET, so this is big enough. */
@@ -1036,7 +1036,7 @@ int tcp_emu(struct socket *so, struct mbuf *m)
 int tcp_ctl(struct socket *so)
 {
     Slirp *slirp = so->slirp;
-    struct sbuf *sb = &so->so_snd;
+    struct slirp_sbuf *sb = &so->so_snd;
     struct gfwd_list *ex_ptr;
 
     DEBUG_CALL("tcp_ctl");

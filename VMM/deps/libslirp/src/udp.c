@@ -69,10 +69,10 @@ void udp_input(register struct mbuf *m, int iphlen)
     Slirp *slirp = m->slirp;
     M_DUP_DEBUG(slirp, m, 0, 0);
 
-    register struct ip *ip;
-    register struct udphdr *uh;
+    register struct slirp_ip *ip;
+    register struct slirp_udphdr *uh;
     int len;
-    struct ip save_ip;
+    struct slirp_ip save_ip;
     struct socket *so;
     struct sockaddr_storage lhost;
     struct sockaddr_in *lhost4;
@@ -88,19 +88,19 @@ void udp_input(register struct mbuf *m, int iphlen)
      * but we don't yet have a way to check the checksum
      * with options still present.
      */
-    if (iphlen > sizeof(struct ip)) {
+    if (iphlen > sizeof(struct slirp_ip)) {
         ip_stripoptions(m);
-        iphlen = sizeof(struct ip);
+        iphlen = sizeof(struct slirp_ip);
     }
 
     /*
      * Get IP and UDP header together in first mbuf.
      */
-    ip = mtod_check(m, iphlen + sizeof(struct udphdr));
+    ip = mtod_check(m, iphlen + sizeof(struct slirp_udphdr));
     if (ip == NULL) {
         goto bad;
     }
-    uh = (struct udphdr *)((char *)ip + iphlen);
+    uh = (struct slirp_udphdr *)((char *)ip + iphlen);
 
     /*
      * Make mbuf data length reflect UDP length.
@@ -127,10 +127,10 @@ void udp_input(register struct mbuf *m, int iphlen)
      * Checksum extended UDP header and data.
      */
     if (uh->uh_sum) {
-        memset(&((struct ipovly *)ip)->ih_mbuf, 0, sizeof(struct mbuf_ptr));
-        ((struct ipovly *)ip)->ih_x1 = 0;
-        ((struct ipovly *)ip)->ih_len = uh->uh_ulen;
-        if (cksum(m, len + sizeof(struct ip))) {
+        memset(&((struct slirp_ipovly *)ip)->ih_mbuf, 0, sizeof(struct mbuf_ptr));
+        ((struct slirp_ipovly *)ip)->ih_x1 = 0;
+        ((struct slirp_ipovly *)ip)->ih_len = uh->uh_ulen;
+        if (cksum(m, len + sizeof(struct slirp_ip))) {
             goto bad;
         }
     }
@@ -204,7 +204,7 @@ void udp_input(register struct mbuf *m, int iphlen)
     so->so_faddr = ip->ip_dst; /* XXX */
     so->so_fport = uh->uh_dport; /* XXX */
 
-    iphlen += sizeof(struct udphdr);
+    iphlen += sizeof(struct slirp_udphdr);
     m->m_len -= iphlen;
     m->m_data += iphlen;
 
@@ -259,9 +259,9 @@ int udp_output(struct socket *so, struct mbuf *m, const struct sockaddr_in *sadd
     Slirp *slirp = m->slirp;
     char addr[INET_ADDRSTRLEN];
 
-    M_DUP_DEBUG(slirp, m, 0, sizeof(struct udpiphdr));
+    M_DUP_DEBUG(slirp, m, 0, sizeof(struct slirp_udpiphdr));
 
-    register struct udpiphdr *ui;
+    register struct slirp_udpiphdr *ui;
     int error = 0;
 
     DEBUG_CALL("udp_output");
@@ -275,18 +275,18 @@ int udp_output(struct socket *so, struct mbuf *m, const struct sockaddr_in *sadd
     /*
      * Adjust for header
      */
-    m->m_data -= sizeof(struct udpiphdr);
-    m->m_len += sizeof(struct udpiphdr);
+    m->m_data -= sizeof(struct slirp_udpiphdr);
+    m->m_len += sizeof(struct slirp_udpiphdr);
 
     /*
      * Fill in mbuf with extended UDP header
      * and addresses and length put into network format.
      */
-    ui = mtod(m, struct udpiphdr *);
+    ui = mtod(m, struct slirp_udpiphdr *);
     memset(&ui->ui_i.ih_mbuf, 0, sizeof(struct mbuf_ptr));
     ui->ui_x1 = 0;
     ui->ui_pr = IPPROTO_UDP;
-    ui->ui_len = htons(m->m_len - sizeof(struct ip));
+    ui->ui_len = htons(m->m_len - sizeof(struct slirp_ip));
     /* XXXXX Check for from-one-location sockets, or from-any-location sockets
      */
     ui->ui_src = saddr->sin_addr;
@@ -301,10 +301,10 @@ int udp_output(struct socket *so, struct mbuf *m, const struct sockaddr_in *sadd
     ui->ui_sum = 0;
     if ((ui->ui_sum = cksum(m, m->m_len)) == 0)
         ui->ui_sum = 0xffff;
-    ((struct ip *)ui)->ip_len = m->m_len;
+    ((struct slirp_ip *)ui)->ip_len = m->m_len;
 
-    ((struct ip *)ui)->ip_ttl = IPDEFTTL;
-    ((struct ip *)ui)->ip_tos = iptos;
+    ((struct slirp_ip *)ui)->ip_ttl = IPDEFTTL;
+    ((struct slirp_ip *)ui)->ip_tos = iptos;
 
     error = ip_output(so, m);
 

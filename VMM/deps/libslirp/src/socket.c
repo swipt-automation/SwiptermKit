@@ -114,7 +114,7 @@ void sofree(struct socket *so)
 size_t sopreprbuf(struct socket *so, struct iovec *iov, int *np)
 {
     int n, lss, total;
-    struct sbuf *sb = &so->so_snd;
+    struct slirp_sbuf *sb = &so->so_snd;
     int len = sb->sb_datalen - sb->sb_cc;
     int mss = so->so_tcpcb->t_maxseg;
 
@@ -180,7 +180,7 @@ int soread(struct socket *so)
 {
     int n, nn;
     size_t buf_len;
-    struct sbuf *sb = &so->so_snd;
+    struct slirp_sbuf *sb = &so->so_snd;
     struct iovec iov[2];
 
     DEBUG_CALL("soread");
@@ -260,7 +260,7 @@ int soread(struct socket *so)
 int soreadbuf(struct socket *so, const char *buf, int size)
 {
     int n, nn, copy = size;
-    struct sbuf *sb = &so->so_snd;
+    struct slirp_sbuf *sb = &so->so_snd;
     struct iovec iov[2];
 
     DEBUG_CALL("soreadbuf");
@@ -309,7 +309,7 @@ err:
  */
 int sorecvoob(struct socket *so)
 {
-    struct tcpcb *tp = sototcpcb(so);
+    struct slirp_tcpcb *tp = sototcpcb(so);
     int ret;
 
     DEBUG_CALL("sorecvoob");
@@ -340,7 +340,7 @@ int sorecvoob(struct socket *so)
  */
 int sosendoob(struct socket *so)
 {
-    struct sbuf *sb = &so->so_rcv;
+    struct slirp_sbuf *sb = &so->so_rcv;
     uint32_t urgc = so->so_urgc;
     char buff[2048];
 
@@ -411,7 +411,7 @@ int sosendoob(struct socket *so)
 int sowrite(struct socket *so)
 {
     int n, nn, noob = 0;
-    struct sbuf *sb = &so->so_rcv;
+    struct slirp_sbuf *sb = &so->so_rcv;
     int len = sb->sb_cc;
     struct iovec iov[2];
 
@@ -637,11 +637,11 @@ void sorecvfrom(struct socket *so)
         }
         switch (so->so_ffamily) {
         case AF_INET:
-            m->m_data += IF_MAXLINKHDR + sizeof(struct udpiphdr);
+            m->m_data += IF_MAXLINKHDR + sizeof(struct slirp_udpiphdr);
             break;
         case AF_INET6:
             m->m_data +=
-                IF_MAXLINKHDR + sizeof(struct ip6) + sizeof(struct udphdr);
+                IF_MAXLINKHDR + sizeof(struct ip6) + sizeof(struct slirp_udphdr);
             break;
         default:
             g_assert_not_reached();

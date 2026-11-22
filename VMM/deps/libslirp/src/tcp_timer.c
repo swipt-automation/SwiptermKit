@@ -33,7 +33,7 @@
 
 #include "slirp.h"
 
-static struct tcpcb *tcp_timers(register struct tcpcb *tp, int timer);
+static struct slirp_tcpcb *tcp_timers(register struct slirp_tcpcb *tp, int timer);
 
 /*
  * Fast timeout routine for processing delayed acks
@@ -41,14 +41,14 @@ static struct tcpcb *tcp_timers(register struct tcpcb *tp, int timer);
 void tcp_fasttimo(Slirp *slirp)
 {
     register struct socket *so;
-    register struct tcpcb *tp;
+    register struct slirp_tcpcb *tp;
 
     DEBUG_CALL("tcp_fasttimo");
 
     so = slirp->tcb.so_next;
     if (so)
         for (; so != &slirp->tcb; so = so->so_next)
-            if ((tp = (struct tcpcb *)so->so_tcpcb) &&
+            if ((tp = (struct slirp_tcpcb *)so->so_tcpcb) &&
                 (tp->t_flags & TF_DELACK)) {
                 tp->t_flags &= ~TF_DELACK;
                 tp->t_flags |= TF_ACKNOW;
@@ -64,7 +64,7 @@ void tcp_fasttimo(Slirp *slirp)
 void tcp_slowtimo(Slirp *slirp)
 {
     register struct socket *ip, *ipnxt;
-    register struct tcpcb *tp;
+    register struct slirp_tcpcb *tp;
     register int i;
 
     DEBUG_CALL("tcp_slowtimo");
@@ -98,7 +98,7 @@ void tcp_slowtimo(Slirp *slirp)
     slirp->tcp_now++; /* for timestamps */
 }
 
-void tcp_canceltimers(struct tcpcb *tp)
+void tcp_canceltimers(struct slirp_tcpcb *tp)
 {
     register int i;
 
@@ -112,7 +112,7 @@ const int tcp_backoff[TCP_MAXRXTSHIFT + 1] = { 1,  2,  4,  8,  16, 32, 64,
 /*
  * TCP timer processing.
  */
-static struct tcpcb *tcp_timers(register struct tcpcb *tp, int timer)
+static struct slirp_tcpcb *tcp_timers(register struct slirp_tcpcb *tp, int timer)
 {
     register int rexmt;
 

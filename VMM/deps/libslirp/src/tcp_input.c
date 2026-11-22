@@ -55,14 +55,14 @@
  * when segments are out of order (so fast retransmit can work).
  */
 
-static void tcp_dooptions(struct tcpcb *tp, uint8_t *cp, int cnt,
-                          struct tcpiphdr *ti);
-static void tcp_xmit_timer(register struct tcpcb *tp, int rtt);
+static void tcp_dooptions(struct slirp_tcpcb *tp, uint8_t *cp, int cnt,
+                          struct slirp_tcpiphdr *ti);
+static void tcp_xmit_timer(register struct slirp_tcpcb *tp, int rtt);
 
-static int tcp_reass(register struct tcpcb *tp, register struct tcpiphdr *ti,
+static int tcp_reass(register struct slirp_tcpcb *tp, register struct slirp_tcpiphdr *ti,
                      struct mbuf *m)
 {
-    register struct tcpiphdr *q;
+    register struct slirp_tcpiphdr *q;
     struct socket *so = tp->t_socket;
     int flags;
 
@@ -173,13 +173,13 @@ present:
 void tcp_input(struct mbuf *m, int iphlen, struct socket *inso,
                unsigned short af)
 {
-    struct ip save_ip, *ip;
+    struct slirp_ip save_ip, *ip;
     struct ip6 save_ip6, *ip6;
-    register struct tcpiphdr *ti;
+    register struct slirp_tcpiphdr *ti;
     char *optp = NULL;
     int optlen = 0;
     int len, tlen, off;
-    register struct tcpcb *tp = NULL;
+    register struct slirp_tcpcb *tp = NULL;
     register int tiflags;
     struct socket *so = NULL;
     int todrop, acked, ourfinisacked, needoutput = 0;
@@ -219,22 +219,22 @@ void tcp_input(struct mbuf *m, int iphlen, struct socket *inso,
     switch (af) {
     case AF_INET:
         M_DUP_DEBUG(slirp, m, 0,
-            sizeof(struct qlink) + sizeof(struct tcpiphdr) - sizeof(struct ip) - sizeof(struct tcphdr));
+            sizeof(struct qlink) + sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_ip) - sizeof(struct slirp_tcphdr));
         break;
     case AF_INET6:
         M_DUP_DEBUG(slirp, m, 0,
-            sizeof(struct qlink) + sizeof(struct tcpiphdr) - sizeof(struct ip6) - sizeof(struct tcphdr));
+            sizeof(struct qlink) + sizeof(struct slirp_tcpiphdr) - sizeof(struct ip6) - sizeof(struct slirp_tcphdr));
         break;
     }
 
-    ip = mtod(m, struct ip *);
+    ip = mtod(m, struct slirp_ip *);
     ip6 = mtod(m, struct ip6 *);
 
     switch (af) {
     case AF_INET:
-        if (iphlen > sizeof(struct ip)) {
+        if (iphlen > sizeof(struct slirp_ip)) {
             ip_stripoptions(m);
-            iphlen = sizeof(struct ip);
+            iphlen = sizeof(struct slirp_ip);
         }
         /* XXX Check if too short */
 
@@ -251,10 +251,10 @@ void tcp_input(struct mbuf *m, int iphlen, struct socket *inso,
          * Note: IP leaves IP header in first mbuf.
          */
         m->m_data -=
-            sizeof(struct tcpiphdr) - sizeof(struct ip) - sizeof(struct tcphdr);
+            sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_ip) - sizeof(struct slirp_tcphdr);
         m->m_len +=
-            sizeof(struct tcpiphdr) - sizeof(struct ip) - sizeof(struct tcphdr);
-        ti = mtod(m, struct tcpiphdr *);
+            sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_ip) - sizeof(struct slirp_tcphdr);
+        ti = mtod(m, struct slirp_tcpiphdr *);
 
         /*
          * Checksum extended TCP header and data.
@@ -280,11 +280,11 @@ void tcp_input(struct mbuf *m, int iphlen, struct socket *inso,
          * Get IP and TCP header together in first mbuf.
          * Note: IP leaves IP header in first mbuf.
          */
-        m->m_data -= sizeof(struct tcpiphdr) -
-                     (sizeof(struct ip6) + sizeof(struct tcphdr));
-        m->m_len += sizeof(struct tcpiphdr) -
-                    (sizeof(struct ip6) + sizeof(struct tcphdr));
-        ti = mtod(m, struct tcpiphdr *);
+        m->m_data -= sizeof(struct slirp_tcpiphdr) -
+                     (sizeof(struct ip6) + sizeof(struct slirp_tcphdr));
+        m->m_len += sizeof(struct slirp_tcpiphdr) -
+                    (sizeof(struct ip6) + sizeof(struct slirp_tcphdr));
+        ti = mtod(m, struct slirp_tcpiphdr *);
 
         tlen = ip6->ip_pl;
         tcpiphdr2qlink(ti)->next = tcpiphdr2qlink(ti)->prev = NULL;
@@ -301,7 +301,7 @@ void tcp_input(struct mbuf *m, int iphlen, struct socket *inso,
         g_assert_not_reached();
     }
 
-    len = ((sizeof(struct tcpiphdr) - sizeof(struct tcphdr)) + tlen);
+    len = ((sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_tcphdr)) + tlen);
     if (cksum(m, len)) {
         goto drop;
     }
@@ -311,14 +311,14 @@ void tcp_input(struct mbuf *m, int iphlen, struct socket *inso,
      * pull out TCP options and adjust length.		XXX
      */
     off = ti->ti_off << 2;
-    if (off < sizeof(struct tcphdr) || off > tlen) {
+    if (off < sizeof(struct slirp_tcphdr) || off > tlen) {
         goto drop;
     }
     tlen -= off;
     ti->ti_len = tlen;
-    if (off > sizeof(struct tcphdr)) {
-        optlen = off - sizeof(struct tcphdr);
-        optp = mtod(m, char *) + sizeof(struct tcpiphdr);
+    if (off > sizeof(struct slirp_tcphdr)) {
+        optlen = off - sizeof(struct slirp_tcphdr);
+        optp = mtod(m, char *) + sizeof(struct slirp_tcpiphdr);
     }
     tiflags = ti->ti_flags;
 
@@ -333,8 +333,8 @@ void tcp_input(struct mbuf *m, int iphlen, struct socket *inso,
     /*
      * Drop TCP, IP headers and TCP options.
      */
-    m->m_data += sizeof(struct tcpiphdr) + off - sizeof(struct tcphdr);
-    m->m_len -= sizeof(struct tcpiphdr) + off - sizeof(struct tcphdr);
+    m->m_data += sizeof(struct slirp_tcpiphdr) + off - sizeof(struct slirp_tcphdr);
+    m->m_len -= sizeof(struct slirp_tcpiphdr) + off - sizeof(struct slirp_tcphdr);
 
     /*
      * Locate pcb for segment.
@@ -413,7 +413,7 @@ findso:
         if (so->so_iptos == 0) {
             switch (af) {
             case AF_INET:
-                so->so_iptos = ((struct ip *)ti)->ip_tos;
+                so->so_iptos = ((struct slirp_ip *)ti)->ip_tos;
                 break;
             case AF_INET6:
                 break;
@@ -650,23 +650,23 @@ findso:
                 HTONS(ti->ti_win);
                 HTONS(ti->ti_urp);
                 m->m_data -=
-                    sizeof(struct tcpiphdr) + off - sizeof(struct tcphdr);
+                    sizeof(struct slirp_tcpiphdr) + off - sizeof(struct slirp_tcphdr);
                 m->m_len +=
-                    sizeof(struct tcpiphdr) + off - sizeof(struct tcphdr);
+                    sizeof(struct slirp_tcpiphdr) + off - sizeof(struct slirp_tcphdr);
                 switch (af) {
                 case AF_INET:
-                    m->m_data += sizeof(struct tcpiphdr) - sizeof(struct ip) -
-                                 sizeof(struct tcphdr);
-                    m->m_len -= sizeof(struct tcpiphdr) - sizeof(struct ip) -
-                                sizeof(struct tcphdr);
+                    m->m_data += sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_ip) -
+                                 sizeof(struct slirp_tcphdr);
+                    m->m_len -= sizeof(struct slirp_tcpiphdr) - sizeof(struct slirp_ip) -
+                                sizeof(struct slirp_tcphdr);
                     *ip = save_ip;
                     icmp_send_error(m, ICMP_UNREACH, code, 0, g_strerror(errno));
                     break;
                 case AF_INET6:
-                    m->m_data += sizeof(struct tcpiphdr) -
-                                 (sizeof(struct ip6) + sizeof(struct tcphdr));
-                    m->m_len -= sizeof(struct tcpiphdr) -
-                                (sizeof(struct ip6) + sizeof(struct tcphdr));
+                    m->m_data += sizeof(struct slirp_tcpiphdr) -
+                                 (sizeof(struct ip6) + sizeof(struct slirp_tcphdr));
+                    m->m_len -= sizeof(struct slirp_tcpiphdr) -
+                                (sizeof(struct ip6) + sizeof(struct slirp_tcphdr));
                     *ip6 = save_ip6;
                     icmp6_send_error(m, ICMP6_UNREACH, code);
                     break;
@@ -772,7 +772,7 @@ findso:
             soisfconnected(so);
             tp->t_state = TCPS_ESTABLISHED;
 
-            tcp_reass(tp, (struct tcpiphdr *)0, (struct mbuf *)0);
+            tcp_reass(tp, (struct slirp_tcpiphdr *)0, (struct mbuf *)0);
             /*
              * if we didn't have to retransmit the SYN,
              * use its rtt as our initial srtt & rtt var.
@@ -981,7 +981,7 @@ findso:
             soisfconnected(so);
         }
 
-        tcp_reass(tp, (struct tcpiphdr *)0, (struct mbuf *)0);
+        tcp_reass(tp, (struct slirp_tcpiphdr *)0, (struct mbuf *)0);
         tp->snd_wl1 = ti->ti_seq - 1;
         /* Avoid ack processing; snd_una==ti_ack  =>  dup ack */
         goto synrx_to_est;
@@ -1392,8 +1392,8 @@ drop:
     m_free(m);
 }
 
-static void tcp_dooptions(struct tcpcb *tp, uint8_t *cp, int cnt,
-                          struct tcpiphdr *ti)
+static void tcp_dooptions(struct slirp_tcpcb *tp, uint8_t *cp, int cnt,
+                          struct slirp_tcpiphdr *ti)
 {
     uint16_t mss;
     int opt, optlen;
@@ -1434,7 +1434,7 @@ static void tcp_dooptions(struct tcpcb *tp, uint8_t *cp, int cnt,
  * and update averages and current timeout.
  */
 
-static void tcp_xmit_timer(register struct tcpcb *tp, int rtt)
+static void tcp_xmit_timer(register struct slirp_tcpcb *tp, int rtt)
 {
     register short delta;
 
@@ -1520,7 +1520,7 @@ static void tcp_xmit_timer(register struct tcpcb *tp, int rtt)
  * parameters from pre-set or cached values in the routing entry.
  */
 
-int tcp_mss(struct tcpcb *tp, unsigned offer)
+int tcp_mss(struct slirp_tcpcb *tp, unsigned offer)
 {
     struct socket *so = tp->t_socket;
     int mss;
@@ -1532,11 +1532,11 @@ int tcp_mss(struct tcpcb *tp, unsigned offer)
     switch (so->so_ffamily) {
     case AF_INET:
         mss = MIN(so->slirp->if_mtu, so->slirp->if_mru) -
-              sizeof(struct tcphdr) - sizeof(struct ip);
+              sizeof(struct slirp_tcphdr) - sizeof(struct slirp_ip);
         break;
     case AF_INET6:
         mss = MIN(so->slirp->if_mtu6, so->slirp->if_mru6) -
-              sizeof(struct tcphdr) - sizeof(struct ip6);
+              sizeof(struct slirp_tcphdr) - sizeof(struct ip6);
         break;
     default:
         g_assert_not_reached();

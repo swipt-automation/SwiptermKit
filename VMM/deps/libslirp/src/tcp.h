@@ -53,8 +53,7 @@ typedef uint32_t tcp_seq;
  * TCP header.
  * Per RFC 793, September, 1981.
  */
-#define tcphdr slirp_tcphdr
-struct tcphdr {
+struct slirp_tcphdr {
     uint16_t th_sport; /* source port */
     uint16_t th_dport; /* destination port */
     tcp_seq th_seq; /* sequence number */

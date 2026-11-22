@@ -13,8 +13,16 @@ public struct LinuxRootImage: Sendable {
     private enum Source: Sendable {
         case file(URL)
         case data(Data)
-        case daxMemory(UnsafeSendable<UnsafeRawBufferPointer>)
     }
+
+    private struct Metadata: Decodable {
+        let version: Int
+    }
+
+    public static let defaultDiskSize: UInt64 = 64 << 30
+
+    private static let metadataName = "swipterm.json"
+    private static let diskName = "root.ext4"
 
     private let source: Source
 
@@ -26,82 +34,65 @@ public struct LinuxRootImage: Sendable {
         LinuxRootImage(source: .data(data))
     }
 
-    public static func daxMemory(_ buffer: UnsafeRawBufferPointer) -> LinuxRootImage {
-        LinuxRootImage(source: .daxMemory(UnsafeSendable(value: buffer)))
-    }
-
-    func withCRootImage<Result>(_ body: (swipterm_root_image) throws -> Result) rethrows -> Result {
-        switch source {
-        case .file(let url):
-            return try url.withUnsafeFileSystemRepresentation { path in
-                try body(swipterm_root_image(
-                    kind: SWIPTERM_ROOT_IMAGE_ARCHIVE_FILE,
-                    path: path,
-                    data: nil,
-                    size: 0
-                ))
-            }
-        case .data(let data):
-            return try data.withUnsafeBytes { buffer in
-                try body(swipterm_root_image(
-                    kind: SWIPTERM_ROOT_IMAGE_ARCHIVE_MEMORY,
-                    path: nil,
-                    data: buffer.baseAddress,
-                    size: buffer.count
-                ))
-            }
-        case .daxMemory(let buffer):
-            return try body(swipterm_root_image(
-                kind: SWIPTERM_ROOT_IMAGE_DAX_EROFS_MEMORY,
-                path: nil,
-                data: buffer.value.baseAddress,
-                size: buffer.value.count
-            ))
+    public static func isInstalled(at root: URL) -> Bool {
+        guard let data = try? Data(contentsOf: root.appending(path: metadataName)),
+              let metadata = try? JSONDecoder().decode(Metadata.self, from: data),
+              metadata.version == 2
+        else {
+            return false
         }
+        return FileManager.default.fileExists(atPath: root.appending(path: diskName).path(percentEncoded: false))
     }
 
-    public func install(to root: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws {
-        let parent = root.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
-        let temporary = parent.appending(path: ".\(root.lastPathComponent).\(UUID().uuidString)", directoryHint: .isDirectory)
+    /// Replaces an image already installed at `root` once the new one is complete.
+    /// `diskSize` is the capacity of the sparse disk the guest sees; the host stores only the blocks in use.
+    /// Throws when `root` is used by a running machine.
+    public func install(
+        to root: URL,
+        diskSize: UInt64 = defaultDiskSize,
+        progress: (@Sendable (Double) -> Void)? = nil
+    ) async throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Self.protect(root)
         let source = source
-        do {
-            try await Self.run(progress) { context, report, message in
-                temporary.withUnsafeFileSystemRepresentation { rootPath in
-                    switch source {
-                    case .file(let url):
-                        url.withUnsafeFileSystemRepresentation { archivePath in
-                            swipterm_image_import_file(archivePath, rootPath, context, report, message)
-                        }
-                    case .data(let data):
-                        data.withUnsafeBytes { buffer in
-                            swipterm_image_import_memory(buffer.baseAddress, buffer.count, rootPath, context, report, message)
-                        }
-                    case .daxMemory(let buffer):
-                        swipterm_image_import_memory(buffer.value.baseAddress, buffer.value.count, rootPath, context, report, message)
+        try await Self.run(progress) { context, report, message in
+            root.withUnsafeFileSystemRepresentation { rootPath in
+                switch source {
+                case .file(let url):
+                    url.withUnsafeFileSystemRepresentation { archivePath in
+                        swipterm_root_import_file(archivePath, rootPath, diskSize, context, report, message)
+                    }
+                case .data(let data):
+                    data.withUnsafeBytes { buffer in
+                        swipterm_root_import_memory(buffer.baseAddress, buffer.count, rootPath, diskSize, context, report, message)
                     }
                 }
             }
-            let fm = FileManager.default
-            if fm.fileExists(atPath: root.path(percentEncoded: false)) {
-                _ = try fm.replaceItemAt(root, withItemAt: temporary)
-            } else {
-                try fm.moveItem(at: temporary, to: root)
-            }
-        } catch {
-            try? FileManager.default.removeItem(at: temporary)
-            throw error
         }
+        try Self.protect(root.appending(path: Self.diskName))
     }
 
     public static func export(from root: URL, to archive: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws {
         try await run(progress) { context, report, message in
             root.withUnsafeFileSystemRepresentation { rootPath in
                 archive.withUnsafeFileSystemRepresentation { archivePath in
-                    swipterm_image_export(rootPath, archivePath, context, report, message)
+                    swipterm_root_export(rootPath, archivePath, context, report, message)
                 }
             }
         }
+    }
+
+    private static func protect(_ url: URL) throws {
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var url = url
+        try url.setResourceValues(values)
+        #if os(iOS)
+        try FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: url.path(percentEncoded: false)
+        )
+        #endif
     }
 
     private final class ProgressReporter {

@@ -39,7 +39,7 @@
 #include "slirp.h"
 #include "ip_icmp.h"
 
-static struct ip *ip_reass(Slirp *slirp, struct ip *ip, struct ipq *fp);
+static struct slirp_ip *ip_reass(Slirp *slirp, struct slirp_ip *ip, struct ipq *fp);
 static void ip_freef(Slirp *slirp, struct ipq *fp);
 static void ip_enq(register struct ipas *p, register struct ipas *prev);
 static void ip_deq(register struct ipas *p);
@@ -72,7 +72,7 @@ void ip_input(struct mbuf *m)
     Slirp *slirp = m->slirp;
     M_DUP_DEBUG(slirp, m, 0, TCPIPHDR_DELTA);
 
-    register struct ip *ip;
+    register struct slirp_ip *ip;
     int hlen;
 
     if (!slirp->in_enabled) {
@@ -83,18 +83,18 @@ void ip_input(struct mbuf *m)
     DEBUG_ARG("m = %p", m);
     DEBUG_ARG("m_len = %d", m->m_len);
 
-    if (m->m_len < sizeof(struct ip)) {
+    if (m->m_len < sizeof(struct slirp_ip)) {
         goto bad;
     }
 
-    ip = mtod(m, struct ip *);
+    ip = mtod(m, struct slirp_ip *);
 
     if (ip->ip_v != IPVERSION) {
         goto bad;
     }
 
     hlen = ip->ip_hl << 2;
-    if (hlen < sizeof(struct ip) || hlen > m->m_len) { /* min header length */
+    if (hlen < sizeof(struct slirp_ip) || hlen > m->m_len) { /* min header length */
         goto bad; /* or packet too short */
     }
 
@@ -228,7 +228,7 @@ bad:
  * reassembly of this datagram already exists, then it
  * is given as q; otherwise have to make a chain.
  */
-static struct ip *ip_reass(Slirp *slirp, struct ip *ip, struct ipq *q)
+static struct slirp_ip *ip_reass(Slirp *slirp, struct slirp_ip *ip, struct ipq *q)
 {
     register struct mbuf *m = dtom(slirp, ip);
     struct ipas *first = container_of(q, struct ipas, ipq);
@@ -442,15 +442,15 @@ void ip_slowtimo(Slirp *slirp)
 void ip_stripoptions(register struct mbuf *m)
 {
     register int i;
-    struct ip *ip = mtod(m, struct ip *);
+    struct slirp_ip *ip = mtod(m, struct slirp_ip *);
     register char *opts;
     int olen;
 
-    olen = (ip->ip_hl << 2) - sizeof(struct ip);
+    olen = (ip->ip_hl << 2) - sizeof(struct slirp_ip);
     opts = (char *)(ip + 1);
-    i = m->m_len - (sizeof(struct ip) + olen);
+    i = m->m_len - (sizeof(struct slirp_ip) + olen);
     memmove(opts, opts + olen, (unsigned)i);
     m->m_len -= olen;
 
-    ip->ip_hl = sizeof(struct ip) >> 2;
+    ip->ip_hl = sizeof(struct slirp_ip) >> 2;
 }

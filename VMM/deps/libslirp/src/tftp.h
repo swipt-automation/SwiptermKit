@@ -20,14 +20,14 @@
 #define TFTP_FILENAME_MAX 512
 
 SLIRP_PACKED_BEGIN
-struct tftphdr {
-    struct udphdr udp;
+struct slirp_tftphdr {
+    struct slirp_udphdr udp;
     uint16_t tp_op;
 } SLIRP_PACKED_END;
 
 SLIRP_PACKED_BEGIN
 struct tftp_t {
-    struct tftphdr hdr;
+    struct slirp_tftphdr hdr;
     union {
         struct {
             uint16_t tp_block_nr;
