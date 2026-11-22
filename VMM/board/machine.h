@@ -23,6 +23,7 @@ typedef struct vmm_config {
     bool snapshot_required;
     uint8_t snapshot_key[32];
     const char *cmdline;
+    swipterm_network *network;
     void *callback_ctx;
     void (*console_output)(void *ctx, const void *data, size_t len);
     void (*on_halt)(void *ctx);

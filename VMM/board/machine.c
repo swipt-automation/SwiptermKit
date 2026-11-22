@@ -1141,7 +1141,7 @@ static int attach_default_virtio(vmm_machine_priv_t *priv, const vmm_config_t *c
     vm->virtio_devs[VMM_VIRTIO_SLOT_VSOCK] = virtio_vsock_create(vm, VMM_VIRTIO_SLOT_VSOCK, 3);
     static const uint8_t default_mac[6] = {0x52, 0x54, 0x00, 0x53, 0x57, 0x01};
     vm->virtio_devs[VMM_VIRTIO_SLOT_NET] =
-        virtio_net_create(vm, VMM_VIRTIO_SLOT_NET, default_mac);
+        virtio_net_create(vm, VMM_VIRTIO_SLOT_NET, default_mac, config->network);
     vm->virtio_devs[VMM_VIRTIO_SLOT_BALLOON] =
         virtio_balloon_create(vm, VMM_VIRTIO_SLOT_BALLOON);
     vm->virtio_devs[VMM_VIRTIO_SLOT_RNG] = virtio_rng_create(vm, VMM_VIRTIO_SLOT_RNG);

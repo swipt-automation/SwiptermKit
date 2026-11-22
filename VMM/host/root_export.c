@@ -67,20 +67,30 @@ typedef struct export_state {
     uint64_t done;
     void *context;
     swipterm_progress_handler progress;
+    bool archive_failed;
 } export_state_t;
 
+static int report_progress(export_state_t *st) {
+    if (!st->progress) {
+        return 0;
+    }
+    double frac = st->total > 0 ? (double)st->done / (double)st->total : 0.0;
+    return st->progress(st->context, frac > 0.99 ? 0.99 : frac) ? 0 : -ECANCELED;
+}
+
 static int write_archive_chunk(void *ctx, const void *data, size_t len) {
-    struct archive *a = ctx;
+    export_state_t *st = ctx;
     const uint8_t *p = data;
     while (len > 0) {
-        la_ssize_t n = archive_write_data(a, p, len);
+        la_ssize_t n = archive_write_data(st->a, p, len);
         if (n <= 0) {
+            st->archive_failed = true;
             return -EIO;
         }
         p += n;
         len -= (size_t)n;
     }
-    return 0;
+    return report_progress(st);
 }
 
 typedef struct data_map {
@@ -231,20 +241,17 @@ static int export_entry(void *ctx, const char *path, const ext4_entry_info_t *in
     int r = archive_write_header(st->a, entry);
     archive_entry_free(entry);
     if (r != ARCHIVE_OK && r != ARCHIVE_WARN) {
+        st->archive_failed = true;
         return -EIO;
     }
     if (!hardlink && S_ISREG(node->mode) && node->size > 0) {
-        int rc = ext4_fs_stream(st->fs, node, 0, node->size, write_archive_chunk, st->a);
+        int rc = ext4_fs_stream(st->fs, node, 0, node->size, write_archive_chunk, st);
         if (rc < 0) {
             return rc;
         }
     }
     st->done++;
-    if (st->progress && st->total > 0) {
-        double frac = (double)st->done / (double)st->total;
-        st->progress(st->context, frac > 0.99 ? 0.99 : frac);
-    }
-    return 0;
+    return report_progress(st);
 }
 
 static void set_error(char **error_message, const char *what, const char *detail) {
@@ -269,6 +276,11 @@ bool swipterm_root_export(const char *root_path, const char *archive_path,
         set_error(error_message, "invalid root path", strerror(ENAMETOOLONG));
         return false;
     }
+    char partial_path[1024];
+    if (snprintf(partial_path, sizeof(partial_path), "%s.partial.XXXXXX", archive_path) >= (int)sizeof(partial_path)) {
+        set_error(error_message, "invalid archive path", strerror(ENAMETOOLONG));
+        return false;
+    }
     int root_fd = open(root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (root_fd < 0) {
         set_error(error_message, "failed to open root", strerror(errno));
@@ -289,6 +301,7 @@ bool swipterm_root_export(const char *root_path, const char *archive_path,
 
     export_state_t st = {.context = context, .progress = progress};
     bool ok = false;
+    int archive_fd = -1;
     int rc = ext4_fs_open(disk_fd, &st.fs);
     if (rc < 0) {
         set_error(error_message, "failed to read root disk", strerror(-rc));
@@ -301,23 +314,44 @@ bool swipterm_root_export(const char *root_path, const char *archive_path,
         goto out;
     }
     if (archive_write_add_filter_gzip(st.a) != ARCHIVE_OK ||
-        archive_write_set_format_pax_restricted(st.a) != ARCHIVE_OK ||
-        archive_write_open_filename(st.a, archive_path) != ARCHIVE_OK) {
+        archive_write_set_format_pax_restricted(st.a) != ARCHIVE_OK) {
         set_error(error_message, "failed to create archive", archive_error_string(st.a));
         goto out;
     }
-    rc = ext4_fs_walk(st.fs, export_entry, &st);
-    ok = rc == 0;
-    if (!ok) {
-        const char *detail = archive_error_string(st.a);
-        set_error(error_message, "failed to export root", detail ? detail : strerror(-rc));
+    bool staged = true;
+    archive_fd = mkostemp(partial_path, O_CLOEXEC);
+    if (archive_fd >= 0) {
+        (void)fchmod(archive_fd, 0644);
+    } else if (errno == EPERM || errno == EACCES) {
+        staged = false;
+        archive_fd = open(archive_path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
     }
-    if (archive_write_close(st.a) != ARCHIVE_OK && ok) {
+    if (archive_fd < 0) {
+        set_error(error_message, "failed to create archive", strerror(errno));
+        goto out;
+    }
+    if (archive_write_open_fd(st.a, archive_fd) != ARCHIVE_OK) {
+        set_error(error_message, "failed to create archive", archive_error_string(st.a));
+    } else if ((rc = ext4_fs_walk(st.fs, export_entry, &st)) != 0) {
+        set_error(error_message, "failed to export root", st.archive_failed ? archive_error_string(st.a) : strerror(-rc));
+        archive_write_fail(st.a);
+    } else if (archive_write_close(st.a) != ARCHIVE_OK) {
         set_error(error_message, "failed to write archive", archive_error_string(st.a));
-        ok = false;
+    } else if ((rc = report_progress(&st)) != 0) {
+        set_error(error_message, "failed to export root", strerror(-rc));
+    } else if (fsync(archive_fd) != 0) {
+        set_error(error_message, "failed to write archive", strerror(errno));
+    } else {
+        int closed = close(archive_fd);
+        archive_fd = -1;
+        if (closed != 0 || (staged && rename(partial_path, archive_path) != 0)) {
+            set_error(error_message, "failed to write archive", strerror(errno));
+        } else {
+            ok = true;
+        }
     }
     if (!ok) {
-        unlink(archive_path);
+        unlink(staged ? partial_path : archive_path);
     } else if (progress) {
         progress(context, 1.0);
     }
@@ -325,6 +359,9 @@ bool swipterm_root_export(const char *root_path, const char *archive_path,
 out:
     if (st.a) {
         archive_write_free(st.a);
+    }
+    if (archive_fd >= 0) {
+        close(archive_fd);
     }
     link_map_free(&st.links);
     ext4_fs_close(st.fs);

@@ -122,6 +122,7 @@ typedef struct virtqueue {
 } virtqueue_t;
 
 typedef struct virtio_dev virtio_dev_t;
+typedef struct swipterm_network swipterm_network;
 
 typedef struct virtio_dev_ops {
     uint64_t (*get_features)(virtio_dev_t *dev);
@@ -165,7 +166,11 @@ void virtio_dev_destroy(virtio_dev_t *dev);
 virtio_dev_t *virtio_blk_create(vmm_machine_t *vm, uint32_t slot, int fd, bool read_only);
 void virtio_blk_flush_host(virtio_dev_t *blk);
 virtio_dev_t *virtio_vsock_create(vmm_machine_t *vm, uint32_t slot, uint64_t guest_cid);
-virtio_dev_t *virtio_net_create(vmm_machine_t *vm, uint32_t slot, const uint8_t mac[6]);
+virtio_dev_t *virtio_net_create(vmm_machine_t *vm, uint32_t slot, const uint8_t mac[6],
+                                swipterm_network *network);
+size_t virtio_net_pop_tx(virtio_dev_t *net, uint8_t *arena, size_t capacity, uint32_t *lengths, size_t max_frames);
+int virtio_net_push_rx(virtio_dev_t *net, const uint8_t *frame, size_t length, bool flush);
+uint64_t virtio_net_features(virtio_dev_t *net);
 virtio_dev_t *virtio_balloon_create(vmm_machine_t *vm, uint32_t slot);
 virtio_dev_t *virtio_rng_create(vmm_machine_t *vm, uint32_t slot);
 virtio_dev_t *virtio_fs_create(vmm_machine_t *vm, uint32_t slot,
@@ -178,7 +183,14 @@ int virtio_vsock_accept_control(virtio_dev_t *vsock, uint32_t host_port, int tim
 int virtio_vsock_listen_host(virtio_dev_t *vsock, uint32_t host_port,
                              virtio_vsock_accept_cb cb, void *ctx);
 void virtio_vsock_unlisten_host(virtio_dev_t *vsock, uint32_t host_port);
-int virtio_vsock_bridge_fd(virtio_dev_t *vsock, uint32_t guest_port, int peer_fd);
+int virtio_vsock_bridge_fd(virtio_dev_t *vsock, uint32_t guest_port, int peer_fd,
+                           const void *prefix, size_t prefix_length);
 void virtio_vsock_notify_halt(virtio_dev_t *vsock);
+
+void swipterm_network_retain(swipterm_network *network);
+void swipterm_network_release(swipterm_network *network);
+void swipterm_network_attach_device(swipterm_network *network, virtio_dev_t *net);
+void swipterm_network_detach_device(swipterm_network *network, virtio_dev_t *net);
+void swipterm_network_signal(swipterm_network *network, int wake);
 
 #endif

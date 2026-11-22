@@ -163,16 +163,18 @@ void virtio_mmio_write(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64
             break;
         }
         uint32_t prev_status = atomic_load_explicit(&dev->status, memory_order_acquire);
-        if ((v & VIRTIO_STATUS_FEATURES_OK) && !(prev_status & VIRTIO_STATUS_FEATURES_OK)) {
-            uint64_t offered = virtio_offered_features(dev);
-            dev->driver_features &= offered;
+        bool features_ok = (v & VIRTIO_STATUS_FEATURES_OK) && !(prev_status & VIRTIO_STATUS_FEATURES_OK);
+        if (features_ok) {
+            dev->driver_features &= virtio_offered_features(dev);
             if (!(dev->driver_features & VIRTIO_F_VERSION_1)) {
                 v &= ~VIRTIO_STATUS_FEATURES_OK;
-            } else if (dev->ops && dev->ops->set_features) {
-                dev->ops->set_features(dev, dev->driver_features);
+                features_ok = false;
             }
         }
         atomic_store_explicit(&dev->status, v, memory_order_release);
+        if (features_ok && dev->ops && dev->ops->set_features) {
+            dev->ops->set_features(dev, dev->driver_features);
+        }
         break;
     case VIRTIO_MMIO_QUEUE_DESC_LOW:
         if (dev->queue_sel < dev->num_queues) {
@@ -277,7 +279,11 @@ int virtqueue_pop(virtio_dev_t *dev, virtqueue_t *vq, virtio_iov_t *iov, size_t 
 
     uint16_t avail_idx = atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire);
     if (avail_idx == vq->last_avail_idx) {
-        return 0;
+        atomic_thread_fence(memory_order_seq_cst);
+        avail_idx = atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire);
+        if (avail_idx == vq->last_avail_idx) {
+            return 0;
+        }
     }
 
     uint16_t head = avail->ring[vq->last_avail_idx % vq->num];
@@ -422,6 +428,23 @@ void virtqueue_rewind(virtio_dev_t *dev, virtqueue_t *vq, uint16_t saved_avail) 
             atomic_store_explicit((_Atomic uint16_t *)avail_event, saved_avail, memory_order_release);
         }
     }
+}
+
+bool virtqueue_request_avail(virtio_dev_t *dev, virtqueue_t *vq) {
+    if (!(dev->driver_features & VIRTIO_F_RING_EVENT_IDX)) {
+        return false;
+    }
+    size_t avail_sz = sizeof(vring_avail_t) + (size_t)vq->num * sizeof(uint16_t);
+    const vring_avail_t *avail = mmu_gpa_to_hva(dev->vm, vq->avail_gpa, avail_sz);
+    size_t off = sizeof(vring_used_t) + (size_t)vq->num * sizeof(vring_used_elem_t);
+    uint16_t *avail_event = mmu_gpa_to_hva(dev->vm, vq->used_gpa + off, sizeof(uint16_t));
+    if (!avail || !avail_event) {
+        return false;
+    }
+    uint16_t idx = atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire);
+    atomic_store_explicit((_Atomic uint16_t *)avail_event, idx, memory_order_seq_cst);
+    atomic_thread_fence(memory_order_seq_cst);
+    return atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire) != idx;
 }
 
 void virtio_dev_destroy(virtio_dev_t *dev) {

@@ -973,6 +973,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: %s " SESSIONS_ANCHOR_COMMAND "\n", argv[0]);
         return 64;
     }
+    if (strcmp(argv[0], MANAGED_INIT_NAME) == 0)
+        managed_init_main();
 
     umask(0);
     signal(SIGPIPE, SIG_IGN);

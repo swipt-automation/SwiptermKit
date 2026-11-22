@@ -11,8 +11,9 @@ typedef struct swipterm_runtime swipterm_runtime;
 typedef struct swipterm_process swipterm_process;
 typedef struct swipterm_terminal swipterm_terminal;
 typedef struct swipterm_invocation swipterm_invocation;
+typedef struct swipterm_network swipterm_network;
 
-typedef void (*swipterm_progress_handler)(void *context, double fraction);
+typedef bool (*swipterm_progress_handler)(void *context, double fraction);
 
 bool swipterm_root_import_file(const char *archive_path, const char *root_path, uint64_t disk_size,
                                void *context, swipterm_progress_handler progress, char **error_message);
@@ -63,6 +64,7 @@ typedef struct {
     swipterm_kernel_selection kernel;
     const char *kernel_release;
     const char *extra_cmdline;
+    swipterm_network *network;
 } swipterm_options;
 
 typedef struct {

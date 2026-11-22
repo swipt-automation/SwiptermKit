@@ -816,8 +816,28 @@ static bool resolve_deferred_hardlinks(vfs_node_t *root, deferred_hl_list_t *lis
     return ok;
 }
 
+typedef struct import_progress {
+    swipterm_progress_handler handler;
+    void *context;
+    uint64_t total;
+    const uint64_t *input_pos;
+} import_progress_t;
+
+static bool report_progress(struct archive *a, const import_progress_t *progress, char **error_message) {
+    if (!progress->handler) {
+        return true;
+    }
+    double done = (double)(progress->input_pos ? *progress->input_pos : (uint64_t)archive_filter_bytes(a, -1));
+    double frac = progress->total > 0 ? done / (double)progress->total * 0.9 : 0.0;
+    if (progress->handler(progress->context, frac < 0.0 ? 0.0 : frac > 0.9 ? 0.9 : frac)) {
+        return true;
+    }
+    set_error(error_message, strerror(ECANCELED));
+    return false;
+}
+
 static bool write_file_data(struct archive *a, struct archive_entry *entry, ext4_writer_t *writer,
-                            vfs_node_t *node, char **error_message) {
+                            vfs_node_t *node, const import_progress_t *progress, char **error_message) {
     uint64_t end = 0;
     for (;;) {
         const void *buf = NULL;
@@ -842,6 +862,9 @@ static bool write_file_data(struct archive *a, struct archive_entry *entry, ext4
         if ((uint64_t)offset + size > end) {
             end = (uint64_t)offset + size;
         }
+        if (!report_progress(a, progress, error_message)) {
+            return false;
+        }
     }
     uint64_t size = end;
     if (archive_entry_size_is_set(entry) && archive_entry_size(entry) > 0 &&
@@ -856,19 +879,8 @@ static bool write_file_data(struct archive *a, struct archive_entry *entry, ext4
     return true;
 }
 
-static void report_progress(struct archive *a, size_t total, const uint64_t *input_pos, void *context,
-                            swipterm_progress_handler progress) {
-    if (!progress || total == 0) {
-        return;
-    }
-    double done = (double)(input_pos ? *input_pos : (uint64_t)archive_filter_bytes(a, -1));
-    double frac = done / (double)total * 0.9;
-    progress(context, frac < 0.0 ? 0.0 : frac > 0.9 ? 0.9 : frac);
-}
-
-static bool import_entries(struct archive *a, size_t total, const uint64_t *input_pos, ext4_writer_t *writer,
-                           vfs_node_t *root, void *context, swipterm_progress_handler progress,
-                           char **error_message) {
+static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t *root,
+                           const import_progress_t *progress, char **error_message) {
     deferred_hl_list_t deferred = {0};
     size_t entry_count = 0;
     struct archive_entry *entry = NULL;
@@ -982,7 +994,7 @@ static bool import_entries(struct archive *a, size_t total, const uint64_t *inpu
             set_error(error_message, "out of memory reading xattrs");
             ok = false;
         } else if (S_ISREG(mode)) {
-            ok = write_file_data(a, entry, writer, node, error_message);
+            ok = write_file_data(a, entry, writer, node, progress, error_message);
         } else if (S_ISLNK(mode)) {
             const char *target = archive_entry_symlink(entry);
             size_t tlen = target ? strlen(target) : 0;
@@ -1006,7 +1018,7 @@ static bool import_entries(struct archive *a, size_t total, const uint64_t *inpu
             ok = false;
         }
         vfs_node_release(node);
-        report_progress(a, total, input_pos, context, progress);
+        ok = ok && report_progress(a, progress, error_message);
     }
     if (ok && r != ARCHIVE_EOF) {
         set_error(error_message, archive_error_string(a));
@@ -1031,16 +1043,9 @@ static int fsync_path(const char *path) {
     return rc;
 }
 
-static bool write_metadata(const char *root_path, char **error_message) {
+static bool stage_metadata(const char *path, char **error_message) {
     static const char json[] = "{\"version\":2,\"disk\":\"root.ext4\"}\n";
-    char tmp_path[1024];
-    char final_path[1024];
-    if (snprintf(tmp_path, sizeof(tmp_path), "%s/swipterm.json.partial", root_path) >= (int)sizeof(tmp_path) ||
-        snprintf(final_path, sizeof(final_path), "%s/swipterm.json", root_path) >= (int)sizeof(final_path)) {
-        set_error(error_message, "root path too long");
-        return false;
-    }
-    int fd = open(tmp_path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     if (fd < 0) {
         set_errno_error(error_message, "failed to write swipterm.json", errno);
         return false;
@@ -1048,12 +1053,7 @@ static bool write_metadata(const char *root_path, char **error_message) {
     bool ok = write(fd, json, sizeof(json) - 1) == (ssize_t)(sizeof(json) - 1) && fsync(fd) == 0;
     int err = errno;
     ok = close(fd) == 0 && ok;
-    if (ok && rename(tmp_path, final_path) != 0) {
-        err = errno;
-        ok = false;
-    }
     if (!ok) {
-        unlink(tmp_path);
         set_errno_error(error_message, "failed to write swipterm.json", err);
     }
     return ok;
@@ -1069,13 +1069,17 @@ static void remove_stale(const char *root_path) {
     }
 }
 
-static bool import_root(struct archive *a, size_t total, const uint64_t *input_pos, const char *root_path,
-                        uint64_t disk_size, void *context, swipterm_progress_handler progress,
-                        char **error_message) {
+static bool import_root(struct archive *a, const char *root_path, uint64_t disk_size,
+                        const import_progress_t *progress, char **error_message) {
     char partial_path[1024];
     char disk_path[1024];
+    char metadata_partial_path[1024];
+    char metadata_path[1024];
     if (snprintf(partial_path, sizeof(partial_path), "%s/root.ext4.partial", root_path) >= (int)sizeof(partial_path) ||
-        snprintf(disk_path, sizeof(disk_path), "%s/root.ext4", root_path) >= (int)sizeof(disk_path)) {
+        snprintf(disk_path, sizeof(disk_path), "%s/root.ext4", root_path) >= (int)sizeof(disk_path) ||
+        snprintf(metadata_partial_path, sizeof(metadata_partial_path), "%s/swipterm.json.partial", root_path) >=
+            (int)sizeof(metadata_partial_path) ||
+        snprintf(metadata_path, sizeof(metadata_path), "%s/swipterm.json", root_path) >= (int)sizeof(metadata_path)) {
         set_error(error_message, "root path too long");
         return false;
     }
@@ -1106,7 +1110,7 @@ static bool import_root(struct archive *a, size_t total, const uint64_t *input_p
     if (!ok) {
         set_errno_error(error_message, rc == -EINVAL ? "invalid disk size" : "failed to create root disk", -rc);
     }
-    ok = ok && import_entries(a, total, input_pos, writer, root, context, progress, error_message);
+    ok = ok && import_entries(a, writer, root, progress, error_message);
     if (ok) {
         rc = ext4_writer_finish(writer, root);
         if (rc < 0) {
@@ -1125,21 +1129,24 @@ static bool import_root(struct archive *a, size_t total, const uint64_t *input_p
         set_errno_error(error_message, "failed to write root disk", errno);
         ok = false;
     }
+    ok = ok && report_progress(a, progress, error_message) && stage_metadata(metadata_partial_path, error_message);
     if (ok && rename(partial_path, disk_path) != 0) {
         set_errno_error(error_message, "failed to install root disk", errno);
         ok = false;
     }
+    if (ok && rename(metadata_partial_path, metadata_path) != 0) {
+        set_errno_error(error_message, "failed to write swipterm.json", errno);
+        ok = false;
+    }
     if (!ok) {
         unlink(partial_path);
+        unlink(metadata_partial_path);
     } else {
         remove_stale(root_path);
-        ok = write_metadata(root_path, error_message);
-    }
-    if (ok) {
         (void)fsync(root_fd);
         (void)fsync_path(disk_path);
-        if (progress) {
-            progress(context, 1.0);
+        if (progress->handler) {
+            progress->handler(progress->context, 1.0);
         }
     }
     close(root_fd);
@@ -1411,21 +1418,20 @@ static bool import_source(const archive_source_t *src, const char *root_path, ui
     }
     xz_mt_reader_t *xz = NULL;
     zstd_reader_t *zstd = NULL;
-    uint64_t total = src->size;
-    const uint64_t *input_pos = NULL;
+    import_progress_t import_progress = {.handler = progress, .context = context, .total = src->size};
     int r;
     if (has_xz_magic(magic, magic_len)) {
         xz = xz_mt_reader_new(src->data ? -1 : src->fd, src->data, (size_t)src->size);
         uint64_t uncompressed = xz ? xz_uncompressed_size(src->data ? -1 : src->fd, src->data, src->size) : 0;
         if (uncompressed > 0) {
-            total = uncompressed;
+            import_progress.total = uncompressed;
         } else if (xz) {
-            input_pos = &xz->strm.total_in;
+            import_progress.input_pos = &xz->strm.total_in;
         }
     } else if (has_zstd_magic(magic, magic_len)) {
         zstd = zstd_reader_new(src->data ? -1 : src->fd, src->data, (size_t)src->size);
         if (zstd) {
-            input_pos = &zstd->total_in;
+            import_progress.input_pos = &zstd->total_in;
         }
     }
     if ((has_xz_magic(magic, magic_len) && !xz) || (has_zstd_magic(magic, magic_len) && !zstd)) {
@@ -1454,7 +1460,7 @@ static bool import_source(const archive_source_t *src, const char *root_path, ui
     if (!ok) {
         set_error(error_message, archive_error_string(a));
     }
-    ok = ok && import_root(a, (size_t)total, input_pos, root_path, disk_size, context, progress, error_message);
+    ok = ok && import_root(a, root_path, disk_size, &import_progress, error_message);
     archive_read_free(a);
     xz_mt_reader_free(xz);
     zstd_reader_free(zstd);

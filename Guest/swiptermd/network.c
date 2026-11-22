@@ -162,6 +162,7 @@ static void configure_guest_links(void) {
     unsigned eth_idx = if_nametoindex("eth0");
     if (eth_idx > 0) {
         net_link_up(ioctl_fd, "eth0");
+        (void)write_file(AT_FDCWD, "/proc/sys/net/ipv4/conf/eth0/route_localnet", "1", 0, 0);
         net_add_addr(nl, eth_idx, AF_INET, "10.0.2.15", 24);
         net_add_default_route(nl, eth_idx, AF_INET, "10.0.2.2");
         net_add_addr(nl, eth_idx, AF_INET6, "fd00::15", 64);

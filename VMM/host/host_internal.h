@@ -37,16 +37,10 @@ enum {
     LINUX_ECANCELED = 125,
 };
 
-void slirp_reset_dns_cache(void);
-
-typedef struct swipterm_mirror swipterm_mirror_t;
-
-swipterm_mirror_t *swipterm_mirror_create(virtio_dev_t *vsock, uint64_t session_nonce);
-void swipterm_mirror_set_nonce(swipterm_mirror_t *mirror, uint64_t session_nonce);
-void swipterm_mirror_apply_updates(swipterm_mirror_t *mirror,
-                                   const swiptermd_mirror_entry_t *entries,
-                                   size_t count);
-void swipterm_mirror_destroy(swipterm_mirror_t *mirror);
+void swipterm_network_set_runtime(swipterm_network *network, virtio_dev_t *vsock);
+void swipterm_network_set_session(swipterm_network *network, uint64_t session_nonce);
+void swipterm_network_push_listeners(swipterm_network *network, const swiptermd_mirror_entry_t *entries,
+                                     size_t count);
 
 // The iOS and macOS SDKs ship libarchive and liblzma without headers.
 
@@ -106,10 +100,11 @@ extern void archive_set_error(struct archive *, int _err, const char *fmt, ...);
 extern struct archive *archive_write_new(void);
 extern int archive_write_add_filter_gzip(struct archive *);
 extern int archive_write_set_format_pax_restricted(struct archive *);
-extern int archive_write_open_filename(struct archive *, const char *filename);
+extern int archive_write_open_fd(struct archive *, int fd);
 extern int archive_write_header(struct archive *, struct archive_entry *);
 extern la_ssize_t archive_write_data(struct archive *, const void *, size_t);
 extern int archive_write_close(struct archive *);
+extern int archive_write_fail(struct archive *);
 extern int archive_write_free(struct archive *);
 
 extern struct archive_entry *archive_entry_new(void);

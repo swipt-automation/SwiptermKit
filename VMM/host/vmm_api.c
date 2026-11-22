@@ -160,7 +160,7 @@ struct swipterm_invocation {
 struct swipterm_runtime {
     vmm_machine_t *vm;
     virtio_dev_t *vsock;
-    swipterm_mirror_t *mirror;
+    swipterm_network *network;
     swipterm_callbacks callbacks;
 
     int root_lock_fd;
@@ -1390,7 +1390,7 @@ static void handle_guest_frame(swipterm_runtime *rt, const swiptermd_frame_hdr_t
         rt->hello_done = true;
         pthread_cond_broadcast(&rt->hello_cond);
         pthread_mutex_unlock(&rt->state_lock);
-        swipterm_mirror_set_nonce(rt->mirror, nonce);
+        swipterm_network_set_session(rt->network, nonce);
 
         swiptermd_enc_err(reply, 0);
         control_send(rt, SWIPTERMD_OP_HELLO | SWIPTERMD_OP_REPLY_FLAG, hdr->req_id, reply, sizeof(reply));
@@ -1499,7 +1499,7 @@ static void handle_guest_frame(swipterm_runtime *rt, const swiptermd_frame_hdr_t
                     swiptermd_mirror_entry_decode(&r, &entries[i]);
                 }
                 if (!r.underflow) {
-                    swipterm_mirror_apply_updates(rt->mirror, entries, count);
+                    swipterm_network_push_listeners(rt->network, entries, count);
                 }
                 free(entries);
             }
@@ -1776,7 +1776,7 @@ static int start_machine(swipterm_runtime *rt, const char *save_path) {
         virtio_vsock_listen_host(rt->vsock, SWIPTERMD_DATA_PORT, on_data_stream_accept, rt) != 0) {
         return -LINUX_EIO;
     }
-    rt->mirror = swipterm_mirror_create(rt->vsock, 0);
+    swipterm_network_set_runtime(rt->network, rt->vsock);
     if (vmm_start(rt->vm) < 0) {
         return -LINUX_EIO;
     }
@@ -1828,8 +1828,10 @@ static void discard_machine(swipterm_runtime *rt) {
         pthread_join(rt->control_rx_thread, NULL);
         rt->control_rx_started = false;
     }
-    swipterm_mirror_destroy(rt->mirror);
-    rt->mirror = NULL;
+    if (rt->vsock) {
+        virtio_vsock_notify_halt(rt->vsock);
+    }
+    swipterm_network_set_runtime(rt->network, NULL);
     if (rt->vm) {
         vmm_stop(rt->vm);
         vmm_destroy(rt->vm);
@@ -1877,6 +1879,7 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
         .root_disk_path = disk_path,
         .preboot_checkpoint = true,
         .cmdline = cmdline,
+        .network = rt->network,
         .callback_ctx = rt,
         .console_output = vmm_on_console,
         .on_halt = vmm_on_halt,
@@ -1985,7 +1988,7 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
 }
 
 int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out) {
-    if (!options || !options->root_path || !options->initramfs_path || !runtime_out ||
+    if (!options || !options->root_path || !options->initramfs_path || !options->network || !runtime_out ||
         (options->kernel != SWIPTERM_KERNEL_INSTALLED && options->kernel != SWIPTERM_KERNEL_BUNDLED &&
          options->kernel != SWIPTERM_KERNEL_RELEASE) ||
         (options->kernel == SWIPTERM_KERNEL_RELEASE && (!options->kernel_release || !options->kernel_release[0]))) {
@@ -1998,6 +2001,8 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
         return -LINUX_ENOMEM;
     }
     rt->callbacks = options->callbacks;
+    rt->network = options->network;
+    swipterm_network_retain(rt->network);
     rt->root_lock_fd = -1;
     rt->control_fd = -1;
     rt->shutdown_pipe[0] = -1;
@@ -2149,6 +2154,7 @@ void swipterm_begin_shutdown(swipterm_runtime *rt) {
 
     if (rt->vsock) {
         virtio_vsock_unlisten_host(rt->vsock, SWIPTERMD_DATA_PORT);
+        virtio_vsock_notify_halt(rt->vsock);
     }
 
     pthread_mutex_lock(&rt->control_tx_lock);
@@ -2173,8 +2179,10 @@ void swipterm_shutdown(swipterm_runtime *rt) {
         rt->control_rx_started = false;
     }
 
-    swipterm_mirror_destroy(rt->mirror);
-    rt->mirror = NULL;
+    if (rt->vsock) {
+        virtio_vsock_notify_halt(rt->vsock);
+    }
+    swipterm_network_set_runtime(rt->network, NULL);
 
     if (rt->vm) {
         vmm_stop(rt->vm);
@@ -2319,6 +2327,7 @@ void swipterm_shutdown(swipterm_runtime *rt) {
     pthread_cond_destroy(&rt->ready_cond);
     pthread_cond_destroy(&rt->console_cond);
     pthread_cond_destroy(&rt->workers_cond);
+    swipterm_network_release(rt->network);
     free(rt);
 }
 
@@ -2420,8 +2429,6 @@ int swipterm_sync_dns(swipterm_runtime *rt) {
     }
     memcpy(conf + length, servers, sizeof(servers) - 1);
     length += sizeof(servers) - 1;
-
-    slirp_reset_dns_cache();
 
     size_t req_size = 4 + length;
     uint8_t *req_buf = malloc(req_size);

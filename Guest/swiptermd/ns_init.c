@@ -11,18 +11,25 @@
 #include <strings.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
-#include <sys/signalfd.h>
+#include <sys/prctl.h>
+#include <sys/reboot.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #define CONSOLE_BUF_CAP 32768
 #define CONTAINER_TTY_COUNT 4
 #define LXC_TEMPLATE_PLACEHOLDER "LXC_NAME"
 #define LXC_TEMPLATE_MAX_SIZE (64 * 1024)
+
+enum {
+    MANAGED_INIT_GRACE_MS = 2000,
+    MANAGED_INIT_POLL_NS = 5 * 1000 * 1000,
+};
 
 typedef struct console_state {
     int master_fd;
@@ -407,22 +414,52 @@ static void redirect_stdio(int fd) {
         close(fd);
 }
 
-static void managed_reaper(void) {
-    int null_fd = open("/dev/null", O_RDWR);
-    if (null_fd >= 0)
-        redirect_stdio(null_fd);
-    close_other_fds(NULL, 0);
-    sigset_t chld;
-    sigemptyset(&chld);
-    sigaddset(&chld, SIGCHLD);
-    sigprocmask(SIG_BLOCK, &chld, NULL);
-    int sfd = signalfd(-1, &chld, SFD_CLOEXEC);
+static void managed_init_signals(sigset_t *set) {
+    static const int faults[] = {SIGILL, SIGABRT, SIGFPE, SIGSEGV, SIGBUS, SIGSYS, SIGTRAP};
+    sigfillset(set);
+    for (size_t i = 0; i < sizeof(faults) / sizeof(faults[0]); i++)
+        sigdelset(set, faults[i]);
+}
+
+static bool managed_init_poweroff_signal(int sig) {
+    return sig == SIGTERM || sig == SIGPWR || sig == SIGUSR1 || sig == SIGUSR2 || sig == SIGRTMIN + 3 ||
+           sig == SIGRTMIN + 4;
+}
+
+static _Noreturn void managed_init_halt(const sigset_t *waited, bool restart) {
+    static const int stop_signals[] = {SIGTERM, SIGHUP, SIGCONT};
+    for (size_t i = 0; i < sizeof(stop_signals) / sizeof(stop_signals[0]); i++)
+        (void)kill(-1, stop_signals[i]);
+    struct timespec start;
+    clock_gettime(CLOCK_MONOTONIC, &start);
     for (;;) {
-        struct signalfd_siginfo si;
-        if (sfd < 0 || read(sfd, &si, sizeof(si)) < 0)
-            pause();
-        int st;
-        while (waitpid(-1, &st, WNOHANG) > 0) {}
+        while (waitpid(-1, NULL, WNOHANG) > 0) {}
+        if (kill(-1, 0) < 0 && errno == ESRCH)
+            break;
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long elapsed_ms = (now.tv_sec - start.tv_sec) * 1000 + (now.tv_nsec - start.tv_nsec) / 1000000;
+        if (elapsed_ms >= MANAGED_INIT_GRACE_MS)
+            break;
+        struct timespec slice = {.tv_nsec = MANAGED_INIT_POLL_NS};
+        if (managed_init_poweroff_signal(sigtimedwait(waited, NULL, &slice)))
+            restart = false;
+    }
+    (void)reboot(restart ? RB_AUTOBOOT : RB_POWER_OFF);
+    _exit(0);
+}
+
+_Noreturn void managed_init_main(void) {
+    (void)prctl(PR_SET_NAME, MANAGED_INIT_NAME, 0, 0, 0);
+    sigset_t waited;
+    managed_init_signals(&waited);
+    for (;;) {
+        while (waitpid(-1, NULL, WNOHANG) > 0) {}
+        int sig = sigwaitinfo(&waited, NULL);
+        if (sig == SIGINT || sig == SIGRTMIN + 5)
+            managed_init_halt(&waited, true);
+        if (managed_init_poweroff_signal(sig))
+            managed_init_halt(&waited, false);
     }
 }
 
@@ -453,8 +490,20 @@ static int container_init_entry(void *arg) {
     close(a->go_rd);
 
     if (a->mode == SWIPTERMD_INIT_MANAGED) {
-        close(a->err_wr);
-        managed_reaper();
+        static char *const managed_argv[] = {MANAGED_INIT_NAME, NULL};
+        static char *const managed_envp[] = {"container=lxc", "PATH=" TRUSTED_PATH, NULL};
+        (void)setsid();
+        int null_fd = open("/dev/null", O_RDWR);
+        if (null_fd < 0)
+            child_fail(a->err_wr, -errno);
+        redirect_stdio(null_fd);
+        close_other_fds(&a->err_wr, 1);
+        umask(0022);
+        sigset_t waited;
+        managed_init_signals(&waited);
+        sigprocmask(SIG_SETMASK, &waited, NULL);
+        execve(GUEST_TOOL_PATH, managed_argv, managed_envp);
+        child_fail(a->err_wr, -errno);
     }
 
     (void)setsid();
@@ -743,11 +792,7 @@ void ns_request_stop(bool reboot) {
     pid_t pid = g_daemon.container_init_pid;
     if (pid <= 0)
         return;
-    if (g_daemon.init_mode == SWIPTERMD_INIT_MANAGED) {
-        kill(pid, SIGKILL);
-        return;
-    }
-    if (notify_signals_level() >= 2 || ns_init_is_systemd()) {
+    if (g_daemon.init_mode == SWIPTERMD_INIT_MANAGED || notify_signals_level() >= 2 || ns_init_is_systemd()) {
         kill(pid, reboot ? SIGRTMIN + 5 : SIGRTMIN + 3);
         return;
     }

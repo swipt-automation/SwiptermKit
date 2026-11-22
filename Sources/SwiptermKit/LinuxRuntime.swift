@@ -1,5 +1,6 @@
 import CSwiptermKit
 import Foundation
+import LibSwipterm
 import Network
 
 public final class LinuxRuntime: @unchecked Sendable {
@@ -107,6 +108,7 @@ public final class LinuxRuntime: @unchecked Sendable {
     }
 
     let handle: OpaquePointer
+    private let network: LibswiptermNetwork
     private let callbacks: RuntimeCallbacks
     private let stateCondition = NSCondition()
     private var pathMonitor: NWPathMonitor?
@@ -119,7 +121,13 @@ public final class LinuxRuntime: @unchecked Sendable {
     private static let systemPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     private static let readinessPollInterval = Duration.milliseconds(250)
 
-    private init(configuration: Configuration, handle: OpaquePointer, callbacks: RuntimeCallbacks, bootedKernel: BootedKernel) {
+    private init(
+        configuration: Configuration,
+        handle: OpaquePointer,
+        network: LibswiptermNetwork,
+        callbacks: RuntimeCallbacks,
+        bootedKernel: BootedKernel
+    ) {
         var path = Self.systemPath
         if let directory = configuration.hostCommandsDirectory {
             path += ":" + directory
@@ -130,6 +138,7 @@ public final class LinuxRuntime: @unchecked Sendable {
             "TERM": "xterm-256color",
         ]
         self.handle = handle
+        self.network = network
         self.callbacks = callbacks
         self.bootedKernel = bootedKernel
     }
@@ -140,6 +149,7 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
         let teardown = UnsafeSendable(value: (
             handle: handle,
+            network: network,
             callbacks: callbacks,
             monitor: pathMonitor,
             commands: registeredCommands,
@@ -151,6 +161,7 @@ public final class LinuxRuntime: @unchecked Sendable {
             withExtendedLifetime(state.callbacks) {
                 swipterm_shutdown(state.handle)
             }
+            try? state.network.close()
             Self.release(commands: state.commands, devices: state.devices)
         }
     }
@@ -187,6 +198,7 @@ public final class LinuxRuntime: @unchecked Sendable {
             return (commands, devices)
         }
         swipterm_shutdown(handle)
+        try? network.close()
         Self.release(commands: commands, devices: devices)
         stateCondition.withLock {
             isShutdownComplete = true
@@ -217,13 +229,25 @@ public final class LinuxRuntime: @unchecked Sendable {
             haltHandler: configuration.haltHandler,
             panicHandler: configuration.panicHandler
         )
-        let booted = try await blocking {
-            try bootKernel(configuration, callbacks: callbacks)
+        var networkError: NSError?
+        guard let network = LibswiptermCreateNetwork(&networkError) else {
+            throw networkError!
+        }
+        let networkHandle = UnsafeSendable(value: network)
+        let booted: (handle: UnsafeSendable<OpaquePointer>, kernel: BootedKernel)
+        do {
+            booted = try await blocking {
+                try bootKernel(configuration, callbacks: callbacks, network: networkHandle.value)
+            }
+        } catch {
+            try? network.close()
+            throw error
         }
 
         let runtime = LinuxRuntime(
             configuration: configuration,
             handle: booted.handle.value,
+            network: network,
             callbacks: callbacks,
             bootedKernel: booted.kernel
         )
@@ -284,7 +308,8 @@ public final class LinuxRuntime: @unchecked Sendable {
 
     private static func bootKernel(
         _ configuration: Configuration,
-        callbacks: RuntimeCallbacks
+        callbacks: RuntimeCallbacks,
+        network: LibswiptermNetwork
     ) throws(LinuxError) -> (handle: UnsafeSendable<OpaquePointer>, kernel: BootedKernel) {
         guard let kernelImage = Bundle.module.url(forResource: "Image", withExtension: "gz"),
               let initramfs = Bundle.module.url(forResource: "initramfs.cpio", withExtension: "gz")
@@ -327,7 +352,8 @@ public final class LinuxRuntime: @unchecked Sendable {
                                         initramfs_path: initramfsPath,
                                         kernel: selection,
                                         kernel_release: release,
-                                        extra_cmdline: extraCmdline
+                                        extra_cmdline: extraCmdline,
+                                        network: OpaquePointer(bitPattern: Int(network.handle()))
                                     )
                                     return swipterm_boot(&options, &handle)
                                 }
@@ -354,6 +380,7 @@ public final class LinuxRuntime: @unchecked Sendable {
 
     public func syncDNS() throws(LinuxError) {
         try withActiveHandle { handle throws(LinuxError) in
+            network.syncDNS()
             try check(swipterm_sync_dns(handle))
         }
     }

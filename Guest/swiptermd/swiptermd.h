@@ -18,6 +18,7 @@
 #define GUEST_TOOL_PATH GUEST_RUN_HOST "/swiptermd"
 #define GUEST_DEFAULT_RESOLV_CONF "nameserver 10.0.2.3\nnameserver fd00::3\n"
 #define SESSIONS_ANCHOR_COMMAND "sessions-anchor"
+#define MANAGED_INIT_NAME "init"
 #define TRUSTED_PATH "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin"
 #define LOGIN_USER_CAP 33
 
@@ -118,6 +119,7 @@ void ns_kill_container(void);
 void ns_close_namespaces(void);
 bool ns_init_executable(char *name, size_t cap);
 bool ns_init_is_systemd(void);
+_Noreturn void managed_init_main(void);
 
 int readiness_start(void);
 void readiness_stop(void);

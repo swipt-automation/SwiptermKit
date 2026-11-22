@@ -107,5 +107,6 @@ static inline size_t virtio_iov_total(const virtio_iov_t *iov, size_t iov_cnt, b
 
 bool virtqueue_should_notify(virtio_dev_t *dev, virtqueue_t *vq, uint16_t old_used);
 void virtqueue_rewind(virtio_dev_t *dev, virtqueue_t *vq, uint16_t saved_avail);
+bool virtqueue_request_avail(virtio_dev_t *dev, virtqueue_t *vq);
 
 #endif

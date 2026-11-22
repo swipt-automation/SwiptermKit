@@ -1,5 +1,6 @@
 import CSwiptermKit
 import Foundation
+import os
 
 public struct LinuxRootImageError: LocalizedError, Sendable {
     public let message: String
@@ -95,11 +96,13 @@ public struct LinuxRootImage: Sendable {
         #endif
     }
 
-    private final class ProgressReporter {
-        let report: @Sendable (Double) -> Void
+    private final class ProgressReporter: @unchecked Sendable {
+        let report: (@Sendable (Double) -> Void)?
+        let cancelled = OSAllocatedUnfairLock(initialState: false)
         var reported = -1
+        var stopped = false
 
-        init(_ report: @escaping @Sendable (Double) -> Void) {
+        init(_ report: (@Sendable (Double) -> Void)?) {
             self.report = report
         }
     }
@@ -112,22 +115,35 @@ public struct LinuxRootImage: Sendable {
             UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>
         ) -> Bool
     ) async throws {
-        try await blocking {
-            let reporter = progress.map(ProgressReporter.init)
-            var message: UnsafeMutablePointer<CChar>?
-            let succeeded = withExtendedLifetime(reporter) {
-                body(reporter.map { Unmanaged.passUnretained($0).toOpaque() }, reporter == nil ? nil : { context, fraction in
-                    let reporter = Unmanaged<ProgressReporter>.fromOpaque(context!).takeUnretainedValue()
-                    let percent = Int(fraction * 100)
-                    guard percent != reporter.reported else { return }
-                    reporter.reported = percent
-                    reporter.report(fraction)
-                }, &message)
+        let reporter = ProgressReporter(progress)
+        try await withTaskCancellationHandler {
+            try await blocking {
+                var message: UnsafeMutablePointer<CChar>?
+                let succeeded = withExtendedLifetime(reporter) {
+                    body(Unmanaged.passUnretained(reporter).toOpaque(), { context, fraction in
+                        let reporter = Unmanaged<ProgressReporter>.fromOpaque(context!).takeUnretainedValue()
+                        if fraction < 1, reporter.cancelled.withLock({ $0 }) {
+                            reporter.stopped = true
+                            return false
+                        }
+                        let percent = Int(fraction * 100)
+                        if let report = reporter.report, percent != reporter.reported {
+                            reporter.reported = percent
+                            report(fraction)
+                        }
+                        return true
+                    }, &message)
+                }
+                guard succeeded else {
+                    defer { free(message) }
+                    if reporter.stopped {
+                        throw CancellationError()
+                    }
+                    throw LinuxRootImageError(message: message.map { String(cString: $0) } ?? "")
+                }
             }
-            guard succeeded else {
-                defer { free(message) }
-                throw LinuxRootImageError(message: message.map { String(cString: $0) } ?? "")
-            }
+        } onCancel: {
+            reporter.cancelled.withLock { $0 = true }
         }
     }
 }

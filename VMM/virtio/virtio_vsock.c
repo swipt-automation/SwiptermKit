@@ -26,6 +26,7 @@ enum {
     VSOCK_MAX_CTRL_QUEUE = 512,
     VSOCK_ACCEPT_BACKLOG = 32,
     VSOCK_RW_CHUNK = 65536,
+    VSOCK_MAX_PREFIX = 64,
 };
 
 enum : uint16_t {
@@ -96,6 +97,9 @@ typedef struct vsock_stream {
     uint8_t *g2h_buf;
     size_t g2h_head;
     size_t g2h_len;
+
+    uint8_t prefix[VSOCK_MAX_PREFIX];
+    size_t prefix_len;
 } vsock_stream_t;
 
 typedef struct vsock_listener {
@@ -568,6 +572,7 @@ static bool vsock_rx_has_avail_locked(virtio_vsock_t *vs) {
     if (!avail) {
         return false;
     }
+    atomic_thread_fence(memory_order_seq_cst);
     uint16_t avail_idx = atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire);
     return avail_idx != vq->last_avail_idx;
 }
@@ -608,6 +613,31 @@ static void vsock_read_stream_to_rx_locked(virtio_vsock_t *vs, vsock_stream_t *s
         }
         if (max_read > VSOCK_RW_CHUNK) {
             max_read = VSOCK_RW_CHUNK;
+        }
+
+        if (s->prefix_len > 0) {
+            size_t length = s->prefix_len < max_read ? s->prefix_len : max_read;
+            virtio_iov_write(iov, total_iov, sizeof(virtio_vsock_hdr_t), s->prefix, length);
+            s->prefix_len -= length;
+            memmove(s->prefix, s->prefix + length, s->prefix_len);
+            s->tx_cnt += (uint32_t)length;
+            s->last_fwd_sent = s->fwd_cnt;
+            virtio_vsock_hdr_t hdr = {
+                .src_cid = VSOCK_HOST_CID,
+                .dst_cid = vs->config.guest_cid,
+                .src_port = s->host_port,
+                .dst_port = s->guest_port,
+                .len = (uint32_t)length,
+                .type = VIRTIO_VSOCK_TYPE_STREAM,
+                .op = VIRTIO_VSOCK_OP_RW,
+                .flags = 0,
+                .buf_alloc = s->buf_alloc,
+                .fwd_cnt = s->fwd_cnt,
+            };
+            virtio_iov_write(iov, total_iov, 0, &hdr, sizeof(hdr));
+            virtqueue_push(dev, vq, head, (uint32_t)(sizeof(hdr) + length));
+            pushed = true;
+            continue;
         }
 
         struct iovec spans[VSOCK_MAX_IOV];
@@ -704,6 +734,14 @@ static void *vsock_io_thread(void *arg) {
         vsock_flush_ctrl_locked(vs);
 
         bool rx_ready = vsock_rx_has_avail_locked(vs);
+        if (rx_ready) {
+            for (size_t i = 0; i < VSOCK_MAX_STREAMS; i++) {
+                if (vs->streams[i].state == VSOCK_STATE_ESTABLISHED && vs->streams[i].prefix_len > 0) {
+                    vsock_read_stream_to_rx_locked(vs, &vs->streams[i]);
+                }
+            }
+            rx_ready = vsock_rx_has_avail_locked(vs);
+        }
         nfds_t nfds = 0;
         pfds[nfds++] = (struct pollfd){ .fd = vs->wake_pipe[0], .events = POLLIN, .revents = 0 };
 
@@ -726,7 +764,7 @@ static void *vsock_io_thread(void *arg) {
         }
         pthread_mutex_unlock(&vs->lock);
 
-        int ready = poll(pfds, nfds, 250);
+        int ready = poll(pfds, nfds, -1);
         if (ready < 0 && errno == EINTR) {
             continue;
         }
@@ -738,7 +776,7 @@ static void *vsock_io_thread(void *arg) {
             uint8_t drain[64];
             while (read(vs->wake_pipe[0], drain, sizeof(drain)) > 0) {
             }
-            atomic_store_explicit(&vs->wake_pending, false, memory_order_release);
+            atomic_exchange_explicit(&vs->wake_pending, false, memory_order_acq_rel);
         }
 
         pthread_mutex_lock(&vs->lock);
@@ -906,7 +944,8 @@ static uint32_t vsock_alloc_port_locked(virtio_vsock_t *vs, uint32_t guest_port)
     return 0;
 }
 
-static int vsock_initiate_connect(virtio_vsock_t *vs, uint32_t guest_port, int internal_fd) {
+static int vsock_initiate_connect(virtio_vsock_t *vs, uint32_t guest_port, int internal_fd,
+                                  const void *prefix, size_t prefix_length) {
     pthread_mutex_lock(&vs->lock);
     uint32_t host_port = vsock_alloc_port_locked(vs, guest_port);
     if (host_port == 0) {
@@ -926,6 +965,10 @@ static int vsock_initiate_connect(virtio_vsock_t *vs, uint32_t guest_port, int i
     s->host_fd = internal_fd;
     s->connect_waiter = true;
     s->connect_err = 0;
+    if (prefix_length > 0) {
+        memcpy(s->prefix, prefix, prefix_length);
+    }
+    s->prefix_len = prefix_length;
 
     vsock_enqueue_ctrl_locked(vs, host_port, guest_port, VIRTIO_VSOCK_OP_REQUEST,
                               0, s->buf_alloc, s->fwd_cnt);
@@ -956,6 +999,7 @@ static int vsock_initiate_connect(virtio_vsock_t *vs, uint32_t guest_port, int i
     if (s->state == VSOCK_STATE_CONNECTING) {
         s->host_fd = -1;
         vsock_close_stream_locked(vs, s, true, err);
+        vsock_wake(vs);
     } else if (s->state == VSOCK_STATE_CLOSED) {
         s->state = VSOCK_STATE_FREE;
     }
@@ -973,7 +1017,7 @@ int virtio_vsock_connect_host(virtio_dev_t *vsock, uint32_t guest_port) {
     if (vsock_make_socketpair(sv) < 0) {
         return -1;
     }
-    if (vsock_initiate_connect(vsock->priv, guest_port, sv[0]) < 0) {
+    if (vsock_initiate_connect(vsock->priv, guest_port, sv[0], NULL, 0) < 0) {
         int saved = errno;
         close(sv[0]);
         close(sv[1]);
@@ -983,7 +1027,8 @@ int virtio_vsock_connect_host(virtio_dev_t *vsock, uint32_t guest_port) {
     return sv[1];
 }
 
-int virtio_vsock_bridge_fd(virtio_dev_t *vsock, uint32_t guest_port, int peer_fd) {
+int virtio_vsock_bridge_fd(virtio_dev_t *vsock, uint32_t guest_port, int peer_fd,
+                           const void *prefix, size_t prefix_length) {
     if (!vsock || !vsock->priv || peer_fd < 0) {
         errno = EINVAL;
         return -1;
@@ -994,7 +1039,7 @@ int virtio_vsock_bridge_fd(virtio_dev_t *vsock, uint32_t guest_port, int peer_fd
     if (fl >= 0) {
         fcntl(peer_fd, F_SETFL, fl | O_NONBLOCK);
     }
-    return vsock_initiate_connect(vsock->priv, guest_port, peer_fd);
+    return vsock_initiate_connect(vsock->priv, guest_port, peer_fd, prefix, prefix_length);
 }
 
 int virtio_vsock_listen_host(virtio_dev_t *vsock, uint32_t host_port,

@@ -26,6 +26,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
       - name: Check Guest Artifacts
         run: make -C Guest check
 
@@ -61,7 +66,7 @@ jobs:
             fi
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          BINARY_TAG="binary.$(git ls-files -s Makefile VMM Guest/swiptermd/protocol.h Guest/swiptermd/wire_format.h | git hash-object --stdin | cut -c1-12)"
+          BINARY_TAG="binary.$(git ls-files -s Makefile VMM Guest/swiptermd/protocol.h Guest/swiptermd/wire_format.h go.mod go.sum internal libswipterm | git hash-object --stdin | cut -c1-12)"
           echo "binary-tag=$BINARY_TAG" >> "$GITHUB_OUTPUT"
           if gh release view "$BINARY_TAG" >/dev/null 2>&1; then
             echo "binary-exists=true" >> "$GITHUB_OUTPUT"
@@ -74,8 +79,8 @@ jobs:
       - name: Download Binary
         if: steps.release.outputs.binary-exists == 'true'
         run: |
-          gh release download "$BINARY_TAG" --pattern CSwiptermKit.xcframework.zip --dir build
-          ditto -x -k build/CSwiptermKit.xcframework.zip Frameworks
+          gh release download "$BINARY_TAG" --pattern LibSwipterm.xcframework.zip --dir build
+          ditto -x -k build/LibSwipterm.xcframework.zip Frameworks
         env:
           BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
 
@@ -89,16 +94,16 @@ jobs:
       - name: Publish Binary
         if: steps.release.outputs.binary-exists != 'true'
         run: |
-          gh release create "$BINARY_TAG" build/CSwiptermKit.xcframework.zip --target "$GITHUB_SHA" \
-            --title "$BINARY_TAG" --notes "CSwiptermKit $(git rev-parse --short HEAD)" --prerelease
+          gh release create "$BINARY_TAG" build/LibSwipterm.xcframework.zip --target "$GITHUB_SHA" \
+            --title "$BINARY_TAG" --notes "LibSwipterm $(git rev-parse --short HEAD)" --prerelease
         env:
           BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
 
       - name: Generate Manifest
         run: |
-          CHECKSUM="$(swift package compute-checksum build/CSwiptermKit.xcframework.zip)"
-          URL="https://github.com/${{ github.repository }}/releases/download/$BINARY_TAG/CSwiptermKit.xcframework.zip"
-          perl -pe "s|path: \"Frameworks/CSwiptermKit.xcframework\"|url: \"$URL\",\n            checksum: \"$CHECKSUM\"|" \
+          CHECKSUM="$(swift package compute-checksum build/LibSwipterm.xcframework.zip)"
+          URL="https://github.com/${{ github.repository }}/releases/download/$BINARY_TAG/LibSwipterm.xcframework.zip"
+          perl -pe "s|path: \"Frameworks/LibSwipterm.xcframework\"|url: \"$URL\",\n            checksum: \"$CHECKSUM\"|" \
             Package.local.swift > Package.swift
           git diff Package.swift
         env:
