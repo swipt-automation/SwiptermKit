@@ -2,8 +2,6 @@
 
 import PackageDescription
 
-let cpuStats: [CSetting] = Context.environment["SWIPTERM_CPU_STATS"] == "1" ? [.define("CPU_STATS")] : []
-
 let package = Package(
     name: "SwiptermKit",
     platforms: [.iOS(.v17), .macOS(.v14)],
@@ -11,40 +9,10 @@ let package = Package(
         .library(name: "SwiptermKit", targets: ["SwiptermKit"]),
     ],
     targets: [
-        .target(
+        .binaryTarget(
             name: "CSwiptermKit",
-            path: "VMM",
-            exclude: [
-                "cpu/generated",
-                "cpu/cpu_fast_decode.inc",
-                "cpu/cpu_fast_ops.inc",
-                "deps/zstd/LICENSE",
-            ],
-            sources: [
-                "board",
-                "cpu",
-                "host",
-                "mmu",
-                "virtio",
-                "deps/libslirp/src",
-                "deps/zstd/lib/common",
-                "deps/zstd/lib/decompress",
-            ],
-            publicHeadersPath: "include/CSwiptermKit",
-            cSettings: [
-                .headerSearchPath("deps/libslirp/glib_compat"),
-                .headerSearchPath("deps/zstd/lib"),
-                .headerSearchPath("deps/zstd/lib/common"),
-                .define("ZSTD_DISABLE_ASM"),
-                .define("ZSTD_LEGACY_SUPPORT", to: "0"),
-                .define("XXH_NAMESPACE", to: "swipterm_zstd_"),
-            ] + cpuStats,
-            linkerSettings: [
-                .linkedLibrary("archive"),
-                .linkedLibrary("lzma"),
-                .linkedLibrary("resolv"),
-                .linkedLibrary("z"),
-            ]
+            url: "https://github.com/swipt-automation/SwiptermKit/releases/download/binary.73fe7a02baf9/CSwiptermKit.xcframework.zip",
+            checksum: "6982f48203294f6d7134853bb7f3f72fe4e2f7f0c5a1fc8e0390291d6b7b707c"
         ),
         .target(
             name: "SwiptermKit",
@@ -52,8 +20,13 @@ let package = Package(
             resources: [
                 .copy("Resources/Image.gz"),
                 .copy("Resources/initramfs.cpio.gz"),
+            ],
+            linkerSettings: [
+                .linkedLibrary("archive"),
+                .linkedLibrary("lzma"),
+                .linkedLibrary("resolv"),
+                .linkedLibrary("z"),
             ]
         ),
-    ],
-    cLanguageStandard: .gnu2x
+    ]
 )
