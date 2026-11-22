@@ -17,6 +17,7 @@ import (
 
 const (
 	udpTimeout     = 5 * time.Minute
+	icmpFlowMax    = 1024
 	transmitFrames = 256
 	transmitArena  = 8 * vmm.MaxFrame
 )
@@ -60,7 +61,7 @@ func New(logger logger.ContextLogger) (*Stack, error) {
 		cancel:      cancel,
 		logger:      logger,
 		network:     network,
-		icmp:        ping.NewPort(ctx, logger, nil, udpTimeout, 0),
+		icmp:        ping.NewPort(ctx, logger, nil, udpTimeout, icmpFlowMax),
 		dns:         &dnsForwarder{},
 		connections: &ConnectionManager{logger: logger},
 	}
