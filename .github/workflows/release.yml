@@ -32,49 +32,17 @@ jobs:
           go-version-file: go.mod
 
       - name: Check Guest Artifacts
-        run: make -C Guest check
+        run: go run ./internal/cmd/build_guest check
 
       - name: Resolve Release
         id: release
+        run: go run ./internal/cmd/release resolve "$VERSION"
         env:
           VERSION: ${{ inputs.version }}
-        run: |
-          LATEST=$(git ls-remote --tags --refs origin | sed 's|.*refs/tags/||' |
-            grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1 || true)
-          if [ -z "$VERSION" ]; then
-            if [ -z "$LATEST" ]; then
-              echo "::error::no package tag to derive major.minor from; pass version"
-              exit 1
-            fi
-            TODAY=$(date -u +%Y%m%d)
-            PATCH=${LATEST##*.}
-            REVISION=1
-            if [ "${PATCH:0:8}" = "$TODAY" ]; then
-              REVISION=$((10#${PATCH:8} + 1))
-            fi
-            VERSION="${LATEST%.*}.$TODAY$(printf '%02d' "$REVISION")"
-          fi
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::version must be semantic, for example 0.1.2026111901: $VERSION"
-            exit 1
-          fi
-          if [ -n "$LATEST" ]; then
-            NEWEST=$(printf '%s\n%s\n' "$LATEST" "$VERSION" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
-            if [ "$LATEST" = "$VERSION" ] || [ "$NEWEST" != "$VERSION" ]; then
-              echo "::error::version must be newer than $LATEST: $VERSION"
-              exit 1
-            fi
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          BINARY_TAG="binary.$(git ls-files -s Makefile VMM Guest/swiptermd/protocol.h Guest/swiptermd/wire_format.h go.mod go.sum internal libswipterm | git hash-object --stdin | cut -c1-12)"
-          echo "binary-tag=$BINARY_TAG" >> "$GITHUB_OUTPUT"
-          if gh release view "$BINARY_TAG" >/dev/null 2>&1; then
-            echo "binary-exists=true" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Build Binary
         if: steps.release.outputs.binary-exists != 'true'
-        run: make -j"$(sysctl -n hw.ncpu)"
+        run: go run ./internal/cmd/build_libswipterm
 
       - name: Download Binary
         if: steps.release.outputs.binary-exists == 'true'
@@ -86,7 +54,6 @@ jobs:
 
       - name: Test Package
         run: |
-          cp Package.local.swift Package.swift
           swift build
           xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS'
           xcodebuild build -quiet -scheme SwiptermKit -destination 'generic/platform=iOS Simulator' ARCHS=arm64
@@ -99,18 +66,10 @@ jobs:
         env:
           BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
 
-      - name: Generate Manifest
-        run: |
-          CHECKSUM="$(swift package compute-checksum build/LibSwipterm.xcframework.zip)"
-          URL="https://github.com/${{ github.repository }}/releases/download/$BINARY_TAG/LibSwipterm.xcframework.zip"
-          perl -pe "s|path: \"Frameworks/LibSwipterm.xcframework\"|url: \"$URL\",\n            checksum: \"$CHECKSUM\"|" \
-            Package.local.swift > Package.swift
-          git diff Package.swift
-        env:
-          BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
-
       - name: Publish
         run: |
+          go run ./internal/cmd/release manifest -repository "$GITHUB_REPOSITORY" -tag "$BINARY_TAG"
+          git diff Package.swift
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout --detach
