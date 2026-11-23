@@ -1749,6 +1749,8 @@ static void compute_snapshot_key(const uint8_t initramfs_digest[CC_SHA256_DIGEST
 
 static int host_error(int rc) {
     switch (rc) {
+    case -ENOEXEC:
+        return -LINUX_ENOEXEC;
     case -ENOMEM:
         return -LINUX_ENOMEM;
     case -ENOENT:
@@ -1849,14 +1851,12 @@ static void discard_machine(swipterm_runtime *rt) {
     pthread_mutex_unlock(&rt->state_lock);
 }
 
-static const char *boot_snapshot_path(const swipterm_options *options, const boot_plan_t *plan, char *buf,
-                                      size_t size) {
+static const char *boot_snapshot_path(const swipterm_options *options, char *buf, size_t size) {
     const char *path = getenv("SWIPTERM_BOOT_SNAPSHOT");
     if (path) {
         return path[0] == '\0' || strcmp(path, "0") == 0 || strcmp(path, "off") == 0 ? NULL : path;
     }
-    const char *name = boot_plan_is_bundled(plan) ? ".preboot_snapshot.bundled" : ".preboot_snapshot";
-    return snprintf(buf, size, "%s/%s", options->root_path, name) < (int)size ? buf : NULL;
+    return snprintf(buf, size, "%s/.preboot_snapshot", options->root_path) < (int)size ? buf : NULL;
 }
 
 static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, boot_plan_t *plan,
@@ -1883,7 +1883,7 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
     atomic_store(&rt->booting, true);
     for (;;) {
         char snapshot_buf[1024];
-        const char *snapshot_path = boot_snapshot_path(options, plan, snapshot_buf, sizeof(snapshot_buf));
+        const char *snapshot_path = boot_snapshot_path(options, snapshot_buf, sizeof(snapshot_buf));
         const char *save_path = save_snapshots ? snapshot_path : NULL;
         vmm_config_t cfg = base;
         int err = 0;
@@ -1932,8 +1932,7 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
             free(kernel);
             free(initrd);
             if (!rt->vm) {
-                if (err == EWOULDBLOCK || err == ENOMEM || err == EINVAL || boot_plan_is_bundled(plan) ||
-                    atomic_load(&rt->shutting_down)) {
+                if (err == EWOULDBLOCK || err == ENOMEM || err == EINVAL || atomic_load(&rt->shutting_down)) {
                     return err == EWOULDBLOCK ? -LINUX_EBUSY
                            : err == ENOMEM    ? -LINUX_ENOMEM
                            : err == EINVAL    ? -LINUX_EINVAL
@@ -1969,9 +1968,6 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
             restore_snapshot = false;
             continue;
         }
-        if (boot_plan_is_bundled(plan)) {
-            return rc;
-        }
         const char *reason = !reached_checkpoint ? "did not reach the boot checkpoint"
                              : rc == -LINUX_EIO  ? "stopped during initialization"
                                                  : "timed out during initialization";
@@ -1983,10 +1979,12 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
     }
 }
 
-int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out) {
+int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, char **error_message) {
+    if (error_message) {
+        *error_message = NULL;
+    }
     if (!options || !options->root_path || !options->initramfs_path || !options->network || !runtime_out ||
-        (options->kernel != SWIPTERM_KERNEL_INSTALLED && options->kernel != SWIPTERM_KERNEL_BUNDLED &&
-         options->kernel != SWIPTERM_KERNEL_RELEASE) ||
+        (options->kernel != SWIPTERM_KERNEL_INSTALLED && options->kernel != SWIPTERM_KERNEL_RELEASE) ||
         (options->kernel == SWIPTERM_KERNEL_RELEASE && (!options->kernel_release || !options->kernel_release[0]))) {
         return -LINUX_EINVAL;
     }
@@ -2038,7 +2036,7 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
         return rc;
     }
     boot_plan_t *plan = NULL;
-    int rc = boot_plan_resolve(disk_fd, options->bundled_kernel_path, options->kernel, options->kernel_release, &plan);
+    int rc = boot_plan_resolve(disk_fd, options->kernel, options->kernel_release, &plan, error_message);
     if (rc < 0) {
         close(disk_fd);
         swipterm_shutdown(rt);
@@ -2058,9 +2056,9 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
     rc = boot_machine(rt, options, plan, disk_path, cmdline);
     if (rc == 0) {
         snprintf(rt->boot_info.release, sizeof(rt->boot_info.release), "%s", boot_plan_release(plan));
-        rt->boot_info.bundled = boot_plan_is_bundled(plan);
-        const char *reason = boot_plan_fallback_reason(plan);
-        snprintf(rt->boot_info.fallback_reason, sizeof(rt->boot_info.fallback_reason), "%s", reason ? reason : "");
+        snprintf(rt->boot_info.fallback_reason, sizeof(rt->boot_info.fallback_reason), "%s", boot_plan_reasons(plan));
+    } else if (rc == -LINUX_ENOEXEC && error_message) {
+        *error_message = strdup(boot_plan_reasons(plan));
     }
     boot_plan_free(plan);
     close(disk_fd);

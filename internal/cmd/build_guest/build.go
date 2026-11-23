@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -9,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -22,11 +20,7 @@ import (
 )
 
 const (
-	linuxVersion     = "6.12"
-	linuxSHA256      = "b1a2562be56e42afb3f8489d4c2a7ac472ac23098f1ef1c1e40da601f54625eb"
-	linuxURL         = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-" + linuxVersion + ".tar.xz"
 	e2fsprogsVersion = "1.47.4"
-	e2fsprogsSHA256  = "fd5bf388cbdbe006a3d3b318d983b2948382440acc85a87f1e7d108653e8db0b"
 	e2fsprogsURL     = "https://cdn.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v" + e2fsprogsVersion + "/e2fsprogs-" + e2fsprogsVersion + ".tar.xz"
 	sourceStamp      = ".swipterm-stamp"
 	downloadRetries  = 3
@@ -47,7 +41,6 @@ var (
 		"-fno-asynchronous-unwind-tables", "-ffunction-sections", "-fdata-sections",
 	}
 	staticLDFlags = []string{"-static", "-Wl,--gc-sections"}
-	configLine    = regexp.MustCompile(`^(?:(CONFIG_[A-Za-z0-9_]+)=.*|# (CONFIG_[A-Za-z0-9_]+) is not set)$`)
 )
 
 type initramfsEntry struct {
@@ -77,8 +70,6 @@ type builder struct {
 	jobs      string
 	epoch     int64
 	compiler  []string
-	linux     string
-	kbuild    string
 	e2fsprogs string
 }
 
@@ -92,8 +83,6 @@ func newBuilder() *builder {
 		work:      work,
 		jobs:      strconv.Itoa(runtime.NumCPU()),
 		compiler:  strings.Fields(os.Getenv("CC")),
-		linux:     filepath.Join(work, "linux-"+linuxVersion),
-		kbuild:    filepath.Join(work, "kbuild-"+linuxVersion),
 		e2fsprogs: filepath.Join(work, "e2fsprogs-"+e2fsprogsVersion),
 	}
 	b.epoch, _ = strconv.ParseInt(os.Getenv("SOURCE_DATE_EPOCH"), 10, 64)
@@ -114,25 +103,14 @@ func (b *builder) build() error {
 	if err != nil {
 		return err
 	}
-	for _, source := range []struct {
-		url    string
-		sha256 string
-		path   string
-	}{
-		{linuxURL, linuxSHA256, b.linux},
-		{e2fsprogsURL, e2fsprogsSHA256, b.e2fsprogs},
-	} {
-		err = b.prepareSource(source.url, source.sha256, source.path)
-		if err != nil {
-			return err
-		}
+	err = b.prepareSource(e2fsprogsURL, b.e2fsprogs)
+	if err != nil {
+		return err
 	}
 	for _, step := range []func() error{
 		b.buildE2fsprogs,
 		b.buildDaemons,
 		b.buildInitramfs,
-		b.configureKernel,
-		b.buildKernel,
 	} {
 		err = step()
 		if err != nil {
@@ -142,13 +120,13 @@ func (b *builder) build() error {
 	return nil
 }
 
-func (b *builder) prepareSource(link string, sha256 string, directory string) error {
+func (b *builder) prepareSource(link string, directory string) error {
 	stamp, _ := os.ReadFile(filepath.Join(directory, sourceStamp))
-	if strings.TrimSpace(string(stamp)) == sha256 {
+	if strings.TrimSpace(string(stamp)) == link {
 		return nil
 	}
 	tarball := filepath.Join(b.work, filepath.Base(link))
-	if sum, err := fileSHA256(tarball); err != nil || sum != sha256 {
+	if _, err := os.Stat(tarball); err != nil {
 		err = os.MkdirAll(b.work, 0o755)
 		if err != nil {
 			return err
@@ -157,9 +135,8 @@ func (b *builder) prepareSource(link string, sha256 string, directory string) er
 		client := httpclient.NewClient(nil)
 		for retry := 0; ; retry++ {
 			err = client.Download(context.Background(), httpclient.DownloadOptions{
-				URL:            link,
-				Destination:    tarball,
-				ExpectedSHA256: sha256,
+				URL:         link,
+				Destination: tarball,
 			}, silentDownload{})
 			if _, transient := errors.AsType[*httpclient.TransientError](err); !transient || retry == downloadRetries {
 				break
@@ -180,14 +157,14 @@ func (b *builder) prepareSource(link string, sha256 string, directory string) er
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(directory, sourceStamp), []byte(sha256+"\n"), 0o644)
+	return os.WriteFile(filepath.Join(directory, sourceStamp), []byte(link+"\n"), 0o644)
 }
 
 func (b *builder) buildE2fsprogs() error {
 	output := filepath.Join(buildPath, "e2fsprogs")
 	stampPath := filepath.Join(output, "configure")
 	stamp, _ := os.ReadFile(stampPath)
-	configuration := strings.Join(append([]string{e2fsprogsSHA256}, e2fsprogsConfigure...), "\n")
+	configuration := strings.Join(append([]string{e2fsprogsURL}, e2fsprogsConfigure...), "\n")
 	if string(stamp) == configuration {
 		return nil
 	}
@@ -269,136 +246,6 @@ func (b *builder) buildInitramfs() error {
 	})
 }
 
-func (b *builder) kernelMake(arguments ...string) *exec.Cmd {
-	return exec.Command("make", append([]string{
-		"-C", b.linux,
-		"O=" + b.kbuild,
-		"ARCH=arm64",
-		"KBUILD_BUILD_USER=swipterm",
-		"KBUILD_BUILD_HOST=swipterm",
-		"KBUILD_BUILD_VERSION=1",
-		"KBUILD_BUILD_TIMESTAMP=" + time.Unix(b.epoch, 0).UTC().Format("Mon Jan _2 15:04:05 MST 2006"),
-	}, arguments...)...)
-}
-
-func (b *builder) configureKernel() error {
-	fragments, err := filepath.Glob(filepath.Join(guestPath, "kernel", "*.config"))
-	if err != nil {
-		return err
-	}
-	err = os.MkdirAll(b.kbuild, 0o755)
-	if err != nil {
-		return err
-	}
-	virtconfig := b.kernelMake("-s", "virtconfig")
-	virtconfig.Stdout = io.Discard
-	err = run(virtconfig)
-	if err != nil {
-		return err
-	}
-	configPath := filepath.Join(b.kbuild, ".config")
-	base, err := readConfig(configPath)
-	if err != nil {
-		return err
-	}
-	merged := base
-	var requested []string
-	for _, fragment := range fragments {
-		lines, err := readConfig(fragment)
-		if err != nil {
-			return err
-		}
-		symbols := make(map[string]bool)
-		for _, line := range lines {
-			if symbol := configSymbol(line); symbol != "" {
-				symbols[symbol] = true
-			}
-		}
-		merged = append(common.Filter(merged, func(line string) bool {
-			return !symbols[configSymbol(line)]
-		}), lines...)
-		requested = append(requested, lines...)
-	}
-	err = os.WriteFile(configPath, []byte(strings.Join(merged, "\n")+"\n"), 0o644)
-	if err != nil {
-		return err
-	}
-	for _, target := range []string{"olddefconfig", "mod2noconfig"} {
-		err = run(b.kernelMake("-s", target))
-		if err != nil {
-			return err
-		}
-	}
-	resolvedLines, err := readConfig(configPath)
-	if err != nil {
-		return err
-	}
-	resolved := make(map[string]string)
-	for _, line := range resolvedLines {
-		if symbol := configSymbol(line); symbol != "" {
-			resolved[symbol] = line
-		}
-	}
-	mismatched := false
-	for _, line := range requested {
-		symbol := configSymbol(line)
-		if symbol == "" {
-			continue
-		}
-		have, exists := resolved[symbol]
-		if have == line || (!exists && strings.HasPrefix(line, "#")) {
-			continue
-		}
-		if !exists {
-			have = "absent"
-		}
-		os.Stderr.WriteString("error: requested " + line + ", resolved " + have + "\n")
-		mismatched = true
-	}
-	if mismatched {
-		return E.New("kernel configuration does not resolve as requested")
-	}
-	return copyFile(configPath, filepath.Join(buildPath, "kernel.config"), 0o644)
-}
-
-func (b *builder) buildKernel() error {
-	err := run(b.kernelMake("-j"+b.jobs, "Image"))
-	if err != nil {
-		return err
-	}
-	image, err := os.Open(filepath.Join(b.kbuild, "arch", "arm64", "boot", "Image"))
-	if err != nil {
-		return err
-	}
-	defer image.Close()
-	return writeGzip(filepath.Join(buildPath, "Image.gz"), func(writer io.Writer) error {
-		_, err := io.Copy(writer, image)
-		return err
-	})
-}
-
-func readConfig(path string) ([]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	var lines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	return lines, scanner.Err()
-}
-
-func configSymbol(line string) string {
-	match := configLine.FindStringSubmatch(line)
-	if match == nil {
-		return ""
-	}
-	return match[1] + match[2]
-}
-
 func writeGzip(path string, write func(io.Writer) error) error {
 	file, err := os.Create(path)
 	if err != nil {
@@ -439,5 +286,3 @@ func run(command *exec.Cmd) error {
 type silentDownload struct{}
 
 func (silentDownload) Progress(httpclient.Progress) {}
-
-func (silentDownload) Verifying() {}

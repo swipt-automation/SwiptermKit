@@ -13,14 +13,38 @@ typedef struct swipterm_terminal swipterm_terminal;
 typedef struct swipterm_invocation swipterm_invocation;
 typedef struct swipterm_network swipterm_network;
 
+typedef struct swipterm_root_builder swipterm_root_builder;
+typedef struct swipterm_archive swipterm_archive;
+
 typedef bool (*swipterm_progress_handler)(void *context, double fraction);
 
-bool swipterm_root_import_file(const char *archive_path, const char *root_path, uint64_t disk_size,
-                               void *context, swipterm_progress_handler progress, char **error_message);
-bool swipterm_root_import_memory(const void *data, size_t size, const char *root_path, uint64_t disk_size,
-                                 void *context, swipterm_progress_handler progress, char **error_message);
+typedef struct {
+    void *context;
+    swipterm_progress_handler progress;
+    void (*metadata)(void *context, const char *name, const void *data, size_t size);
+    void (*entry)(void *context, const char *path, uint32_t mode, const uint8_t *sha1);
+} swipterm_package_callbacks;
+
+swipterm_root_builder *swipterm_root_builder_create(const char *root_path, uint64_t disk_size, char **error_message);
+bool swipterm_root_builder_add_file(swipterm_root_builder *builder, const char *archive_path, void *context,
+                                    swipterm_progress_handler progress, char **error_message);
+bool swipterm_root_builder_add_memory(swipterm_root_builder *builder, const void *data, size_t size, void *context,
+                                      swipterm_progress_handler progress, char **error_message);
+bool swipterm_root_builder_add_package(swipterm_root_builder *builder, const char *package_path,
+                                       const swipterm_package_callbacks *callbacks, char **error_message);
+int swipterm_root_builder_read(swipterm_root_builder *builder, const char *path, void **data_out, size_t *size_out);
+int swipterm_root_builder_write(swipterm_root_builder *builder, const char *path, const void *data, size_t size,
+                                uint32_t mode);
+bool swipterm_root_builder_finish(swipterm_root_builder *builder, char **error_message);
+void swipterm_root_builder_free(swipterm_root_builder *builder);
+
 bool swipterm_root_export(const char *root_path, const char *archive_path,
                           void *context, swipterm_progress_handler progress, char **error_message);
+
+swipterm_archive *swipterm_archive_open(const char *path, char **error_message);
+int swipterm_archive_next(swipterm_archive *archive, const char **name_out, char **error_message);
+ssize_t swipterm_archive_read(swipterm_archive *archive, void *buffer, size_t length, char **error_message);
+void swipterm_archive_close(swipterm_archive *archive);
 
 typedef enum {
     SWIPTERM_HALT_NONE = 0,
@@ -48,8 +72,7 @@ typedef struct {
 
 typedef enum {
     SWIPTERM_KERNEL_INSTALLED = 0,
-    SWIPTERM_KERNEL_BUNDLED = 1,
-    SWIPTERM_KERNEL_RELEASE = 2,
+    SWIPTERM_KERNEL_RELEASE = 1,
 } swipterm_kernel_selection;
 
 typedef struct {
@@ -59,7 +82,6 @@ typedef struct {
     size_t ram_size;
     uint32_t cpu_count;
     swipterm_callbacks callbacks;
-    const char *bundled_kernel_path;
     const char *initramfs_path;
     swipterm_kernel_selection kernel;
     const char *kernel_release;
@@ -69,11 +91,10 @@ typedef struct {
 
 typedef struct {
     char release[65];
-    bool bundled;
-    char fallback_reason[256];
+    char fallback_reason[2048];
 } swipterm_boot_info;
 
-int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out);
+int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, char **error_message);
 void swipterm_begin_shutdown(swipterm_runtime *runtime);
 void swipterm_shutdown(swipterm_runtime *runtime);
 int swipterm_start_init(swipterm_runtime *runtime, const char *path,

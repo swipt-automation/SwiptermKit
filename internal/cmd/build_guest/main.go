@@ -20,7 +20,7 @@ const (
 	toolPath      = "internal/cmd/build_guest"
 )
 
-var artifacts = []string{"Image.gz", "initramfs.cpio.gz"}
+var artifacts = []string{"initramfs.cpio.gz"}
 
 func main() {
 	if len(os.Args) != 2 {
@@ -89,7 +89,7 @@ func check() error {
 
 func computeLock() (string, error) {
 	var inputs []string
-	for _, pattern := range []string{toolPath + "/*.go", guestPath + "/kernel/*.config", guestPath + "/swiptermd/*.[ch]"} {
+	for _, pattern := range []string{toolPath + "/*.go", guestPath + "/swiptermd/*.[ch]"} {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			return "", err

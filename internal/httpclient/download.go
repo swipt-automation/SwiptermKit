@@ -3,8 +3,6 @@ package httpclient
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"io"
 	"mime"
@@ -40,11 +38,10 @@ const (
 var errStalled = E.New("http: no data received for ", stallTimeout)
 
 type DownloadOptions struct {
-	URL            string
-	URLs           []string
-	Destination    string
-	ExpectedBytes  int64
-	ExpectedSHA256 string
+	URL           string
+	URLs          []string
+	Destination   string
+	ExpectedBytes int64
 }
 
 type SourceProgress struct {
@@ -63,7 +60,6 @@ type Progress struct {
 
 type DownloadHandler interface {
 	Progress(progress Progress)
-	Verifying()
 }
 
 type source struct {
@@ -118,14 +114,9 @@ func (c *Client) Download(ctx context.Context, options DownloadOptions, handler 
 	if len(links) == 0 {
 		links = []string{options.URL}
 	}
-	verified := options.ExpectedSHA256 != ""
 	targets := make([]*url.URL, 0, len(links))
 	for _, link := range links {
 		target, err := url.Parse(link)
-		if err != nil {
-			return err
-		}
-		err = checkScheme(target, verified)
 		if err != nil {
 			return err
 		}
@@ -136,15 +127,12 @@ func (c *Client) Download(ctx context.Context, options DownloadOptions, handler 
 		return err
 	}
 	d := &download{
-		client:  &c.https,
+		client:  &c.client,
 		options: options,
 		handler: handler,
 		file:    file,
 		writer:  bufio.NewWriterSize(file, writeBufferSize),
 		total:   -1,
-	}
-	if verified {
-		d.client = &c.http
 	}
 	err = E.Errors(d.run(ctx, targets), file.Close())
 	if err == nil {
@@ -504,8 +492,7 @@ func (d *download) attempt(ctx context.Context, target *source) (bool, error) {
 	}
 	response, err := d.get(ctx, target.url, byteRange, target.validator)
 	if err != nil {
-		_, insecure := errors.AsType[*InsecureURLError](err)
-		return !insecure, err
+		return true, err
 	}
 	defer response.Body.Close()
 	switch code := response.StatusCode; {
@@ -647,19 +634,6 @@ func (d *download) finish() error {
 		return &ContentLengthError{Expected: d.options.ExpectedBytes, Actual: written}
 	}
 	d.report(true)
-	if d.options.ExpectedSHA256 == "" {
-		return nil
-	}
-	d.handler.Verifying()
-	hash := sha256.New()
-	_, err := io.Copy(hash, io.NewSectionReader(d.file, 0, written))
-	if err != nil {
-		return err
-	}
-	actual := hex.EncodeToString(hash.Sum(nil))
-	if !strings.EqualFold(actual, d.options.ExpectedSHA256) {
-		return &ChecksumError{Expected: d.options.ExpectedSHA256, Actual: actual}
-	}
 	return nil
 }
 

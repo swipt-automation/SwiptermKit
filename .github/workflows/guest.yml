@@ -26,14 +26,14 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison flex gcc libelf-dev libssl-dev make xz-utils
+          sudo apt-get install -y gcc make xz-utils
 
       - name: Build Guest Artifacts
         run: go run ./internal/cmd/build_guest install
 
       - name: Commit Guest Artifacts
         run: |
-          git add Sources/SwiptermKit/Resources/Image.gz Sources/SwiptermKit/Resources/initramfs.cpio.gz Guest/artifacts.lock
+          git add Sources/SwiptermKit/Resources/initramfs.cpio.gz Guest/artifacts.lock
           if git diff --cached --quiet; then
             echo "Guest artifacts are up to date"
             exit 0

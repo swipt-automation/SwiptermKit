@@ -75,22 +75,16 @@ public struct HTTPDownloadProgress: Sendable {
 }
 
 public enum HTTPError: Error, Hashable, Sendable {
-    case insecureURL(URL)
     case unexpectedStatus(Int)
     case contentLengthMismatch(expected: Int64, actual: Int64)
-    case checksumMismatch(expected: String, actual: String)
     case emptyBody
 
-    init?(_ failure: LibswiptermHTTPFailure, requestURL: URL) {
+    init?(_ failure: LibswiptermHTTPFailure) {
         switch failure.kind {
-        case LibswiptermHTTPFailureInsecureURL:
-            self = .insecureURL(URL(string: failure.url) ?? requestURL)
         case LibswiptermHTTPFailureStatus:
             self = .unexpectedStatus(Int(failure.status))
         case LibswiptermHTTPFailureContentLength:
             self = .contentLengthMismatch(expected: failure.expectedBytes, actual: failure.actualBytes)
-        case LibswiptermHTTPFailureChecksum:
-            self = .checksumMismatch(expected: failure.expectedSHA256, actual: failure.actualSHA256)
         case LibswiptermHTTPFailureEmptyBody:
             self = .emptyBody
         default:
@@ -102,21 +96,16 @@ public enum HTTPError: Error, Hashable, Sendable {
 extension HTTPError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case let .insecureURL(url):
-            "Insecure URL: \(url.absoluteString)"
         case let .unexpectedStatus(code):
             "HTTP status \(code) \(HTTPURLResponse.localizedString(forStatusCode: code))"
         case let .contentLengthMismatch(expected, actual):
             "Content-Length mismatch: expected \(expected), got \(actual)"
-        case let .checksumMismatch(expected, actual):
-            "SHA-256 mismatch: expected \(expected), got \(actual)"
         case .emptyBody:
             "Empty response body"
         }
     }
 }
 
-/// Every URL, including each redirect, must use HTTPS; a download with `expectedSHA256` may also use HTTP.
 public enum HTTPClient {
     public static func data(for request: HTTPRequest) async throws -> (Data, HTTPResponse) {
         var error: NSError?
@@ -134,28 +123,24 @@ public enum HTTPClient {
                 let response = try handle.value.execute(timeout)
                 return (response.body() ?? Data(), HTTPResponse(response, requestURL: request.url))
             } catch {
-                throw handle.value.failure().flatMap { HTTPError($0, requestURL: request.url) } ?? error
+                throw handle.value.failure().flatMap(HTTPError.init) ?? error
             }
         }
     }
 
     /// A failure before the first byte throws immediately; a transfer interrupted after it resumes where it stopped.
-    /// `destination` is replaced only by a complete, verified file; a failed download removes its partial data.
+    /// `destination` is replaced only by a complete file; a failed download removes its partial data.
     public static func download(
         from url: URL,
         to destination: URL,
         expectedBytes: Int64? = nil,
-        expectedSHA256: String? = nil,
-        progress: @escaping @Sendable (_ bytesWritten: Int64, _ totalBytes: Int64?) -> Void = { _, _ in },
-        verifying: @escaping @Sendable () -> Void = {}
+        progress: @escaping @Sendable (_ bytesWritten: Int64, _ totalBytes: Int64?) -> Void = { _, _ in }
     ) async throws {
         try await download(
             from: [url],
             to: destination,
             expectedBytes: expectedBytes,
-            expectedSHA256: expectedSHA256,
-            progress: { progress($0.bytesWritten, $0.totalBytes) },
-            verifying: verifying
+            progress: { progress($0.bytesWritten, $0.totalBytes) }
         )
     }
 
@@ -165,26 +150,23 @@ public enum HTTPClient {
         from urls: [URL],
         to destination: URL,
         expectedBytes: Int64? = nil,
-        expectedSHA256: String? = nil,
-        progress: @escaping @Sendable (HTTPDownloadProgress) -> Void = { _ in },
-        verifying: @escaping @Sendable () -> Void = {}
+        progress: @escaping @Sendable (HTTPDownloadProgress) -> Void = { _ in }
     ) async throws {
         let call = LibswiptermNewHTTPDownload(
             urls[0].absoluteString,
             destination.path(percentEncoded: false),
-            expectedBytes ?? 0,
-            expectedSHA256 ?? ""
+            expectedBytes ?? 0
         )!
         for url in urls.dropFirst() {
             call.addURL(url.absoluteString)
         }
         let handle = UnsafeSendable(value: call)
-        let handler = DownloadHandler(urls: urls, onProgress: progress, onVerifying: verifying)
+        let handler = DownloadHandler(urls: urls, onProgress: progress)
         try await perform(cancel: { handle.value.cancel() }) {
             do {
                 try handle.value.run(handler)
             } catch {
-                throw handle.value.failure().flatMap { HTTPError($0, requestURL: urls[0]) } ?? error
+                throw handle.value.failure().flatMap(HTTPError.init) ?? error
             }
         }
     }
@@ -209,23 +191,13 @@ public enum HTTPClient {
 private final class DownloadHandler: NSObject, LibswiptermHTTPDownloadHandlerProtocol, Sendable {
     private let urls: [URL]
     private let onProgress: @Sendable (HTTPDownloadProgress) -> Void
-    private let onVerifying: @Sendable () -> Void
 
-    init(
-        urls: [URL],
-        onProgress: @escaping @Sendable (HTTPDownloadProgress) -> Void,
-        onVerifying: @escaping @Sendable () -> Void
-    ) {
+    init(urls: [URL], onProgress: @escaping @Sendable (HTTPDownloadProgress) -> Void) {
         self.urls = urls
         self.onProgress = onProgress
-        self.onVerifying = onVerifying
     }
 
     func progress(_ progress: LibswiptermHTTPDownloadProgress?) {
         onProgress(HTTPDownloadProgress(progress!, urls: urls))
-    }
-
-    func verifying() {
-        onVerifying()
     }
 }

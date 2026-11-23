@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <time.h>
+#include <zstd.h>
 
 enum {
     LINUX_EPERM = 1,
@@ -18,6 +19,7 @@ enum {
     LINUX_EINTR = 4,
     LINUX_EIO = 5,
     LINUX_ENXIO = 6,
+    LINUX_ENOEXEC = 8,
     LINUX_EBADF = 9,
     LINUX_EAGAIN = 11,
     LINUX_ENOMEM = 12,
@@ -82,12 +84,16 @@ extern struct archive *archive_read_new(void);
 extern int archive_read_support_filter_all(struct archive *);
 extern int archive_read_support_filter_none(struct archive *);
 extern int archive_read_support_format_tar(struct archive *);
+extern int archive_read_support_format_ar(struct archive *);
+extern int archive_read_support_format_cpio(struct archive *);
+extern int archive_read_support_format_raw(struct archive *);
 extern int archive_read_open(struct archive *, void *_client_data, archive_open_callback *,
                              archive_read_callback *, archive_close_callback *);
 extern int archive_read_open_filename(struct archive *, const char *filename, size_t block_size);
 extern int archive_read_open_memory(struct archive *, const void *buff, size_t size);
 extern int archive_read_next_header(struct archive *, struct archive_entry **);
 extern int archive_read_data_block(struct archive *, const void **buff, size_t *size, la_int64_t *offset);
+extern la_ssize_t archive_read_data(struct archive *, void *, size_t);
 extern int archive_read_free(struct archive *);
 extern la_int64_t archive_filter_bytes(struct archive *, int);
 extern const char *archive_error_string(struct archive *);
@@ -251,6 +257,38 @@ static_assert(sizeof(lzma_stream_flags) == 56);
 static_assert(offsetof(lzma_stream_flags, backward_size) == 8);
 static_assert(offsetof(lzma_stream_flags, check) == 16);
 
+typedef struct archive_input {
+    int fd;
+    uint64_t offset;
+    uint64_t size;
+    const uint8_t *data;
+    struct archive *entry;
+} archive_input_t;
+
+typedef struct archive_stream {
+    archive_input_t in;
+    uint64_t pos;
+    uint8_t *in_buf;
+    size_t in_off;
+    size_t in_len;
+    bool in_eof;
+    int codec;
+    bool end;
+    uint64_t uncompressed;
+    uint8_t *out_buf;
+    lzma_stream xz;
+    bool xz_open;
+    bool xz_input_end;
+    ZSTD_DCtx *zstd;
+    ZSTD_inBuffer zstd_in;
+    bool zstd_input_end;
+    size_t zstd_last;
+} archive_stream_t;
+
+int archive_stream_open(archive_stream_t *stream, struct archive *a, const archive_input_t *input);
+double archive_stream_progress(struct archive *a, const archive_stream_t *stream);
+void archive_stream_close(archive_stream_t *stream);
+
 int swipterm_decompress(const uint8_t *in, size_t len, size_t limit, uint8_t **out, size_t *out_len);
 int swipterm_kernel_image(const uint8_t *file, size_t len, uint8_t **image_out, size_t *image_len);
 int swipterm_kernel_probe(const uint8_t *file_prefix, size_t len, size_t *payload_offset_out);
@@ -361,6 +399,7 @@ vfs_node_t *vfs_node_retain(vfs_node_t *node);
 void vfs_node_release(vfs_node_t *node);
 bool vfs_dir_set(vfs_node_t *dir, const char *name, size_t name_len, vfs_node_t *child);
 vfs_dirent_t *vfs_dir_find(vfs_node_t *dir, const char *name, size_t name_len);
+bool vfs_dir_remove(vfs_node_t *dir, const char *name, size_t name_len);
 
 typedef struct ext4_writer ext4_writer_t;
 
@@ -368,15 +407,20 @@ int ext4_writer_create(int fd, uint64_t disk_size, ext4_writer_t **writer_out);
 int ext4_writer_write(ext4_writer_t *w, vfs_node_t *file, uint64_t offset, const void *data, size_t length);
 int ext4_writer_end_file(ext4_writer_t *w, vfs_node_t *file, uint64_t size);
 int ext4_writer_finish(ext4_writer_t *w, vfs_node_t *root);
+int ext4_writer_read(ext4_writer_t *w, const vfs_node_t *file, uint64_t offset, void *buf, size_t len);
 void ext4_writer_free(ext4_writer_t *w);
+
+vfs_node_t *vfs_find(vfs_node_t *root, const char *path, bool follow_final);
+int vfs_write_file(ext4_writer_t *w, vfs_node_t *dir, const char *name, size_t name_len, const void *data,
+                   size_t size, uint32_t mode);
+int module_index_build(ext4_writer_t *w, vfs_node_t *root);
 
 typedef struct boot_plan boot_plan_t;
 
-int boot_plan_resolve(int disk_fd, const char *bundled_kernel_path, swipterm_kernel_selection selection,
-                      const char *release, boot_plan_t **plan_out);
-bool boot_plan_is_bundled(const boot_plan_t *plan);
+int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, boot_plan_t **plan_out,
+                      char **error_message);
 const char *boot_plan_release(const boot_plan_t *plan);
-const char *boot_plan_fallback_reason(const boot_plan_t *plan);
+const char *boot_plan_reasons(const boot_plan_t *plan);
 const uint8_t *boot_plan_identity(const boot_plan_t *plan);
 int boot_plan_load(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_out,
                    uint8_t **modules_cpio_out, size_t *modules_cpio_size_out);

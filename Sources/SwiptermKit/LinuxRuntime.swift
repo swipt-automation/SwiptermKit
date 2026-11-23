@@ -12,11 +12,11 @@ public final class LinuxRuntime: @unchecked Sendable {
             case managed
         }
 
+        /// Booting throws `LinuxRuntime.KernelUnavailableError` when no kernel matches.
         public enum Kernel: Hashable, Sendable {
-            /// The newest kernel installed in the root that can boot this machine, or the bundled kernel when there is none.
+            /// The newest kernel installed in the root that can boot this machine.
             case installed
-            case bundled
-            /// The installed kernel with this release, or the bundled kernel when it cannot boot this machine.
+            /// The installed kernel with this release.
             case release(String)
         }
 
@@ -64,18 +64,28 @@ public final class LinuxRuntime: @unchecked Sendable {
 
     public struct BootedKernel: Hashable, Sendable {
         public let release: String
-        public let isBundled: Bool
-        /// Why the kernel that `Configuration.kernel` asked for did not boot; `nil` when it did.
+        /// Why the newer installed kernels did not boot; `nil` when the newest did.
         public let fallbackReason: String?
 
         init(_ info: swipterm_boot_info) {
             var info = info
             release = withUnsafeBytes(of: &info.release) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
-            isBundled = info.bundled
             let reason = withUnsafeBytes(of: &info.fallback_reason) {
                 String(cString: $0.bindMemory(to: CChar.self).baseAddress!)
             }
             fallbackReason = reason.isEmpty ? nil : reason
+        }
+    }
+
+    public struct KernelUnavailableError: LocalizedError, Sendable {
+        /// Why each installed kernel that `Configuration.kernel` selects cannot boot this machine; empty when the root has none.
+        public let reasons: [String]
+
+        public var errorDescription: String? {
+            guard !reasons.isEmpty else {
+                return "No kernel is installed in the root."
+            }
+            return "No installed kernel can boot this machine: " + reasons.joined(separator: "; ")
         }
     }
 
@@ -328,11 +338,9 @@ public final class LinuxRuntime: @unchecked Sendable {
         _ configuration: Configuration,
         callbacks: RuntimeCallbacks,
         network: LibswiptermNetwork
-    ) throws(LinuxError) -> (handle: UnsafeSendable<OpaquePointer>, kernel: BootedKernel) {
-        guard let kernelImage = Bundle.module.url(forResource: "Image", withExtension: "gz"),
-              let initramfs = Bundle.module.url(forResource: "initramfs.cpio", withExtension: "gz")
-        else {
-            throw .ENOENT
+    ) throws -> (handle: UnsafeSendable<OpaquePointer>, kernel: BootedKernel) {
+        guard let initramfs = Bundle.module.url(forResource: "initramfs.cpio", withExtension: "gz") else {
+            throw LinuxError.ENOENT
         }
         let callbackTable = callbacks.makeTable(
             includeConsoleOutput: callbacks.consoleOutput != nil,
@@ -344,42 +352,42 @@ public final class LinuxRuntime: @unchecked Sendable {
         case .installed:
             selection = SWIPTERM_KERNEL_INSTALLED
             release = nil
-        case .bundled:
-            selection = SWIPTERM_KERNEL_BUNDLED
-            release = nil
         case .release(let name):
             selection = SWIPTERM_KERNEL_RELEASE
             release = name
         }
         var handle: OpaquePointer?
+        var message: UnsafeMutablePointer<CChar>?
         let code = configuration.root.withUnsafeFileSystemRepresentation { root in
-            kernelImage.withUnsafeFileSystemRepresentation { kernelPath in
-                initramfs.withUnsafeFileSystemRepresentation { initramfsPath in
-                    withOptionalCString(configuration.hostname) { hostname in
-                        withOptionalCString(configuration.hostCommandsDirectory) { hostCommandsDirectory in
-                            withOptionalCString(configuration.extraKernelArguments) { extraCmdline in
-                                withOptionalCString(release) { release in
-                                    var options = swipterm_options(
-                                        root_path: root,
-                                        hostname: hostname,
-                                        host_commands_directory: hostCommandsDirectory,
-                                        ram_size: Int(truncatingIfNeeded: configuration.memorySize ?? 0),
-                                        cpu_count: UInt32(truncatingIfNeeded: configuration.cpuCount ?? 0),
-                                        callbacks: callbackTable,
-                                        bundled_kernel_path: kernelPath,
-                                        initramfs_path: initramfsPath,
-                                        kernel: selection,
-                                        kernel_release: release,
-                                        extra_cmdline: extraCmdline,
-                                        network: OpaquePointer(bitPattern: Int(network.handle()))
-                                    )
-                                    return swipterm_boot(&options, &handle)
-                                }
+            initramfs.withUnsafeFileSystemRepresentation { initramfsPath in
+                withOptionalCString(configuration.hostname) { hostname in
+                    withOptionalCString(configuration.hostCommandsDirectory) { hostCommandsDirectory in
+                        withOptionalCString(configuration.extraKernelArguments) { extraCmdline in
+                            withOptionalCString(release) { release in
+                                var options = swipterm_options(
+                                    root_path: root,
+                                    hostname: hostname,
+                                    host_commands_directory: hostCommandsDirectory,
+                                    ram_size: Int(truncatingIfNeeded: configuration.memorySize ?? 0),
+                                    cpu_count: UInt32(truncatingIfNeeded: configuration.cpuCount ?? 0),
+                                    callbacks: callbackTable,
+                                    initramfs_path: initramfsPath,
+                                    kernel: selection,
+                                    kernel_release: release,
+                                    extra_cmdline: extraCmdline,
+                                    network: OpaquePointer(bitPattern: Int(network.handle()))
+                                )
+                                return swipterm_boot(&options, &handle, &message)
                             }
                         }
                     }
                 }
             }
+        }
+        if let message {
+            defer { free(message) }
+            let reasons = String(cString: message)
+            throw KernelUnavailableError(reasons: reasons.isEmpty ? [] : reasons.components(separatedBy: "\n"))
         }
         try check(code)
         var info = swipterm_boot_info()

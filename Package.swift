@@ -29,7 +29,6 @@ let package = Package(
             name: "SwiptermKit",
             dependencies: ["CSwiptermKit", "LibSwipterm"],
             resources: [
-                .copy("Resources/Image.gz"),
                 .copy("Resources/initramfs.cpio.gz"),
             ]
         ),

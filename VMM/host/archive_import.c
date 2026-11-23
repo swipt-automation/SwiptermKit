@@ -2,6 +2,7 @@
 
 #include "host_internal.h"
 
+#include <CommonCrypto/CommonDigest.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -11,19 +12,17 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include <zstd.h>
 
 enum : uint32_t {
-    STREAM_IO_BUF_SIZE = 65536U,
-    XZ_MT_BUF_SIZE = 1U << 20,
-    XZ_TAIL_SIZE = 4096U,
-    XZ_INDEX_MAX_SIZE = 4U << 20,
     VFS_MAX_SYMLINKS = 40U,
     VFS_MAX_NAME_LEN = 255U,
     VFS_MAX_SYMLINK_LEN = 4095U,
     VFS_MAX_XATTR_VALUE = 4096U,
     VFS_HASH_THRESHOLD = 32U,
     VFS_MAX_ENTRIES = 4000000U,
+    PACKAGE_METADATA_LIMIT = 64U << 20,
+    RPM_HEADER_LIMIT = 256U << 20,
+    BUILDER_READ_LIMIT = 256U << 20,
 };
 
 enum : uint8_t {
@@ -227,7 +226,7 @@ vfs_dirent_t *vfs_dir_find(vfs_node_t *dir, const char *name, size_t name_len) {
     return idx >= 0 ? &dir->children[idx] : NULL;
 }
 
-static bool vfs_dir_remove(vfs_node_t *dir, const char *name, size_t nlen) {
+bool vfs_dir_remove(vfs_node_t *dir, const char *name, size_t nlen) {
     ssize_t idx = vfs_dir_find_index(dir, name, nlen, fnv1a_32(name, nlen));
     if (idx < 0) {
         return false;
@@ -834,28 +833,186 @@ static bool resolve_deferred_hardlinks(vfs_node_t *root, vfs_path_stack_t *st, d
     return ok;
 }
 
-typedef struct import_progress {
-    swipterm_progress_handler handler;
-    void *context;
-    uint64_t total;
-    const uint64_t *input_pos;
-} import_progress_t;
+vfs_node_t *vfs_find(vfs_node_t *root, const char *path, bool follow_final) {
+    vfs_path_stack_t st = {0};
+    char *current = strdup(path);
+    vfs_node_t *found = NULL;
+    for (unsigned depth = 0; current && depth <= VFS_MAX_SYMLINKS; depth++) {
+        vfs_node_t *node = vfs_lookup(root, &st, current);
+        if (!node || !follow_final || !S_ISLNK(node->mode)) {
+            found = node;
+            break;
+        }
+        const char *target = node->symlink;
+        char *next = NULL;
+        if (target[0] == '/') {
+            next = strdup(target);
+        } else {
+            const char *slash = strrchr(current, '/');
+            size_t dir_len = slash ? (size_t)(slash - current) : 0;
+            size_t target_len = strlen(target);
+            next = malloc(dir_len + 1 + target_len + 1);
+            if (next) {
+                memcpy(next, current, dir_len);
+                next[dir_len] = '/';
+                memcpy(next + dir_len + 1, target, target_len + 1);
+            }
+        }
+        free(current);
+        current = next;
+    }
+    free(current);
+    free(st.nodes);
+    return found;
+}
 
-static bool report_progress(struct archive *a, const import_progress_t *progress, char **error_message) {
-    if (!progress->handler) {
+int vfs_write_file(ext4_writer_t *w, vfs_node_t *dir, const char *name, size_t name_len, const void *data,
+                   size_t size, uint32_t mode) {
+    vfs_node_t *node = vfs_node_new(S_IFREG | (mode & 07777U));
+    if (!node) {
+        return -ENOMEM;
+    }
+    int rc = size > 0 ? ext4_writer_write(w, node, 0, data, size) : 0;
+    if (rc == 0) {
+        rc = ext4_writer_end_file(w, node, size);
+    }
+    if (rc == 0 && !vfs_dir_set(dir, name, name_len, node)) {
+        rc = -ENOMEM;
+    }
+    vfs_node_release(node);
+    return rc;
+}
+
+struct swipterm_root_builder {
+    char *root_path;
+    char *partial_path;
+    int root_fd;
+    int disk_fd;
+    ext4_writer_t *writer;
+    vfs_node_t *root;
+    vfs_path_stack_t st;
+    bool failed;
+    bool finished;
+};
+
+typedef struct import_job {
+    swipterm_root_builder *builder;
+    struct archive *top_archive;
+    const archive_stream_t *top_stream;
+    swipterm_progress_handler progress;
+    void *context;
+    const swipterm_package_callbacks *package;
+    bool top_level_metadata;
+    char **error_message;
+} import_job_t;
+
+static bool report_progress(const import_job_t *job) {
+    if (!job->progress) {
         return true;
     }
-    double done = (double)(progress->input_pos ? *progress->input_pos : (uint64_t)archive_filter_bytes(a, -1));
-    double frac = progress->total > 0 ? done / (double)progress->total * 0.9 : 0.0;
-    if (progress->handler(progress->context, frac < 0.0 ? 0.0 : frac > 0.9 ? 0.9 : frac)) {
+    double fraction = archive_stream_progress(job->top_archive, job->top_stream);
+    if (job->progress(job->context, fraction < 0.0 ? 0.0 : fraction > 0.999 ? 0.999 : fraction)) {
         return true;
     }
-    set_error(error_message, strerror(ECANCELED));
+    set_error(job->error_message, strerror(ECANCELED));
     return false;
 }
 
-static bool write_file_data(struct archive *a, struct archive_entry *entry, ext4_writer_t *writer,
-                            vfs_node_t *node, const import_progress_t *progress, char **error_message) {
+static const char *strip_path(const char *path) {
+    while (*path == '/' || (path[0] == '.' && path[1] == '/')) {
+        path += *path == '/' ? 1 : 2;
+    }
+    return path[0] == '.' && path[1] == '\0' ? path + 1 : path;
+}
+
+static void report_entry(const import_job_t *job, const char *pathname, uint32_t mode, const uint8_t *sha1) {
+    if (!job->package || !job->package->entry) {
+        return;
+    }
+    const char *stripped = strip_path(pathname);
+    size_t len = strlen(stripped);
+    while (len > 0 && stripped[len - 1] == '/') {
+        len--;
+    }
+    char *path = malloc(len + 2);
+    if (!path) {
+        return;
+    }
+    path[0] = '/';
+    memcpy(path + 1, stripped, len);
+    path[len + 1] = '\0';
+    job->package->entry(job->package->context, path, mode, sha1);
+    free(path);
+}
+
+static bool read_entry_data(const import_job_t *job, struct archive *a, uint8_t **data_out, size_t *size_out) {
+    size_t cap = 65536;
+    size_t size = 0;
+    uint8_t *data = malloc(cap);
+    for (;;) {
+        if (!data) {
+            set_error(job->error_message, strerror(ENOMEM));
+            return false;
+        }
+        if (size == cap) {
+            if (cap >= PACKAGE_METADATA_LIMIT) {
+                free(data);
+                set_error(job->error_message, "package metadata is too large");
+                return false;
+            }
+            cap *= 2;
+            uint8_t *grown = realloc(data, cap);
+            if (!grown) {
+                free(data);
+            }
+            data = grown;
+            continue;
+        }
+        la_ssize_t n = archive_read_data(a, data + size, cap - size);
+        if (n < 0) {
+            set_error(job->error_message, archive_error_string(a));
+            free(data);
+            return false;
+        }
+        if (n == 0) {
+            break;
+        }
+        size += (size_t)n;
+    }
+    *data_out = data;
+    *size_out = size;
+    return true;
+}
+
+static bool report_metadata(const import_job_t *job, struct archive *a, const char *pathname) {
+    uint8_t *data = NULL;
+    size_t size = 0;
+    if (!read_entry_data(job, a, &data, &size)) {
+        return false;
+    }
+    if (job->package->metadata) {
+        const char *name = strip_path(pathname);
+        const char *slash = strrchr(name, '/');
+        job->package->metadata(job->package->context, slash ? slash + 1 : name, data, size);
+    }
+    free(data);
+    return true;
+}
+
+static void sha1_zeros(CC_SHA1_CTX *context, uint64_t length) {
+    static const uint8_t zeros[65536];
+    while (length > 0) {
+        size_t n = length < sizeof(zeros) ? (size_t)length : sizeof(zeros);
+        CC_SHA1_Update(context, zeros, (CC_LONG)n);
+        length -= n;
+    }
+}
+
+static bool write_file_data(const import_job_t *job, struct archive *a, struct archive_entry *entry,
+                            vfs_node_t *node, uint8_t *sha1) {
+    ext4_writer_t *writer = job->builder->writer;
+    CC_SHA1_CTX context;
+    CC_SHA1_Init(&context);
     uint64_t end = 0;
     for (;;) {
         const void *buf = NULL;
@@ -866,7 +1023,7 @@ static bool write_file_data(struct archive *a, struct archive_entry *entry, ext4
             break;
         }
         if (r < ARCHIVE_WARN || offset < 0) {
-            set_error(error_message, archive_error_string(a));
+            set_error(job->error_message, archive_error_string(a));
             return false;
         }
         if (size == 0) {
@@ -874,13 +1031,15 @@ static bool write_file_data(struct archive *a, struct archive_entry *entry, ext4
         }
         int rc = ext4_writer_write(writer, node, (uint64_t)offset, buf, size);
         if (rc < 0) {
-            set_errno_error(error_message, "failed to write root disk", -rc);
+            set_errno_error(job->error_message, "failed to write root disk", -rc);
             return false;
         }
-        if ((uint64_t)offset + size > end) {
-            end = (uint64_t)offset + size;
+        if (sha1) {
+            sha1_zeros(&context, (uint64_t)offset - end);
+            CC_SHA1_Update(&context, buf, (CC_LONG)size);
         }
-        if (!report_progress(a, progress, error_message)) {
+        end = (uint64_t)offset + size;
+        if (!report_progress(job)) {
             return false;
         }
     }
@@ -891,16 +1050,23 @@ static bool write_file_data(struct archive *a, struct archive_entry *entry, ext4
     }
     int rc = ext4_writer_end_file(writer, node, size);
     if (rc < 0) {
-        set_errno_error(error_message, "failed to write root disk", -rc);
+        set_errno_error(job->error_message, "failed to write root disk", -rc);
         return false;
+    }
+    if (sha1) {
+        sha1_zeros(&context, size - end);
+        CC_SHA1_Final(sha1, &context);
     }
     return true;
 }
 
-static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t *root,
-                           const import_progress_t *progress, char **error_message) {
+static bool import_entries(const import_job_t *job, struct archive *a, bool require_entries) {
+    vfs_node_t *root = job->builder->root;
+    vfs_path_stack_t *st = &job->builder->st;
+    char **error_message = job->error_message;
+    bool package = job->package != NULL;
+    bool digest = package && job->package->entry;
     deferred_hl_list_t deferred = {0};
-    vfs_path_stack_t st = {0};
     size_t entry_count = 0;
     struct archive_entry *entry = NULL;
     int r;
@@ -915,23 +1081,29 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
         if (!pathname || pathname[0] == '\0') {
             continue;
         }
-        vfs_node_t *parent = NULL;
-        const char *leaf = NULL;
-        size_t leaf_len = 0;
-        if (!vfs_resolve_parent(root, &st, pathname, true, &parent, &leaf, &leaf_len)) {
-            set_error(error_message, "invalid path in archive");
-            ok = false;
-            break;
-        }
         uint32_t mode = (uint32_t)archive_entry_mode(entry);
         if ((mode & S_IFMT) == 0) {
             mode |= S_IFREG;
         }
+        if (job->top_level_metadata && S_ISREG(mode) && !strchr(strip_path(pathname), '/')) {
+            ok = report_metadata(job, a, pathname);
+            continue;
+        }
+        vfs_node_t *parent = NULL;
+        const char *leaf = NULL;
+        size_t leaf_len = 0;
+        if (!vfs_resolve_parent(root, st, pathname, true, &parent, &leaf, &leaf_len)) {
+            set_error(error_message, "invalid path in archive");
+            ok = false;
+            break;
+        }
         if (!parent) {
-            set_node_attrs(root, entry, (mode & 07777U) | S_IFDIR);
-            if (!capture_entry_xattrs(entry, root)) {
-                set_error(error_message, "out of memory reading root xattrs");
-                ok = false;
+            if (!package) {
+                set_node_attrs(root, entry, (mode & 07777U) | S_IFDIR);
+                if (!capture_entry_xattrs(entry, root)) {
+                    set_error(error_message, "out of memory reading root xattrs");
+                    ok = false;
+                }
             }
             continue;
         }
@@ -948,9 +1120,11 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
             continue;
         }
 
+        uint8_t sha1[CC_SHA1_DIGEST_LENGTH];
+        const uint8_t *entry_digest = NULL;
         const char *hardlink = archive_entry_hardlink(entry);
         if (hardlink && hardlink[0] != '\0') {
-            vfs_node_t *target = vfs_lookup(root, &st, hardlink);
+            vfs_node_t *target = vfs_lookup(root, st, hardlink);
             if (!target) {
                 if (!deferred_hl_push(&deferred, pathname, hardlink)) {
                     set_error(error_message, "out of memory queuing deferred hardlink");
@@ -962,6 +1136,12 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
             } else if (!vfs_dir_set(parent, leaf, leaf_len, target)) {
                 set_error(error_message, "out of memory linking hardlink");
                 ok = false;
+            } else if (archive_entry_size(entry) > 0 && S_ISREG(target->mode) && target->size == 0) {
+                ok = write_file_data(job, a, entry, target, digest ? sha1 : NULL);
+                entry_digest = digest ? sha1 : NULL;
+            }
+            if (ok) {
+                report_entry(job, pathname, mode, entry_digest);
             }
             continue;
         }
@@ -969,13 +1149,14 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
         vfs_dirent_t *existing = vfs_dir_find(parent, leaf, leaf_len);
         if (S_ISDIR(mode) && existing && S_ISLNK(existing->node->mode)) {
             unsigned sym_depth = 0;
-            if (vfs_follow_symlink_dir(root, &st, existing->node->symlink, true, &sym_depth)) {
-                vfs_node_t *tdir = st.nodes[st.depth];
+            if (vfs_follow_symlink_dir(root, st, existing->node->symlink, true, &sym_depth)) {
+                vfs_node_t *tdir = st->nodes[st->depth];
                 if (tdir->implicit_dir) {
                     set_node_attrs(tdir, entry, mode);
                     tdir->implicit_dir = false;
                 }
             }
+            report_entry(job, pathname, mode, NULL);
             continue;
         }
         if (S_ISLNK(mode) && existing && S_ISDIR(existing->node->mode)) {
@@ -983,11 +1164,11 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
             if (sym_target && sym_target[0] != '\0') {
                 unsigned sym_depth = 0;
                 bool inside = false;
-                if (vfs_follow_symlink_dir(root, &st, sym_target, true, &sym_depth)) {
-                    for (size_t i = 0; i <= st.depth && !inside; i++) {
-                        inside = st.nodes[i] == existing->node;
+                if (vfs_follow_symlink_dir(root, st, sym_target, true, &sym_depth)) {
+                    for (size_t i = 0; i <= st->depth && !inside; i++) {
+                        inside = st->nodes[i] == existing->node;
                     }
-                    vfs_node_t *tdir = st.nodes[st.depth];
+                    vfs_node_t *tdir = st->nodes[st->depth];
                     if (!inside && S_ISDIR(tdir->mode) && !vfs_dir_merge(tdir, existing->node)) {
                         set_error(error_message, "out of memory merging symlinked directory");
                         ok = false;
@@ -998,8 +1179,10 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
         }
 
         vfs_node_t *node = NULL;
+        bool keeps_attributes = false;
         if (S_ISDIR(mode) && existing && S_ISDIR(existing->node->mode)) {
             node = vfs_node_retain(existing->node);
+            keeps_attributes = package && !node->implicit_dir;
             node->implicit_dir = false;
         } else {
             node = vfs_node_new(mode);
@@ -1009,12 +1192,17 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
                 continue;
             }
         }
-        set_node_attrs(node, entry, mode);
-        if (!capture_entry_xattrs(entry, node)) {
-            set_error(error_message, "out of memory reading xattrs");
-            ok = false;
+        if (!keeps_attributes) {
+            set_node_attrs(node, entry, mode);
+            ok = capture_entry_xattrs(entry, node);
+            if (!ok) {
+                set_error(error_message, "out of memory reading xattrs");
+            }
+        }
+        if (!ok) {
         } else if (S_ISREG(mode)) {
-            ok = write_file_data(a, entry, writer, node, progress, error_message);
+            ok = write_file_data(job, a, entry, node, digest ? sha1 : NULL);
+            entry_digest = digest ? sha1 : NULL;
         } else if (S_ISLNK(mode)) {
             const char *target = archive_entry_symlink(entry);
             size_t tlen = target ? strlen(target) : 0;
@@ -1028,6 +1216,8 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
                     set_error(error_message, "out of memory");
                     ok = false;
                 }
+                CC_SHA1(target, (CC_LONG)tlen, sha1);
+                entry_digest = digest ? sha1 : NULL;
             }
         } else if (S_ISCHR(mode) || S_ISBLK(mode)) {
             node->rdev_major = archive_entry_rdevmajor(entry);
@@ -1038,20 +1228,361 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
             ok = false;
         }
         vfs_node_release(node);
-        ok = ok && report_progress(a, progress, error_message);
+        if (ok) {
+            report_entry(job, pathname, mode, entry_digest);
+        }
+        ok = ok && report_progress(job);
     }
     if (ok && r != ARCHIVE_EOF) {
         set_error(error_message, archive_error_string(a));
         ok = false;
     }
-    if (ok && entry_count == 0) {
+    if (ok && require_entries && entry_count == 0) {
         set_error(error_message, "archive is empty");
         ok = false;
     }
-    ok = ok && resolve_deferred_hardlinks(root, &st, &deferred, error_message);
+    ok = ok && resolve_deferred_hardlinks(root, st, &deferred, error_message);
     deferred_hl_free(&deferred);
-    free(st.nodes);
     return ok;
+}
+
+static bool read_control(const import_job_t *job, struct archive *a) {
+    struct archive_entry *entry = NULL;
+    int r;
+    bool ok = true;
+    while (ok && ((r = archive_read_next_header(a, &entry)) == ARCHIVE_OK || r == ARCHIVE_WARN)) {
+        if ((archive_entry_mode(entry) & S_IFMT) == S_IFREG) {
+            ok = report_metadata(job, a, archive_entry_pathname(entry));
+        }
+    }
+    if (ok && r != ARCHIVE_EOF) {
+        set_error(job->error_message, archive_error_string(a));
+        ok = false;
+    }
+    return ok;
+}
+
+static bool usable(swipterm_root_builder *b, char **error_message) {
+    if (error_message) {
+        *error_message = NULL;
+    }
+    if (!b->failed && !b->finished) {
+        return true;
+    }
+    set_error(error_message, "the root image can no longer be changed");
+    return false;
+}
+
+static bool import_archive(swipterm_root_builder *b, const archive_input_t *input, int (*format)(struct archive *),
+                           void *context, swipterm_progress_handler progress,
+                           const swipterm_package_callbacks *package, bool top_level_metadata, char **error_message) {
+    struct archive *a = archive_read_new();
+    archive_stream_t stream = {0};
+    bool ok = a && format(a) == ARCHIVE_OK && archive_stream_open(&stream, a, input) == ARCHIVE_OK;
+    if (!ok) {
+        set_error(error_message, a ? archive_error_string(a) : "failed to allocate archive reader");
+    }
+    import_job_t job = {
+        .builder = b,
+        .top_archive = a,
+        .top_stream = &stream,
+        .progress = progress,
+        .context = context,
+        .package = package,
+        .top_level_metadata = top_level_metadata,
+        .error_message = error_message,
+    };
+    ok = ok && import_entries(&job, a, !package);
+    archive_read_free(a);
+    archive_stream_close(&stream);
+    b->failed = !ok;
+    return ok;
+}
+
+static bool import_deb(swipterm_root_builder *b, const archive_input_t *input,
+                       const swipterm_package_callbacks *callbacks, char **error_message) {
+    struct archive *outer = archive_read_new();
+    archive_stream_t outer_stream = {0};
+    bool ok = outer && archive_read_support_format_ar(outer) == ARCHIVE_OK &&
+              archive_stream_open(&outer_stream, outer, input) == ARCHIVE_OK;
+    if (!ok) {
+        set_error(error_message, outer ? archive_error_string(outer) : "failed to allocate archive reader");
+    }
+    import_job_t job = {
+        .builder = b,
+        .top_archive = outer,
+        .top_stream = &outer_stream,
+        .progress = callbacks->progress,
+        .context = callbacks->context,
+        .package = callbacks,
+        .error_message = error_message,
+    };
+    bool has_data = false;
+    struct archive_entry *entry = NULL;
+    int r = ARCHIVE_EOF;
+    while (ok && ((r = archive_read_next_header(outer, &entry)) == ARCHIVE_OK || r == ARCHIVE_WARN)) {
+        const char *name = archive_entry_pathname(entry);
+        bool control = name && strncmp(name, "control.tar", 11) == 0;
+        bool data = name && strncmp(name, "data.tar", 8) == 0;
+        if (!control && !data) {
+            continue;
+        }
+        struct archive *inner = archive_read_new();
+        archive_stream_t inner_stream = {0};
+        archive_input_t member = {.fd = -1, .entry = outer};
+        ok = inner && archive_read_support_format_tar(inner) == ARCHIVE_OK &&
+             archive_stream_open(&inner_stream, inner, &member) == ARCHIVE_OK;
+        if (!ok) {
+            set_error(error_message, inner ? archive_error_string(inner) : "failed to allocate archive reader");
+        }
+        ok = ok && (control ? read_control(&job, inner) : import_entries(&job, inner, false));
+        has_data = has_data || data;
+        archive_read_free(inner);
+        archive_stream_close(&inner_stream);
+    }
+    if (ok && r != ARCHIVE_EOF) {
+        set_error(error_message, archive_error_string(outer));
+        ok = false;
+    }
+    if (ok && !has_data) {
+        set_error(error_message, "the Debian package has no data archive");
+        ok = false;
+    }
+    archive_read_free(outer);
+    archive_stream_close(&outer_stream);
+    b->failed = !ok;
+    return ok;
+}
+
+static uint32_t get_be32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+}
+
+static bool rpm_payload_offset(int fd, uint64_t size, uint64_t *offset_out, char **error_message) {
+    static const uint8_t header_magic[4] = {0x8E, 0xAD, 0xE8, 0x01};
+    uint64_t offset = 96;
+    for (int header = 0; header < 2; header++) {
+        uint8_t intro[16];
+        if (pread(fd, intro, sizeof(intro), (off_t)offset) != (ssize_t)sizeof(intro) ||
+            memcmp(intro, header_magic, sizeof(header_magic)) != 0) {
+            set_error(error_message, "the RPM package header is invalid");
+            return false;
+        }
+        uint64_t length = 16 + 16 * (uint64_t)get_be32(intro + 8) + get_be32(intro + 12);
+        if (length > RPM_HEADER_LIMIT) {
+            set_error(error_message, "the RPM package header is invalid");
+            return false;
+        }
+        offset += length;
+        if (header == 0) {
+            offset = (offset + 7) & ~(uint64_t)7;
+        }
+    }
+    if (offset >= size) {
+        set_error(error_message, "the RPM package has no payload");
+        return false;
+    }
+    *offset_out = offset;
+    return true;
+}
+
+swipterm_root_builder *swipterm_root_builder_create(const char *root_path, uint64_t disk_size, char **error_message) {
+    if (error_message) {
+        *error_message = NULL;
+    }
+    swipterm_root_builder *b = calloc(1, sizeof(*b));
+    if (!b) {
+        set_error(error_message, strerror(ENOMEM));
+        return NULL;
+    }
+    b->root_fd = -1;
+    b->disk_fd = -1;
+    b->root_path = strdup(root_path);
+    if (b->root_path && asprintf(&b->partial_path, "%s/root.ext4.partial", root_path) < 0) {
+        b->partial_path = NULL;
+    }
+    if (!b->root_path || !b->partial_path) {
+        set_error(error_message, strerror(ENOMEM));
+        swipterm_root_builder_free(b);
+        return NULL;
+    }
+    if (mkdir(root_path, 0755) != 0 && errno != EEXIST) {
+        set_errno_error(error_message, "failed to create root directory", errno);
+        swipterm_root_builder_free(b);
+        return NULL;
+    }
+    b->root_fd = open(root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (b->root_fd < 0) {
+        set_errno_error(error_message, "failed to open root directory", errno);
+        swipterm_root_builder_free(b);
+        return NULL;
+    }
+    if (flock(b->root_fd, LOCK_EX | LOCK_NB) != 0) {
+        set_error(error_message, errno == EWOULDBLOCK ? "the root is used by a running machine" : strerror(errno));
+        close(b->root_fd);
+        b->root_fd = -1;
+        swipterm_root_builder_free(b);
+        return NULL;
+    }
+    b->disk_fd = open(b->partial_path, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (b->disk_fd < 0) {
+        set_errno_error(error_message, "failed to create root disk", errno);
+        swipterm_root_builder_free(b);
+        return NULL;
+    }
+    b->root = vfs_node_new(S_IFDIR | 0755);
+    int rc = b->root ? ext4_writer_create(b->disk_fd, disk_size ? disk_size : DEFAULT_DISK_SIZE, &b->writer) : -ENOMEM;
+    if (rc < 0) {
+        set_errno_error(error_message, rc == -EINVAL ? "invalid disk size" : "failed to create root disk", -rc);
+        swipterm_root_builder_free(b);
+        return NULL;
+    }
+    return b;
+}
+
+void swipterm_root_builder_free(swipterm_root_builder *b) {
+    if (!b) {
+        return;
+    }
+    vfs_node_release(b->root);
+    ext4_writer_free(b->writer);
+    free(b->st.nodes);
+    if (b->disk_fd >= 0) {
+        close(b->disk_fd);
+    }
+    if (!b->finished && b->partial_path && b->root_fd >= 0) {
+        unlink(b->partial_path);
+    }
+    if (b->root_fd >= 0) {
+        close(b->root_fd);
+    }
+    free(b->partial_path);
+    free(b->root_path);
+    free(b);
+}
+
+bool swipterm_root_builder_add_file(swipterm_root_builder *b, const char *archive_path, void *context,
+                                    swipterm_progress_handler progress, char **error_message) {
+    if (!usable(b, error_message)) {
+        return false;
+    }
+    int fd = open(archive_path, O_RDONLY | O_CLOEXEC);
+    struct stat st;
+    if (fd < 0 || fstat(fd, &st) != 0) {
+        set_errno_error(error_message, "failed to open archive", errno);
+        if (fd >= 0) {
+            close(fd);
+        }
+        return false;
+    }
+    archive_input_t input = {.fd = fd, .size = (uint64_t)st.st_size};
+    bool ok = import_archive(b, &input, archive_read_support_format_tar, context, progress, NULL, false, error_message);
+    close(fd);
+    return ok;
+}
+
+bool swipterm_root_builder_add_memory(swipterm_root_builder *b, const void *data, size_t size, void *context,
+                                      swipterm_progress_handler progress, char **error_message) {
+    if (!usable(b, error_message)) {
+        return false;
+    }
+    if (!data || size == 0) {
+        set_error(error_message, "archive is empty");
+        return false;
+    }
+    archive_input_t input = {.fd = -1, .data = data, .size = size};
+    return import_archive(b, &input, archive_read_support_format_tar, context, progress, NULL, false, error_message);
+}
+
+bool swipterm_root_builder_add_package(swipterm_root_builder *b, const char *package_path,
+                                       const swipterm_package_callbacks *callbacks, char **error_message) {
+    if (!usable(b, error_message)) {
+        return false;
+    }
+    int fd = open(package_path, O_RDONLY | O_CLOEXEC);
+    struct stat st;
+    if (fd < 0 || fstat(fd, &st) != 0) {
+        set_errno_error(error_message, "failed to open package", errno);
+        if (fd >= 0) {
+            close(fd);
+        }
+        return false;
+    }
+    static const uint8_t rpm_magic[4] = {0xED, 0xAB, 0xEE, 0xDB};
+    uint8_t magic[8] = {0};
+    ssize_t magic_len = pread(fd, magic, sizeof(magic), 0);
+    archive_input_t input = {.fd = fd, .size = (uint64_t)st.st_size};
+    bool ok;
+    if (magic_len == (ssize_t)sizeof(magic) && memcmp(magic, "!<arch>\n", 8) == 0) {
+        ok = import_deb(b, &input, callbacks, error_message);
+    } else if (magic_len >= 4 && memcmp(magic, rpm_magic, sizeof(rpm_magic)) == 0) {
+        ok = rpm_payload_offset(fd, input.size, &input.offset, error_message);
+        input.size -= input.offset;
+        ok = ok && import_archive(b, &input, archive_read_support_format_cpio, callbacks->context,
+                                  callbacks->progress, callbacks, false, error_message);
+        b->failed = !ok;
+    } else {
+        ok = import_archive(b, &input, archive_read_support_format_tar, callbacks->context, callbacks->progress,
+                            callbacks, true, error_message);
+    }
+    close(fd);
+    return ok;
+}
+
+int swipterm_root_builder_read(swipterm_root_builder *b, const char *path, void **data_out, size_t *size_out) {
+    *data_out = NULL;
+    *size_out = 0;
+    if (b->failed || b->finished) {
+        return -LINUX_EINVAL;
+    }
+    vfs_node_t *node = vfs_find(b->root, path, true);
+    if (!node) {
+        return -LINUX_ENOENT;
+    }
+    if (S_ISDIR(node->mode)) {
+        return -LINUX_EISDIR;
+    }
+    if (!S_ISREG(node->mode)) {
+        return -LINUX_EINVAL;
+    }
+    if (node->size > BUILDER_READ_LIMIT) {
+        return -LINUX_ENOMEM;
+    }
+    size_t size = (size_t)node->size;
+    uint8_t *data = malloc(size > 0 ? size : 1);
+    if (!data) {
+        return -LINUX_ENOMEM;
+    }
+    if (ext4_writer_read(b->writer, node, 0, data, size) < 0) {
+        free(data);
+        return -LINUX_EIO;
+    }
+    *data_out = data;
+    *size_out = size;
+    return 0;
+}
+
+int swipterm_root_builder_write(swipterm_root_builder *b, const char *path, const void *data, size_t size,
+                                uint32_t mode) {
+    if (b->failed || b->finished) {
+        return -LINUX_EINVAL;
+    }
+    vfs_node_t *parent = NULL;
+    const char *leaf = NULL;
+    size_t leaf_len = 0;
+    if (!vfs_resolve_parent(b->root, &b->st, path, true, &parent, &leaf, &leaf_len) || !parent) {
+        return -LINUX_EINVAL;
+    }
+    vfs_dirent_t *existing = vfs_dir_find(parent, leaf, leaf_len);
+    if (existing && S_ISDIR(existing->node->mode)) {
+        return -LINUX_EISDIR;
+    }
+    int rc = vfs_write_file(b->writer, parent, leaf, leaf_len, data, size, mode);
+    if (rc < 0) {
+        b->failed = true;
+        return rc == -ENOMEM ? -LINUX_ENOMEM : rc == -ENOSPC ? -LINUX_ENOSPC : -LINUX_EIO;
+    }
+    return 0;
 }
 
 static int fsync_path(const char *path) {
@@ -1081,7 +1612,7 @@ static bool stage_metadata(const char *path, char **error_message) {
 }
 
 static void remove_stale(const char *root_path) {
-    static const char *const names[] = {"lower.erofs", "upper.ext4", ".preboot_snapshot", ".preboot_snapshot.bundled"};
+    static const char *const names[] = {"lower.erofs", "upper.ext4", ".preboot_snapshot"};
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         char path[1024];
         if (snprintf(path, sizeof(path), "%s/%s", root_path, names[i]) < (int)sizeof(path)) {
@@ -1090,68 +1621,43 @@ static void remove_stale(const char *root_path) {
     }
 }
 
-static bool import_root(struct archive *a, const char *root_path, uint64_t disk_size,
-                        const import_progress_t *progress, char **error_message) {
-    char partial_path[1024];
-    char disk_path[1024];
-    char metadata_partial_path[1024];
-    char metadata_path[1024];
-    if (snprintf(partial_path, sizeof(partial_path), "%s/root.ext4.partial", root_path) >= (int)sizeof(partial_path) ||
-        snprintf(disk_path, sizeof(disk_path), "%s/root.ext4", root_path) >= (int)sizeof(disk_path) ||
-        snprintf(metadata_partial_path, sizeof(metadata_partial_path), "%s/swipterm.json.partial", root_path) >=
-            (int)sizeof(metadata_partial_path) ||
-        snprintf(metadata_path, sizeof(metadata_path), "%s/swipterm.json", root_path) >= (int)sizeof(metadata_path)) {
-        set_error(error_message, "root path too long");
+bool swipterm_root_builder_finish(swipterm_root_builder *b, char **error_message) {
+    if (!usable(b, error_message)) {
         return false;
     }
-    if (mkdir(root_path, 0755) != 0 && errno != EEXIST) {
-        set_errno_error(error_message, "failed to create root directory", errno);
-        return false;
-    }
-    int root_fd = open(root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (root_fd < 0) {
-        set_errno_error(error_message, "failed to open root directory", errno);
-        return false;
-    }
-    if (flock(root_fd, LOCK_EX | LOCK_NB) != 0) {
-        set_error(error_message, errno == EWOULDBLOCK ? "the root is used by a running machine" : strerror(errno));
-        close(root_fd);
-        return false;
-    }
-    int fd = open(partial_path, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-    if (fd < 0) {
-        set_errno_error(error_message, "failed to create root disk", errno);
-        close(root_fd);
-        return false;
-    }
-    ext4_writer_t *writer = NULL;
-    vfs_node_t *root = vfs_node_new(S_IFDIR | 0755);
-    int rc = root ? ext4_writer_create(fd, disk_size ? disk_size : DEFAULT_DISK_SIZE, &writer) : -ENOMEM;
-    bool ok = rc == 0;
+    char *disk_path = NULL;
+    char *metadata_partial_path = NULL;
+    char *metadata_path = NULL;
+    bool ok = asprintf(&disk_path, "%s/root.ext4", b->root_path) >= 0 &&
+              asprintf(&metadata_partial_path, "%s/swipterm.json.partial", b->root_path) >= 0 &&
+              asprintf(&metadata_path, "%s/swipterm.json", b->root_path) >= 0;
     if (!ok) {
-        set_errno_error(error_message, rc == -EINVAL ? "invalid disk size" : "failed to create root disk", -rc);
+        set_error(error_message, strerror(ENOMEM));
     }
-    ok = ok && import_entries(a, writer, root, progress, error_message);
+    int rc = ok ? module_index_build(b->writer, b->root) : 0;
+    if (rc < 0) {
+        set_errno_error(error_message, "failed to index kernel modules", -rc);
+        ok = false;
+    }
     if (ok) {
-        rc = ext4_writer_finish(writer, root);
+        rc = ext4_writer_finish(b->writer, b->root);
         if (rc < 0) {
             set_errno_error(error_message, rc == -ENOSPC ? "the archive does not fit the disk size"
                                                          : "failed to write root disk", -rc);
             ok = false;
         }
     }
-    vfs_node_release(root);
-    ext4_writer_free(writer);
-    if (ok && fsync(fd) != 0) {
+    if (ok && fsync(b->disk_fd) != 0) {
         set_errno_error(error_message, "failed to write root disk", errno);
         ok = false;
     }
-    if (close(fd) != 0 && ok) {
+    if (close(b->disk_fd) != 0 && ok) {
         set_errno_error(error_message, "failed to write root disk", errno);
         ok = false;
     }
-    ok = ok && report_progress(a, progress, error_message) && stage_metadata(metadata_partial_path, error_message);
-    if (ok && rename(partial_path, disk_path) != 0) {
+    b->disk_fd = -1;
+    ok = ok && stage_metadata(metadata_partial_path, error_message);
+    if (ok && rename(b->partial_path, disk_path) != 0) {
         set_errno_error(error_message, "failed to install root disk", errno);
         ok = false;
     }
@@ -1159,365 +1665,21 @@ static bool import_root(struct archive *a, const char *root_path, uint64_t disk_
         set_errno_error(error_message, "failed to write swipterm.json", errno);
         ok = false;
     }
-    if (!ok) {
-        unlink(partial_path);
-        unlink(metadata_partial_path);
-    } else {
-        remove_stale(root_path);
-        (void)fsync(root_fd);
+    if (ok) {
+        remove_stale(b->root_path);
+        (void)fsync(b->root_fd);
         (void)fsync_path(disk_path);
-        if (progress->handler) {
-            progress->handler(progress->context, 1.0);
-        }
-    }
-    close(root_fd);
-    return ok;
-}
-
-static bool has_xz_magic(const uint8_t *hdr, size_t len) {
-    static const uint8_t magic[6] = {0xFD, '7', 'z', 'X', 'Z', 0x00};
-    return len >= sizeof(magic) && memcmp(hdr, magic, sizeof(magic)) == 0;
-}
-
-static bool has_zstd_magic(const uint8_t *hdr, size_t len) {
-    return len >= 4 && get_le32(hdr) == ZSTD_MAGICNUMBER;
-}
-
-typedef struct xz_mt_reader {
-    lzma_stream strm;
-    int fd;
-    bool input_eof;
-    bool stream_end;
-    uint8_t *in_buf;
-    uint8_t *out_buf;
-} xz_mt_reader_t;
-
-static void xz_mt_reader_free(xz_mt_reader_t *r) {
-    if (!r) {
-        return;
-    }
-    lzma_end(&r->strm);
-    free(r->in_buf);
-    free(r->out_buf);
-    free(r);
-}
-
-static xz_mt_reader_t *xz_mt_reader_new(int fd, const uint8_t *data, size_t size) {
-    xz_mt_reader_t *r = calloc(1, sizeof(*r));
-    if (!r) {
-        return NULL;
-    }
-    r->fd = fd;
-    r->out_buf = malloc(XZ_MT_BUF_SIZE);
-    r->in_buf = fd >= 0 ? malloc(XZ_MT_BUF_SIZE) : NULL;
-    uint32_t threads = lzma_cputhreads();
-    lzma_mt mt = {
-        .flags = LZMA_CONCATENATED,
-        .threads = threads ? threads : 1U,
-        .memlimit_threading = UINT64_MAX,
-        .memlimit_stop = UINT64_MAX,
-    };
-    if (!r->out_buf || (fd >= 0 && !r->in_buf) || lzma_stream_decoder_mt(&r->strm, &mt) != LZMA_OK) {
-        xz_mt_reader_free(r);
-        return NULL;
-    }
-    if (fd < 0) {
-        r->strm.next_in = data;
-        r->strm.avail_in = size;
-        r->input_eof = true;
-    }
-    return r;
-}
-
-static la_ssize_t xz_mt_read(struct archive *a, void *client, const void **buffer) {
-    xz_mt_reader_t *r = client;
-    r->strm.next_out = r->out_buf;
-    r->strm.avail_out = XZ_MT_BUF_SIZE;
-    while (!r->stream_end && r->strm.avail_out == XZ_MT_BUF_SIZE) {
-        if (r->strm.avail_in == 0 && !r->input_eof) {
-            ssize_t n = read(r->fd, r->in_buf, XZ_MT_BUF_SIZE);
-            if (n < 0) {
-                int err = errno;
-                if (err == EINTR) {
-                    continue;
-                }
-                archive_set_error(a, err, "%s", strerror(err));
-                return ARCHIVE_FATAL;
-            }
-            r->strm.next_in = r->in_buf;
-            r->strm.avail_in = (size_t)n;
-            r->input_eof = n == 0;
-        }
-        lzma_ret ret = lzma_code(&r->strm, r->input_eof ? LZMA_FINISH : LZMA_RUN);
-        if (ret == LZMA_STREAM_END) {
-            r->stream_end = true;
-        } else if (ret != LZMA_OK) {
-            archive_set_error(a, ARCHIVE_ERRNO_MISC, "xz decompression failed (liblzma error %d)", (int)ret);
-            return ARCHIVE_FATAL;
-        }
-    }
-    *buffer = r->out_buf;
-    return (la_ssize_t)(XZ_MT_BUF_SIZE - r->strm.avail_out);
-}
-
-static const uint8_t *xz_tail_bytes(int fd, const uint8_t *data, uint64_t off, size_t len, uint8_t *buf) {
-    if (data) {
-        return data + off;
-    }
-    for (size_t done = 0; done < len;) {
-        ssize_t n = pread(fd, buf + done, len - done, (off_t)(off + done));
-        if (n < 0 && errno == EINTR) {
-            continue;
-        }
-        if (n <= 0) {
-            return NULL;
-        }
-        done += (size_t)n;
-    }
-    return buf;
-}
-
-static uint64_t xz_uncompressed_size(int fd, const uint8_t *data, uint64_t size) {
-    uint8_t tail_buf[XZ_TAIL_SIZE];
-    size_t tail_len = size < XZ_TAIL_SIZE ? (size_t)size : XZ_TAIL_SIZE;
-    const uint8_t *tail = xz_tail_bytes(fd, data, size - tail_len, tail_len, tail_buf);
-    if (!tail) {
-        return 0;
-    }
-    size_t end = tail_len;
-    while (end >= 4 && get_le32(tail + end - 4) == 0) {
-        end -= 4;
-    }
-    lzma_stream_flags flags;
-    if (end < LZMA_STREAM_HEADER_SIZE ||
-        lzma_stream_footer_decode(&flags, tail + end - LZMA_STREAM_HEADER_SIZE) != LZMA_OK) {
-        return 0;
-    }
-    uint64_t padding = tail_len - end;
-    uint64_t index_end = size - padding - LZMA_STREAM_HEADER_SIZE;
-    if (flags.backward_size > XZ_INDEX_MAX_SIZE || flags.backward_size + LZMA_STREAM_HEADER_SIZE > index_end) {
-        return 0;
-    }
-    size_t index_size = (size_t)flags.backward_size;
-    uint8_t *index_buf = data ? NULL : malloc(index_size);
-    if (!data && !index_buf) {
-        return 0;
-    }
-    const uint8_t *index_bytes = xz_tail_bytes(fd, data, index_end - index_size, index_size, index_buf);
-    uint64_t uncompressed = 0;
-    lzma_index *idx = NULL;
-    uint64_t memlimit = UINT64_MAX;
-    size_t pos = 0;
-    if (index_bytes && lzma_index_buffer_decode(&idx, &memlimit, NULL, index_bytes, &pos, index_size) == LZMA_OK) {
-        if (pos == index_size && lzma_index_stream_size(idx) + padding == size) {
-            uncompressed = lzma_index_uncompressed_size(idx);
-        }
-        lzma_index_end(idx, NULL);
-    }
-    free(index_buf);
-    return uncompressed;
-}
-
-typedef struct zstd_reader {
-    ZSTD_DCtx *dctx;
-    int fd;
-    ZSTD_inBuffer in;
-    uint8_t *in_buf;
-    uint8_t *out_buf;
-    size_t out_cap;
-    bool input_eof;
-    size_t last_ret;
-    uint64_t total_in;
-} zstd_reader_t;
-
-static void zstd_reader_free(zstd_reader_t *r) {
-    if (!r) {
-        return;
-    }
-    ZSTD_freeDCtx(r->dctx);
-    free(r->in_buf);
-    free(r->out_buf);
-    free(r);
-}
-
-static zstd_reader_t *zstd_reader_new(int fd, const uint8_t *data, size_t size) {
-    zstd_reader_t *r = calloc(1, sizeof(*r));
-    if (!r) {
-        return NULL;
-    }
-    r->fd = fd;
-    r->dctx = ZSTD_createDCtx();
-    r->out_cap = ZSTD_DStreamOutSize();
-    r->out_buf = malloc(r->out_cap);
-    r->in_buf = fd >= 0 ? malloc(ZSTD_DStreamInSize()) : NULL;
-    if (!r->dctx || !r->out_buf || (fd >= 0 && !r->in_buf)) {
-        zstd_reader_free(r);
-        return NULL;
-    }
-    (void)ZSTD_DCtx_setParameter(r->dctx, ZSTD_d_windowLogMax, 31);
-    if (fd < 0) {
-        r->in = (ZSTD_inBuffer){.src = data, .size = size, .pos = 0};
-        r->input_eof = true;
-    }
-    return r;
-}
-
-static la_ssize_t zstd_read(struct archive *a, void *client, const void **buffer) {
-    zstd_reader_t *r = client;
-    ZSTD_outBuffer out = {.dst = r->out_buf, .size = r->out_cap, .pos = 0};
-    while (out.pos == 0) {
-        if (r->in.pos == r->in.size && !r->input_eof) {
-            ssize_t n = read(r->fd, r->in_buf, ZSTD_DStreamInSize());
-            if (n < 0) {
-                int err = errno;
-                if (err == EINTR) {
-                    continue;
-                }
-                archive_set_error(a, err, "%s", strerror(err));
-                return ARCHIVE_FATAL;
-            }
-            r->in = (ZSTD_inBuffer){.src = r->in_buf, .size = (size_t)n, .pos = 0};
-            r->input_eof = n == 0;
-        }
-        if (r->in.pos == r->in.size && r->input_eof) {
-            if (r->last_ret != 0) {
-                archive_set_error(a, ARCHIVE_ERRNO_MISC, "truncated zstd stream");
-                return ARCHIVE_FATAL;
-            }
-            break;
-        }
-        size_t before = r->in.pos;
-        size_t ret = ZSTD_decompressStream(r->dctx, &out, &r->in);
-        r->total_in += r->in.pos - before;
-        if (ZSTD_isError(ret)) {
-            archive_set_error(a, ARCHIVE_ERRNO_MISC, "zstd decompression failed: %s", ZSTD_getErrorName(ret));
-            return ARCHIVE_FATAL;
-        }
-        r->last_ret = ret;
-    }
-    *buffer = r->out_buf;
-    return (la_ssize_t)out.pos;
-}
-
-static bool setup_native_reader(struct archive *a, char **error_message) {
-    (void)archive_read_support_filter_all(a);
-    if (archive_read_support_format_tar(a) != ARCHIVE_OK) {
-        set_error(error_message, archive_error_string(a));
-        return false;
-    }
-    return true;
-}
-
-typedef struct archive_source {
-    const char *path;
-    int fd;
-    const uint8_t *data;
-    uint64_t size;
-} archive_source_t;
-
-static bool import_source(const archive_source_t *src, const char *root_path, uint64_t disk_size, void *context,
-                          swipterm_progress_handler progress, char **error_message) {
-    uint8_t magic[6] = {0};
-    size_t magic_len = 0;
-    if (src->data) {
-        magic_len = src->size < sizeof(magic) ? (size_t)src->size : sizeof(magic);
-        memcpy(magic, src->data, magic_len);
+        close(b->root_fd);
+        b->root_fd = -1;
+        b->finished = true;
     } else {
-        ssize_t n = pread(src->fd, magic, sizeof(magic), 0);
-        magic_len = n > 0 ? (size_t)n : 0;
-    }
-
-    struct archive *a = archive_read_new();
-    if (!a) {
-        set_error(error_message, "failed to allocate archive reader");
-        return false;
-    }
-    xz_mt_reader_t *xz = NULL;
-    zstd_reader_t *zstd = NULL;
-    import_progress_t import_progress = {.handler = progress, .context = context, .total = src->size};
-    int r;
-    if (has_xz_magic(magic, magic_len)) {
-        xz = xz_mt_reader_new(src->data ? -1 : src->fd, src->data, (size_t)src->size);
-        uint64_t uncompressed = xz ? xz_uncompressed_size(src->data ? -1 : src->fd, src->data, src->size) : 0;
-        if (uncompressed > 0) {
-            import_progress.total = uncompressed;
-        } else if (xz) {
-            import_progress.input_pos = &xz->strm.total_in;
+        if (metadata_partial_path) {
+            unlink(metadata_partial_path);
         }
-    } else if (has_zstd_magic(magic, magic_len)) {
-        zstd = zstd_reader_new(src->data ? -1 : src->fd, src->data, (size_t)src->size);
-        if (zstd) {
-            import_progress.input_pos = &zstd->total_in;
-        }
+        b->failed = true;
     }
-    if ((has_xz_magic(magic, magic_len) && !xz) || (has_zstd_magic(magic, magic_len) && !zstd)) {
-        set_error(error_message, "failed to initialize decompressor");
-        archive_read_free(a);
-        xz_mt_reader_free(xz);
-        zstd_reader_free(zstd);
-        return false;
-    }
-    if (xz || zstd) {
-        r = archive_read_support_filter_none(a);
-        if (r == ARCHIVE_OK) {
-            r = archive_read_support_format_tar(a);
-        }
-        if (r == ARCHIVE_OK) {
-            r = xz ? archive_read_open(a, xz, NULL, xz_mt_read, NULL)
-                   : archive_read_open(a, zstd, NULL, zstd_read, NULL);
-        }
-    } else if (setup_native_reader(a, error_message)) {
-        r = src->data ? archive_read_open_memory(a, src->data, (size_t)src->size)
-                      : archive_read_open_filename(a, src->path, STREAM_IO_BUF_SIZE);
-    } else {
-        r = ARCHIVE_FATAL;
-    }
-    bool ok = r == ARCHIVE_OK;
-    if (!ok) {
-        set_error(error_message, archive_error_string(a));
-    }
-    ok = ok && import_root(a, root_path, disk_size, &import_progress, error_message);
-    archive_read_free(a);
-    xz_mt_reader_free(xz);
-    zstd_reader_free(zstd);
+    free(disk_path);
+    free(metadata_partial_path);
+    free(metadata_path);
     return ok;
-}
-
-bool swipterm_root_import_file(const char *archive_path, const char *root_path, uint64_t disk_size,
-                               void *context, swipterm_progress_handler progress, char **error_message) {
-    if (error_message) {
-        *error_message = NULL;
-    }
-    if (!archive_path || !root_path) {
-        set_error(error_message, "invalid arguments");
-        return false;
-    }
-    int fd = open(archive_path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        set_errno_error(error_message, "failed to open archive", errno);
-        return false;
-    }
-    struct stat st;
-    if (fstat(fd, &st) != 0) {
-        set_errno_error(error_message, "failed to open archive", errno);
-        close(fd);
-        return false;
-    }
-    archive_source_t src = {.path = archive_path, .fd = fd, .size = (uint64_t)st.st_size};
-    bool ok = import_source(&src, root_path, disk_size, context, progress, error_message);
-    close(fd);
-    return ok;
-}
-
-bool swipterm_root_import_memory(const void *data, size_t size, const char *root_path, uint64_t disk_size,
-                                 void *context, swipterm_progress_handler progress, char **error_message) {
-    if (error_message) {
-        *error_message = NULL;
-    }
-    if (!data || size == 0 || !root_path) {
-        set_error(error_message, "invalid arguments");
-        return false;
-    }
-    archive_source_t src = {.fd = -1, .data = data, .size = size};
-    return import_source(&src, root_path, disk_size, context, progress, error_message);
 }

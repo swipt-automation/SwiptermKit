@@ -1582,3 +1582,34 @@ int ext4_writer_finish(ext4_writer_t *w, vfs_node_t *root) {
     free(n.parent);
     return rc;
 }
+
+int ext4_writer_read(ext4_writer_t *w, const vfs_node_t *file, uint64_t offset, void *buf, size_t len) {
+    if (w->file == file) {
+        return -EBUSY;
+    }
+    memset(buf, 0, len);
+    uint64_t end = offset + len;
+    for (size_t i = 0; i < file->extent_count; i++) {
+        const vfs_extent_t *e = &file->extents[i];
+        uint64_t start = e->logical * BLOCK_SIZE;
+        uint64_t stop = (e->logical + e->length) * BLOCK_SIZE;
+        if (stop <= offset || start >= end) {
+            continue;
+        }
+        uint64_t from = start > offset ? start : offset;
+        uint64_t to = stop < end ? stop : end;
+        uint8_t *out = (uint8_t *)buf + (from - offset);
+        uint64_t disk = e->physical * BLOCK_SIZE + (from - start);
+        for (uint64_t done = 0; done < to - from;) {
+            ssize_t n = pread(w->fd, out + done, (size_t)(to - from - done), (off_t)(disk + done));
+            if (n < 0 && errno == EINTR) {
+                continue;
+            }
+            if (n <= 0) {
+                return n < 0 ? -errno : -EIO;
+            }
+            done += (uint64_t)n;
+        }
+    }
+    return 0;
+}

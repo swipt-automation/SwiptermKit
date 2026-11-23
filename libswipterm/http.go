@@ -16,37 +16,26 @@ import (
 )
 
 const (
-	HTTPFailureInsecureURL int32 = iota + 1
-	HTTPFailureStatus
+	HTTPFailureStatus int32 = iota + 1
 	HTTPFailureContentLength
-	HTTPFailureChecksum
 	HTTPFailureEmptyBody
 )
 
 var httpClient = httpclient.NewClient(nil)
 
 type HTTPFailure struct {
-	Kind           int32
-	URL            string
-	Status         int32
-	ExpectedBytes  int64
-	ActualBytes    int64
-	ExpectedSHA256 string
-	ActualSHA256   string
+	Kind          int32
+	Status        int32
+	ExpectedBytes int64
+	ActualBytes   int64
 }
 
 func newHTTPFailure(err error) *HTTPFailure {
-	if insecure, ok := errors.AsType[*httpclient.InsecureURLError](err); ok {
-		return &HTTPFailure{Kind: HTTPFailureInsecureURL, URL: insecure.URL.Redacted()}
-	}
 	if status, ok := errors.AsType[*httpclient.StatusError](err); ok {
 		return &HTTPFailure{Kind: HTTPFailureStatus, Status: int32(status.StatusCode)}
 	}
 	if length, ok := errors.AsType[*httpclient.ContentLengthError](err); ok {
 		return &HTTPFailure{Kind: HTTPFailureContentLength, ExpectedBytes: length.Expected, ActualBytes: length.Actual}
-	}
-	if checksum, ok := errors.AsType[*httpclient.ChecksumError](err); ok {
-		return &HTTPFailure{Kind: HTTPFailureChecksum, ExpectedSHA256: checksum.Expected, ActualSHA256: checksum.Actual}
 	}
 	if errors.Is(err, httpclient.ErrEmptyBody) {
 		return &HTTPFailure{Kind: HTTPFailureEmptyBody}
@@ -138,7 +127,6 @@ func (r *HTTPResponse) Body() []byte {
 
 type HTTPDownloadHandler interface {
 	Progress(progress *HTTPDownloadProgress)
-	Verifying()
 }
 
 type HTTPDownloadProgress struct {
@@ -192,14 +180,13 @@ type HTTPDownload struct {
 	failure *HTTPFailure
 }
 
-func NewHTTPDownload(link string, destination string, expectedBytes int64, expectedSHA256 string) *HTTPDownload {
+func NewHTTPDownload(link string, destination string, expectedBytes int64) *HTTPDownload {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &HTTPDownload{
 		options: httpclient.DownloadOptions{
-			URLs:           []string{link},
-			Destination:    destination,
-			ExpectedBytes:  expectedBytes,
-			ExpectedSHA256: expectedSHA256,
+			URLs:          []string{link},
+			Destination:   destination,
+			ExpectedBytes: expectedBytes,
 		},
 		ctx:    ctx,
 		cancel: cancel,

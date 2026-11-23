@@ -7,7 +7,6 @@
 #include <fcntl.h>
 #include <fnmatch.h>
 #include <limits.h>
-#include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,7 +67,6 @@ typedef struct boot_module {
 
 struct boot_plan {
     ext4_fs_t *fs;
-    char *bundled_path;
     swipterm_kernel_selection selection;
     char *wanted_release;
 
@@ -76,13 +74,12 @@ struct boot_plan {
     size_t candidate_count;
     size_t next_candidate;
 
-    bool bundled;
     const kernel_candidate_t *current;
     boot_module_t *modules;
     size_t module_count;
     uint8_t identity[CC_SHA256_DIGEST_LENGTH];
     char release[RELEASE_MAX + 1];
-    char fallback_reason[256];
+    char reasons[2048];
 };
 
 static char *path_join(const char *a, const char *b) {
@@ -99,12 +96,14 @@ static char *path_join(const char *a, const char *b) {
 }
 
 static void record_reason(boot_plan_t *plan, const char *fmt, ...) {
-    if (plan->fallback_reason[0] != '\0') {
-        return;
+    size_t len = strlen(plan->reasons);
+    if (len > 0 && len + 1 < sizeof(plan->reasons)) {
+        plan->reasons[len++] = '\n';
+        plan->reasons[len] = '\0';
     }
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(plan->fallback_reason, sizeof(plan->fallback_reason), fmt, ap);
+    vsnprintf(plan->reasons + len, sizeof(plan->reasons) - len, fmt, ap);
     va_end(ap);
 }
 
@@ -917,131 +916,6 @@ static const char *image_error(int rc) {
     }
 }
 
-typedef struct bundled_info {
-    char *path;
-    dev_t dev;
-    ino_t ino;
-    off_t size;
-    struct timespec mtime;
-    uint8_t digest[CC_SHA256_DIGEST_LENGTH];
-    char release[RELEASE_MAX + 1];
-} bundled_info_t;
-
-static pthread_mutex_t g_bundled_lock = PTHREAD_MUTEX_INITIALIZER;
-static bundled_info_t g_bundled;
-
-static int read_host_file(const char *path, size_t limit, uint8_t **data_out, size_t *size_out, struct stat *st_out) {
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        return -errno;
-    }
-    struct stat st;
-    if (fstat(fd, &st) != 0) {
-        int err = errno;
-        close(fd);
-        return -err;
-    }
-    if (!S_ISREG(st.st_mode) || st.st_size <= 0 || (uint64_t)st.st_size > limit) {
-        close(fd);
-        return -EINVAL;
-    }
-    uint8_t *data = malloc((size_t)st.st_size);
-    if (!data) {
-        close(fd);
-        return -ENOMEM;
-    }
-    size_t done = 0;
-    while (done < (size_t)st.st_size) {
-        ssize_t n = read(fd, data + done, (size_t)st.st_size - done);
-        if (n < 0 && errno == EINTR) {
-            continue;
-        }
-        if (n <= 0) {
-            int err = n < 0 ? errno : EIO;
-            free(data);
-            close(fd);
-            return -err;
-        }
-        done += (size_t)n;
-    }
-    close(fd);
-    *data_out = data;
-    *size_out = done;
-    if (st_out) {
-        *st_out = st;
-    }
-    return 0;
-}
-
-static bool bundled_matches(const struct stat *st, const char *path) {
-    return g_bundled.path && strcmp(g_bundled.path, path) == 0 && g_bundled.dev == st->st_dev &&
-           g_bundled.ino == st->st_ino && g_bundled.size == st->st_size &&
-           g_bundled.mtime.tv_sec == st->st_mtimespec.tv_sec && g_bundled.mtime.tv_nsec == st->st_mtimespec.tv_nsec;
-}
-
-static int bundled_describe(const char *path, uint8_t digest[CC_SHA256_DIGEST_LENGTH], char release[RELEASE_MAX + 1]) {
-    struct stat st;
-    if (!path || stat(path, &st) != 0) {
-        return path ? -errno : -ENOENT;
-    }
-    pthread_mutex_lock(&g_bundled_lock);
-    if (bundled_matches(&st, path)) {
-        memcpy(digest, g_bundled.digest, CC_SHA256_DIGEST_LENGTH);
-        memcpy(release, g_bundled.release, RELEASE_MAX + 1);
-        pthread_mutex_unlock(&g_bundled_lock);
-        return 0;
-    }
-    pthread_mutex_unlock(&g_bundled_lock);
-
-    uint8_t *file = NULL;
-    size_t size = 0;
-    int rc = read_host_file(path, KERNEL_FILE_LIMIT, &file, &size, &st);
-    if (rc < 0) {
-        return rc;
-    }
-    bundled_info_t info = {.dev = st.st_dev, .ino = st.st_ino, .size = st.st_size, .mtime = st.st_mtimespec};
-    CC_SHA256(file, (CC_LONG)size, info.digest);
-    uint8_t *image = NULL;
-    size_t image_size = 0;
-    rc = swipterm_kernel_image(file, size, &image, &image_size);
-    free(file);
-    if (rc < 0) {
-        return rc;
-    }
-    if (!swipterm_kernel_find_release(image, image_size, info.release, sizeof(info.release))) {
-        snprintf(info.release, sizeof(info.release), "unknown");
-    }
-    free(image);
-    info.path = strdup(path);
-    if (!info.path) {
-        return -ENOMEM;
-    }
-    pthread_mutex_lock(&g_bundled_lock);
-    free(g_bundled.path);
-    g_bundled = info;
-    pthread_mutex_unlock(&g_bundled_lock);
-    memcpy(digest, info.digest, CC_SHA256_DIGEST_LENGTH);
-    memcpy(release, info.release, RELEASE_MAX + 1);
-    return 0;
-}
-
-static int use_bundled(boot_plan_t *plan) {
-    uint8_t digest[CC_SHA256_DIGEST_LENGTH];
-    int rc = bundled_describe(plan->bundled_path, digest, plan->release);
-    if (rc < 0) {
-        return rc;
-    }
-    CC_SHA256_CTX ctx;
-    CC_SHA256_Init(&ctx);
-    sha_string(&ctx, "bundled");
-    CC_SHA256_Update(&ctx, digest, sizeof(digest));
-    CC_SHA256_Final(plan->identity, &ctx);
-    clear_modules(plan);
-    plan->bundled = true;
-    plan->current = NULL;
-    return 0;
-}
-
 static int select_next(boot_plan_t *plan) {
     while (plan->next_candidate < plan->candidate_count) {
         const kernel_candidate_t *c = &plan->candidates[plan->next_candidate++];
@@ -1062,7 +936,6 @@ static int select_next(boot_plan_t *plan) {
             record_reason(plan, "%s", reason);
             continue;
         }
-        plan->bundled = false;
         plan->current = c;
         snprintf(plan->release, sizeof(plan->release), "%s", c->release);
         return 0;
@@ -1070,11 +943,12 @@ static int select_next(boot_plan_t *plan) {
     if (plan->selection == SWIPTERM_KERNEL_RELEASE) {
         record_reason(plan, "kernel %s is not installed", plan->wanted_release);
     }
-    return use_bundled(plan);
+    plan->current = NULL;
+    return -ENOEXEC;
 }
 
-int boot_plan_resolve(int disk_fd, const char *bundled_kernel_path, swipterm_kernel_selection selection,
-                      const char *release, boot_plan_t **plan_out) {
+int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, boot_plan_t **plan_out,
+                      char **error_message) {
     *plan_out = NULL;
     if (selection == SWIPTERM_KERNEL_RELEASE && (!release || release[0] == '\0')) {
         return -EINVAL;
@@ -1084,30 +958,23 @@ int boot_plan_resolve(int disk_fd, const char *bundled_kernel_path, swipterm_ker
         return -ENOMEM;
     }
     plan->selection = selection;
-    plan->bundled_path = bundled_kernel_path ? strdup(bundled_kernel_path) : NULL;
     plan->wanted_release = release ? strdup(release) : NULL;
-    int rc = 0;
-    if ((bundled_kernel_path && !plan->bundled_path) || (release && !plan->wanted_release)) {
-        rc = -ENOMEM;
-    } else if (selection == SWIPTERM_KERNEL_BUNDLED) {
-        rc = use_bundled(plan);
-    } else {
-        int frc = ext4_fs_open(disk_fd, &plan->fs);
-        if (frc == 0) {
-            frc = discover_nixos(plan);
-        }
-        if (frc == 0 && plan->candidate_count == 0) {
-            frc = discover_module_dirs(plan);
-        }
-        if (frc == -ENOMEM) {
-            rc = frc;
-        } else if (frc < 0) {
-            record_reason(plan, "the root disk cannot be read (%s)", strerror(-frc));
-            rc = use_bundled(plan);
-        } else {
-            qsort(plan->candidates, plan->candidate_count, sizeof(*plan->candidates), compare_candidates_desc);
-            rc = select_next(plan);
-        }
+    int rc = release && !plan->wanted_release ? -ENOMEM : ext4_fs_open(disk_fd, &plan->fs);
+    if (rc == 0) {
+        rc = discover_nixos(plan);
+    }
+    if (rc == 0 && plan->candidate_count == 0) {
+        rc = discover_module_dirs(plan);
+    }
+    if (rc < 0 && rc != -ENOMEM) {
+        record_reason(plan, "the root disk cannot be read (%s)", strerror(-rc));
+        rc = -ENOEXEC;
+    } else if (rc == 0) {
+        qsort(plan->candidates, plan->candidate_count, sizeof(*plan->candidates), compare_candidates_desc);
+        rc = select_next(plan);
+    }
+    if (rc == -ENOEXEC && error_message) {
+        *error_message = strdup(plan->reasons);
     }
     if (rc < 0) {
         boot_plan_free(plan);
@@ -1118,23 +985,16 @@ int boot_plan_resolve(int disk_fd, const char *bundled_kernel_path, swipterm_ker
 }
 
 int boot_plan_next(boot_plan_t *plan, const char *reason) {
-    if (plan->bundled) {
-        return -ENOENT;
-    }
     record_reason(plan, "kernel %s %s", plan->release, reason);
     return select_next(plan);
-}
-
-bool boot_plan_is_bundled(const boot_plan_t *plan) {
-    return plan->bundled;
 }
 
 const char *boot_plan_release(const boot_plan_t *plan) {
     return plan->release;
 }
 
-const char *boot_plan_fallback_reason(const boot_plan_t *plan) {
-    return plan->fallback_reason[0] != '\0' ? plan->fallback_reason : NULL;
+const char *boot_plan_reasons(const boot_plan_t *plan) {
+    return plan->reasons;
 }
 
 const uint8_t *boot_plan_identity(const boot_plan_t *plan) {
@@ -1274,18 +1134,6 @@ static int build_modules_cpio(boot_plan_t *plan, uint8_t **cpio_out, size_t *cpi
     return 0;
 }
 
-static int load_bundled(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_out) {
-    uint8_t *file = NULL;
-    size_t size = 0;
-    int rc = read_host_file(plan->bundled_path, KERNEL_FILE_LIMIT, &file, &size, NULL);
-    if (rc < 0) {
-        return rc;
-    }
-    rc = swipterm_kernel_image(file, size, kernel_out, kernel_size_out);
-    free(file);
-    return rc;
-}
-
 static int load_installed(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_out, char *reason,
                           size_t reason_size) {
     const kernel_candidate_t *c = plan->current;
@@ -1322,9 +1170,6 @@ int boot_plan_load(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_
     *kernel_size_out = 0;
     *modules_cpio_out = NULL;
     *modules_cpio_size_out = 0;
-    if (plan->bundled) {
-        return load_bundled(plan, kernel_out, kernel_size_out);
-    }
     char reason[192] = {0};
     int rc = load_installed(plan, kernel_out, kernel_size_out, reason, sizeof(reason));
     if (rc == 0) {
@@ -1356,7 +1201,6 @@ void boot_plan_free(boot_plan_t *plan) {
     }
     free(plan->candidates);
     ext4_fs_close(plan->fs);
-    free(plan->bundled_path);
     free(plan->wanted_release);
     free(plan);
 }

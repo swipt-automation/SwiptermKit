@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"net"
 	"net/http"
-	"net/url"
 	"time"
 
 	E "github.com/sagernet/sing/common/exceptions"
@@ -22,14 +21,6 @@ const (
 )
 
 var ErrEmptyBody = E.New("http: empty response body")
-
-type InsecureURLError struct {
-	URL *url.URL
-}
-
-func (e *InsecureURLError) Error() string {
-	return F.ToString("http: insecure URL: ", e.URL.Redacted())
-}
 
 type StatusError struct {
 	StatusCode int
@@ -48,15 +39,6 @@ func (e *ContentLengthError) Error() string {
 	return F.ToString("http: Content-Length mismatch: expected ", e.Expected, ", got ", e.Actual)
 }
 
-type ChecksumError struct {
-	Expected string
-	Actual   string
-}
-
-func (e *ChecksumError) Error() string {
-	return F.ToString("http: SHA-256 mismatch: expected ", e.Expected, ", got ", e.Actual)
-}
-
 type TransientError struct {
 	Cause error
 }
@@ -70,8 +52,7 @@ func (e *TransientError) Unwrap() error {
 }
 
 type Client struct {
-	https http.Client
-	http  http.Client
+	client http.Client
 }
 
 func NewClient(rootCAs *x509.CertPool) *Client {
@@ -84,40 +65,19 @@ func NewClient(rootCAs *x509.CertPool) *Client {
 		ResponseHeaderTimeout: responseHeaderTimeout,
 		IdleConnTimeout:       idleConnTimeout,
 	}
-	return &Client{
-		https: http.Client{Transport: transport, CheckRedirect: checkRedirect(false)},
-		http:  http.Client{Transport: transport, CheckRedirect: checkRedirect(true)},
-	}
+	return &Client{client: http.Client{Transport: transport, CheckRedirect: checkRedirect}}
 }
 
 func (c *Client) Do(request *http.Request) (*http.Response, error) {
-	err := checkScheme(request.URL, false)
-	if err != nil {
-		return nil, err
-	}
 	if request.Header.Get("User-Agent") == "" {
 		request.Header.Set("User-Agent", userAgent)
 	}
-	return c.https.Do(request)
+	return c.client.Do(request)
 }
 
-func checkScheme(target *url.URL, allowHTTP bool) error {
-	switch target.Scheme {
-	case "https":
-		return nil
-	case "http":
-		if allowHTTP {
-			return nil
-		}
+func checkRedirect(request *http.Request, via []*http.Request) error {
+	if len(via) >= redirectLimit {
+		return E.New("http: stopped after ", redirectLimit, " redirects")
 	}
-	return &InsecureURLError{URL: target}
-}
-
-func checkRedirect(allowHTTP bool) func(*http.Request, []*http.Request) error {
-	return func(request *http.Request, via []*http.Request) error {
-		if len(via) >= redirectLimit {
-			return E.New("http: stopped after ", redirectLimit, " redirects")
-		}
-		return checkScheme(request.URL, allowHTTP)
-	}
+	return nil
 }
