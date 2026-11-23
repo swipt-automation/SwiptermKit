@@ -25,6 +25,8 @@ public final class LinuxRuntime: @unchecked Sendable {
         public var kernel: Kernel
         public var hostname: String?
         public var hostCommandsDirectory: String?
+        public var memorySize: UInt64?
+        public var cpuCount: Int?
         public var autoSyncDNS: Bool
         public var extraKernelArguments: String?
         public var consoleOutput: (@Sendable (Data) -> Void)?
@@ -37,6 +39,8 @@ public final class LinuxRuntime: @unchecked Sendable {
             kernel: Kernel = .installed,
             hostname: String? = nil,
             hostCommandsDirectory: String? = "/run/host-bin",
+            memorySize: UInt64? = nil,
+            cpuCount: Int? = nil,
             autoSyncDNS: Bool = true,
             extraKernelArguments: String? = nil,
             consoleOutput: (@Sendable (Data) -> Void)? = nil,
@@ -48,6 +52,8 @@ public final class LinuxRuntime: @unchecked Sendable {
             self.kernel = kernel
             self.hostname = hostname
             self.hostCommandsDirectory = hostCommandsDirectory
+            self.memorySize = memorySize
+            self.cpuCount = cpuCount
             self.autoSyncDNS = autoSyncDNS
             self.extraKernelArguments = extraKernelArguments
             self.consoleOutput = consoleOutput
@@ -112,6 +118,7 @@ public final class LinuxRuntime: @unchecked Sendable {
     private let callbacks: RuntimeCallbacks
     private let stateCondition = NSCondition()
     private var pathMonitor: NWPathMonitor?
+    private var networkPath: NWPath?
     private var registeredCommands: [Unmanaged<CommandBox>] = []
     private var registeredDevices: [Unmanaged<DeviceBox>] = []
     private var activeOperations = 0
@@ -262,8 +269,19 @@ public final class LinuxRuntime: @unchecked Sendable {
         if configuration.autoSyncDNS {
             try? runtime.syncDNS()
             let monitor = NWPathMonitor()
-            monitor.pathUpdateHandler = { [weak runtime] _ in
-                try? runtime?.syncDNS()
+            monitor.pathUpdateHandler = { [weak runtime] path in
+                guard let runtime else { return }
+                let previous = runtime.networkPath
+                runtime.networkPath = path
+                guard let previous else { return }
+                guard path.status != previous.status || path.availableInterfaces.first != previous.availableInterfaces.first else {
+                    try? runtime.syncDNS()
+                    return
+                }
+                try? runtime.withActiveHandle { handle throws(LinuxError) in
+                    runtime.network.resetNetwork()
+                    try check(swipterm_sync_dns(handle))
+                }
             }
             monitor.start(queue: DispatchQueue(label: "SwiptermKit.PathMonitor"))
             let installed = runtime.stateCondition.withLock { () -> Bool in
@@ -345,8 +363,8 @@ public final class LinuxRuntime: @unchecked Sendable {
                                         root_path: root,
                                         hostname: hostname,
                                         host_commands_directory: hostCommandsDirectory,
-                                        ram_size: 0,
-                                        cpu_count: 0,
+                                        ram_size: Int(truncatingIfNeeded: configuration.memorySize ?? 0),
+                                        cpu_count: UInt32(truncatingIfNeeded: configuration.cpuCount ?? 0),
                                         callbacks: callbackTable,
                                         bundled_kernel_path: kernelPath,
                                         initramfs_path: initramfsPath,

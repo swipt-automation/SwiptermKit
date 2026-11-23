@@ -7,9 +7,9 @@
 #include "../include/CSwiptermKit/swipterm.h"
 
 #include <CommonCrypto/CommonDigest.h>
-#include <TargetConditionals.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <netdb.h>
 #include <poll.h>
 #include <pthread.h>
@@ -22,15 +22,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/uio.h>
 #include <unistd.h>
-
-#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-#include <os/proc.h>
-#endif
 
 enum {
     TERMINAL_RING_CAPACITY = 256 * 1024,
@@ -162,6 +159,7 @@ struct swipterm_runtime {
     virtio_dev_t *vsock;
     swipterm_network *network;
     swipterm_callbacks callbacks;
+    bool console_log;
 
     int root_lock_fd;
     _Atomic int control_fd;
@@ -1492,7 +1490,7 @@ static void handle_guest_frame(swipterm_runtime *rt, const swiptermd_frame_hdr_t
     case SWIPTERMD_OP_MIRROR_UPDATE: {
         swiptermd_buf_r_t r = swiptermd_buf_r_init(body, hdr->body_len);
         uint32_t count = swiptermd_r_u32(&r);
-        if (!r.underflow && count > 0 && count <= 4096) {
+        if (!r.underflow && count > 0 && count <= (r.len - r.pos) / SWIPTERMD_MIRROR_ENTRY_WIRE_SIZE) {
             swiptermd_mirror_entry_t *entries = calloc(count, sizeof(*entries));
             if (entries) {
                 for (uint32_t i = 0; i < count; i++) {
@@ -1574,8 +1572,8 @@ static void *control_rx_main(void *arg) {
 }
 
 static void vmm_on_console(void *ctx, const void *data, size_t len) {
-    (void)ctx;
-    if (getenv("SWIPTERM_CONSOLE_LOG")) {
+    swipterm_runtime *rt = ctx;
+    if (rt->console_log) {
         (void)fwrite(data, 1, len, stderr);
         (void)fflush(stderr);
     }
@@ -1614,39 +1612,34 @@ static void vmm_on_panic(void *ctx, const char *message) {
 static size_t default_ram_size(void) {
     const uint64_t step = 16ULL << 20;
     const uint64_t min_size = 256ULL << 20;
-    const uint64_t max_size = 2ULL << 30;
-#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-    uint64_t target = os_proc_available_memory() / 2;
-#else
-    uint64_t target = max_size;
     uint64_t memsize = 0;
     size_t len = sizeof(memsize);
-    if (sysctlbyname("hw.memsize", &memsize, &len, NULL, 0) == 0 && memsize / 2 < target) {
-        target = memsize / 2;
-    }
-#endif
-    if (target < min_size) {
-        target = min_size;
-    }
-    if (target > max_size) {
-        target = max_size;
-    }
-    return (size_t)(target & ~(step - 1));
+    (void)sysctlbyname("hw.memsize", &memsize, &len, NULL, 0);
+    uint64_t target = (memsize / 2) & ~(step - 1);
+    return (size_t)(target < min_size ? min_size : target);
 }
 
 static uint32_t default_cpu_count(void) {
-    int ncpu = 2;
+    int ncpu = 1;
     size_t len = sizeof(ncpu);
-    if (sysctlbyname("hw.activecpu", &ncpu, &len, NULL, 0) != 0) {
-        ncpu = 2;
-    }
-    if (ncpu < 1) {
+    if (sysctlbyname("hw.activecpu", &ncpu, &len, NULL, 0) != 0 || ncpu < 1) {
         ncpu = 1;
     }
-    if (ncpu > 4) {
-        ncpu = 4;
+    return ncpu < VMM_MAX_VCPUS ? (uint32_t)ncpu : VMM_MAX_VCPUS;
+}
+
+static pthread_once_t g_open_file_limit_once = PTHREAD_ONCE_INIT;
+
+static void raise_open_file_limit(void) {
+    struct rlimit limit;
+    if (getrlimit(RLIMIT_NOFILE, &limit) != 0) {
+        return;
     }
-    return (uint32_t)ncpu;
+    rlim_t target = limit.rlim_max < OPEN_MAX ? limit.rlim_max : OPEN_MAX;
+    if (limit.rlim_cur < target) {
+        limit.rlim_cur = target;
+        (void)setrlimit(RLIMIT_NOFILE, &limit);
+    }
 }
 
 typedef struct initramfs_cache {
@@ -1939,9 +1932,12 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
             free(kernel);
             free(initrd);
             if (!rt->vm) {
-                if (err == EWOULDBLOCK || err == ENOMEM || boot_plan_is_bundled(plan) ||
+                if (err == EWOULDBLOCK || err == ENOMEM || err == EINVAL || boot_plan_is_bundled(plan) ||
                     atomic_load(&rt->shutting_down)) {
-                    return err == EWOULDBLOCK ? -LINUX_EBUSY : err == ENOMEM ? -LINUX_ENOMEM : -LINUX_EIO;
+                    return err == EWOULDBLOCK ? -LINUX_EBUSY
+                           : err == ENOMEM    ? -LINUX_ENOMEM
+                           : err == EINVAL    ? -LINUX_EINVAL
+                                              : -LINUX_EIO;
                 }
                 rc = boot_plan_next(plan, "could not be loaded into guest memory");
                 if (rc < 0) {
@@ -1995,12 +1991,14 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
         return -LINUX_EINVAL;
     }
     *runtime_out = NULL;
+    pthread_once(&g_open_file_limit_once, raise_open_file_limit);
 
     swipterm_runtime *rt = calloc(1, sizeof(*rt));
     if (!rt) {
         return -LINUX_ENOMEM;
     }
     rt->callbacks = options->callbacks;
+    rt->console_log = getenv("SWIPTERM_CONSOLE_LOG") != NULL;
     rt->network = options->network;
     swipterm_network_retain(rt->network);
     rt->root_lock_fd = -1;
@@ -2047,11 +2045,14 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
         return host_error(rc);
     }
 
-    char cmdline[1024];
-    if (options->extra_cmdline && options->extra_cmdline[0] != '\0') {
-        snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1 %s", options->extra_cmdline);
-    } else {
-        snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1");
+    char cmdline[2048];
+    bool has_extra = options->extra_cmdline && options->extra_cmdline[0] != '\0';
+    if (snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1%s%s", has_extra ? " " : "",
+                 has_extra ? options->extra_cmdline : "") >= (int)sizeof(cmdline)) {
+        boot_plan_free(plan);
+        close(disk_fd);
+        swipterm_shutdown(rt);
+        return -LINUX_EINVAL;
     }
 
     rc = boot_machine(rt, options, plan, disk_path, cmdline);
@@ -3147,7 +3148,8 @@ int swipterm_write_file(swipterm_runtime *rt, const char *path,
         if (chunk_len > max_chunk) {
             chunk_len = max_chunk;
         }
-        uint32_t flags = (offset == 0) ? 0 : SWIPTERMD_FS_WRITE_FLAG_APPEND;
+        uint32_t flags = (offset == 0 ? 0 : SWIPTERMD_FS_WRITE_FLAG_APPEND) |
+                         (offset + chunk_len == length ? SWIPTERMD_FS_WRITE_FLAG_SYNC : 0);
         size_t req_size = hdr_size + chunk_len;
         uint8_t *req_buf = malloc(req_size);
         if (!req_buf) {

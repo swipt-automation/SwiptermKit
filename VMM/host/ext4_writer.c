@@ -29,6 +29,7 @@ enum : uint32_t {
     LINK_MAX = 65000,
 
     EXT4_SUPER_MAGIC = 0xEF53,
+    EXT4_INDEX_FL = 0x00001000,
     EXT4_EXTENTS_FL = 0x00080000,
     EXT4_EXTENT_MAGIC = 0xF30A,
     EXTENT_MAX_LEN = 32768,
@@ -57,6 +58,13 @@ enum : uint32_t {
     DEFM_ACL = 0x0008,
     FLAGS_UNSIGNED_HASH = 0x0002,
     HASH_HALF_MD4 = 1,
+    HTREE_EOF_32BIT = 0x7FFFFFFF,
+    DX_ROOT_INFO = 24,
+    DX_ROOT_INFO_LENGTH = 8,
+    DX_ROOT_ENTRIES = DX_ROOT_INFO + DX_ROOT_INFO_LENGTH,
+    DX_NODE_ENTRIES = 8,
+    DX_ROOT_LIMIT = (BLOCK_SIZE - DX_ROOT_ENTRIES) / 8,
+    DX_NODE_LIMIT = (BLOCK_SIZE - DX_NODE_ENTRIES) / 8,
     JNL_BACKUP_BLOCKS = 1,
 
     JBD2_MAGIC = 0xC03B3998,
@@ -812,6 +820,14 @@ static int dir_reserve_block(dir_builder_t *d) {
     return 0;
 }
 
+static void put_dirent(uint8_t *p, uint32_t ino, size_t rec_len, const char *name, size_t name_len, uint8_t type) {
+    put_le32(p, ino);
+    put_le16(p + 4, (uint16_t)rec_len);
+    p[6] = (uint8_t)name_len;
+    p[7] = type;
+    memcpy(p + 8, name, name_len);
+}
+
 static int dir_add(dir_builder_t *d, uint32_t ino, const char *name, size_t name_len, uint8_t type) {
     size_t rec_len = align4(8 + name_len);
     if (d->len + rec_len > d->block_start + BLOCK_SIZE) {
@@ -821,12 +837,7 @@ static int dir_add(dir_builder_t *d, uint32_t ino, const char *name, size_t name
     if (rc < 0) {
         return rc;
     }
-    uint8_t *p = d->data + d->len;
-    put_le32(p, ino);
-    put_le16(p + 4, (uint16_t)rec_len);
-    p[6] = (uint8_t)name_len;
-    p[7] = type;
-    memcpy(p + 8, name, name_len);
+    put_dirent(d->data + d->len, ino, rec_len, name, name_len, type);
     d->last_entry = d->len;
     d->len += rec_len;
     return 0;
@@ -845,27 +856,179 @@ static int dir_add_empty_block(dir_builder_t *d) {
     return 0;
 }
 
-static int build_directory(ext4_writer_t *w, const numbering_t *n, vfs_node_t *dir, uint8_t **data_out,
-                           size_t *blocks_out) {
-    dir_builder_t d = {0};
-    uint32_t parent = n->parent[dir->ino];
-    int rc = dir_add(&d, dir->ino, ".", 1, FT_DIR);
-    if (rc == 0) {
-        rc = dir_add(&d, parent, "..", 2, FT_DIR);
+static void half_md4_transform(uint32_t buf[4], const uint32_t in[8]) {
+    static const uint8_t order[3][8] = {
+        {0, 1, 2, 3, 4, 5, 6, 7},
+        {1, 3, 5, 7, 0, 2, 4, 6},
+        {3, 7, 2, 6, 1, 5, 0, 4},
+    };
+    static const uint8_t shift[3][4] = {{3, 7, 11, 19}, {3, 5, 9, 13}, {3, 9, 11, 15}};
+    static const uint32_t key[3] = {0, 0x5A827999, 0x6ED9EBA1};
+    uint32_t v[4] = {buf[0], buf[1], buf[2], buf[3]};
+    for (int round = 0; round < 3; round++) {
+        for (int step = 0; step < 8; step++) {
+            int t = (4 - step % 4) & 3;
+            uint32_t x = v[(t + 1) & 3];
+            uint32_t y = v[(t + 2) & 3];
+            uint32_t z = v[(t + 3) & 3];
+            uint32_t f = round == 0 ? z ^ (x & (y ^ z)) : round == 1 ? (x & y) + ((x ^ y) & z) : x ^ y ^ z;
+            uint32_t sum = v[t] + f + in[order[round][step]] + key[round];
+            unsigned s = shift[round][step % 4];
+            v[t] = (sum << s) | (sum >> (32 - s));
+        }
     }
-    for (size_t i = 0; i < dir->child_count && rc == 0; i++) {
+    for (int i = 0; i < 4; i++) {
+        buf[i] += v[i];
+    }
+}
+
+static void str2hashbuf(const uint8_t *msg, size_t len, uint32_t buf[8]) {
+    uint32_t pad = (uint32_t)len | ((uint32_t)len << 8);
+    pad |= pad << 16;
+    uint32_t val = pad;
+    size_t out = 0;
+    for (size_t i = 0; i < len && i < 32; i++) {
+        val = msg[i] + (val << 8);
+        if (i % 4 == 3) {
+            buf[out++] = val;
+            val = pad;
+        }
+    }
+    if (out < 8) {
+        buf[out++] = val;
+    }
+    while (out < 8) {
+        buf[out++] = pad;
+    }
+}
+
+static uint32_t dx_hash(const uint8_t seed[16], const char *name, size_t len) {
+    uint32_t buf[4] = {get_le32(seed), get_le32(seed + 4), get_le32(seed + 8), get_le32(seed + 12)};
+    uint32_t in[8];
+    for (size_t off = 0; off < len; off += 32) {
+        str2hashbuf((const uint8_t *)name + off, len - off, in);
+        half_md4_transform(buf, in);
+    }
+    uint32_t hash = buf[1] & ~1U;
+    return hash == HTREE_EOF_32BIT << 1 ? (HTREE_EOF_32BIT - 1) << 1 : hash;
+}
+
+typedef struct dir_item {
+    uint32_t hash;
+    uint32_t ino;
+    const char *name;
+    uint8_t name_len;
+    uint8_t type;
+} dir_item_t;
+
+static int compare_dir_items(const void *a, const void *b) {
+    const dir_item_t *x = a;
+    const dir_item_t *y = b;
+    return x->hash < y->hash ? -1 : x->hash > y->hash;
+}
+
+static void put_dx_entries(uint8_t *p, uint16_t limit, const uint32_t *hashes, size_t count, uint32_t first_block) {
+    for (size_t i = 0; i < count; i++) {
+        put_le32(p + i * 8, hashes[i]);
+        put_le32(p + i * 8 + 4, first_block + (uint32_t)i);
+    }
+    put_le16(p + 0, limit);
+    put_le16(p + 2, (uint16_t)count);
+}
+
+static int build_indexed_directory(ext4_writer_t *w, dir_item_t *items, size_t count, dir_builder_t *d) {
+    dir_item_t *entries = items + 2;
+    size_t entry_count = count - 2;
+    uint32_t *leaf_hash = malloc(entry_count * sizeof(*leaf_hash));
+    if (!leaf_hash) {
+        return -ENOMEM;
+    }
+    for (size_t i = 0; i < entry_count; i++) {
+        entries[i].hash = dx_hash(w->hash_seed, entries[i].name, entries[i].name_len);
+    }
+    qsort(entries, entry_count, sizeof(*entries), compare_dir_items);
+    int rc = dir_add_empty_block(d);
+    size_t leaves = 0;
+    for (size_t i = 0; i < entry_count && rc == 0; i++) {
+        rc = dir_add(d, entries[i].ino, entries[i].name, entries[i].name_len, entries[i].type);
+        if (d->last_entry == d->block_start) {
+            bool continued = i > 0 && entries[i - 1].hash == entries[i].hash;
+            leaf_hash[leaves++] = entries[i].hash | continued;
+        }
+    }
+    dir_close_block(d);
+    size_t nodes = leaves > DX_ROOT_LIMIT ? (leaves + DX_NODE_LIMIT - 1) / DX_NODE_LIMIT : 0;
+    if (rc == 0 && nodes > DX_ROOT_LIMIT) {
+        rc = -EFBIG;
+    }
+    uint32_t node_hash[DX_ROOT_LIMIT];
+    for (size_t k = 0; k < nodes && rc == 0; k++) {
+        size_t first = k * leaves / nodes;
+        size_t end = (k + 1) * leaves / nodes;
+        node_hash[k] = leaf_hash[first];
+        rc = dir_add_empty_block(d);
+        if (rc == 0) {
+            put_dx_entries(d->data + d->block_start - BLOCK_SIZE + DX_NODE_ENTRIES, DX_NODE_LIMIT, leaf_hash + first,
+                           end - first, (uint32_t)(1 + first));
+        }
+    }
+    if (rc == 0) {
+        uint8_t *root = d->data;
+        put_dirent(root, items[0].ino, 12, ".", 1, FT_DIR);
+        put_dirent(root + 12, items[1].ino, BLOCK_SIZE - 12, "..", 2, FT_DIR);
+        root[DX_ROOT_INFO + 4] = HASH_HALF_MD4;
+        root[DX_ROOT_INFO + 5] = DX_ROOT_INFO_LENGTH;
+        root[DX_ROOT_INFO + 6] = nodes > 0 ? 1 : 0;
+        if (nodes > 0) {
+            put_dx_entries(root + DX_ROOT_ENTRIES, DX_ROOT_LIMIT, node_hash, nodes, (uint32_t)(1 + leaves));
+        } else {
+            put_dx_entries(root + DX_ROOT_ENTRIES, DX_ROOT_LIMIT, leaf_hash, leaves, 1);
+        }
+    }
+    free(leaf_hash);
+    return rc;
+}
+
+static int build_directory(ext4_writer_t *w, const numbering_t *n, vfs_node_t *dir, uint8_t **data_out,
+                           size_t *blocks_out, uint32_t *flags) {
+    dir_item_t *items = malloc((dir->child_count + 2) * sizeof(*items));
+    if (!items) {
+        return -ENOMEM;
+    }
+    items[0] = (dir_item_t){.ino = dir->ino, .name = ".", .name_len = 1, .type = FT_DIR};
+    items[1] = (dir_item_t){.ino = n->parent[dir->ino], .name = "..", .name_len = 2, .type = FT_DIR};
+    size_t count = 2;
+    size_t bytes = 12 + 12;
+    for (size_t i = 0; i < dir->child_count; i++) {
         const vfs_dirent_t *de = &dir->children[i];
         if (S_ISDIR(de->node->mode) && n->parent[de->node->ino] != dir->ino) {
             continue;
         }
-        rc = dir_add(&d, de->node->ino, de->name, de->name_len, file_type(de->node->mode));
+        items[count++] = (dir_item_t){
+            .ino = de->node->ino,
+            .name = de->name,
+            .name_len = (uint8_t)de->name_len,
+            .type = file_type(de->node->mode),
+        };
+        bytes += align4(8 + de->name_len);
     }
-    if (rc == 0) {
-        dir_close_block(&d);
-        while (rc == 0 && dir == w->lost_found && d.block_start < (size_t)LOST_FOUND_BLOCKS * BLOCK_SIZE) {
-            rc = dir_add_empty_block(&d);
+    dir_builder_t d = {0};
+    int rc = 0;
+    if (bytes > BLOCK_SIZE) {
+        rc = build_indexed_directory(w, items, count, &d);
+        *flags |= EXT4_INDEX_FL;
+    } else {
+        for (size_t i = 0; i < count && rc == 0; i++) {
+            rc = dir_add(&d, items[i].ino, items[i].name, items[i].name_len, items[i].type);
+        }
+        if (rc == 0) {
+            dir_close_block(&d);
+            while (rc == 0 && dir == w->lost_found && d.block_start < (size_t)LOST_FOUND_BLOCKS * BLOCK_SIZE) {
+                rc = dir_add_empty_block(&d);
+            }
         }
     }
+    free(items);
     if (rc < 0) {
         free(d.data);
         return rc;
@@ -1065,7 +1228,7 @@ static int build_node_inode(ext4_writer_t *w, const numbering_t *n, vfs_node_t *
     if (S_ISDIR(node->mode)) {
         uint8_t *data = NULL;
         size_t blocks = 0;
-        rc = build_directory(w, n, node, &data, &blocks);
+        rc = build_directory(w, n, node, &data, &blocks, &shape.flags);
         if (rc == 0) {
             rc = write_extent_data(w, node, 0, data, blocks);
         }

@@ -28,8 +28,8 @@
 #define CPU_BUDGET 312
 #define CPU_FPCR 316
 #define CPU_FPSR 320
-#define CPU_IRQ 332
-#define CPU_STOP 336
+#define CPU_IRQ 328
+#define CPU_STOP 332
 #define CPU_SALT 344
 #define CPU_TLB_EPOCH 352
 #define CPU_ICACHE_EPOCH 360
@@ -44,7 +44,7 @@
 #define CPU_EXCL_VAL 944
 #define CPU_SCTLR 960
 #define CPU_CNTKCTL 1080
-#define CPU_EXCL_HVA_PAGE 0x18
+#define CPU_EXCL_HVA_PAGE 0x40
 #define CPU_EXCL_HVA 0x6C0
 #define CPU_TPIDR_EL0 1048
 #define CPU_TPIDRRO_EL0 1056
@@ -55,10 +55,12 @@
 #define VM_ICACHE_EPOCH 96
 #define VM_WFE_WAITERS 104
 
-#define TLB_BANK_SHIFT 14
-#define EXEC_BANK_SHIFT 17
-#define SALT_FP_TRAP 12
-#define VMM_DCZID_BS 6
+#define TLB_BANK_SHIFT 16
+#define EXEC_BANK_SHIFT 19
+#define SALT_MMU_OFF 2
+#define SALT_ALIGN 16
+#define SALT_FP_TRAP 17
+#define VMM_DCZID_BS 4
 #define CPU_PT_WIDE_RM 0x80000000
 
 #define PAGE_PA 0
@@ -70,7 +72,7 @@
 #define IC_CUR_PAGE 0
 #define IC_CUR_EXEC_EPOCH 8
 #define IC_RAS_SP 16
-#define IC_STAT_DISPATCHES 40
+#define IC_STAT_DISPATCHES 32
 #define IC_RAS 64
 #define IC_EXEC_CACHE 576
 

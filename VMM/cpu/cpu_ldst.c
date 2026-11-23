@@ -1018,7 +1018,7 @@ void cpu_op_simd_ldst_multi(vcpu_t *cpu, const ir_insn_t *ir,
     uintptr_t hva = 0;
 
     if (selem == 1U && ((addr ^ (addr + total - 1U)) & ~(uint64_t)VMM_PAGE_MASK) == 0 &&
-        ((cpu->tlb_asid_salt & (1ULL << 11)) == 0 || (addr & (ebytes - 1U)) == 0) &&
+        ((cpu->tlb_asid_salt & MMU_SALT_ALIGN) == 0 || (addr & (ebytes - 1U)) == 0) &&
         mmu_tlb_lookup_aligned(is_load ? tlb_r : tlb_w, cpu->tlb_asid_salt, addr, &hva)) {
         bool aligned = (hva & 7U) == 0U;
         for (uint32_t r = 0; r < rpt; ++r) {

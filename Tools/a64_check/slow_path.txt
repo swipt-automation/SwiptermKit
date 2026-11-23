@@ -9,10 +9,10 @@ control/pstate/ only DAIFSet and DAIFClr are fast; SPSel, PAN and UAO change tra
 control/systemmove/ only the registers read or written on hot kernel and libc paths are fast
 control/systeminstrs/ only DC ZVA and the cache maintenance operations are fast; TLBI and AT walk page tables
 reserved/perm_undef/ always raises an exception
-ldst/memcms/ no supported host implements FEAT_MOPS
+ldst/memcms/ only the main and epilogue stages with nothing left to copy or set are fast
 ldst/ldstexclp/ exclusive pairs
 ldst/asisdlse/ LD2-LD4 and ST2-ST4 structure accesses
 ldst/asisdlsep/ LD2-LD4 and ST2-ST4 structure accesses
-ldst/asisdlso/ single-lane and replicating structure accesses
-ldst/asisdlsop/ single-lane and replicating structure accesses
+ldst/asisdlso/ LD2-LD4, ST2-ST4 and replicating structure accesses
+ldst/asisdlsop/ LD2-LD4, ST2-ST4 and replicating structure accesses
 simd_dp/asimdtbl/ table registers that wrap past V31

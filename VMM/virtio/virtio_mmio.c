@@ -263,6 +263,14 @@ static int virtqueue_append_desc(virtio_dev_t *dev, const vring_desc_t *desc,
     return 0;
 }
 
+static int virtqueue_fail(virtio_dev_t *dev) {
+    uint32_t prev = atomic_fetch_or_explicit(&dev->status, VIRTIO_STATUS_DEVICE_NEEDS_RESET, memory_order_acq_rel);
+    if (!(prev & VIRTIO_STATUS_DEVICE_NEEDS_RESET)) {
+        virtio_raise_irq(dev, VIRTIO_MMIO_INT_CONFIG);
+    }
+    return -1;
+}
+
 int virtqueue_pop(virtio_dev_t *dev, virtqueue_t *vq, virtio_iov_t *iov, size_t max_iov,
                   uint16_t *head_out, size_t *out_count, size_t *in_count) {
     if (!dev || !dev->vm || !vq ||
@@ -270,11 +278,14 @@ int virtqueue_pop(virtio_dev_t *dev, virtqueue_t *vq, virtio_iov_t *iov, size_t 
         vq->num == 0 || vq->num > vq->num_max) {
         return 0;
     }
+    if (atomic_load_explicit(&dev->status, memory_order_acquire) & VIRTIO_STATUS_DEVICE_NEEDS_RESET) {
+        return -1;
+    }
 
     size_t avail_sz = sizeof(vring_avail_t) + (size_t)vq->num * sizeof(uint16_t);
     vring_avail_t *avail = mmu_gpa_to_hva(dev->vm, vq->avail_gpa, avail_sz);
     if (!avail) {
-        return -1;
+        return virtqueue_fail(dev);
     }
 
     uint16_t avail_idx = atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire);
@@ -288,23 +299,13 @@ int virtqueue_pop(virtio_dev_t *dev, virtqueue_t *vq, virtio_iov_t *iov, size_t 
 
     uint16_t head = avail->ring[vq->last_avail_idx % vq->num];
     if (head >= vq->num) {
-        return -1;
+        return virtqueue_fail(dev);
     }
 
     size_t desc_sz = (size_t)vq->num * sizeof(vring_desc_t);
     const vring_desc_t *desc_tbl = mmu_gpa_to_hva(dev->vm, vq->desc_gpa, desc_sz);
     if (!desc_tbl) {
-        return -1;
-    }
-
-    vq->last_avail_idx++;
-
-    if (dev->driver_features & VIRTIO_F_RING_EVENT_IDX) {
-        size_t used_event_off = sizeof(vring_used_t) + (size_t)vq->num * sizeof(vring_used_elem_t);
-        uint16_t *avail_event = mmu_gpa_to_hva(dev->vm, vq->used_gpa + used_event_off, sizeof(uint16_t));
-        if (avail_event) {
-            atomic_store_explicit((_Atomic uint16_t *)avail_event, vq->last_avail_idx, memory_order_seq_cst);
-        }
+        return virtqueue_fail(dev);
     }
 
     size_t out_cnt = 0;
@@ -314,31 +315,31 @@ int virtqueue_pop(virtio_dev_t *dev, virtqueue_t *vq, virtio_iov_t *iov, size_t 
 
     for (;;) {
         if (steps++ >= vq->num || idx >= vq->num) {
-            return -1;
+            return virtqueue_fail(dev);
         }
         vring_desc_t d = desc_tbl[idx];
 
         if (d.flags & VRING_DESC_F_INDIRECT) {
             if ((d.flags & VRING_DESC_F_NEXT) || d.len == 0 || (d.len % sizeof(vring_desc_t)) != 0) {
-                return -1;
+                return virtqueue_fail(dev);
             }
             uint32_t ind_max = d.len / (uint32_t)sizeof(vring_desc_t);
             const vring_desc_t *ind_tbl = mmu_gpa_to_hva(dev->vm, d.addr, d.len);
             if (!ind_tbl) {
-                return -1;
+                return virtqueue_fail(dev);
             }
             uint16_t ind_idx = 0;
             uint32_t ind_steps = 0;
             for (;;) {
                 if (ind_steps++ >= ind_max || ind_idx >= ind_max) {
-                    return -1;
+                    return virtqueue_fail(dev);
                 }
                 vring_desc_t id = ind_tbl[ind_idx];
                 if (id.flags & VRING_DESC_F_INDIRECT) {
-                    return -1;
+                    return virtqueue_fail(dev);
                 }
                 if (virtqueue_append_desc(dev, &id, iov, max_iov, &out_cnt, &in_cnt) < 0) {
-                    return -1;
+                    return virtqueue_fail(dev);
                 }
                 if (!(id.flags & VRING_DESC_F_NEXT)) {
                     break;
@@ -349,12 +350,22 @@ int virtqueue_pop(virtio_dev_t *dev, virtqueue_t *vq, virtio_iov_t *iov, size_t 
         }
 
         if (virtqueue_append_desc(dev, &d, iov, max_iov, &out_cnt, &in_cnt) < 0) {
-            return -1;
+            return virtqueue_fail(dev);
         }
         if (!(d.flags & VRING_DESC_F_NEXT)) {
             break;
         }
         idx = d.next;
+    }
+
+    vq->last_avail_idx++;
+
+    if (dev->driver_features & VIRTIO_F_RING_EVENT_IDX) {
+        size_t used_event_off = sizeof(vring_used_t) + (size_t)vq->num * sizeof(vring_used_elem_t);
+        uint16_t *avail_event = mmu_gpa_to_hva(dev->vm, vq->used_gpa + used_event_off, sizeof(uint16_t));
+        if (avail_event) {
+            atomic_store_explicit((_Atomic uint16_t *)avail_event, vq->last_avail_idx, memory_order_seq_cst);
+        }
     }
 
     if (head_out) {

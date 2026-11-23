@@ -18,7 +18,6 @@ enum : uint32_t {
     XZ_MT_BUF_SIZE = 1U << 20,
     XZ_TAIL_SIZE = 4096U,
     XZ_INDEX_MAX_SIZE = 4U << 20,
-    VFS_MAX_DEPTH = 128U,
     VFS_MAX_SYMLINKS = 40U,
     VFS_MAX_NAME_LEN = 255U,
     VFS_MAX_SYMLINK_LEN = 4095U,
@@ -311,9 +310,25 @@ bool vfs_dir_set(vfs_node_t *dir, const char *name, size_t nlen, vfs_node_t *chi
 }
 
 typedef struct vfs_path_stack {
-    vfs_node_t *nodes[VFS_MAX_DEPTH + 1];
+    vfs_node_t **nodes;
     size_t depth;
+    size_t cap;
 } vfs_path_stack_t;
+
+static bool vfs_path_set(vfs_path_stack_t *st, size_t depth, vfs_node_t *node) {
+    if (depth >= st->cap) {
+        size_t cap = st->cap ? st->cap * 2 : 64;
+        vfs_node_t **nodes = realloc(st->nodes, cap * sizeof(*nodes));
+        if (!nodes) {
+            return false;
+        }
+        st->nodes = nodes;
+        st->cap = cap;
+    }
+    st->nodes[depth] = node;
+    st->depth = depth;
+    return true;
+}
 
 static bool vfs_walk_dir_path(vfs_node_t *root, vfs_path_stack_t *st, const char *path,
                               size_t path_len, bool create_dirs, unsigned *symlink_depth);
@@ -324,16 +339,10 @@ static bool vfs_follow_symlink_dir(vfs_node_t *root, vfs_path_stack_t *st,
         return false;
     }
     (*symlink_depth)++;
-    vfs_path_stack_t next_st = *st;
-    if (target[0] == '/') {
-        next_st.nodes[0] = root;
-        next_st.depth = 0;
-    }
-    if (!vfs_walk_dir_path(root, &next_st, target, strlen(target), create_dirs, symlink_depth)) {
+    if (target[0] == '/' && !vfs_path_set(st, 0, root)) {
         return false;
     }
-    *st = next_st;
-    return true;
+    return vfs_walk_dir_path(root, st, target, strlen(target), create_dirs, symlink_depth);
 }
 
 static vfs_dirent_t *vfs_make_implicit_dir(vfs_node_t *cur, const char *name, size_t len) {
@@ -352,11 +361,7 @@ static bool vfs_enter(vfs_node_t *root, vfs_path_stack_t *st, vfs_dirent_t *de, 
     if (S_ISLNK(de->node->mode)) {
         return vfs_follow_symlink_dir(root, st, de->node->symlink, create_dirs, symlink_depth);
     }
-    if (!S_ISDIR(de->node->mode) || st->depth >= VFS_MAX_DEPTH) {
-        return false;
-    }
-    st->nodes[++st->depth] = de->node;
-    return true;
+    return S_ISDIR(de->node->mode) && vfs_path_set(st, st->depth + 1, de->node);
 }
 
 static bool vfs_walk_dir_path(vfs_node_t *root, vfs_path_stack_t *st, const char *path,
@@ -405,8 +410,7 @@ static bool vfs_walk_dir_path(vfs_node_t *root, vfs_path_stack_t *st, const char
     return true;
 }
 
-static bool vfs_resolve_parent(vfs_node_t *root, const char *raw_path, bool create_parents,
-                               vfs_path_stack_t *parent_stack_out,
+static bool vfs_resolve_parent(vfs_node_t *root, vfs_path_stack_t *st, const char *raw_path, bool create_parents,
                                vfs_node_t **parent_out, const char **leaf_out, size_t *leaf_len_out) {
     const char *p = raw_path;
     while (*p == '/' || (p[0] == '.' && p[1] == '/')) {
@@ -416,14 +420,13 @@ static bool vfs_resolve_parent(vfs_node_t *root, const char *raw_path, bool crea
     while (len > 0 && p[len - 1] == '/') {
         len--;
     }
-    vfs_path_stack_t st = {.nodes = {root}, .depth = 0};
     *parent_out = NULL;
     *leaf_out = NULL;
     *leaf_len_out = 0;
+    if (!vfs_path_set(st, 0, root)) {
+        return false;
+    }
     if (len == 0 || (len == 1 && p[0] == '.')) {
-        if (parent_stack_out) {
-            *parent_stack_out = st;
-        }
         return true;
     }
 
@@ -443,24 +446,21 @@ static bool vfs_resolve_parent(vfs_node_t *root, const char *raw_path, bool crea
             continue;
         }
         if (clen == 2 && p[0] == '.' && p[1] == '.') {
-            if (st.depth == 0) {
+            if (st->depth == 0) {
                 return false;
             }
-            st.depth--;
+            st->depth--;
             p = slash ? slash + 1 : end;
             continue;
         }
         if (clen > VFS_MAX_NAME_LEN) {
             return false;
         }
-        vfs_node_t *cur = st.nodes[st.depth];
+        vfs_node_t *cur = st->nodes[st->depth];
         if (!S_ISDIR(cur->mode)) {
             return false;
         }
         if (!slash) {
-            if (parent_stack_out) {
-                *parent_stack_out = st;
-            }
             *parent_out = cur;
             *leaf_out = p;
             *leaf_len_out = clen;
@@ -472,22 +472,19 @@ static bool vfs_resolve_parent(vfs_node_t *root, const char *raw_path, bool crea
                 return false;
             }
         }
-        if (!vfs_enter(root, &st, de, create_parents, &sym_depth)) {
+        if (!vfs_enter(root, st, de, create_parents, &sym_depth)) {
             return false;
         }
         p = slash + 1;
     }
-    if (parent_stack_out) {
-        *parent_stack_out = st;
-    }
     return true;
 }
 
-static vfs_node_t *vfs_lookup(vfs_node_t *root, const char *raw_path) {
+static vfs_node_t *vfs_lookup(vfs_node_t *root, vfs_path_stack_t *st, const char *raw_path) {
     vfs_node_t *parent = NULL;
     const char *leaf = NULL;
     size_t leaf_len = 0;
-    if (!vfs_resolve_parent(root, raw_path, false, NULL, &parent, &leaf, &leaf_len)) {
+    if (!vfs_resolve_parent(root, st, raw_path, false, &parent, &leaf, &leaf_len)) {
         return NULL;
     }
     if (!parent) {
@@ -497,24 +494,46 @@ static vfs_node_t *vfs_lookup(vfs_node_t *root, const char *raw_path) {
     return de ? de->node : NULL;
 }
 
-static bool vfs_dir_merge(vfs_node_t *dst, vfs_node_t *src, unsigned depth) {
-    if (dst == src || depth > VFS_MAX_DEPTH) {
-        return true;
+typedef struct vfs_merge_frame {
+    vfs_node_t *dst;
+    vfs_node_t *src;
+    size_t index;
+} vfs_merge_frame_t;
+
+static bool vfs_dir_merge(vfs_node_t *dst, vfs_node_t *src) {
+    size_t cap = 64;
+    size_t top = 0;
+    vfs_merge_frame_t *stack = malloc(cap * sizeof(*stack));
+    if (!stack) {
+        return false;
     }
-    for (size_t i = 0; i < src->child_count; i++) {
-        const vfs_dirent_t *se = &src->children[i];
-        vfs_dirent_t *de = vfs_dir_find(dst, se->name, se->name_len);
+    stack[top++] = (vfs_merge_frame_t){dst, src, 0};
+    bool ok = true;
+    while (ok && top > 0) {
+        vfs_merge_frame_t *frame = &stack[top - 1];
+        if (frame->dst == frame->src || frame->index >= frame->src->child_count) {
+            top--;
+            continue;
+        }
+        const vfs_dirent_t *se = &frame->src->children[frame->index++];
+        vfs_dirent_t *de = vfs_dir_find(frame->dst, se->name, se->name_len);
         if (!de) {
-            if (!vfs_dir_set(dst, se->name, se->name_len, se->node)) {
-                return false;
-            }
+            ok = vfs_dir_set(frame->dst, se->name, se->name_len, se->node);
         } else if (S_ISDIR(de->node->mode) && S_ISDIR(se->node->mode)) {
-            if (!vfs_dir_merge(de->node, se->node, depth + 1)) {
-                return false;
+            if (top == cap) {
+                vfs_merge_frame_t *next = realloc(stack, cap * 2 * sizeof(*next));
+                if (!next) {
+                    ok = false;
+                    break;
+                }
+                stack = next;
+                cap *= 2;
             }
+            stack[top++] = (vfs_merge_frame_t){de->node, se->node, 0};
         }
     }
-    return true;
+    free(stack);
+    return ok;
 }
 
 static uint8_t xattr_index_for(const char *name, const char **suffix_out) {
@@ -764,7 +783,8 @@ static void deferred_hl_free(deferred_hl_list_t *list) {
     *list = (deferred_hl_list_t){0};
 }
 
-static bool resolve_deferred_hardlinks(vfs_node_t *root, deferred_hl_list_t *list, char **error_message) {
+static bool resolve_deferred_hardlinks(vfs_node_t *root, vfs_path_stack_t *st, deferred_hl_list_t *list,
+                                       char **error_message) {
     if (list->count == 0) {
         return true;
     }
@@ -775,13 +795,14 @@ static bool resolve_deferred_hardlinks(vfs_node_t *root, deferred_hl_list_t *lis
     }
     size_t remaining = list->count;
     bool ok = true;
-    for (int pass = 0; pass < 8 && remaining > 0 && ok; pass++) {
-        size_t progressed = 0;
+    size_t progressed = 1;
+    while (remaining > 0 && ok && progressed > 0) {
+        progressed = 0;
         for (size_t i = 0; i < list->count && ok; i++) {
             if (done[i]) {
                 continue;
             }
-            vfs_node_t *target = vfs_lookup(root, list->items[i].target_path);
+            vfs_node_t *target = vfs_lookup(root, st, list->items[i].target_path);
             if (!target) {
                 continue;
             }
@@ -791,7 +812,7 @@ static bool resolve_deferred_hardlinks(vfs_node_t *root, deferred_hl_list_t *lis
             if (S_ISDIR(target->mode)) {
                 set_error(error_message, "archive contains hardlink to directory");
                 ok = false;
-            } else if (!vfs_resolve_parent(root, list->items[i].link_path, true, NULL, &parent, &leaf, &leaf_len) ||
+            } else if (!vfs_resolve_parent(root, st, list->items[i].link_path, true, &parent, &leaf, &leaf_len) ||
                        !parent) {
                 set_error(error_message, "invalid hardlink path in archive");
                 ok = false;
@@ -803,9 +824,6 @@ static bool resolve_deferred_hardlinks(vfs_node_t *root, deferred_hl_list_t *lis
                 remaining--;
                 progressed++;
             }
-        }
-        if (progressed == 0) {
-            break;
         }
     }
     free(done);
@@ -882,6 +900,7 @@ static bool write_file_data(struct archive *a, struct archive_entry *entry, ext4
 static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t *root,
                            const import_progress_t *progress, char **error_message) {
     deferred_hl_list_t deferred = {0};
+    vfs_path_stack_t st = {0};
     size_t entry_count = 0;
     struct archive_entry *entry = NULL;
     int r;
@@ -896,11 +915,10 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
         if (!pathname || pathname[0] == '\0') {
             continue;
         }
-        vfs_path_stack_t parent_stack;
         vfs_node_t *parent = NULL;
         const char *leaf = NULL;
         size_t leaf_len = 0;
-        if (!vfs_resolve_parent(root, pathname, true, &parent_stack, &parent, &leaf, &leaf_len)) {
+        if (!vfs_resolve_parent(root, &st, pathname, true, &parent, &leaf, &leaf_len)) {
             set_error(error_message, "invalid path in archive");
             ok = false;
             break;
@@ -932,7 +950,7 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
 
         const char *hardlink = archive_entry_hardlink(entry);
         if (hardlink && hardlink[0] != '\0') {
-            vfs_node_t *target = vfs_lookup(root, hardlink);
+            vfs_node_t *target = vfs_lookup(root, &st, hardlink);
             if (!target) {
                 if (!deferred_hl_push(&deferred, pathname, hardlink)) {
                     set_error(error_message, "out of memory queuing deferred hardlink");
@@ -950,10 +968,9 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
 
         vfs_dirent_t *existing = vfs_dir_find(parent, leaf, leaf_len);
         if (S_ISDIR(mode) && existing && S_ISLNK(existing->node->mode)) {
-            vfs_path_stack_t target_st = parent_stack;
             unsigned sym_depth = 0;
-            if (vfs_follow_symlink_dir(root, &target_st, existing->node->symlink, true, &sym_depth)) {
-                vfs_node_t *tdir = target_st.nodes[target_st.depth];
+            if (vfs_follow_symlink_dir(root, &st, existing->node->symlink, true, &sym_depth)) {
+                vfs_node_t *tdir = st.nodes[st.depth];
                 if (tdir->implicit_dir) {
                     set_node_attrs(tdir, entry, mode);
                     tdir->implicit_dir = false;
@@ -964,11 +981,14 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
         if (S_ISLNK(mode) && existing && S_ISDIR(existing->node->mode)) {
             const char *sym_target = archive_entry_symlink(entry);
             if (sym_target && sym_target[0] != '\0') {
-                vfs_path_stack_t target_st = parent_stack;
                 unsigned sym_depth = 0;
-                if (vfs_follow_symlink_dir(root, &target_st, sym_target, true, &sym_depth)) {
-                    vfs_node_t *tdir = target_st.nodes[target_st.depth];
-                    if (tdir != existing->node && S_ISDIR(tdir->mode) && !vfs_dir_merge(tdir, existing->node, 0)) {
+                bool inside = false;
+                if (vfs_follow_symlink_dir(root, &st, sym_target, true, &sym_depth)) {
+                    for (size_t i = 0; i <= st.depth && !inside; i++) {
+                        inside = st.nodes[i] == existing->node;
+                    }
+                    vfs_node_t *tdir = st.nodes[st.depth];
+                    if (!inside && S_ISDIR(tdir->mode) && !vfs_dir_merge(tdir, existing->node)) {
                         set_error(error_message, "out of memory merging symlinked directory");
                         ok = false;
                         continue;
@@ -1028,8 +1048,9 @@ static bool import_entries(struct archive *a, ext4_writer_t *writer, vfs_node_t 
         set_error(error_message, "archive is empty");
         ok = false;
     }
-    ok = ok && resolve_deferred_hardlinks(root, &deferred, error_message);
+    ok = ok && resolve_deferred_hardlinks(root, &st, &deferred, error_message);
     deferred_hl_free(&deferred);
+    free(st.nodes);
     return ok;
 }
 
@@ -1192,9 +1213,9 @@ static xz_mt_reader_t *xz_mt_reader_new(int fd, const uint8_t *data, size_t size
     uint32_t threads = lzma_cputhreads();
     lzma_mt mt = {
         .flags = LZMA_CONCATENATED,
-        .threads = threads == 0U ? 4U : threads < 2U ? 2U : threads > 6U ? 6U : threads,
-        .memlimit_threading = 128ULL << 20,
-        .memlimit_stop = 512ULL << 20,
+        .threads = threads ? threads : 1U,
+        .memlimit_threading = UINT64_MAX,
+        .memlimit_stop = UINT64_MAX,
     };
     if (!r->out_buf || (fd >= 0 && !r->in_buf) || lzma_stream_decoder_mt(&r->strm, &mt) != LZMA_OK) {
         xz_mt_reader_free(r);
@@ -1379,12 +1400,7 @@ static la_ssize_t zstd_read(struct archive *a, void *client, const void **buffer
 }
 
 static bool setup_native_reader(struct archive *a, char **error_message) {
-    (void)archive_read_support_filter_none(a);
-    (void)archive_read_support_filter_gzip(a);
-    (void)archive_read_support_filter_bzip2(a);
-    (void)archive_read_support_filter_xz(a);
-    (void)archive_read_support_filter_lzma(a);
-    (void)archive_read_support_filter_compress(a);
+    (void)archive_read_support_filter_all(a);
     if (archive_read_support_format_tar(a) != ARCHIVE_OK) {
         set_error(error_message, archive_error_string(a));
         return false;

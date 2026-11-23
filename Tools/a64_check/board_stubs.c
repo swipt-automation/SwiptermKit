@@ -10,8 +10,6 @@ void vmm_vcpu_wfi(vcpu_t *cpu) { stop(cpu); }
 void vmm_vcpu_wfe(vcpu_t *cpu) { stop(cpu); }
 void vmm_vcpu_sev(vmm_machine_t *) {}
 void vmm_vcpu_wfe_notify_write(vmm_machine_t *, uintptr_t) {}
-void vmm_vcpu_qspin_wait(vcpu_t *, uint64_t, uint8_t) {}
-void vmm_vcpu_qspin_kick(vmm_machine_t *, uint32_t) {}
 bool vmm_handle_psci(vcpu_t *) { return false; }
 bool vmm_preboot_trap(vcpu_t *) { return false; }
 uint64_t vmm_mmio_read(vmm_machine_t *, vcpu_t *, uint64_t, uint32_t) { return 0; }

@@ -77,8 +77,9 @@ func (m *portMirror) update(listeners []vmm.Listener, reset bool) {
 
 func (m *portMirror) reconcileLocked(port uint16) {
 	var (
-		inet4Any      bool
+		inet4Network  bool
 		inet6Any      bool
+		inet6Network  bool
 		inet6Loopback bool
 		inet4Loopback netip.Addr
 	)
@@ -88,10 +89,12 @@ func (m *portMirror) reconcileLocked(port uint16) {
 		}
 		addr := address.Addr()
 		switch {
-		case addr == netip.IPv4Unspecified():
-			inet4Any = true
+		case addr == netip.IPv4Unspecified() || addr == inet4Guest:
+			inet4Network = true
 		case addr == netip.IPv6Unspecified():
 			inet6Any = true
+		case addr == inet6Guest:
+			inet6Network = true
 		case addr == netip.IPv6Loopback():
 			inet6Loopback = true
 		case addr.Is4() && addr.IsLoopback() && (!inet4Loopback.IsValid() || addr.Less(inet4Loopback)):
@@ -100,7 +103,7 @@ func (m *portMirror) reconcileLocked(port uint16) {
 	}
 	var inet4, inet6 mirrorBinding
 	switch {
-	case inet4Any:
+	case inet4Network:
 		inet4 = mirrorBinding{bind: netip.IPv4Unspecified(), target: netip.AddrPortFrom(inet4Guest, port)}
 	case inet6Any:
 		inet4 = mirrorBinding{bind: netip.IPv4Unspecified(), target: netip.AddrPortFrom(inet6Guest, port)}
@@ -108,7 +111,7 @@ func (m *portMirror) reconcileLocked(port uint16) {
 		inet4 = mirrorBinding{bind: netip.AddrFrom4([4]byte{127, 0, 0, 1}), target: netip.AddrPortFrom(inet4Loopback, port), bridge: true}
 	}
 	switch {
-	case inet6Any:
+	case inet6Any || inet6Network:
 		inet6 = mirrorBinding{bind: netip.IPv6Unspecified(), target: netip.AddrPortFrom(inet6Guest, port)}
 	case inet6Loopback:
 		inet6 = mirrorBinding{bind: netip.IPv6Loopback(), target: netip.AddrPortFrom(netip.IPv6Loopback(), port), bridge: true}

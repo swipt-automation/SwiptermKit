@@ -79,12 +79,8 @@ typedef int archive_open_callback(struct archive *, void *_client_data);
 typedef int archive_close_callback(struct archive *, void *_client_data);
 
 extern struct archive *archive_read_new(void);
+extern int archive_read_support_filter_all(struct archive *);
 extern int archive_read_support_filter_none(struct archive *);
-extern int archive_read_support_filter_gzip(struct archive *);
-extern int archive_read_support_filter_bzip2(struct archive *);
-extern int archive_read_support_filter_xz(struct archive *);
-extern int archive_read_support_filter_lzma(struct archive *);
-extern int archive_read_support_filter_compress(struct archive *);
 extern int archive_read_support_format_tar(struct archive *);
 extern int archive_read_open(struct archive *, void *_client_data, archive_open_callback *,
                              archive_read_callback *, archive_close_callback *);

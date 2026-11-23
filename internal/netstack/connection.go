@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	tcpConnectTimeout = 15 * time.Second
+	tcpConnectTimeout = 75 * time.Second
 	udpSendBuffer     = 256 << 10
 )
 

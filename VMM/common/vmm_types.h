@@ -10,11 +10,12 @@ enum {
     VMM_PAGE_SHIFT = 12,
     VMM_PAGE_SIZE = 4096,
     VMM_PAGE_MASK = 4095,
-    SOFTTLB_ENTRIES = 1024,
+    SOFTTLB_ENTRIES = 4096,
     SOFTTLB_MASK = SOFTTLB_ENTRIES - 1,
 };
 
 #define SOFTTLB_TAG_INVALID 1ULL
+#define SOFTTLB_TAG_GLOBAL 2ULL
 
 #define VMM_GICD_BASE 0x08000000ULL
 #define VMM_GICD_SIZE 0x00010000ULL
@@ -95,23 +96,12 @@ enum : int64_t {
     PSCI_RET_INVALID_ADDRESS = -9,
 };
 
-// Matches paravirt HVC #0 call numbers patched into the swipterm guest Linux kernel.
-#define SWIPTERM_HVC_CLEAR_PAGE 0xC6000001U
-#define SWIPTERM_HVC_COPY_PAGE 0xC6000002U
-#define SWIPTERM_HVC_COPY_USER 0xC6000003U
-#define SWIPTERM_HVC_CRC32_BE 0xC6000004U
-#define SWIPTERM_HVC_TLBI_RANGE 0xC6000005U
-#define SWIPTERM_HVC_QSPIN_WAIT 0xC6000006U
-#define SWIPTERM_HVC_QSPIN_KICK 0xC6000007U
-
 typedef enum softtlb_bank : uint8_t {
     SOFTTLB_EL0_R = 0,
     SOFTTLB_EL0_W = 1,
-    SOFTTLB_EL0_X = 2,
-    SOFTTLB_EL1_R = 3,
-    SOFTTLB_EL1_W = 4,
-    SOFTTLB_EL1_X = 5,
-    SOFTTLB_BANK_COUNT = 6,
+    SOFTTLB_EL1_R = 2,
+    SOFTTLB_EL1_W = 3,
+    SOFTTLB_BANK_COUNT = 4,
 } softtlb_bank_t;
 
 typedef struct softtlb_entry {
@@ -120,6 +110,13 @@ typedef struct softtlb_entry {
 } softtlb_entry_t;
 
 static_assert(sizeof(softtlb_entry_t) == 16);
+
+typedef struct vmm_tlbi {
+    uint64_t va;
+    uint64_t pages;
+    uint16_t asid;
+    bool all_asids;
+} vmm_tlbi_t;
 
 typedef struct vmm_machine vmm_machine_t;
 typedef struct vcpu vcpu_t;

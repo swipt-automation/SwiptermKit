@@ -121,14 +121,13 @@ Lreload:
     ldr x11, [x11, w10, uxtw #3]
     str x11, [x19, #CPU_FAST_SP]
 
-    add w10, w9, w9, lsl #1
     add x21, x19, #CPU_TLB
-    add x21, x21, x10, lsl #TLB_BANK_SHIFT
+    add x21, x21, x9, lsl #(TLB_BANK_SHIFT + 1)
     add x22, x21, #(1 << (TLB_BANK_SHIFT - 12)), lsl #12
     ldr x23, [x19, #CPU_SALT]
-    ubfx x27, x23, #10, #1
     and x9, x23, #0xffff000000000000
-    orr x27, x9, x27, lsl #2
+    and x27, x23, #0xffc
+    orr x27, x27, x9
 
     ldr x9, [x19, #CPU_ICACHE]
     ldr w28, [x9, #IC_RAS_SP]
@@ -150,27 +149,19 @@ Lpoll:
     DISPATCH
 
 Lasync_check:
-    add x9, x19, #CPU_STOP
-    ldarb w9, [x9]
-    cbnz w9, Lcross_slow
+    ldr x9, [x19, #CPU_IRQ]
+    tbnz x9, #((CPU_STOP - CPU_IRQ) * 8), Lcross_slow
+    cbz w9, 1f
+    ldr w0, [x19, #CPU_DAIF]
+    tbz w0, #7, Lcross_slow
+1:
     ldr x9, [x19, #CPU_VM]
-    cbz x9, Lcross_slow
-    add x0, x9, #VM_TLB_EPOCH
-    add x1, x9, #VM_ICACHE_EPOCH
-    ldar x0, [x0]
-    ldar x1, [x1]
+    ldp x0, x1, [x9, #VM_TLB_EPOCH]
     ldp x2, x3, [x19, #CPU_TLB_EPOCH]
     eor x0, x0, x2
     eor x1, x1, x3
     orr x0, x0, x1
     cbnz x0, Lcross_slow
-
-    ldr w9, [x19, #CPU_DAIF]
-    tbnz w9, #7, 1f
-    add x9, x19, #CPU_IRQ
-    ldar w9, [x9]
-    cbnz w9, Lcross_slow
-1:
     br x17
 
 Lcross_page:
@@ -192,9 +183,9 @@ Lcross_page:
     tbnz w11, #16, 4f
     b Lcross_slow
 4:
-    ubfx x11, x23, #10, #1
+    and x11, x23, #(1 << SALT_MMU_OFF)
     orr x10, x10, #2
-    orr x10, x10, x11, lsl #2
+    orr x10, x10, x11
 3:
     and w9, w9, #((1 << (EXEC_BANK_SHIFT - 5)) - 1)
     ldr x14, [x19, #CPU_ICACHE]
@@ -438,7 +429,7 @@ BITFIELD sbfiz64, x, asr, 1
     add x9, x12, #(\bytes - 1)
     eor x9, x9, x12
     tbnz x9, #12, \cold
-    tbz x23, #11, 1f
+    tbz x23, #SALT_ALIGN, 1f
     and x9, x12, #(\alignment - 1)
     cbnz x9, \cold
 1:
@@ -455,11 +446,11 @@ BITFIELD sbfiz64, x, asr, 1
     tbnz w11, #16, 4f
     b \cold
 4:
-    ubfx x11, x23, #10, #1
+    and x11, x23, #(1 << SALT_MMU_OFF)
     orr x10, x10, #2
-    orr x10, x10, x11, lsl #2
+    orr x10, x10, x11
 3:
-    and w9, w9, #1023
+    and w9, w9, #((1 << (TLB_BANK_SHIFT - 4)) - 1)
     add x9, \bank, w9, uxtw #4
     ldp x9, x11, [x9]
     eor x9, x9, x10
@@ -1244,6 +1235,51 @@ Lv\name:
     VLDST1_FORMS ld, \count
 .endr
 
+.macro VLANE name, dir, reg, insn, bytes, mode
+Lv\name:
+    VFP_CHECK
+    BASE
+    mov x12, x10
+.ifc \mode, post
+    add x13, x10, #\bytes
+.endif
+.ifc \mode, postr
+    READ_X x13, IR_RM, w11
+    add x13, x10, x13
+.endif
+.ifc \dir, ld
+    TLB x21, \bytes, \bytes, Lvcold
+.else
+    TLB x22, \bytes, \bytes, Lvcold
+.endif
+    ldrb w9, [x20, #IR_RD]
+    ldrb w10, [x20, #IR_RA]
+    add x9, x19, x9, lsl #4
+    add x9, x9, x10
+.ifc \dir, ld
+    ldr\insn \reg\()15, [x12]
+    str\insn \reg\()15, [x9]
+.else
+    ldr\insn \reg\()15, [x9]
+    str\insn \reg\()15, [x12]
+.endif
+    WRITEBACK \mode
+    NEXT
+.endmacro
+
+.macro VLANE_FORMS dir, lane, reg, insn, bytes
+    VLANE \dir\()1l_\lane\()_off, \dir, \reg, \insn, \bytes, off
+    VLANE \dir\()1l_\lane\()_post, \dir, \reg, \insn, \bytes, post
+    VLANE \dir\()1l_\lane\()_postr, \dir, \reg, \insn, \bytes, postr
+.endmacro
+
+.irp dir, st, ld
+    VLANE_FORMS \dir, b, w, b, 1
+    VLANE_FORMS \dir, h, w, h, 2
+    VLANE_FORMS \dir, s, w, , 4
+    VLANE_FORMS \dir, d, x, , 8
+.endr
+
 Lvcold:
     b Lcold
 
@@ -1844,6 +1880,16 @@ Ldc_zva:
 .endr
     NEXT
 
+Lmops_tail:
+    ldrb w9, [x19, #CPU_EL]
+    cbnz w9, 1f
+    ldr x9, [x19, #CPU_SCTLR]
+    tbz x9, #33, Lpt_cold
+1:
+    READ_X x9, IR_RN
+    cbnz x9, Lpt_cold
+    NEXT
+
 Lbarrier:
     dmb ish
     ldrb w9, [x19, #CPU_ICACHE_SHOOTDOWN]
@@ -1975,11 +2021,9 @@ Lmsr_fpcr:
     ldrb w9, [x19, #CPU_FP_ACTIVE]
     cbz w9, Lpt_cold
     READ_X x14, IR_RD
-    mov w10, #0x9f00
-    movk w10, #0x07c8, lsl #16
+    mov w10, #0x07c80000
     and w14, w14, w10
     str w14, [x19, #CPU_FPCR]
-    and w14, w14, #0xffff0000
     msr fpcr, x14
     NEXT
 
@@ -2145,6 +2189,8 @@ _cpu_fast_offsets:
 #define FAST_MEM3(op) FAST_OFFSETS op, off, pre, post
 #define FAST_MEM6(op) FAST_OFFSETS op, off, pre, post, uxtw, xreg, sxtw
 #define FAST_LDST1(op) FAST_OFFSETS op, 8b_off, 8b_post, 8b_postr, 16b_off, 16b_post, 16b_postr
+#define FAST_LANE(op) FAST_OFFSETS op, b_off, b_post, b_postr, h_off, h_post, h_postr, \
+                      s_off, s_post, s_postr, d_off, d_post, d_postr
 #include "cpu_fast_ops.inc"
 
 .subsections_via_symbols

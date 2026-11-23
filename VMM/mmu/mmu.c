@@ -1,7 +1,6 @@
 #include "mmu.h"
 
 #include "../board/board_internal.h"
-#include "../cpu/cpu_fast_layout.h"
 #include "../cpu/cpu_internal.h"
 #include "../board/machine.h"
 
@@ -9,10 +8,6 @@
 #include <stdatomic.h>
 #include <stdint.h>
 #include <string.h>
-
-#if defined(__ARM_FEATURE_CRC32)
-#include <arm_acle.h>
-#endif
 
 static uint16_t mmu_current_asid(const vcpu_t *cpu) {
     uint64_t tcr = cpu->tcr_el1;
@@ -24,22 +19,22 @@ static uint16_t mmu_current_asid(const vcpu_t *cpu) {
     return asid;
 }
 
-static uint32_t mmu_asid_hash(uint16_t asid) {
-    return (uint32_t)((((uint32_t)asid * 40503U) >> 6) & SOFTTLB_MASK);
+static uint64_t mmu_user_salt(const vcpu_t *cpu, uint16_t asid) {
+    uint32_t hash = (((uint32_t)asid * 40503U) >> 2) ^ ((uint32_t)cpu->tlb_user_gen << 3);
+    return ((uint64_t)asid << 48) | (hash & (EXEC_CACHE_MASK & ~7U));
 }
 
 void mmu_update_asid_salt(vcpu_t *cpu) {
     cpu->ic_ivau_last_va_page = UINT64_MAX;
-    uint16_t asid = mmu_current_asid(cpu);
-    uint64_t salt = ((uint64_t)asid << 48) | (uint64_t)mmu_asid_hash(asid);
+    uint64_t salt = mmu_user_salt(cpu, mmu_current_asid(cpu));
     if ((cpu->sctlr_el1 & 1ULL) == 0) {
-        salt |= (1ULL << 10);
+        salt |= MMU_SALT_MMU_OFF;
     }
     if ((cpu->sctlr_el1 & 2ULL) != 0) {
-        salt |= (1ULL << 11);
+        salt |= MMU_SALT_ALIGN;
     }
     if (!cpu_fp_enabled(cpu)) {
-        salt |= (1ULL << SALT_FP_TRAP);
+        salt |= MMU_SALT_FP_TRAP;
         cpu_fp_leave_guest(cpu);
     }
     if (cpu->tlb_asid_salt != salt) {
@@ -48,7 +43,7 @@ void mmu_update_asid_salt(vcpu_t *cpu) {
     }
 }
 
-static void tlb_flush_all_local(vcpu_t *cpu) {
+void mmu_tlbi_all(vcpu_t *cpu) {
     for (uint32_t b = 0; b < SOFTTLB_BANK_COUNT; b++) {
         for (uint32_t i = 0; i < SOFTTLB_ENTRIES; i++) {
             cpu->tlb[b][i].tag = SOFTTLB_TAG_INVALID;
@@ -59,19 +54,108 @@ static void tlb_flush_all_local(vcpu_t *cpu) {
     cpu->ic_ivau_last_va_page = UINT64_MAX;
 }
 
-static void tlb_flush_asid_local(vcpu_t *cpu, uint16_t asid) {
-    uint64_t target_asid = (uint64_t)asid << 48;
+static void tlb_flush_user_local(vcpu_t *cpu) {
+    if ((++cpu->tlb_user_gen & 511U) == 0U) {
+        mmu_tlbi_all(cpu);
+    }
+    mmu_update_asid_salt(cpu);
+    cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
+    if (ic->cur_page && (ic->cur_page->va_page >> 48) == 0ULL) {
+        ic->cur_exec_epoch = 0;
+    }
+}
+
+static void tlb_flush_page_local(vcpu_t *cpu, uint64_t va, uint64_t salt) {
+    uint64_t tag = va & 0x0000fffffffff000ULL;
+    uint32_t idx;
+    if ((va >> 48) == 0ULL) {
+        idx = (uint32_t)((va >> VMM_PAGE_SHIFT) ^ salt);
+        tag |= salt & MMU_SALT_USER_TAG;
+    } else {
+        idx = (uint32_t)(va >> VMM_PAGE_SHIFT);
+        tag |= SOFTTLB_TAG_GLOBAL;
+    }
     for (uint32_t b = 0; b < SOFTTLB_BANK_COUNT; b++) {
-        for (uint32_t i = 0; i < SOFTTLB_ENTRIES; i++) {
-            uint64_t tag = cpu->tlb[b][i].tag;
-            if ((tag & 3ULL) == 0 && (tag & 0xffff000000000000ULL) == target_asid) {
-                cpu->tlb[b][i].tag = SOFTTLB_TAG_INVALID;
+        softtlb_entry_t *entry = &cpu->tlb[b][idx & SOFTTLB_MASK];
+        if (entry->tag == tag) {
+            entry->tag = SOFTTLB_TAG_INVALID;
+        }
+    }
+    cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
+    for (uint32_t el = 0; el < 2; el++) {
+        exec_cache_entry_t *entry = &ic->exec_cache[el][idx & EXEC_CACHE_MASK];
+        if (entry->tag == tag) {
+            entry->pg = NULL;
+        }
+    }
+    if (ic->cur_page && ic->cur_page->va_page == va) {
+        ic->cur_exec_epoch = 0;
+    }
+}
+
+static void tlb_apply(vcpu_t *cpu, const vmm_tlbi_t *op) {
+    if (op->pages == 0 && op->all_asids) {
+        mmu_tlbi_all(cpu);
+        return;
+    }
+    cpu->ras_epoch++;
+    cpu->ic_ivau_last_va_page = UINT64_MAX;
+    bool user = (op->va >> 48) == 0ULL;
+    if (user && (op->pages == 0 || op->all_asids || op->pages >= SOFTTLB_ENTRIES)) {
+        tlb_flush_user_local(cpu);
+        return;
+    }
+    if (op->pages >= SOFTTLB_ENTRIES) {
+        mmu_tlbi_all(cpu);
+        return;
+    }
+    uint64_t salt = mmu_user_salt(cpu, op->asid);
+    uint64_t va = op->va;
+    for (uint64_t i = 0; i < op->pages; i++, va += VMM_PAGE_SIZE) {
+        tlb_flush_page_local(cpu, va, salt);
+    }
+}
+
+static bool tlb_apply_ring(vcpu_t *cpu, uint64_t target) {
+    const vmm_machine_t *vm = cpu->vm;
+    uint64_t epoch = cpu->tlb_epoch_local;
+    if (target - epoch > VMM_TLB_RING) {
+        return true;
+    }
+    while (epoch != target) {
+        ++epoch;
+        tlb_apply(cpu, &vm->tlb_ring[epoch & (VMM_TLB_RING - 1U)]);
+    }
+    return false;
+}
+
+static void shootdown_wait(vcpu_t *cpu, uint64_t target, bool icache) {
+    vmm_machine_t *vm = cpu->vm;
+    if (!atomic_load_explicit(&vm->running, memory_order_acquire)) {
+        return;
+    }
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
+        vcpu_t *other = vm->cpus[i];
+        if (i == cpu->cpu_id || !other) {
+            continue;
+        }
+        const uint64_t *local = icache ? &other->icache_epoch_local : &other->tlb_epoch_local;
+        uint32_t spins = 0;
+        while (__atomic_load_n(local, __ATOMIC_ACQUIRE) < target) {
+            mmu_poll_shootdown(cpu);
+            if (atomic_load_explicit(&other->halted_wfi, memory_order_seq_cst) ||
+                atomic_load_explicit(&other->stop_requested, memory_order_acquire) ||
+                !atomic_load_explicit(&vm->running, memory_order_acquire) ||
+                atomic_load_explicit(&vm->suspended, memory_order_acquire)) {
+                break;
+            }
+            if (++spins < 128) {
+                __asm__ __volatile__("yield");
+            } else {
+                sched_yield();
             }
         }
     }
-    cpu->exec_epoch++;
-    cpu->ras_epoch++;
-    cpu->ic_ivau_last_va_page = UINT64_MAX;
 }
 
 static uint64_t mmu_canonicalize_va(uint64_t va) {
@@ -81,136 +165,25 @@ static uint64_t mmu_canonicalize_va(uint64_t va) {
     return va & 0x00ffffffffffffffULL;
 }
 
-static void tlb_flush_va_local(vcpu_t *cpu, uint64_t va, uint16_t asid, bool all_asids) {
-    cpu->exec_epoch++;
-    cpu->ras_epoch++;
-    cpu->ic_ivau_last_va_page = UINT64_MAX;
-    va = mmu_canonicalize_va(va);
-    uint64_t top = va >> 48;
-    uint64_t page = va & 0x0000fffffffff000ULL;
-    if (top == 0xffffULL) {
-        uint32_t idx = (uint32_t)((va >> VMM_PAGE_SHIFT) & SOFTTLB_MASK);
-        uint64_t match = page | 0x2ULL;
-        for (uint32_t b = 0; b < SOFTTLB_BANK_COUNT; b++) {
-            if (cpu->tlb[b][idx].tag == match) {
-                cpu->tlb[b][idx].tag = SOFTTLB_TAG_INVALID;
-            }
-        }
-        return;
-    }
-    if (top != 0ULL) {
-        return;
-    }
-    if (!all_asids) {
-        uint32_t idx = (uint32_t)(((va >> VMM_PAGE_SHIFT) ^ mmu_asid_hash(asid)) & SOFTTLB_MASK);
-        uint64_t match = page | ((uint64_t)asid << 48);
-        for (uint32_t b = 0; b < SOFTTLB_BANK_COUNT; b++) {
-            if (cpu->tlb[b][idx].tag == match) {
-                cpu->tlb[b][idx].tag = SOFTTLB_TAG_INVALID;
-            }
-        }
-        return;
-    }
-    for (uint32_t b = 0; b < SOFTTLB_BANK_COUNT; b++) {
-        for (uint32_t i = 0; i < SOFTTLB_ENTRIES; i++) {
-            uint64_t tag = cpu->tlb[b][i].tag;
-            if ((tag & 3ULL) == 0 && (tag & 0x0000fffffffff000ULL) == page) {
-                cpu->tlb[b][i].tag = SOFTTLB_TAG_INVALID;
-            }
-        }
-    }
-}
-
-static void tlb_broadcast_shootdown(vcpu_t *cpu) {
+void mmu_tlbi(vcpu_t *cpu, vmm_tlbi_t op, bool inner_shareable) {
+    op.va = mmu_canonicalize_va(op.va) & ~(uint64_t)VMM_PAGE_MASK;
+    tlb_apply(cpu, &op);
     vmm_machine_t *vm = cpu->vm;
-    if (!vm || vm->cpu_count <= 1) {
+    if (!inner_shareable || vm->cpu_count <= 1) {
         return;
     }
-    uint64_t target = atomic_fetch_add_explicit(&vm->tlb_epoch, 1, memory_order_seq_cst) + 1;
-    if (cpu->tlb_epoch_local != target - 1U) {
-        tlb_flush_all_local(cpu);
+    os_unfair_lock_lock(&vm->tlb_lock);
+    uint64_t target = atomic_load_explicit(&vm->tlb_epoch, memory_order_relaxed);
+    bool lagged = tlb_apply_ring(cpu, target);
+    ++target;
+    vm->tlb_ring[target & (VMM_TLB_RING - 1U)] = op;
+    atomic_store_explicit(&vm->tlb_epoch, target, memory_order_seq_cst);
+    os_unfair_lock_unlock(&vm->tlb_lock);
+    if (lagged) {
+        mmu_tlbi_all(cpu);
     }
     __atomic_store_n(&cpu->tlb_epoch_local, target, __ATOMIC_RELEASE);
-
-    if (!atomic_load_explicit(&vm->running, memory_order_acquire)) {
-        return;
-    }
-
-    for (uint32_t i = 0; i < vm->cpu_count; i++) {
-        if (i == cpu->cpu_id) {
-            continue;
-        }
-        vcpu_t *other = vm->cpus[i];
-        if (!other) {
-            continue;
-        }
-        uint32_t spins = 0;
-        while (__atomic_load_n(&other->tlb_epoch_local, __ATOMIC_ACQUIRE) < target) {
-            mmu_poll_shootdown(cpu);
-            if (atomic_load_explicit(&other->halted_wfi, memory_order_seq_cst) ||
-                atomic_load_explicit(&other->stop_requested, memory_order_acquire) ||
-                !atomic_load_explicit(&vm->running, memory_order_acquire) ||
-                atomic_load_explicit(&vm->suspended, memory_order_acquire)) {
-                break;
-            }
-            if (++spins < 128) {
-#if defined(__aarch64__)
-                __asm__ __volatile__("yield");
-#endif
-            } else {
-                sched_yield();
-            }
-        }
-    }
-}
-
-void mmu_tlbi_all(vcpu_t *cpu, bool inner_shareable) {
-    tlb_flush_all_local(cpu);
-    if (inner_shareable) {
-        tlb_broadcast_shootdown(cpu);
-    }
-}
-
-void mmu_tlbi_asid(vcpu_t *cpu, uint16_t asid, bool inner_shareable) {
-    tlb_flush_asid_local(cpu, asid);
-    if (inner_shareable) {
-        tlb_broadcast_shootdown(cpu);
-    }
-}
-
-void mmu_tlbi_va(vcpu_t *cpu, uint64_t va, uint16_t asid, bool all_asids, bool inner_shareable) {
-    tlb_flush_va_local(cpu, va, asid, all_asids);
-    if (inner_shareable) {
-        tlb_broadcast_shootdown(cpu);
-    }
-}
-
-void mmu_tlbi_range(vcpu_t *cpu, uint64_t start_va, uint64_t num_pages, uint8_t tg_shift,
-                    uint16_t asid, bool all_asids, bool inner_shareable) {
-    if (tg_shift < VMM_PAGE_SHIFT || tg_shift > 16) {
-        tg_shift = VMM_PAGE_SHIFT;
-    }
-    uint64_t subpages = 1ULL << (tg_shift - VMM_PAGE_SHIFT);
-    uint64_t total_4k = num_pages * subpages;
-    if (num_pages == 0) {
-        return;
-    }
-    uint64_t canon_start = mmu_canonicalize_va(start_va);
-    if (total_4k >= 128 || (all_asids && (canon_start >> 48) == 0ULL && total_4k >= 16)) {
-        if (all_asids) {
-            tlb_flush_all_local(cpu);
-        } else {
-            tlb_flush_asid_local(cpu, asid);
-        }
-    } else {
-        uint64_t va = canon_start & ~(uint64_t)VMM_PAGE_MASK;
-        for (uint64_t i = 0; i < total_4k; i++, va += VMM_PAGE_SIZE) {
-            tlb_flush_va_local(cpu, va, asid, all_asids);
-        }
-    }
-    if (inner_shareable) {
-        tlb_broadcast_shootdown(cpu);
-    }
+    shootdown_wait(cpu, target, false);
 }
 
 static bool icache_apply_ring(vcpu_t *cpu, uint64_t target) {
@@ -222,7 +195,7 @@ static bool icache_apply_ring(vcpu_t *cpu, uint64_t target) {
     while (epoch != target) {
         ++epoch;
         const vmm_icache_shootdown_t *rec = &vm->icache_ring[epoch & (VMM_ICACHE_RING - 1U)];
-        if (rec->epoch != epoch || rec->count > VCPU_ICACHE_PENDING) {
+        if (rec->count > VCPU_ICACHE_PENDING) {
             return true;
         }
         for (uint32_t i = 0; i < rec->count; ++i) {
@@ -252,7 +225,7 @@ void mmu_icache_broadcast(vcpu_t *cpu) {
     cpu->icache_shootdown_all = false;
     cpu->icache_shootdown_pending = false;
     cpu->ic_ivau_last_va_page = UINT64_MAX;
-    if ((!all && count == 0U) || !vm || vm->cpu_count <= 1) {
+    if ((!all && count == 0U) || vm->cpu_count <= 1) {
         return;
     }
 
@@ -261,7 +234,6 @@ void mmu_icache_broadcast(vcpu_t *cpu) {
     bool lagged = icache_apply_ring(cpu, target);
     ++target;
     vmm_icache_shootdown_t *rec = &vm->icache_ring[target & (VMM_ICACHE_RING - 1U)];
-    rec->epoch = target;
     rec->count = all ? UINT32_MAX : count;
     memcpy(rec->pa_pages, pages, count * sizeof(pages[0]));
     atomic_store_explicit(&vm->icache_epoch, target, memory_order_seq_cst);
@@ -270,61 +242,32 @@ void mmu_icache_broadcast(vcpu_t *cpu) {
         vcpu_flush_icache_all(cpu);
     }
     __atomic_store_n(&cpu->icache_epoch_local, target, __ATOMIC_RELEASE);
-
-    if (!atomic_load_explicit(&vm->running, memory_order_acquire)) {
-        return;
-    }
-
-    for (uint32_t i = 0; i < vm->cpu_count; i++) {
-        if (i == cpu->cpu_id) {
-            continue;
-        }
-        vcpu_t *other = vm->cpus[i];
-        if (!other) {
-            continue;
-        }
-        uint32_t spins = 0;
-        while (__atomic_load_n(&other->icache_epoch_local, __ATOMIC_ACQUIRE) < target) {
-            mmu_poll_shootdown(cpu);
-            if (atomic_load_explicit(&other->halted_wfi, memory_order_seq_cst) ||
-                atomic_load_explicit(&other->stop_requested, memory_order_acquire) ||
-                !atomic_load_explicit(&vm->running, memory_order_acquire) ||
-                atomic_load_explicit(&vm->suspended, memory_order_acquire)) {
-                break;
-            }
-            if (++spins < 128) {
-#if defined(__aarch64__)
-                __asm__ __volatile__("yield");
-#endif
-            } else {
-                sched_yield();
-            }
-        }
-    }
+    shootdown_wait(cpu, target, true);
 }
 
 bool mmu_poll_shootdown(vcpu_t *cpu) {
-    vmm_machine_t *vm = cpu ? cpu->vm : NULL;
-    if (!vm) {
-        return false;
-    }
+    vmm_machine_t *vm = cpu->vm;
     bool flushed = false;
-    uint64_t epoch = atomic_load_explicit(&vm->tlb_epoch, memory_order_acquire);
-    if (__builtin_expect(cpu->tlb_epoch_local != epoch, 0)) {
-        tlb_flush_all_local(cpu);
+    if (__builtin_expect(atomic_load_explicit(&vm->tlb_epoch, memory_order_seq_cst) != cpu->tlb_epoch_local, 0)) {
+        os_unfair_lock_lock(&vm->tlb_lock);
+        uint64_t epoch = atomic_load_explicit(&vm->tlb_epoch, memory_order_relaxed);
+        bool lagged = tlb_apply_ring(cpu, epoch);
+        os_unfair_lock_unlock(&vm->tlb_lock);
+        if (lagged) {
+            mmu_tlbi_all(cpu);
+        }
         __atomic_store_n(&cpu->tlb_epoch_local, epoch, __ATOMIC_RELEASE);
         flushed = true;
     }
-    uint64_t iepoch = atomic_load_explicit(&vm->icache_epoch, memory_order_acquire);
-    if (__builtin_expect(cpu->icache_epoch_local != iepoch, 0)) {
+    if (__builtin_expect(atomic_load_explicit(&vm->icache_epoch, memory_order_seq_cst) != cpu->icache_epoch_local, 0)) {
         os_unfair_lock_lock(&vm->icache_lock);
-        iepoch = atomic_load_explicit(&vm->icache_epoch, memory_order_relaxed);
-        bool lagged = icache_apply_ring(cpu, iepoch);
+        uint64_t epoch = atomic_load_explicit(&vm->icache_epoch, memory_order_relaxed);
+        bool lagged = icache_apply_ring(cpu, epoch);
         os_unfair_lock_unlock(&vm->icache_lock);
         if (lagged) {
             vcpu_flush_icache_all(cpu);
         }
-        __atomic_store_n(&cpu->icache_epoch_local, iepoch, __ATOMIC_RELEASE);
+        __atomic_store_n(&cpu->icache_epoch_local, epoch, __ATOMIC_RELEASE);
         flushed = true;
     }
     return flushed;
@@ -354,6 +297,8 @@ typedef struct walk_detail {
     bool is_ttbr1;
     bool non_global;
     bool el0_accessible;
+    bool readable;
+    bool writable;
     bool canonical_untagged;
 } walk_detail_t;
 
@@ -550,38 +495,24 @@ static walk_detail_t mmu_walk(vcpu_t *cpu, uint64_t va, mmu_access_t access, uin
     bool writable_el0 = (ap == 1U);
     bool writable_el1 = ((ap & 2U) == 0);
     bool wxn = ((cpu->sctlr_el1 >> 19) & 1ULL) != 0;
+    bool pan_denied = el != 0 && cpu->pan && el0_accessible;
+    out.readable = el == 0 ? el0_accessible : !pan_denied;
+    out.writable = el == 0 ? writable_el0 : writable_el1 && !pan_denied;
 
-    bool perm_ok = false;
-    if (el == 0) {
-        switch (access) {
-        case MMU_ACCESS_READ:
-            perm_ok = el0_accessible;
-            break;
-        case MMU_ACCESS_WRITE:
-            perm_ok = writable_el0;
-            break;
-        case MMU_ACCESS_EXEC:
-            perm_ok = el0_accessible && !uxn && !(wxn && writable_el0);
-            break;
-        case MMU_ACCESS_RESOLVE:
-            perm_ok = true;
-            break;
-        }
-    } else {
-        switch (access) {
-        case MMU_ACCESS_READ:
-            perm_ok = !(cpu->pan && el0_accessible);
-            break;
-        case MMU_ACCESS_WRITE:
-            perm_ok = writable_el1 && !(cpu->pan && el0_accessible);
-            break;
-        case MMU_ACCESS_EXEC:
-            perm_ok = !pxn && !writable_el0 && !(wxn && writable_el1);
-            break;
-        case MMU_ACCESS_RESOLVE:
-            perm_ok = true;
-            break;
-        }
+    bool perm_ok = true;
+    switch (access) {
+    case MMU_ACCESS_READ:
+        perm_ok = out.readable;
+        break;
+    case MMU_ACCESS_WRITE:
+        perm_ok = out.writable;
+        break;
+    case MMU_ACCESS_EXEC:
+        perm_ok = el == 0 ? el0_accessible && !uxn && !(wxn && writable_el0)
+                          : !pxn && !writable_el0 && !(wxn && writable_el1);
+        break;
+    case MMU_ACCESS_RESOLVE:
+        break;
     }
 
     if (!perm_ok) {
@@ -615,8 +546,40 @@ mmu_translation_t mmu_translate(vcpu_t *cpu, uint64_t va, mmu_access_t access, u
     return mmu_walk(cpu, va, access, el).res;
 }
 
-static void mmu_tlb_fill(vcpu_t *cpu, uint64_t va, mmu_access_t access, uint8_t el,
-                         const walk_detail_t *w);
+static void mmu_tlb_fill(vcpu_t *cpu, uint64_t va, uint8_t el, const walk_detail_t *w) {
+    if ((cpu->sctlr_el1 & 1ULL) == 0 || !w->res.ok || w->res.is_mmio || w->is_device ||
+        !w->canonical_untagged || (el == 1 && w->el0_accessible) || (w->is_ttbr1 && w->non_global)) {
+        return;
+    }
+
+    uint64_t page_pa = w->res.pa & ~(uint64_t)VMM_PAGE_MASK;
+    void *page_hva = mmu_gpa_to_hva(cpu->vm, page_pa, VMM_PAGE_SIZE);
+    if (!page_hva) {
+        return;
+    }
+
+    mmu_update_asid_salt(cpu);
+
+    uint64_t page_va = va & 0x0000fffffffff000ULL;
+    uint32_t idx;
+    uint64_t tag;
+    if (!w->is_ttbr1) {
+        idx = (uint32_t)(((va >> VMM_PAGE_SHIFT) ^ (uint32_t)cpu->tlb_asid_salt) & SOFTTLB_MASK);
+        tag = page_va | (cpu->tlb_asid_salt & MMU_SALT_USER_TAG);
+    } else {
+        idx = (uint32_t)((va >> VMM_PAGE_SHIFT) & SOFTTLB_MASK);
+        tag = page_va | SOFTTLB_TAG_GLOBAL;
+    }
+
+    softtlb_entry_t entry = {tag, (uintptr_t)page_hva - (uintptr_t)(va & ~(uint64_t)VMM_PAGE_MASK)};
+    softtlb_bank_t read_bank = el ? SOFTTLB_EL1_R : SOFTTLB_EL0_R;
+    if (w->readable) {
+        cpu->tlb[read_bank][idx] = entry;
+    }
+    if (w->writable) {
+        cpu->tlb[read_bank + 1][idx] = entry;
+    }
+}
 
 bool mmu_translate_and_fill(vcpu_t *cpu, uint64_t va, mmu_access_t access, uint8_t el,
                             mmu_translation_t *out, bool *is_device_out) {
@@ -629,7 +592,7 @@ bool mmu_translate_and_fill(vcpu_t *cpu, uint64_t va, mmu_access_t access, uint8
         return false;
     }
     if (!w.res.is_mmio) {
-        mmu_tlb_fill(cpu, va, access, el, &w);
+        mmu_tlb_fill(cpu, va, el, &w);
     }
     return true;
 }
@@ -656,7 +619,7 @@ bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va, uint64_t *pa_out) {
     const vmm_machine_t *vm = cpu->vm;
     uint64_t va_page = va & ~(uint64_t)VMM_PAGE_MASK;
     uint32_t first = cpu->el ? SOFTTLB_EL1_R : SOFTTLB_EL0_R;
-    for (uint32_t b = first; b < first + 3U; ++b) {
+    for (uint32_t b = first; b <= first + 1U; ++b) {
         uintptr_t hva;
         if (!mmu_tlb_lookup_aligned(cpu->tlb[b], cpu->tlb_asid_salt, va_page, &hva)) {
             continue;
@@ -674,61 +637,9 @@ bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va, uint64_t *pa_out) {
     return true;
 }
 
-static void mmu_tlb_fill(vcpu_t *cpu, uint64_t va, mmu_access_t access, uint8_t el,
-                         const walk_detail_t *w) {
-    if ((cpu->sctlr_el1 & 1ULL) == 0 || !w->res.ok || w->res.is_mmio || w->is_device ||
-        !w->canonical_untagged) {
-        return;
-    }
-    if (el == 1 && access != MMU_ACCESS_EXEC && w->el0_accessible) {
-        return;
-    }
-    if (w->is_ttbr1 && w->non_global) {
-        return;
-    }
-
-    uint64_t page_pa = w->res.pa & ~(uint64_t)VMM_PAGE_MASK;
-    void *page_hva = mmu_gpa_to_hva(cpu->vm, page_pa, VMM_PAGE_SIZE);
-    if (!page_hva) {
-        return;
-    }
-
-    mmu_update_asid_salt(cpu);
-
-    softtlb_bank_t bank_id;
-    if (el == 0) {
-        bank_id = (access == MMU_ACCESS_READ) ? SOFTTLB_EL0_R :
-                  (access == MMU_ACCESS_WRITE) ? SOFTTLB_EL0_W : SOFTTLB_EL0_X;
-    } else {
-        bank_id = (access == MMU_ACCESS_READ) ? SOFTTLB_EL1_R :
-                  (access == MMU_ACCESS_WRITE) ? SOFTTLB_EL1_W : SOFTTLB_EL1_X;
-    }
-
-    uint64_t page_va = va & 0x0000fffffffff000ULL;
-    uint32_t idx;
-    uint64_t tag;
-    if (!w->is_ttbr1) {
-        idx = (uint32_t)(((va >> VMM_PAGE_SHIFT) ^ (uint32_t)cpu->tlb_asid_salt) & SOFTTLB_MASK);
-        tag = page_va | (cpu->tlb_asid_salt & 0xffff000000000000ULL);
-    } else {
-        idx = (uint32_t)((va >> VMM_PAGE_SHIFT) & SOFTTLB_MASK);
-        tag = page_va | 0x2ULL;
-    }
-
-    softtlb_entry_t *entry = &cpu->tlb[bank_id][idx];
-    entry->addend = (uintptr_t)page_hva - (uintptr_t)(va & ~(uint64_t)VMM_PAGE_MASK);
-    entry->tag = tag;
-}
-
 static void mmu_raise_data_abort(vcpu_t *cpu, uint64_t far, uint32_t fsc, bool is_write) {
     uint32_t ec = (cpu->el == 0) ? 0x24U : 0x25U;
     uint32_t esr = (ec << 26) | (1U << 25) | (is_write ? (1U << 6) : 0U) | (fsc & 0x3fU);
-    vcpu_raise_exception(cpu, esr, far, cpu->pc);
-}
-
-static void mmu_raise_insn_abort(vcpu_t *cpu, uint64_t far, uint32_t fsc) {
-    uint32_t ec = (cpu->el == 0) ? 0x20U : 0x21U;
-    uint32_t esr = (ec << 26) | (1U << 25) | (fsc & 0x3fU);
     vcpu_raise_exception(cpu, esr, far, cpu->pc);
 }
 
@@ -762,7 +673,7 @@ static bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out) 
             }
             return true;
         }
-        mmu_tlb_fill(cpu, va, MMU_ACCESS_READ, cpu->el, &w);
+        mmu_tlb_fill(cpu, va, cpu->el, &w);
         if (!unaligned) {
             switch (size) {
             case 1: *(uint8_t *)out = __atomic_load_n((const uint8_t *)w.res.hva, __ATOMIC_RELAXED); return true;
@@ -801,7 +712,7 @@ static bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out) 
     uint8_t *dst = (uint8_t *)out;
 
     if (!w1.res.is_mmio) {
-        mmu_tlb_fill(cpu, va, MMU_ACCESS_READ, cpu->el, &w1);
+        mmu_tlb_fill(cpu, va, cpu->el, &w1);
         memcpy(dst, (const void *)w1.res.hva, n1);
     } else {
         for (uint32_t i = 0; i < n1; i++) {
@@ -809,7 +720,7 @@ static bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out) 
         }
     }
     if (!w2.res.is_mmio) {
-        mmu_tlb_fill(cpu, va2, MMU_ACCESS_READ, cpu->el, &w2);
+        mmu_tlb_fill(cpu, va2, cpu->el, &w2);
         memcpy(dst + n1, (const void *)w2.res.hva, n2);
     } else {
         for (uint32_t i = 0; i < n2; i++) {
@@ -851,7 +762,7 @@ static bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void
             }
             return true;
         }
-        mmu_tlb_fill(cpu, va, MMU_ACCESS_WRITE, cpu->el, &w);
+        mmu_tlb_fill(cpu, va, cpu->el, &w);
         if (!unaligned) {
             switch (size) {
             case 1: __atomic_store_n((uint8_t *)w.res.hva, *(const uint8_t *)in, __ATOMIC_RELAXED); return true;
@@ -890,7 +801,7 @@ static bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void
     const uint8_t *src = (const uint8_t *)in;
 
     if (!w1.res.is_mmio) {
-        mmu_tlb_fill(cpu, va, MMU_ACCESS_WRITE, cpu->el, &w1);
+        mmu_tlb_fill(cpu, va, cpu->el, &w1);
         memcpy((void *)w1.res.hva, src, n1);
     } else {
         for (uint32_t i = 0; i < n1; i++) {
@@ -898,7 +809,7 @@ static bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void
         }
     }
     if (!w2.res.is_mmio) {
-        mmu_tlb_fill(cpu, va2, MMU_ACCESS_WRITE, cpu->el, &w2);
+        mmu_tlb_fill(cpu, va2, cpu->el, &w2);
         memcpy((void *)w2.res.hva, src + n1, n2);
     } else {
         for (uint32_t i = 0; i < n2; i++) {
@@ -946,255 +857,4 @@ bool mmu_write_64_slow(vcpu_t *cpu, uint64_t va, uint64_t val) {
 
 bool mmu_write_128_slow(vcpu_t *cpu, uint64_t va, __uint128_t val) {
     return mmu_write_slow_n(cpu, va, 16, &val);
-}
-
-bool mmu_fetch_32_slow(vcpu_t *cpu, uint64_t va, uint32_t *out) {
-    if ((va & 3ULL) != 0) {
-        uint32_t esr = (0x22U << 26) | (1U << 25);
-        vcpu_raise_exception(cpu, esr, va, cpu->pc);
-        return false;
-    }
-    walk_detail_t w = mmu_walk(cpu, va, MMU_ACCESS_EXEC, cpu->el);
-    if (!w.res.ok) {
-        mmu_raise_insn_abort(cpu, va, w.res.fault_fsc);
-        return false;
-    }
-    mmu_tlb_fill(cpu, va, MMU_ACCESS_EXEC, cpu->el, &w);
-    memcpy(out, (const void *)w.res.hva, 4);
-    return true;
-}
-
-static uint32_t pv_crc32_be(uint32_t crc, const uint8_t *p, size_t n) {
-#if defined(__ARM_FEATURE_CRC32)
-    uint32_t c = __builtin_bitreverse32(crc);
-    while (n >= 8) {
-        uint64_t word;
-        memcpy(&word, p, 8);
-        c = __crc32d(c, __builtin_bitreverse64(__builtin_bswap64(word)));
-        p += 8;
-        n -= 8;
-    }
-    while (n > 0) {
-        c = __crc32b(c, __builtin_bitreverse8(*p++));
-        n--;
-    }
-    return __builtin_bitreverse32(c);
-#else
-    uint32_t c = crc;
-    while (n > 0) {
-        c ^= ((uint32_t)(*p++) << 24);
-        for (int b = 0; b < 8; b++) {
-            c = (c & 0x80000000U) ? ((c << 1) ^ 0x04c11db7U) : (c << 1);
-        }
-        n--;
-    }
-    return c;
-#endif
-}
-
-static bool pv_clear_page(vcpu_t *cpu, uint64_t dst_va) {
-    uint8_t *ptrs[2];
-    size_t lens[2];
-    size_t count = 0;
-    size_t left = VMM_PAGE_SIZE;
-    uint64_t va = dst_va;
-
-    while (left > 0) {
-        size_t chunk = VMM_PAGE_SIZE - (size_t)(va & VMM_PAGE_MASK);
-        if (chunk > left) {
-            chunk = left;
-        }
-        walk_detail_t w = mmu_walk(cpu, va, MMU_ACCESS_WRITE, cpu->el);
-        if (!w.res.ok || w.res.is_mmio) {
-            return false;
-        }
-        ptrs[count] = (uint8_t *)w.res.hva;
-        lens[count] = chunk;
-        count++;
-        va += chunk;
-        left -= chunk;
-    }
-    for (size_t i = 0; i < count; i++) {
-        memset(ptrs[i], 0, lens[i]);
-    }
-    return true;
-}
-
-static bool pv_copy_page(vcpu_t *cpu, uint64_t dst_va, uint64_t src_va) {
-    struct {
-        uint8_t *dst;
-        const uint8_t *src;
-        size_t len;
-    } spans[4];
-    size_t count = 0;
-    size_t left = VMM_PAGE_SIZE;
-    uint64_t d = dst_va;
-    uint64_t s = src_va;
-
-    while (left > 0) {
-        size_t cd = VMM_PAGE_SIZE - (size_t)(d & VMM_PAGE_MASK);
-        size_t cs = VMM_PAGE_SIZE - (size_t)(s & VMM_PAGE_MASK);
-        size_t chunk = cd < cs ? cd : cs;
-        if (chunk > left) {
-            chunk = left;
-        }
-        walk_detail_t ws = mmu_walk(cpu, s, MMU_ACCESS_READ, cpu->el);
-        if (!ws.res.ok || ws.res.is_mmio) {
-            return false;
-        }
-        walk_detail_t wd = mmu_walk(cpu, d, MMU_ACCESS_WRITE, cpu->el);
-        if (!wd.res.ok || wd.res.is_mmio) {
-            return false;
-        }
-        spans[count].dst = (uint8_t *)wd.res.hva;
-        spans[count].src = (const uint8_t *)ws.res.hva;
-        spans[count].len = chunk;
-        count++;
-        d += chunk;
-        s += chunk;
-        left -= chunk;
-    }
-    for (size_t i = 0; i < count; i++) {
-        memmove(spans[i].dst, spans[i].src, spans[i].len);
-    }
-    return true;
-}
-
-static uint64_t pv_copy_user(vcpu_t *cpu, uint64_t dst_va, uint64_t src_va, uint64_t len) {
-    if (len == 0) {
-        return 0;
-    }
-    uint8_t dst_el = ((dst_va >> 55) & 1ULL) ? 1 : 0;
-    uint8_t src_el = ((src_va >> 55) & 1ULL) ? 1 : 0;
-    uint64_t d = dst_va;
-    uint64_t s = src_va;
-    uint64_t left = len;
-
-    size_t cd0 = VMM_PAGE_SIZE - (size_t)(d & VMM_PAGE_MASK);
-    size_t cs0 = VMM_PAGE_SIZE - (size_t)(s & VMM_PAGE_MASK);
-    size_t chunk0 = cd0 < cs0 ? cd0 : cs0;
-    if (chunk0 >= left) {
-        walk_detail_t ws = mmu_walk(cpu, s, MMU_ACCESS_READ, src_el);
-        if (!ws.res.ok || ws.res.is_mmio) {
-            return UINT64_MAX;
-        }
-        walk_detail_t wd = mmu_walk(cpu, d, MMU_ACCESS_WRITE, dst_el);
-        if (!wd.res.ok || wd.res.is_mmio) {
-            return UINT64_MAX;
-        }
-        memmove((void *)wd.res.hva, (const void *)ws.res.hva, (size_t)left);
-        return 0;
-    }
-
-    while (left > 0) {
-        size_t cd = VMM_PAGE_SIZE - (size_t)(d & VMM_PAGE_MASK);
-        size_t cs = VMM_PAGE_SIZE - (size_t)(s & VMM_PAGE_MASK);
-        size_t chunk = cd < cs ? cd : cs;
-        if (chunk > left) {
-            chunk = (size_t)left;
-        }
-        walk_detail_t ws = mmu_walk(cpu, s, MMU_ACCESS_READ, src_el);
-        if (!ws.res.ok || ws.res.is_mmio) {
-            return UINT64_MAX;
-        }
-        walk_detail_t wd = mmu_walk(cpu, d, MMU_ACCESS_WRITE, dst_el);
-        if (!wd.res.ok || wd.res.is_mmio) {
-            return UINT64_MAX;
-        }
-        d += chunk;
-        s += chunk;
-        left -= chunk;
-    }
-
-    d = dst_va;
-    s = src_va;
-    left = len;
-    while (left > 0) {
-        size_t cd = VMM_PAGE_SIZE - (size_t)(d & VMM_PAGE_MASK);
-        size_t cs = VMM_PAGE_SIZE - (size_t)(s & VMM_PAGE_MASK);
-        size_t chunk = cd < cs ? cd : cs;
-        if (chunk > left) {
-            chunk = (size_t)left;
-        }
-        walk_detail_t ws = mmu_walk(cpu, s, MMU_ACCESS_READ, src_el);
-        walk_detail_t wd = mmu_walk(cpu, d, MMU_ACCESS_WRITE, dst_el);
-        memmove((void *)wd.res.hva, (const void *)ws.res.hva, chunk);
-        d += chunk;
-        s += chunk;
-        left -= chunk;
-    }
-    return 0;
-}
-
-static bool pv_crc32_be_guest(vcpu_t *cpu, uint32_t crc, uint64_t src_va, uint64_t len,
-                              uint32_t *out_crc) {
-    uint64_t s = src_va;
-    uint64_t left = len;
-    while (left > 0) {
-        size_t chunk = VMM_PAGE_SIZE - (size_t)(s & VMM_PAGE_MASK);
-        if (chunk > left) {
-            chunk = (size_t)left;
-        }
-        walk_detail_t ws = mmu_walk(cpu, s, MMU_ACCESS_READ, cpu->el);
-        if (!ws.res.ok || ws.res.is_mmio) {
-            return false;
-        }
-        crc = pv_crc32_be(crc, (const uint8_t *)ws.res.hva, chunk);
-        s += chunk;
-        left -= chunk;
-    }
-    *out_crc = crc;
-    return true;
-}
-
-bool mmu_handle_pv_hvc(vcpu_t *cpu, uint32_t func_id) {
-    switch (func_id) {
-    case SWIPTERM_HVC_CLEAR_PAGE:
-        cpu->x[0] = pv_clear_page(cpu, cpu->x[1]) ? 0ULL : (uint64_t)-1;
-        return true;
-
-    case SWIPTERM_HVC_COPY_PAGE:
-        cpu->x[0] = pv_copy_page(cpu, cpu->x[1], cpu->x[2]) ? 0ULL : (uint64_t)-1;
-        return true;
-
-    case SWIPTERM_HVC_COPY_USER:
-        cpu->x[0] = pv_copy_user(cpu, cpu->x[1], cpu->x[2], cpu->x[3]);
-        return true;
-
-    case SWIPTERM_HVC_CRC32_BE: {
-        uint32_t crc = 0;
-        if (pv_crc32_be_guest(cpu, (uint32_t)cpu->x[1], cpu->x[2], cpu->x[3], &crc)) {
-            cpu->x[0] = (uint64_t)crc;
-        } else {
-            cpu->x[0] = UINT64_MAX;
-        }
-        return true;
-    }
-
-    case SWIPTERM_HVC_TLBI_RANGE: {
-        uint64_t start_va = cpu->x[1];
-        uint64_t num_pages = cpu->x[2];
-        uint8_t tg_shift = (cpu->x[3] == 12 || cpu->x[3] == 14 || cpu->x[3] == 16)
-                               ? (uint8_t)cpu->x[3]
-                               : (uint8_t)VMM_PAGE_SHIFT;
-        uint16_t asid = (uint16_t)(cpu->x[4] & 0xffffU);
-        bool all_asids = (cpu->x[3] == 0) || (cpu->x[4] >> 16) != 0;
-        mmu_tlbi_range(cpu, start_va, num_pages, tg_shift, asid, all_asids, true);
-        cpu->x[0] = 0;
-        return true;
-    }
-
-    case SWIPTERM_HVC_QSPIN_WAIT:
-        vmm_vcpu_qspin_wait(cpu, cpu->x[1], (uint8_t)cpu->x[2]);
-        cpu->x[0] = 0;
-        return true;
-
-    case SWIPTERM_HVC_QSPIN_KICK:
-        vmm_vcpu_qspin_kick(cpu->vm, (uint32_t)cpu->x[1]);
-        cpu->x[0] = 0;
-        return true;
-
-    default:
-        return vmm_handle_psci(cpu);
-    }
 }

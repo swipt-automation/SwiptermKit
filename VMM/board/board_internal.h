@@ -89,10 +89,6 @@ typedef struct vmm_machine_priv {
     pthread_mutex_t wfe_lock[VMM_MAX_VCPUS];
     pthread_cond_t wfe_cond[VMM_MAX_VCPUS];
 
-    pthread_mutex_t qspin_lock[VMM_MAX_VCPUS];
-    pthread_cond_t qspin_cond[VMM_MAX_VCPUS];
-    bool qspin_kicked[VMM_MAX_VCPUS];
-
     pthread_mutex_t state_lock;
     pthread_cond_t suspend_cond;
     uint32_t suspended_count;
@@ -169,8 +165,6 @@ void vmm_vcpu_wake(vmm_machine_t *vm, uint32_t cpu_id);
 void vmm_vcpu_wfe(vcpu_t *cpu);
 void vmm_vcpu_sev(vmm_machine_t *vm);
 void vmm_vcpu_wfe_notify_write(vmm_machine_t *vm, uintptr_t hva);
-void vmm_vcpu_qspin_wait(vcpu_t *cpu, uint64_t lock_va, uint8_t expected);
-void vmm_vcpu_qspin_kick(vmm_machine_t *vm, uint32_t cpu_id);
 bool vmm_handle_psci(vcpu_t *cpu);
 
 #endif

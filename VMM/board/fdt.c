@@ -157,10 +157,7 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
         return -EINVAL;
     }
 
-    uint32_t cpu_count = vm->cpu_count ? vm->cpu_count : 1;
-    if (cpu_count > VMM_MAX_VCPUS) {
-        cpu_count = VMM_MAX_VCPUS;
-    }
+    uint32_t cpu_count = vm->cpu_count;
 
     fdt_writer_t w = {0};
 

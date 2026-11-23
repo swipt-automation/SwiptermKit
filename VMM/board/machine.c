@@ -166,7 +166,7 @@ static void vcpu_load_snapshot(vcpu_t *cpu, const vmm_snapshot_vcpu_t *in) {
     cpu->par_el1 = in->par_el1;
     cpu->mpidr_el1 = in->mpidr_el1;
     cpu->sysregs = in->sysregs;
-    mmu_tlbi_all(cpu, false);
+    mmu_tlbi_all(cpu);
     mmu_update_asid_salt(cpu);
     vcpu_flush_icache_all(cpu);
 }
@@ -367,13 +367,15 @@ void vmm_vcpu_wake(vmm_machine_t *vm, uint32_t cpu_id) {
     if (!priv || cpu_id >= vm->cpu_count) {
         return;
     }
+    vcpu_t *cpu = vm->cpus[cpu_id];
+    atomic_store_explicit(&cpu->event_reg, true, memory_order_release);
+    atomic_thread_fence(memory_order_seq_cst);
+    if (!atomic_load_explicit(&cpu->halted_wfi, memory_order_seq_cst)) {
+        return;
+    }
     pthread_mutex_lock(&priv->wfi_lock[cpu_id]);
     pthread_cond_signal(&priv->wfi_cond[cpu_id]);
     pthread_mutex_unlock(&priv->wfi_lock[cpu_id]);
-
-    if (vm->cpus[cpu_id]) {
-        atomic_store_explicit(&vm->cpus[cpu_id]->event_reg, true, memory_order_release);
-    }
     pthread_mutex_lock(&priv->wfe_lock[cpu_id]);
     pthread_cond_signal(&priv->wfe_cond[cpu_id]);
     pthread_mutex_unlock(&priv->wfe_lock[cpu_id]);
@@ -436,15 +438,8 @@ void vmm_vcpu_wfe(vcpu_t *cpu) {
     }
 
     atomic_store_explicit(&cpu->halted_wfi, true, memory_order_seq_cst);
+    atomic_thread_fence(memory_order_seq_cst);
     mmu_poll_shootdown(cpu);
-
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_nsec += 200000L;
-    if (ts.tv_nsec >= 1000000000L) {
-        ts.tv_sec += 1;
-        ts.tv_nsec -= 1000000000L;
-    }
 
     pthread_mutex_lock(&priv->wfe_lock[id]);
     if (!atomic_exchange_explicit(&cpu->event_reg, false, memory_order_acq_rel) &&
@@ -453,7 +448,8 @@ void vmm_vcpu_wfe(vcpu_t *cpu) {
         !atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) &&
         !atomic_load_explicit(&vm->suspended, memory_order_acquire) &&
         atomic_load_explicit(&vm->running, memory_order_acquire)) {
-        pthread_cond_timedwait(&priv->wfe_cond[id], &priv->wfe_lock[id], &ts);
+        pthread_cond_timedwait_relative_np(&priv->wfe_cond[id], &priv->wfe_lock[id],
+                                           &(struct timespec){.tv_nsec = 200000L});
         atomic_store_explicit(&cpu->event_reg, false, memory_order_release);
     }
     pthread_mutex_unlock(&priv->wfe_lock[id]);
@@ -524,6 +520,7 @@ void vmm_vcpu_wfi(vcpu_t *cpu) {
     }
 
     atomic_store_explicit(&cpu->halted_wfi, true, memory_order_seq_cst);
+    atomic_thread_fence(memory_order_seq_cst);
     mmu_poll_shootdown(cpu);
 
     pthread_mutex_lock(&priv->wfi_lock[id]);
@@ -537,63 +534,6 @@ void vmm_vcpu_wfi(vcpu_t *cpu) {
 
     atomic_store_explicit(&cpu->halted_wfi, false, memory_order_seq_cst);
     mmu_poll_shootdown(cpu);
-}
-
-void vmm_vcpu_qspin_wait(vcpu_t *cpu, uint64_t lock_va, uint8_t expected) {
-    if (!cpu || !cpu->vm) {
-        return;
-    }
-    vmm_machine_t *vm = cpu->vm;
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || cpu->cpu_id >= vm->cpu_count) {
-        sched_yield();
-        return;
-    }
-
-    if (lock_va != 0) {
-        mmu_translation_t tr = mmu_translate(cpu, lock_va, MMU_ACCESS_READ, cpu->el);
-        if (tr.ok && !tr.is_mmio) {
-            uint8_t cur = __atomic_load_n((const uint8_t *)tr.hva, __ATOMIC_ACQUIRE);
-            if (cur != expected) {
-                return;
-            }
-        }
-    }
-
-    uint32_t id = cpu->cpu_id;
-    atomic_store_explicit(&cpu->halted_wfi, true, memory_order_seq_cst);
-
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_nsec += 250000L;
-    if (ts.tv_nsec >= 1000000000L) {
-        ts.tv_sec += 1;
-        ts.tv_nsec -= 1000000000L;
-    }
-
-    pthread_mutex_lock(&priv->qspin_lock[id]);
-    if (!priv->qspin_kicked[id] &&
-        !atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) &&
-        !atomic_load_explicit(&vm->suspended, memory_order_acquire) &&
-        atomic_load_explicit(&vm->running, memory_order_acquire)) {
-        pthread_cond_timedwait(&priv->qspin_cond[id], &priv->qspin_lock[id], &ts);
-    }
-    priv->qspin_kicked[id] = false;
-    pthread_mutex_unlock(&priv->qspin_lock[id]);
-
-    atomic_store_explicit(&cpu->halted_wfi, false, memory_order_seq_cst);
-    mmu_poll_shootdown(cpu);
-}
-
-void vmm_vcpu_qspin_kick(vmm_machine_t *vm, uint32_t cpu_id) {
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || cpu_id >= vm->cpu_count) {
-        return;
-    }
-    pthread_mutex_lock(&priv->qspin_lock[cpu_id]);
-    priv->qspin_kicked[cpu_id] = true;
-    pthread_cond_signal(&priv->qspin_cond[cpu_id]);
-    pthread_mutex_unlock(&priv->qspin_lock[cpu_id]);
 }
 
 static void vmm_notify_halt_once(vmm_machine_priv_t *priv) {
@@ -707,7 +647,7 @@ bool vmm_handle_psci(vcpu_t *cpu) {
 
         vcpu_t *target = vm->cpus[target_id];
         vcpu_reset(target, entry, ctx_id);
-        mmu_tlbi_all(target, false);
+        mmu_tlbi_all(target);
         mmu_update_asid_salt(target);
         target->stop_reason = VCPU_STOP_NONE;
         atomic_store_explicit(&target->stop_requested, false, memory_order_release);
@@ -1188,8 +1128,6 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
         pthread_cond_init(&priv->wfi_cond[i], NULL);
         pthread_mutex_init(&priv->wfe_lock[i], NULL);
         pthread_cond_init(&priv->wfe_cond[i], NULL);
-        pthread_mutex_init(&priv->qspin_lock[i], NULL);
-        pthread_cond_init(&priv->qspin_cond[i], NULL);
     }
 
     vmm_machine_t *vm = &priv->pub;
@@ -1262,7 +1200,7 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
             memset(mem, 0, sizeof(vcpu_t));
             vm->cpus[i] = (vcpu_t *)mem;
             vcpu_init(vm->cpus[i], vm, i);
-            mmu_tlbi_all(vm->cpus[i], false);
+            mmu_tlbi_all(vm->cpus[i]);
             mmu_update_asid_salt(vm->cpus[i]);
         }
 
@@ -1296,7 +1234,7 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
         }
 
         vcpu_reset(vm->cpus[0], priv->kernel_entry_pc, priv->dtb_addr);
-        mmu_tlbi_all(vm->cpus[0], false);
+        mmu_tlbi_all(vm->cpus[0]);
         mmu_update_asid_salt(vm->cpus[0]);
         atomic_store_explicit(&priv->cpu_online[0], true, memory_order_release);
         atomic_store_explicit(&vm->cpus[0]->halted_wfi, false, memory_order_release);
@@ -1374,7 +1312,6 @@ int vmm_suspend(vmm_machine_t *vm) {
         if (vm->cpus[i]) {
             atomic_store_explicit(&vm->cpus[i]->stop_requested, true, memory_order_release);
             vmm_vcpu_wake(vm, i);
-            vmm_vcpu_qspin_kick(vm, i);
         }
     }
 
@@ -1437,7 +1374,6 @@ void vmm_stop(vmm_machine_t *vm) {
         if (vm->cpus[i]) {
             atomic_store_explicit(&vm->cpus[i]->stop_requested, true, memory_order_release);
             vmm_vcpu_wake(vm, i);
-            vmm_vcpu_qspin_kick(vm, i);
         }
     }
 
@@ -1511,8 +1447,6 @@ void vmm_destroy(vmm_machine_t *vm) {
         pthread_mutex_destroy(&priv->wfi_lock[i]);
         pthread_cond_destroy(&priv->wfe_cond[i]);
         pthread_mutex_destroy(&priv->wfe_lock[i]);
-        pthread_cond_destroy(&priv->qspin_cond[i]);
-        pthread_mutex_destroy(&priv->qspin_lock[i]);
     }
     pthread_cond_destroy(&priv->suspend_cond);
     pthread_mutex_destroy(&priv->state_lock);

@@ -51,9 +51,10 @@ enum {
     IR_PAGE_INSNS = 1024,
     TILE_SHIFT = 5,
     TILE_INSNS = 1U << TILE_SHIFT,
-    ICACHE_SETS = 1024,
-    ICACHE_WAYS = 2,
-    EXEC_CACHE_ENTRIES = 4096,
+    ICACHE_SETS = 4096,
+    ICACHE_SET_MASK = ICACHE_SETS - 1,
+    ICACHE_WAYS = 4,
+    EXEC_CACHE_ENTRIES = 16384,
     EXEC_CACHE_MASK = EXEC_CACHE_ENTRIES - 1,
     RAS_SIZE = 16,
     RAS_MASK = RAS_SIZE - 1,
@@ -74,8 +75,7 @@ enum : uint16_t {
 };
 
 enum : uint32_t {
-    CPU_FPCR_HW_MASK = 0x07C80000U,
-    CPU_FPCR_ALL_MASK = 0x07C89F00U,
+    CPU_FPCR_MASK = 0x07C80000U,
     CPU_FPSR_MASK = 0x0800009FU,
     CPU_FPSR_QC = 1U << 27,
     CPU_FPSR_IOC = 1U << 0,
@@ -123,14 +123,13 @@ typedef struct cpu_icache {
     uint32_t next_gen;
     uint32_t host_fpcr;
     uint32_t host_fpsr;
-    uint32_t set_mask;
 #ifdef CPU_STATS
     uint64_t stat_dispatches;
     struct cpu_stats *stats;
 #endif
     alignas(64) ras_entry_t ras[RAS_SIZE];
     exec_cache_entry_t exec_cache[2][EXEC_CACHE_ENTRIES];
-    uint32_t lru[ICACHE_SETS];
+    uint8_t plru[ICACHE_SETS];
     ir_page_t *slots[ICACHE_SETS][ICACHE_WAYS];
 } cpu_icache_t;
 
@@ -706,8 +705,13 @@ enum : uint16_t {
 bool vcpu_decode_bitmask(uint32_t n, uint32_t imms, uint32_t immr, bool is_64,
                          bool immediate, uint64_t *wmask_out, uint64_t *tmask_out);
 
+enum : uint32_t {
+    CPU_HOST_SHA3 = 1U << 0,
+    CPU_HOST_SHA512 = 1U << 1,
+};
+
+uint32_t cpu_host_features(void);
 bool vcpu_check_interrupts(vcpu_t *cpu);
-void vcpu_handle_hvc(vcpu_t *cpu);
 bool vmm_handle_psci(vcpu_t *cpu);
 void vmm_vcpu_wfe(vcpu_t *cpu);
 void vmm_vcpu_sev(vmm_machine_t *vm);

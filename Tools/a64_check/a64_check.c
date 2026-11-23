@@ -787,6 +787,20 @@ static int command_system(int argc, char **argv) {
         in.x[rt] = DATA_CENTER + (rng() & 0x7FFF);
         system_case("DC ZVA", &zva, 1, &in, &shown);
 
+        uint32_t mops_rd = pick_register(5, 1U << 31), mops_rs = pick_register(5, 1U << 31 | 1U << mops_rd);
+        uint32_t mops_rn = pick_register(5, 1U << 31 | 1U << mops_rd | 1U << mops_rs);
+        uint32_t stage = 1U + ((uint32_t)rng() & 1U);
+        uint32_t mops = (rng() & 1) ? 0x19000400U | ((uint32_t)rng() & 1U) << 26 | stage << 22 |
+                                          ((uint32_t)rng() & 15U) << 12
+                                    : 0x19C00400U | stage << 14 | ((uint32_t)rng() & 3U) << 12;
+        mops |= mops_rs << 16 | mops_rn << 5 | mops_rd;
+        random_state(&in);
+        in.x[mops_rd] = DATA_CENTER + (rng() & 0xFF);
+        in.x[mops_rs] = DATA_CENTER + 0x400 + (rng() & 0xFF);
+        in.x[mops_rn] = (rng() & 1) ? 0 : -(rng() & 63);
+        in.irq_pending = 0;
+        system_case("MOPS", &mops, 1, &in, &shown);
+
         uint32_t size = (uint32_t)rng() & 3U, ordered = (uint32_t)rng() & 1U;
         uint32_t base = pick_register(5, 1U << 31), loaded = pick_register(5, 1U << base);
         uint32_t status = pick_register(5, 1U << base | 1U << loaded);

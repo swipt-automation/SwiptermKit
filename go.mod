@@ -5,7 +5,8 @@ go 1.26.8
 require (
 	github.com/sagernet/gomobile v0.1.13
 	github.com/sagernet/sing v0.9.7-0.20261110095940-27b73774b240
-	github.com/sagernet/sing-tun v0.9.7-0.20261122180259-1d143df634e5
+	github.com/sagernet/sing-tun v0.9.7-0.20261123035353-695e0f7bfedf
+	golang.org/x/sync v0.20.0
 	golang.org/x/sys v0.47.0
 )
 
@@ -25,6 +26,5 @@ require (
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/exp v0.0.0-20250711185948-6ae5c78190dc // indirect
 	golang.org/x/net v0.57.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )

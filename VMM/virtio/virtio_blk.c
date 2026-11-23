@@ -15,7 +15,6 @@ enum : uint64_t {
     VIRTIO_BLK_F_SEG_MAX = 1ULL << 2,
     VIRTIO_BLK_F_RO = 1ULL << 5,
     VIRTIO_BLK_F_BLK_SIZE = 1ULL << 6,
-    VIRTIO_BLK_F_FLUSH = 1ULL << 9,
     VIRTIO_BLK_F_TOPOLOGY = 1ULL << 10,
     VIRTIO_BLK_F_DISCARD = 1ULL << 13,
     VIRTIO_BLK_F_WRITE_ZEROES = 1ULL << 14,
@@ -24,7 +23,6 @@ enum : uint64_t {
 enum : uint32_t {
     VIRTIO_BLK_T_IN = 0,
     VIRTIO_BLK_T_OUT = 1,
-    VIRTIO_BLK_T_FLUSH = 4,
     VIRTIO_BLK_T_GET_ID = 8,
     VIRTIO_BLK_T_DISCARD = 11,
     VIRTIO_BLK_T_WRITE_ZEROES = 13,
@@ -37,7 +35,8 @@ enum : uint8_t {
 };
 
 enum {
-    VIRTIO_BLK_MAX_IOV = 128,
+    VIRTIO_BLK_MAX_IOV = 512,
+    VIRTIO_BLK_MAX_DWZ_SEG = 256,
     VIRTIO_BLK_QUEUE_SIZE = 256,
     VIRTIO_BLK_SECTOR_SIZE = 512,
     VIRTIO_BLK_BLOCK_SIZE = 4096,
@@ -253,11 +252,11 @@ static uint8_t blk_handle_dwz(virtio_blk_t *blk, uint32_t type,
         return VIRTIO_BLK_S_IOERR;
     }
     size_t segs = payload / sizeof(virtio_blk_dwz_t);
-    if (segs > 16) {
+    if (segs > VIRTIO_BLK_MAX_DWZ_SEG) {
         return VIRTIO_BLK_S_IOERR;
     }
 
-    virtio_blk_dwz_t reqs[16] = {0};
+    virtio_blk_dwz_t reqs[VIRTIO_BLK_MAX_DWZ_SEG];
     if (virtio_iov_read(iov, total_iov, sizeof(virtio_blk_req_hdr_t), reqs, payload) != payload) {
         return VIRTIO_BLK_S_IOERR;
     }
@@ -366,9 +365,6 @@ static void *virtio_blk_worker(void *ctx) {
                             atomic_store_explicit(&blk->dirty, true, memory_order_relaxed);
                         }
                         break;
-                    case VIRTIO_BLK_T_FLUSH:
-                        status = VIRTIO_BLK_S_OK;
-                        break;
                     case VIRTIO_BLK_T_GET_ID: {
                         size_t n = in_total - 1;
                         if (n > VIRTIO_BLK_ID_BYTES) {
@@ -417,8 +413,7 @@ static void *virtio_blk_worker(void *ctx) {
 static uint64_t virtio_blk_get_features(virtio_dev_t *dev) {
     virtio_blk_t *blk = dev->priv;
     uint64_t feats = VIRTIO_BLK_F_SIZE_MAX | VIRTIO_BLK_F_SEG_MAX |
-                     VIRTIO_BLK_F_BLK_SIZE | VIRTIO_BLK_F_FLUSH |
-                     VIRTIO_BLK_F_TOPOLOGY;
+                     VIRTIO_BLK_F_BLK_SIZE | VIRTIO_BLK_F_TOPOLOGY;
     if (blk->read_only) {
         feats |= VIRTIO_BLK_F_RO;
     } else {
@@ -524,15 +519,14 @@ virtio_dev_t *virtio_blk_create(vmm_machine_t *vm, uint32_t slot, int fd, bool r
     blk->config.size_max = 1U << 20;
     blk->config.seg_max = VIRTIO_BLK_MAX_IOV - 2;
     blk->config.blk_size = VIRTIO_BLK_BLOCK_SIZE;
-    blk->config.topology.physical_block_exp = 3;
+    blk->config.topology.physical_block_exp = 0;
     blk->config.topology.min_io_size = 1;
-    blk->config.writeback = 1;
     blk->config.num_queues = 1;
     blk->config.max_discard_sectors = 0x200000U;
-    blk->config.max_discard_seg = 16;
+    blk->config.max_discard_seg = VIRTIO_BLK_MAX_DWZ_SEG;
     blk->config.discard_sector_alignment = VIRTIO_BLK_BLOCK_SIZE / VIRTIO_BLK_SECTOR_SIZE;
     blk->config.max_write_zeroes_sectors = 0x200000U;
-    blk->config.max_write_zeroes_seg = 16;
+    blk->config.max_write_zeroes_seg = VIRTIO_BLK_MAX_DWZ_SEG;
     blk->config.write_zeroes_may_unmap = 1;
     snprintf(blk->serial, sizeof(blk->serial), "swipterm-blk%u", slot);
 

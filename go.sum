@@ -30,8 +30,8 @@ github.com/sagernet/nftables v0.3.0-mod.4.0.20261114074246-0b310c3e010b h1:dgnXJ
 github.com/sagernet/nftables v0.3.0-mod.4.0.20261114074246-0b310c3e010b/go.mod h1:8kslHG4VvYNihcco+i6uxIX7qbT8A56T0y5q7U44ZaQ=
 github.com/sagernet/sing v0.9.7-0.20261110095940-27b73774b240 h1:VtsWVLrPqf1brgvW4pwNxmROSitei/2OrFNsOHQ3/o8=
 github.com/sagernet/sing v0.9.7-0.20261110095940-27b73774b240/go.mod h1:K3Owt3xPhHugvlnlPPxZJ/exXdaJfEPOTNorGk4AXjo=
-github.com/sagernet/sing-tun v0.9.7-0.20261122180259-1d143df634e5 h1:2TOow87dDjBcGDSjnOA58M1oberaHN2hrdw4lCr8ioQ=
-github.com/sagernet/sing-tun v0.9.7-0.20261122180259-1d143df634e5/go.mod h1:JxmxIS7tDJmjfsPe+RynTBiNn0pPiEEKuXuH2r7aESw=
+github.com/sagernet/sing-tun v0.9.7-0.20261123035353-695e0f7bfedf h1:xnlp3grTkUDvkvz5hgvClWEk8dtlTq6+14ZX+RSx340=
+github.com/sagernet/sing-tun v0.9.7-0.20261123035353-695e0f7bfedf/go.mod h1:JxmxIS7tDJmjfsPe+RynTBiNn0pPiEEKuXuH2r7aESw=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/vishvananda/netns v0.0.4 h1:Oeaw1EM2JMxD51g9uhtC0D7erkIjgmj8+JZc26m1YX8=

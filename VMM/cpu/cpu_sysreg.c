@@ -2,15 +2,19 @@
 #include "cpu_fast_layout.h"
 #include "generated/a64_sysreg_gen.inc"
 
+#include <sys/sysctl.h>
+
 enum : uint64_t {
     ID_MIDR_VAL = 0x410FD050ULL,
-    ID_AA64PFR0_VAL = 0x0000000000000011ULL,
+    ID_AA64PFR0_VAL = (1ULL << 0) | (1ULL << 4) | (1ULL << 16) | (1ULL << 20),
     ID_AA64PFR1_VAL = 0x0000000000000000ULL,
     ID_AA64DFR0_VAL = 0x0000000000101006ULL,
-    ID_AA64ISAR0_VAL = (2ULL << 4) | (1ULL << 8) | (1ULL << 12) |
-                       (1ULL << 16) | (2ULL << 20) | (1ULL << 28) |
-                       (2ULL << 56),
-    ID_AA64ISAR1_VAL = (1ULL << 12) | (1ULL << 20),
+    ID_AA64ISAR0_VAL = (2ULL << 4) | (1ULL << 8) | (1ULL << 16) | (2ULL << 20) | (1ULL << 28) |
+                       (1ULL << 44) | (1ULL << 48) | (2ULL << 56),
+    ID_AA64ISAR0_SHA256 = 1ULL << 12,
+    ID_AA64ISAR0_SHA512 = 2ULL << 12,
+    ID_AA64ISAR0_SHA3 = 1ULL << 32,
+    ID_AA64ISAR1_VAL = (1ULL << 12) | (1ULL << 16) | (1ULL << 20),
     ID_AA64ISAR2_VAL = (1ULL << 16),
     ID_AA64MMFR0_VAL = 0x000000000F100022ULL,
     ID_AA64MMFR1_VAL = (1ULL << 16) | (1ULL << 20),
@@ -19,6 +23,24 @@ enum : uint64_t {
     CLIDR_EL1_VAL = 0x0A200023ULL,
     CCSIDR_EL1_VAL = 0x700FE01AULL,
 };
+
+uint32_t cpu_host_features(void) {
+    static const char *const names[] = {"hw.optional.arm.FEAT_SHA3", "hw.optional.arm.FEAT_SHA512"};
+    static _Atomic uint32_t cached;
+    uint32_t features = atomic_load_explicit(&cached, memory_order_relaxed);
+    if (features == 0) {
+        features = 1U << 31;
+        for (uint32_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
+            int present = 0;
+            size_t size = sizeof(present);
+            if (sysctlbyname(names[i], &present, &size, nullptr, 0) == 0 && present) {
+                features |= 1U << i;
+            }
+        }
+        atomic_store_explicit(&cached, features, memory_order_relaxed);
+    }
+    return features;
+}
 
 bool vcpu_check_interrupts(vcpu_t *cpu) {
     bool icache_flushed = mmu_poll_shootdown(cpu);
@@ -90,7 +112,12 @@ void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_ID_AA64DFR1_EL1: val = 0; break;
     case A64_SYSREG_ID_AA64AFR0_EL1: val = 0; break;
     case A64_SYSREG_ID_AA64AFR1_EL1: val = 0; break;
-    case A64_SYSREG_ID_AA64ISAR0_EL1: val = ID_AA64ISAR0_VAL; break;
+    case A64_SYSREG_ID_AA64ISAR0_EL1: {
+        uint32_t host = cpu_host_features();
+        val = ID_AA64ISAR0_VAL | ((host & CPU_HOST_SHA512) ? ID_AA64ISAR0_SHA512 : ID_AA64ISAR0_SHA256) |
+              ((host & CPU_HOST_SHA3) ? ID_AA64ISAR0_SHA3 : 0);
+        break;
+    }
     case A64_SYSREG_ID_AA64ISAR1_EL1: val = ID_AA64ISAR1_VAL; break;
     case A64_SYSREG_ID_AA64ISAR2_EL1: val = ID_AA64ISAR2_VAL; break;
     case A64_SYSREG_ID_AA64MMFR0_EL1: val = ID_AA64MMFR0_VAL; break;
@@ -285,9 +312,9 @@ void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir,
             return;
         }
         if (key == A64_SYSREG_FPCR) {
-            cpu->fpcr = (uint32_t)val & CPU_FPCR_ALL_MASK;
+            cpu->fpcr = (uint32_t)val & CPU_FPCR_MASK;
             if (cpu->fp_host_active) {
-                cpu_hw_write_fpcr(cpu->fpcr & CPU_FPCR_HW_MASK);
+                cpu_hw_write_fpcr(cpu->fpcr);
             }
         } else {
             cpu->fpsr = (uint32_t)val & CPU_FPSR_MASK;
@@ -310,15 +337,13 @@ void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir,
         uint64_t old = cpu->sctlr_el1;
         cpu->sctlr_el1 = val;
         if ((old ^ val) & 1ULL) {
-            mmu_tlbi_all(cpu, false);
+            mmu_tlbi_all(cpu);
             exit_loop = true;
-        } else {
-            if ((old ^ val) & (1ULL << 19)) {
-                cpu->exec_epoch++;
-                cpu->ras_epoch++;
-            }
-            mmu_update_asid_salt(cpu);
+        } else if ((old ^ val) & (1ULL << 19)) {
+            cpu->exec_epoch++;
+            cpu->ras_epoch++;
         }
+        mmu_update_asid_salt(cpu);
         break;
     }
     case A64_SYSREG_ACTLR_EL1: cpu->sysregs.actlr_el1 = val; break;
@@ -540,15 +565,26 @@ static void exec_at(vcpu_t *cpu, uint64_t va, mmu_access_t acc, uint8_t target_e
     }
 }
 
-static void exec_tlbi_range(vcpu_t *cpu, uint64_t xt, bool all_asids, bool inner_shareable) {
+static vmm_tlbi_t tlbi_page(uint64_t xt, bool all_asids) {
+    return (vmm_tlbi_t){
+        .va = (uint64_t)((int64_t)(xt << 20) >> 8),
+        .pages = 1,
+        .asid = (uint16_t)(xt >> 48),
+        .all_asids = all_asids,
+    };
+}
+
+static vmm_tlbi_t tlbi_range(uint64_t xt, bool all_asids) {
     uint32_t tg = (uint32_t)((xt >> 46) & 3U);
-    uint8_t tg_shift = tg == 2U ? 14U : (tg == 3U ? 16U : 12U);
+    uint32_t tg_shift = tg == 2U ? 14U : (tg == 3U ? 16U : 12U);
     uint32_t scale = (uint32_t)((xt >> 44) & 3U);
     uint32_t num = (uint32_t)((xt >> 39) & 0x1FU);
-    uint64_t num_pages = (uint64_t)(num + 1U) << (5U * scale + 1U);
-    uint64_t start_va = (uint64_t)((int64_t)(xt << 27) >> (27U - tg_shift));
-    uint16_t asid = (uint16_t)(xt >> 48);
-    mmu_tlbi_range(cpu, start_va, num_pages, tg_shift, asid, all_asids, inner_shareable);
+    return (vmm_tlbi_t){
+        .va = (uint64_t)((int64_t)(xt << 27) >> (27U - tg_shift)),
+        .pages = (uint64_t)(num + 1U) << (5U * scale + 1U + tg_shift - VMM_PAGE_SHIFT),
+        .asid = (uint16_t)(xt >> 48),
+        .all_asids = all_asids,
+    };
 }
 
 void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
@@ -666,66 +702,58 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
         break;
 
     case A64_SYSOP_TLBI_VMALLE1:
-        mmu_tlbi_all(cpu, false);
+        mmu_tlbi(cpu, (vmm_tlbi_t){.all_asids = true}, false);
         break;
     case A64_SYSOP_TLBI_VMALLE1IS:
     case A64_SYSOP_TLBI_VMALLE1OS:
-        mmu_tlbi_all(cpu, true);
+        mmu_tlbi(cpu, (vmm_tlbi_t){.all_asids = true}, true);
         break;
     case A64_SYSOP_TLBI_ASIDE1:
-        mmu_tlbi_asid(cpu, (uint16_t)(xt >> 48), false);
+        mmu_tlbi(cpu, (vmm_tlbi_t){.asid = (uint16_t)(xt >> 48)}, false);
         break;
     case A64_SYSOP_TLBI_ASIDE1IS:
     case A64_SYSOP_TLBI_ASIDE1OS:
-        mmu_tlbi_asid(cpu, (uint16_t)(xt >> 48), true);
+        mmu_tlbi(cpu, (vmm_tlbi_t){.asid = (uint16_t)(xt >> 48)}, true);
         break;
     case A64_SYSOP_TLBI_VAE1:
-    case A64_SYSOP_TLBI_VALE1: {
-        uint64_t va = (uint64_t)((int64_t)(xt << 20) >> 8);
-        mmu_tlbi_va(cpu, va, (uint16_t)(xt >> 48), false, false);
+    case A64_SYSOP_TLBI_VALE1:
+        mmu_tlbi(cpu, tlbi_page(xt, false), false);
         break;
-    }
     case A64_SYSOP_TLBI_VAE1IS:
     case A64_SYSOP_TLBI_VAE1OS:
     case A64_SYSOP_TLBI_VALE1IS:
-    case A64_SYSOP_TLBI_VALE1OS: {
-        uint64_t va = (uint64_t)((int64_t)(xt << 20) >> 8);
-        mmu_tlbi_va(cpu, va, (uint16_t)(xt >> 48), false, true);
+    case A64_SYSOP_TLBI_VALE1OS:
+        mmu_tlbi(cpu, tlbi_page(xt, false), true);
         break;
-    }
     case A64_SYSOP_TLBI_VAAE1:
-    case A64_SYSOP_TLBI_VAALE1: {
-        uint64_t va = (uint64_t)((int64_t)(xt << 20) >> 8);
-        mmu_tlbi_va(cpu, va, 0, true, false);
+    case A64_SYSOP_TLBI_VAALE1:
+        mmu_tlbi(cpu, tlbi_page(xt, true), false);
         break;
-    }
     case A64_SYSOP_TLBI_VAAE1IS:
     case A64_SYSOP_TLBI_VAAE1OS:
     case A64_SYSOP_TLBI_VAALE1IS:
-    case A64_SYSOP_TLBI_VAALE1OS: {
-        uint64_t va = (uint64_t)((int64_t)(xt << 20) >> 8);
-        mmu_tlbi_va(cpu, va, 0, true, true);
+    case A64_SYSOP_TLBI_VAALE1OS:
+        mmu_tlbi(cpu, tlbi_page(xt, true), true);
         break;
-    }
     case A64_SYSOP_TLBI_RVAE1:
     case A64_SYSOP_TLBI_RVALE1:
-        exec_tlbi_range(cpu, xt, false, false);
+        mmu_tlbi(cpu, tlbi_range(xt, false), false);
         break;
     case A64_SYSOP_TLBI_RVAE1IS:
     case A64_SYSOP_TLBI_RVAE1OS:
     case A64_SYSOP_TLBI_RVALE1IS:
     case A64_SYSOP_TLBI_RVALE1OS:
-        exec_tlbi_range(cpu, xt, false, true);
+        mmu_tlbi(cpu, tlbi_range(xt, false), true);
         break;
     case A64_SYSOP_TLBI_RVAAE1:
     case A64_SYSOP_TLBI_RVAALE1:
-        exec_tlbi_range(cpu, xt, true, false);
+        mmu_tlbi(cpu, tlbi_range(xt, true), false);
         break;
     case A64_SYSOP_TLBI_RVAAE1IS:
     case A64_SYSOP_TLBI_RVAAE1OS:
     case A64_SYSOP_TLBI_RVAALE1IS:
     case A64_SYSOP_TLBI_RVAALE1OS:
-        exec_tlbi_range(cpu, xt, true, true);
+        mmu_tlbi(cpu, tlbi_range(xt, true), true);
         break;
 
     default:
@@ -733,139 +761,6 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
     }
 
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
-}
-
-static vcpu_t *find_vcpu_by_mpidr(vmm_machine_t *vm, uint64_t mpidr) {
-    if (!vm) {
-        return nullptr;
-    }
-    uint64_t aff = mpidr & 0x00FFFFFFULL;
-    for (uint32_t i = 0; i < vm->cpu_count && i < VMM_MAX_VCPUS; ++i) {
-        vcpu_t *c = vm->cpus[i];
-        if (c && (c->mpidr_el1 & 0x00FFFFFFULL) == aff) {
-            return c;
-        }
-    }
-    return nullptr;
-}
-
-void vcpu_handle_hvc(vcpu_t *cpu) {
-    uint32_t func_id = (uint32_t)cpu->x[0];
-    if (mmu_handle_pv_hvc(cpu, func_id)) {
-        return;
-    }
-    if (vmm_handle_psci(cpu)) {
-        return;
-    }
-
-    switch (func_id) {
-    case SMCCC_VERSION:
-        cpu->x[0] = 0x00010001ULL;
-        return;
-    case SMCCC_ARCH_FEATURES:
-        cpu->x[0] = ((uint32_t)cpu->x[1] == SMCCC_VERSION) ? 0ULL : (uint64_t)PSCI_RET_NOT_SUPPORTED;
-        return;
-    case PSCI_FN_VERSION:
-        cpu->x[0] = PSCI_VERSION_1_1;
-        return;
-    case PSCI_FN_FEATURES:
-        switch ((uint32_t)cpu->x[1]) {
-        case SMCCC_VERSION:
-        case PSCI_FN_VERSION:
-        case PSCI_FN_CPU_SUSPEND:
-        case PSCI_FN64_CPU_SUSPEND:
-        case PSCI_FN_CPU_OFF:
-        case PSCI_FN_CPU_ON:
-        case PSCI_FN64_CPU_ON:
-        case PSCI_FN_AFFINITY_INFO:
-        case PSCI_FN64_AFFINITY_INFO:
-        case PSCI_FN_MIGRATE_INFO_TYPE:
-        case PSCI_FN_SYSTEM_OFF:
-        case PSCI_FN_SYSTEM_RESET:
-        case PSCI_FN_SYSTEM_RESET2:
-        case PSCI_FN64_SYSTEM_RESET2:
-        case PSCI_FN_FEATURES:
-            cpu->x[0] = 0;
-            return;
-        default:
-            cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
-            return;
-        }
-    case PSCI_FN_MIGRATE_INFO_TYPE:
-        cpu->x[0] = 2;
-        return;
-    case PSCI_FN_CPU_SUSPEND:
-    case PSCI_FN64_CPU_SUSPEND:
-        cpu->x[0] = PSCI_RET_SUCCESS;
-        return;
-    case PSCI_FN_CPU_OFF:
-        cpu->stop_reason = VCPU_STOP_HALT;
-        atomic_store_explicit(&cpu->stop_requested, true, memory_order_release);
-        cpu->x[0] = PSCI_RET_SUCCESS;
-        return;
-    case PSCI_FN_CPU_ON:
-    case PSCI_FN64_CPU_ON: {
-        vcpu_t *target = find_vcpu_by_mpidr(cpu->vm, cpu->x[1]);
-        if (!target) {
-            cpu->x[0] = (uint64_t)PSCI_RET_INVALID_PARAMS;
-            return;
-        }
-        if (target == cpu || !atomic_load_explicit(&target->halted_wfi, memory_order_acquire)) {
-            cpu->x[0] = (uint64_t)PSCI_RET_ALREADY_ON;
-            return;
-        }
-        vcpu_reset(target, cpu->x[2], cpu->x[3]);
-        atomic_store_explicit(&target->halted_wfi, false, memory_order_release);
-        cpu->x[0] = PSCI_RET_SUCCESS;
-        return;
-    }
-    case PSCI_FN_AFFINITY_INFO:
-    case PSCI_FN64_AFFINITY_INFO: {
-        vcpu_t *target = find_vcpu_by_mpidr(cpu->vm, cpu->x[1]);
-        if (!target) {
-            cpu->x[0] = (uint64_t)PSCI_RET_INVALID_PARAMS;
-            return;
-        }
-        bool off = atomic_load_explicit(&target->halted_wfi, memory_order_acquire) && target->pc == 0;
-        cpu->x[0] = off ? 1ULL : 0ULL;
-        return;
-    }
-    case PSCI_FN_SYSTEM_OFF:
-        cpu->stop_reason = VCPU_STOP_HALT;
-        if (cpu->vm) {
-            atomic_store_explicit(&cpu->vm->running, false, memory_order_release);
-            for (uint32_t i = 0; i < cpu->vm->cpu_count && i < VMM_MAX_VCPUS; ++i) {
-                if (cpu->vm->cpus[i]) {
-                    cpu->vm->cpus[i]->stop_reason = VCPU_STOP_HALT;
-                    atomic_store_explicit(&cpu->vm->cpus[i]->stop_requested, true, memory_order_release);
-                }
-            }
-        } else {
-            atomic_store_explicit(&cpu->stop_requested, true, memory_order_release);
-        }
-        cpu->x[0] = PSCI_RET_SUCCESS;
-        return;
-    case PSCI_FN_SYSTEM_RESET:
-    case PSCI_FN_SYSTEM_RESET2:
-    case PSCI_FN64_SYSTEM_RESET2:
-        cpu->stop_reason = VCPU_STOP_REBOOT;
-        if (cpu->vm) {
-            atomic_store_explicit(&cpu->vm->running, false, memory_order_release);
-            for (uint32_t i = 0; i < cpu->vm->cpu_count && i < VMM_MAX_VCPUS; ++i) {
-                if (cpu->vm->cpus[i]) {
-                    cpu->vm->cpus[i]->stop_reason = VCPU_STOP_REBOOT;
-                    atomic_store_explicit(&cpu->vm->cpus[i]->stop_requested, true, memory_order_release);
-                }
-            }
-        } else {
-            atomic_store_explicit(&cpu->stop_requested, true, memory_order_release);
-        }
-        cpu->x[0] = PSCI_RET_SUCCESS;
-        return;
-    default:
-        cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
-        return;
-    }
 }
 
 void cpu_op_svc(vcpu_t *cpu, const ir_insn_t *ir,
@@ -893,7 +788,9 @@ void cpu_op_hvc(vcpu_t *cpu, const ir_insn_t *ir,
     }
     cpu->pc = cur_pc + 4ULL;
     cpu_fp_leave_guest(cpu);
-    vcpu_handle_hvc(cpu);
+    if (!vmm_handle_psci(cpu)) {
+        cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
+    }
     if (atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {
         return;
     }

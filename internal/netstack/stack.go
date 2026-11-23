@@ -82,6 +82,7 @@ func New(logger logger.ContextLogger) (*Stack, error) {
 			Inet6Address: []netip.Prefix{netip.PrefixFrom(inet6Gateway, inet6Prefix.Bits())},
 		},
 		UDPTimeout:    udpTimeout,
+		ICMPTimeout:   udpTimeout,
 		UDPMapping:    tun.NATMappingEndpointIndependent,
 		UDPFiltering:  tun.NATFilteringEndpointIndependent,
 		Handler:       s,

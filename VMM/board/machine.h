@@ -31,11 +31,11 @@ typedef struct vmm_config {
 } vmm_config_t;
 
 enum {
+    VMM_TLB_RING = 64,
     VMM_ICACHE_RING = 64,
 };
 
 typedef struct vmm_icache_shootdown {
-    uint64_t epoch;
     uint32_t count;
     uint64_t pa_pages[VCPU_ICACHE_PENDING];
 } vmm_icache_shootdown_t;
@@ -63,6 +63,8 @@ struct vmm_machine {
     void (*on_halt)(void *ctx);
     void (*on_panic)(void *ctx, const char *message);
 
+    os_unfair_lock tlb_lock;
+    vmm_tlbi_t tlb_ring[VMM_TLB_RING];
     os_unfair_lock icache_lock;
     vmm_icache_shootdown_t icache_ring[VMM_ICACHE_RING];
     _Atomic uint64_t *icache_ram_bitmap;

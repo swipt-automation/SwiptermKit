@@ -11,7 +11,7 @@
 typedef struct ir_insn ir_insn_t;
 
 enum {
-    VCPU_ICACHE_PENDING = 16,
+    VCPU_ICACHE_PENDING = 64,
 };
 
 typedef void (*ir_handler_fn)(vcpu_t *cpu, const ir_insn_t *ir,
@@ -79,12 +79,12 @@ struct vcpu {
     uint32_t fpcr;
     uint32_t fpsr;
     vcpu_stop_reason_t stop_reason;
-    uint32_t cpu_id;
 
     _Atomic uint32_t irq_pending;
     _Atomic bool stop_requested;
     _Atomic bool halted_wfi;
     _Atomic bool event_reg;
+    uint32_t cpu_id;
 
     uint64_t tlb_asid_salt;
     uint64_t tlb_epoch_local;
@@ -92,6 +92,7 @@ struct vcpu {
     bool icache_shootdown_pending;
     bool icache_shootdown_all;
     uint8_t icache_pending_count;
+    uint16_t tlb_user_gen;
     vmm_machine_t *vm;
     void *icache;
     const ir_insn_t *fast_next;

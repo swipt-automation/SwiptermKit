@@ -5,12 +5,14 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <pthread.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/time.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 enum {
@@ -18,14 +20,16 @@ enum {
     VIRTIO_FS_VQ_REQUEST = 1,
     VIRTIO_FS_HIPRIO_SIZE = 64,
     VIRTIO_FS_REQ_SIZE = 256,
-    VIRTIO_FS_MAX_IOV = 128,
+    VIRTIO_FS_MAX_IOV = 264,
     VIRTIO_FS_TAG_LEN = 36,
+    VIRTIO_FS_HASH_INIT = 64,
+    VIRTIO_FS_MAX_NODE_FDS = 128,
 
     FUSE_KERNEL_VERSION = 7,
     FUSE_KERNEL_MINOR_VERSION = 31,
     FUSE_ROOT_ID = 1,
-    FUSE_MAX_WRITE = 131072,
-    FUSE_MAX_PAGES = 32,
+    FUSE_MAX_PAGES = 252,
+    FUSE_MAX_WRITE = FUSE_MAX_PAGES * 4096,
 };
 
 enum : uint32_t {
@@ -397,15 +401,41 @@ static_assert(sizeof(fuse_attr_out_t) == 104);
 static_assert(sizeof(fuse_init_out_t) == 64);
 static_assert(sizeof(fuse_dirent_t) == 24);
 static_assert(sizeof(fuse_direntplus_t) == 152);
+static_assert(VIRTIO_FS_MAX_IOV <= IOV_MAX);
+
+#define FS_CONTAINER(ptr, type, member) ((type *)(void *)((char *)(ptr) - offsetof(type, member)))
+
+typedef struct fs_hlink {
+    struct fs_hlink *next;
+    uint64_t key;
+} fs_hlink_t;
+
+typedef struct fs_htable {
+    fs_hlink_t **buckets;
+    size_t mask;
+    size_t count;
+} fs_htable_t;
+
+typedef struct fs_list {
+    struct fs_list *prev;
+    struct fs_list *next;
+} fs_list_t;
 
 typedef struct fs_inode {
+    fs_hlink_t id_link;
+    fs_hlink_t dev_ino_link;
+    fs_list_t lru;
+    fs_list_t handles;
+    struct fs_inode *parent;
+    char *name;
     uint64_t nodeid;
     uint64_t generation;
+    uint64_t nlookup;
+    uint64_t refs;
     dev_t dev;
     ino_t ino;
     int fd;
-    uint64_t nlookup;
-    bool in_use;
+    bool detached;
 } fs_inode_t;
 
 typedef struct fs_dir_entry {
@@ -415,11 +445,12 @@ typedef struct fs_dir_entry {
 } fs_dir_entry_t;
 
 typedef struct fs_handle {
+    fs_hlink_t link;
+    fs_list_t node_link;
+    fs_inode_t *node;
     uint64_t fh;
-    uint64_t nodeid;
     int fd;
     bool is_dir;
-    bool in_use;
     fs_dir_entry_t *entries;
     size_t entry_count;
 } fs_handle_t;
@@ -437,13 +468,15 @@ typedef struct virtio_fs {
     bool busy;
     bool stop;
 
-    fs_inode_t *inodes;
-    size_t inode_cap;
+    fs_htable_t inodes;
+    fs_htable_t inodes_by_dev_ino;
+    fs_inode_t *root;
+    fs_list_t lru;
+    size_t lru_count;
     uint64_t next_nodeid;
     uint64_t generation;
 
-    fs_handle_t *handles;
-    size_t handle_cap;
+    fs_htable_t handles;
     uint64_t next_fh;
 } virtio_fs_t;
 
@@ -554,93 +587,345 @@ static bool fs_name_valid(const char *name) {
     return true;
 }
 
-static fs_inode_t *fs_find_inode(virtio_fs_t *fs, uint64_t nodeid) {
-    for (size_t i = 0; i < fs->inode_cap; i++) {
-        if (fs->inodes[i].in_use && fs->inodes[i].nodeid == nodeid) {
-            return &fs->inodes[i];
+static size_t fs_hash_index(uint64_t key, size_t mask) {
+    key ^= key >> 33;
+    key *= 0xff51afd7ed558ccdULL;
+    key ^= key >> 33;
+    return (size_t)key & mask;
+}
+
+static bool fs_htable_init(fs_htable_t *t) {
+    t->buckets = calloc(VIRTIO_FS_HASH_INIT, sizeof(*t->buckets));
+    t->mask = VIRTIO_FS_HASH_INIT - 1;
+    t->count = 0;
+    return t->buckets != NULL;
+}
+
+static void fs_htable_clear(fs_htable_t *t) {
+    memset(t->buckets, 0, (t->mask + 1) * sizeof(*t->buckets));
+    t->count = 0;
+}
+
+static void fs_htable_insert(fs_htable_t *t, fs_hlink_t *link, uint64_t key) {
+    if (t->count > t->mask) {
+        size_t mask = t->mask * 2 + 1;
+        fs_hlink_t **buckets = calloc(mask + 1, sizeof(*buckets));
+        if (buckets) {
+            for (size_t i = 0; i <= t->mask; i++) {
+                fs_hlink_t *l = t->buckets[i];
+                while (l) {
+                    fs_hlink_t *next = l->next;
+                    size_t idx = fs_hash_index(l->key, mask);
+                    l->next = buckets[idx];
+                    buckets[idx] = l;
+                    l = next;
+                }
+            }
+            free(t->buckets);
+            t->buckets = buckets;
+            t->mask = mask;
         }
     }
-    return NULL;
+    size_t idx = fs_hash_index(key, t->mask);
+    link->key = key;
+    link->next = t->buckets[idx];
+    t->buckets[idx] = link;
+    t->count++;
+}
+
+static void fs_htable_remove(fs_htable_t *t, fs_hlink_t *link) {
+    fs_hlink_t **p = &t->buckets[fs_hash_index(link->key, t->mask)];
+    while (*p != link) {
+        p = &(*p)->next;
+    }
+    *p = link->next;
+    t->count--;
+}
+
+static fs_hlink_t *fs_htable_find(const fs_htable_t *t, uint64_t key) {
+    fs_hlink_t *l = t->buckets[fs_hash_index(key, t->mask)];
+    while (l && l->key != key) {
+        l = l->next;
+    }
+    return l;
+}
+
+static void fs_list_init(fs_list_t *head) {
+    head->prev = head;
+    head->next = head;
+}
+
+static void fs_list_push(fs_list_t *head, fs_list_t *l) {
+    l->prev = head;
+    l->next = head->next;
+    head->next->prev = l;
+    head->next = l;
+}
+
+static void fs_list_remove(fs_list_t *l) {
+    l->prev->next = l->next;
+    l->next->prev = l->prev;
+}
+
+static uint64_t fs_dev_ino_key(dev_t dev, ino_t ino) {
+    return (uint64_t)ino ^ ((uint64_t)(uint32_t)dev << 32);
+}
+
+static fs_inode_t *fs_find_inode(virtio_fs_t *fs, uint64_t nodeid) {
+    fs_hlink_t *l = fs_htable_find(&fs->inodes, nodeid);
+    return l ? FS_CONTAINER(l, fs_inode_t, id_link) : NULL;
 }
 
 static fs_inode_t *fs_find_inode_by_dev_ino(virtio_fs_t *fs, dev_t dev, ino_t ino) {
-    for (size_t i = 0; i < fs->inode_cap; i++) {
-        if (fs->inodes[i].in_use && fs->inodes[i].dev == dev && fs->inodes[i].ino == ino) {
-            return &fs->inodes[i];
+    uint64_t key = fs_dev_ino_key(dev, ino);
+    fs_hlink_t *l = fs->inodes_by_dev_ino.buckets[fs_hash_index(key, fs->inodes_by_dev_ino.mask)];
+    for (; l; l = l->next) {
+        fs_inode_t *node = FS_CONTAINER(l, fs_inode_t, dev_ino_link);
+        if (node->dev == dev && node->ino == ino) {
+            return node;
         }
     }
     return NULL;
 }
 
-static int fs_open_node_fd(int dirfd, const char *name) {
-    int fd = openat(dirfd, name, O_RDONLY | O_SYMLINK | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0 && (errno == EACCES || errno == EPERM)) {
-        fd = openat(dirfd, name, O_EVTONLY | O_SYMLINK | O_CLOEXEC);
+static fs_handle_t *fs_find_handle(virtio_fs_t *fs, uint64_t fh) {
+    fs_hlink_t *l = fs_htable_find(&fs->handles, fh);
+    return l ? FS_CONTAINER(l, fs_handle_t, link) : NULL;
+}
+
+static void fs_inode_put(virtio_fs_t *fs, fs_inode_t *node) {
+    while (node != fs->root && node->parent && node->nlookup == 0 && node->refs == 0) {
+        fs_inode_t *parent = node->parent;
+        fs_htable_remove(&fs->inodes, &node->id_link);
+        fs_htable_remove(&fs->inodes_by_dev_ino, &node->dev_ino_link);
+        if (node->fd >= 0) {
+            if (!node->detached) {
+                fs_list_remove(&node->lru);
+                fs->lru_count--;
+            }
+            close(node->fd);
+        }
+        free(node->name);
+        free(node);
+        node = parent;
+        node->refs--;
+    }
+}
+
+static int fs_inode_fd(virtio_fs_t *fs, fs_inode_t *node);
+
+static int fs_inode_cached_fd(virtio_fs_t *fs, fs_inode_t *node) {
+    if (node->fd >= 0) {
+        if (node != fs->root && !node->detached) {
+            fs_list_remove(&node->lru);
+            fs_list_push(&fs->lru, &node->lru);
+        }
+        return node->fd;
+    }
+    if (node->handles.next != &node->handles) {
+        return FS_CONTAINER(node->handles.next, fs_handle_t, node_link)->fd;
+    }
+    return -1;
+}
+
+static int fs_inode_at(virtio_fs_t *fs, fs_inode_t *node, const char **name) {
+    if (node->detached) {
+        errno = ESTALE;
+        return -1;
+    }
+    if (!node->parent) {
+        *name = ".";
+        return node->fd;
+    }
+    *name = node->name;
+    return fs_inode_fd(fs, node->parent);
+}
+
+static int fs_inode_open(virtio_fs_t *fs, fs_inode_t *node, int oflags) {
+    const char *name;
+    int dirfd = fs_inode_at(fs, node, &name);
+    if (dirfd < 0) {
+        return -1;
+    }
+    int nofollow = (oflags & O_SYMLINK) ? 0 : O_NOFOLLOW;
+    int fd = openat(dirfd, name, (oflags & ~O_TRUNC) | nofollow | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) {
+        return -1;
+    }
+    struct stat st;
+    if (fstat(fd, &st) < 0 || st.st_dev != node->dev || st.st_ino != node->ino) {
+        close(fd);
+        errno = ESTALE;
+        return -1;
+    }
+    if ((oflags & O_TRUNC) && ftruncate(fd, 0) < 0) {
+        int err = errno;
+        close(fd);
+        errno = err;
+        return -1;
     }
     return fd;
 }
 
-static fs_inode_t *fs_lookup_or_insert(virtio_fs_t *fs, fs_inode_t *parent,
-                                       const char *name, struct stat *st_out) {
-    if (parent->nodeid == FUSE_ROOT_ID &&
-        (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)) {
-        if (fstat(parent->fd, st_out) < 0) {
-            return NULL;
-        }
-        parent->nlookup++;
-        return parent;
+static int fs_inode_cache_fd(virtio_fs_t *fs, fs_inode_t *node) {
+    int fd = fs_inode_open(fs, node, O_RDONLY | O_SYMLINK);
+    if (fd < 0 && (errno == EACCES || errno == EPERM)) {
+        fd = fs_inode_open(fs, node, O_EVTONLY | O_SYMLINK);
     }
-
-    int fd = fs_open_node_fd(parent->fd, name);
     if (fd < 0) {
-        return NULL;
+        return -1;
+    }
+    node->fd = fd;
+    fs_list_push(&fs->lru, &node->lru);
+    fs->lru_count++;
+    return fd;
+}
+
+static int fs_inode_fd(virtio_fs_t *fs, fs_inode_t *node) {
+    int fd = fs_inode_cached_fd(fs, node);
+    return fd >= 0 ? fd : fs_inode_cache_fd(fs, node);
+}
+
+static int fs_inode_stat_at(virtio_fs_t *fs, fs_inode_t *node, struct stat *st) {
+    const char *name;
+    int dirfd = fs_inode_at(fs, node, &name);
+    if (dirfd < 0 || fstatat(dirfd, name, st, AT_SYMLINK_NOFOLLOW) < 0) {
+        return -1;
+    }
+    if (st->st_dev != node->dev || st->st_ino != node->ino) {
+        errno = ESTALE;
+        return -1;
+    }
+    return 0;
+}
+
+static int fs_inode_stat(virtio_fs_t *fs, fs_inode_t *node, struct stat *st) {
+    int fd = fs_inode_cached_fd(fs, node);
+    return fd >= 0 ? fstat(fd, st) : fs_inode_stat_at(fs, node, st);
+}
+
+static void fs_trim_fds(virtio_fs_t *fs) {
+    while (fs->lru_count > VIRTIO_FS_MAX_NODE_FDS) {
+        fs_inode_t *node = FS_CONTAINER(fs->lru.prev, fs_inode_t, lru);
+        fs_list_remove(&node->lru);
+        fs->lru_count--;
+        close(node->fd);
+        node->fd = -1;
+    }
+}
+
+static void fs_inode_move(virtio_fs_t *fs, fs_inode_t *node, fs_inode_t *parent, const char *name, bool replace) {
+    if (!node->parent || (!node->detached && node->parent == parent && strcmp(node->name, name) == 0)) {
+        return;
     }
     struct stat st;
-    if (fstat(fd, &st) < 0) {
-        int saved = errno;
-        close(fd);
-        errno = saved;
+    if (!replace && fs_inode_stat_at(fs, node, &st) == 0) {
+        return;
+    }
+    for (const fs_inode_t *p = parent; p; p = p->parent) {
+        if (p == node) {
+            return;
+        }
+    }
+    char *dup_name = strdup(name);
+    if (!dup_name) {
+        return;
+    }
+    free(node->name);
+    node->name = dup_name;
+    if (node->detached) {
+        node->detached = false;
+        if (node->fd >= 0) {
+            fs_list_push(&fs->lru, &node->lru);
+            fs->lru_count++;
+        }
+    }
+    fs_inode_t *old = node->parent;
+    parent->refs++;
+    node->parent = parent;
+    old->refs--;
+    fs_inode_put(fs, old);
+}
+
+static void fs_rebind(virtio_fs_t *fs, fs_inode_t *dir, int dirfd, const char *name) {
+    struct stat st;
+    if (fstatat(dirfd, name, &st, AT_SYMLINK_NOFOLLOW) < 0) {
+        return;
+    }
+    fs_inode_t *node = fs_find_inode_by_dev_ino(fs, st.st_dev, st.st_ino);
+    if (node) {
+        fs_inode_move(fs, node, dir, name, S_ISDIR(st.st_mode));
+    }
+}
+
+static fs_inode_t *fs_inode_named(virtio_fs_t *fs, fs_inode_t *dir, int dirfd, const char *name) {
+    struct stat st;
+    if (fstatat(dirfd, name, &st, AT_SYMLINK_NOFOLLOW) < 0) {
+        return NULL;
+    }
+    fs_inode_t *node = fs_find_inode_by_dev_ino(fs, st.st_dev, st.st_ino);
+    if (!node || node->detached || node->parent != dir || strcmp(node->name, name) != 0) {
+        return NULL;
+    }
+    if (node->fd < 0) {
+        fs_inode_cache_fd(fs, node);
+    }
+    return node;
+}
+
+static void fs_inode_detach(virtio_fs_t *fs, fs_inode_t *node) {
+    if (node->fd >= 0) {
+        fs_list_remove(&node->lru);
+        fs->lru_count--;
+    }
+    node->detached = true;
+}
+
+static fs_inode_t *fs_lookup_or_insert(virtio_fs_t *fs, fs_inode_t *parent,
+                                       const char *name, struct stat *st_out) {
+    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+        fs_inode_t *node = name[1] == '.' && parent->parent ? parent->parent : parent;
+        if (fs_inode_stat(fs, node, st_out) < 0) {
+            return NULL;
+        }
+        node->nlookup++;
+        return node;
+    }
+
+    int dirfd = fs_inode_fd(fs, parent);
+    if (dirfd < 0 || fstatat(dirfd, name, st_out, AT_SYMLINK_NOFOLLOW) < 0) {
         return NULL;
     }
 
-    fs_inode_t *existing = fs_find_inode_by_dev_ino(fs, st.st_dev, st.st_ino);
-    if (existing) {
-        close(fd);
-        existing->nlookup++;
-        *st_out = st;
-        return existing;
+    fs_inode_t *node = fs_find_inode_by_dev_ino(fs, st_out->st_dev, st_out->st_ino);
+    if (node) {
+        fs_inode_move(fs, node, parent, name, S_ISDIR(st_out->st_mode));
+        node->nlookup++;
+        return node;
     }
 
-    size_t slot = fs->inode_cap;
-    for (size_t i = 0; i < fs->inode_cap; i++) {
-        if (!fs->inodes[i].in_use) {
-            slot = i;
-            break;
-        }
+    node = malloc(sizeof(*node));
+    char *dup_name = strdup(name);
+    if (!node || !dup_name) {
+        free(node);
+        free(dup_name);
+        errno = ENOMEM;
+        return NULL;
     }
-    if (slot == fs->inode_cap) {
-        size_t new_cap = fs->inode_cap ? fs->inode_cap * 2 : 128;
-        fs_inode_t *grown = realloc(fs->inodes, new_cap * sizeof(*grown));
-        if (!grown) {
-            close(fd);
-            errno = ENOMEM;
-            return NULL;
-        }
-        memset(grown + fs->inode_cap, 0, (new_cap - fs->inode_cap) * sizeof(*grown));
-        fs->inodes = grown;
-        slot = fs->inode_cap;
-        fs->inode_cap = new_cap;
-    }
-
-    fs_inode_t *node = &fs->inodes[slot];
-    node->nodeid = fs->next_nodeid++;
-    node->generation = fs->generation;
-    node->dev = st.st_dev;
-    node->ino = st.st_ino;
-    node->fd = fd;
-    node->nlookup = 1;
-    node->in_use = true;
-    *st_out = st;
+    *node = (fs_inode_t){
+        .parent = parent,
+        .name = dup_name,
+        .nodeid = fs->next_nodeid++,
+        .generation = fs->generation,
+        .nlookup = 1,
+        .dev = st_out->st_dev,
+        .ino = st_out->st_ino,
+        .fd = -1,
+    };
+    fs_list_init(&node->handles);
+    parent->refs++;
+    fs_htable_insert(&fs->inodes, &node->id_link, node->nodeid);
+    fs_htable_insert(&fs->inodes_by_dev_ino, &node->dev_ino_link, fs_dev_ino_key(node->dev, node->ino));
     return node;
 }
 
@@ -652,16 +937,8 @@ static void fs_forget_inode(virtio_fs_t *fs, uint64_t nodeid, uint64_t nlookup) 
     if (!node) {
         return;
     }
-    if (nlookup >= node->nlookup) {
-        node->nlookup = 0;
-        if (node->fd >= 0) {
-            close(node->fd);
-            node->fd = -1;
-        }
-        node->in_use = false;
-    } else {
-        node->nlookup -= nlookup;
-    }
+    node->nlookup = nlookup < node->nlookup ? node->nlookup - nlookup : 0;
+    fs_inode_put(fs, node);
 }
 
 static void fs_free_dir_entries(fs_handle_t *h) {
@@ -673,55 +950,54 @@ static void fs_free_dir_entries(fs_handle_t *h) {
     h->entry_count = 0;
 }
 
-static fs_handle_t *fs_find_handle(virtio_fs_t *fs, uint64_t fh) {
-    for (size_t i = 0; i < fs->handle_cap; i++) {
-        if (fs->handles[i].in_use && fs->handles[i].fh == fh) {
-            return &fs->handles[i];
-        }
+static fs_handle_t *fs_alloc_handle(virtio_fs_t *fs, fs_inode_t *node, int fd, bool is_dir) {
+    fs_handle_t *h = malloc(sizeof(*h));
+    if (!h) {
+        return NULL;
     }
-    return NULL;
-}
-
-static fs_handle_t *fs_alloc_handle(virtio_fs_t *fs, uint64_t nodeid, int fd, bool is_dir) {
-    size_t slot = fs->handle_cap;
-    for (size_t i = 0; i < fs->handle_cap; i++) {
-        if (!fs->handles[i].in_use) {
-            slot = i;
-            break;
-        }
-    }
-    if (slot == fs->handle_cap) {
-        size_t new_cap = fs->handle_cap ? fs->handle_cap * 2 : 64;
-        fs_handle_t *grown = realloc(fs->handles, new_cap * sizeof(*grown));
-        if (!grown) {
-            return NULL;
-        }
-        memset(grown + fs->handle_cap, 0, (new_cap - fs->handle_cap) * sizeof(*grown));
-        fs->handles = grown;
-        slot = fs->handle_cap;
-        fs->handle_cap = new_cap;
-    }
-    fs_handle_t *h = &fs->handles[slot];
-    memset(h, 0, sizeof(*h));
-    h->fh = fs->next_fh++;
-    h->nodeid = nodeid;
-    h->fd = fd;
-    h->is_dir = is_dir;
-    h->in_use = true;
+    *h = (fs_handle_t){
+        .node = node,
+        .fh = fs->next_fh++,
+        .fd = fd,
+        .is_dir = is_dir,
+    };
+    fs_htable_insert(&fs->handles, &h->link, h->fh);
+    fs_list_push(&node->handles, &h->node_link);
+    node->refs++;
     return h;
 }
 
-static void fs_release_handle(virtio_fs_t *fs, uint64_t fh) {
-    fs_handle_t *h = fs_find_handle(fs, fh);
-    if (!h) {
-        return;
-    }
+static void fs_free_handle(virtio_fs_t *fs, fs_handle_t *h) {
+    fs_inode_t *node = h->node;
+    fs_htable_remove(&fs->handles, &h->link);
+    fs_list_remove(&h->node_link);
     fs_free_dir_entries(h);
-    if (h->fd >= 0) {
-        close(h->fd);
-        h->fd = -1;
+    close(h->fd);
+    free(h);
+    node->refs--;
+    fs_inode_put(fs, node);
+}
+
+static int fs_data_iov(const virtio_iov_t *iov, size_t count, bool write, size_t skip,
+                       size_t len, struct iovec vecs[VIRTIO_FS_MAX_IOV]) {
+    int used = 0;
+    for (size_t i = 0; i < count && len > 0; i++) {
+        if (iov[i].write != write) {
+            continue;
+        }
+        if (skip >= iov[i].len) {
+            skip -= iov[i].len;
+            continue;
+        }
+        size_t span = iov[i].len - skip;
+        if (span > len) {
+            span = len;
+        }
+        vecs[used++] = (struct iovec){ .iov_base = (uint8_t *)iov[i].base + skip, .iov_len = span };
+        len -= span;
+        skip = 0;
     }
-    h->in_use = false;
+    return used;
 }
 
 static int fs_snapshot_dir(fs_handle_t *h) {
@@ -828,7 +1104,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         fuse_init_out_t resp = {
             .major = FUSE_KERNEL_VERSION,
             .minor = req.minor < FUSE_KERNEL_MINOR_VERSION ? req.minor : FUSE_KERNEL_MINOR_VERSION,
-            .max_readahead = req.max_readahead < 131072U ? req.max_readahead : 131072U,
+            .max_readahead = req.max_readahead < FUSE_MAX_WRITE ? req.max_readahead : FUSE_MAX_WRITE,
             .flags = req.flags & supported,
             .max_background = 32,
             .congestion_threshold = 24,
@@ -893,22 +1169,19 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
     case FUSE_GETATTR: {
         fuse_getattr_in_t req = {0};
         virtio_iov_read(iov, total_iov, sizeof(in), &req, sizeof(req));
-        int fd = -1;
-        if (req.getattr_flags & FUSE_GETATTR_FH) {
-            fs_handle_t *h = fs_find_handle(fs, req.fh);
-            if (h) {
-                fd = h->fd;
-            }
-        }
-        if (fd < 0) {
+        fs_handle_t *h = (req.getattr_flags & FUSE_GETATTR_FH) ? fs_find_handle(fs, req.fh) : NULL;
+        struct stat st;
+        int rc;
+        if (h) {
+            rc = fstat(h->fd, &st);
+        } else {
             fs_inode_t *node = fs_find_inode(fs, in.nodeid);
             if (!node) {
                 return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
             }
-            fd = node->fd;
+            rc = fs_inode_stat(fs, node, &st);
         }
-        struct stat st;
-        if (fstat(fd, &st) < 0) {
+        if (rc < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
         fuse_attr_out_t resp = { .attr_valid = 1 };
@@ -935,29 +1208,31 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
                 rw_fd = h->fd;
             }
         }
-        char path[PATH_MAX];
-        bool have_path = fcntl(node->fd, F_GETPATH, path) == 0;
+        int fd = rw_fd >= 0 ? rw_fd : fs_inode_fd(fs, node);
+        if (fd < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        const char *name;
+        int dirfd = fs_inode_at(fs, node, &name);
 
         if (req.valid & FATTR_MODE) {
-            int rc = fchmod(rw_fd >= 0 ? rw_fd : node->fd, (mode_t)(req.mode & 07777U));
-            if (rc < 0 && have_path) {
-                rc = chmod(path, (mode_t)(req.mode & 07777U));
+            int rc = fchmod(fd, (mode_t)(req.mode & 07777U));
+            if (rc < 0 && dirfd >= 0) {
+                rc = fchmodat(dirfd, name, (mode_t)(req.mode & 07777U), 0);
             }
             if (rc < 0) {
                 return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
             }
         }
         if (req.valid & FATTR_SIZE) {
-            int rc = -1;
-            if (rw_fd >= 0) {
-                rc = ftruncate(rw_fd, (off_t)req.size);
-            } else if (have_path) {
-                rc = truncate(path, (off_t)req.size);
-            } else {
-                errno = EBADF;
+            int wfd = rw_fd >= 0 ? rw_fd : fs_inode_open(fs, node, O_WRONLY);
+            int rc = wfd < 0 ? -1 : ftruncate(wfd, (off_t)req.size);
+            int err = errno;
+            if (wfd >= 0 && wfd != rw_fd) {
+                close(wfd);
             }
             if (rc < 0) {
-                return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+                return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(err), NULL, 0);
             }
         }
         if (req.valid & (FATTR_ATIME | FATTR_MTIME | FATTR_ATIME_NOW | FATTR_MTIME_NOW)) {
@@ -982,9 +1257,9 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
                 ts[1].tv_sec = 0;
                 ts[1].tv_nsec = UTIME_OMIT;
             }
-            int rc = futimens(rw_fd >= 0 ? rw_fd : node->fd, ts);
-            if (rc < 0 && have_path) {
-                rc = utimensat(AT_FDCWD, path, ts, AT_SYMLINK_NOFOLLOW);
+            int rc = futimens(fd, ts);
+            if (rc < 0 && dirfd >= 0) {
+                rc = utimensat(dirfd, name, ts, AT_SYMLINK_NOFOLLOW);
             }
             if (rc < 0) {
                 return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
@@ -993,13 +1268,13 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (req.valid & (FATTR_UID | FATTR_GID)) {
             uid_t uid = (req.valid & FATTR_UID) ? (uid_t)req.uid : (uid_t)-1;
             gid_t gid = (req.valid & FATTR_GID) ? (gid_t)req.gid : (gid_t)-1;
-            if (fchown(rw_fd >= 0 ? rw_fd : node->fd, uid, gid) < 0 && errno != EPERM) {
+            if (fchown(fd, uid, gid) < 0 && errno != EPERM) {
                 return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
             }
         }
 
         struct stat st;
-        if (fstat(rw_fd >= 0 ? rw_fd : node->fd, &st) < 0) {
+        if (fstat(fd, &st) < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
         fuse_attr_out_t resp = { .attr_valid = 1 };
@@ -1012,12 +1287,9 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!node) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
-        char path[PATH_MAX];
-        if (fcntl(node->fd, F_GETPATH, path) < 0) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
+        int fd = fs_inode_fd(fs, node);
         char target[PATH_MAX];
-        ssize_t len = readlink(path, target, sizeof(target));
+        ssize_t len = fd < 0 ? -1 : freadlink(fd, target, sizeof(target));
         if (len < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
@@ -1045,7 +1317,8 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!fs_name_valid(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
-        if (symlinkat(linkname, parent->fd, name) < 0) {
+        int dirfd = fs_inode_fd(fs, parent);
+        if (dirfd < 0 || symlinkat(linkname, dirfd, name) < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
         struct stat st;
@@ -1078,24 +1351,20 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!fs_name_valid(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
+        int dirfd = fs_inode_fd(fs, parent);
+        if (dirfd < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
         mode_t perm = (mode_t)((req.mode & 07777U) & ~req.umask);
         mode_t ftype = req.mode & S_IFMT;
         if (ftype == 0 || ftype == S_IFREG) {
-            int fd = openat(parent->fd, name, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, perm);
+            int fd = openat(dirfd, name, O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, perm);
             if (fd < 0) {
                 return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
             }
             close(fd);
         } else if (ftype == S_IFIFO) {
-            char ppath[PATH_MAX];
-            if (fcntl(parent->fd, F_GETPATH, ppath) < 0) {
-                return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-            }
-            char full[PATH_MAX];
-            if ((size_t)snprintf(full, sizeof(full), "%s/%s", ppath, name) >= sizeof(full)) {
-                return fs_reply(iov, total_iov, in.unique, -LINUX_ENAMETOOLONG, NULL, 0);
-            }
-            if (mkfifo(full, perm) < 0) {
+            if (mkfifoat(dirfd, name, perm) < 0) {
                 return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
             }
         } else {
@@ -1131,7 +1400,8 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!fs_name_valid(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
-        if (mkdirat(parent->fd, name, (mode_t)((req.mode & 07777U) & ~req.umask)) < 0) {
+        int dirfd = fs_inode_fd(fs, parent);
+        if (dirfd < 0 || mkdirat(dirfd, name, (mode_t)((req.mode & 07777U) & ~req.umask)) < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
         struct stat st;
@@ -1161,8 +1431,13 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
         int flags = (in.opcode == FUSE_RMDIR) ? AT_REMOVEDIR : 0;
-        if (unlinkat(parent->fd, name, flags) < 0) {
+        int dirfd = fs_inode_fd(fs, parent);
+        fs_inode_t *victim = dirfd < 0 ? NULL : fs_inode_named(fs, parent, dirfd, name);
+        if (dirfd < 0 || unlinkat(dirfd, name, flags) < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        if (victim) {
+            fs_inode_detach(fs, victim);
         }
         return fs_reply(iov, total_iov, in.unique, 0, NULL, 0);
     }
@@ -1213,9 +1488,15 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!fs_name_valid(oldname) || !fs_name_valid(newname)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
+        int olddir_fd = fs_inode_fd(fs, olddir);
+        int newdir_fd = olddir_fd < 0 ? -1 : fs_inode_fd(fs, newdir);
+        if (newdir_fd < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        fs_inode_t *victim = (rflags & LINUX_RENAME_EXCHANGE) ? NULL : fs_inode_named(fs, newdir, newdir_fd, newname);
         int rc;
         if (rflags == 0) {
-            rc = renameat(olddir->fd, oldname, newdir->fd, newname);
+            rc = renameat(olddir_fd, oldname, newdir_fd, newname);
         } else {
             unsigned int dflags = 0;
             if (rflags & ~(LINUX_RENAME_NOREPLACE | LINUX_RENAME_EXCHANGE)) {
@@ -1227,10 +1508,17 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             if (rflags & LINUX_RENAME_EXCHANGE) {
                 dflags |= RENAME_SWAP;
             }
-            rc = renameatx_np(olddir->fd, oldname, newdir->fd, newname, dflags);
+            rc = renameatx_np(olddir_fd, oldname, newdir_fd, newname, dflags);
         }
         if (rc < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        if (victim) {
+            fs_inode_detach(fs, victim);
+        }
+        fs_rebind(fs, newdir, newdir_fd, newname);
+        if (rflags & LINUX_RENAME_EXCHANGE) {
+            fs_rebind(fs, olddir, olddir_fd, oldname);
         }
         return fs_reply(iov, total_iov, in.unique, 0, NULL, 0);
     }
@@ -1259,18 +1547,21 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!fs_name_valid(newname)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
-        char oldpath[PATH_MAX];
-        if (fcntl(oldnode->fd, F_GETPATH, oldpath) < 0) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
-        if (linkat(AT_FDCWD, oldpath, newdir->fd, newname, 0) < 0) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
         struct stat st;
+        if (fs_inode_stat_at(fs, oldnode, &st) < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        const char *oldname;
+        int olddir_fd = fs_inode_at(fs, oldnode, &oldname);
+        int newdir_fd = olddir_fd < 0 ? -1 : fs_inode_fd(fs, newdir);
+        if (newdir_fd < 0 || linkat(olddir_fd, oldname, newdir_fd, newname, 0) < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
         fs_inode_t *child = fs_lookup_or_insert(fs, newdir, newname, &st);
         if (!child) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
+        fs_inode_move(fs, child, newdir, newname, true);
         fuse_entry_out_t eo;
         fs_fill_entry_out(child, &st, &eo);
         return fs_reply(iov, total_iov, in.unique, 0, &eo, sizeof(eo));
@@ -1291,16 +1582,15 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!node) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
-        char path[PATH_MAX];
-        if (fcntl(node->fd, F_GETPATH, path) < 0) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
         int dflags = linux_to_darwin_oflags(req.flags) & ~(O_CREAT | O_EXCL);
-        int fd = open(path, dflags);
+        int fd = fs_inode_open(fs, node, dflags);
         if (fd < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
-        fs_handle_t *h = fs_alloc_handle(fs, node->nodeid, fd, false);
+        if (!(dflags & O_NONBLOCK)) {
+            fcntl(fd, F_SETFL, dflags);
+        }
+        fs_handle_t *h = fs_alloc_handle(fs, node, fd, false);
         if (!h) {
             close(fd);
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOMEM, NULL, 0);
@@ -1331,9 +1621,13 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         }
         int dflags = linux_to_darwin_oflags(req.flags) | O_CREAT;
         mode_t perm = (mode_t)((req.mode & 07777U) & ~req.umask);
-        int fd = openat(parent->fd, name, dflags, perm);
+        int dirfd = fs_inode_fd(fs, parent);
+        int fd = dirfd < 0 ? -1 : openat(dirfd, name, dflags | O_NONBLOCK, perm);
         if (fd < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        if (!(dflags & O_NONBLOCK)) {
+            fcntl(fd, F_SETFL, dflags);
         }
         struct stat st;
         fs_inode_t *child = fs_lookup_or_insert(fs, parent, name, &st);
@@ -1342,7 +1636,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             close(fd);
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(saved), NULL, 0);
         }
-        fs_handle_t *h = fs_alloc_handle(fs, child->nodeid, fd, false);
+        fs_handle_t *h = fs_alloc_handle(fs, child, fd, false);
         if (!h) {
             close(fd);
             fs_forget_inode(fs, child->nodeid, 1);
@@ -1366,27 +1660,22 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!h || h->is_dir) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EBADF, NULL, 0);
         }
-        size_t in_cap = virtio_iov_total(iov, total_iov, true);
-        size_t max_bytes = in_cap > sizeof(fuse_out_header_t) ? in_cap - sizeof(fuse_out_header_t) : 0;
-        size_t to_read = req.size < max_bytes ? req.size : max_bytes;
-        uint8_t *buf = to_read > 0 ? malloc(to_read) : NULL;
-        if (to_read > 0 && !buf) {
-            return fs_reply(iov, total_iov, in.unique, -LINUX_ENOMEM, NULL, 0);
-        }
+        struct iovec vecs[VIRTIO_FS_MAX_IOV];
+        int cnt = fs_data_iov(iov, total_iov, true, sizeof(fuse_out_header_t), req.size, vecs);
         ssize_t got = 0;
-        if (to_read > 0) {
+        if (cnt > 0) {
             do {
-                got = pread(h->fd, buf, to_read, (off_t)req.offset);
+                got = preadv(h->fd, vecs, cnt, (off_t)req.offset);
             } while (got < 0 && errno == EINTR);
         }
         if (got < 0) {
-            int saved = errno;
-            free(buf);
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(saved), NULL, 0);
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
-        uint32_t written = fs_reply(iov, total_iov, in.unique, 0, buf, (size_t)got);
-        free(buf);
-        return written;
+        fuse_out_header_t out = {
+            .len = (uint32_t)(sizeof(out) + (size_t)got),
+            .unique = in.unique,
+        };
+        return (uint32_t)(virtio_iov_write(iov, total_iov, 0, &out, sizeof(out)) + (size_t)got);
     }
 
     case FUSE_WRITE: {
@@ -1401,22 +1690,14 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!h || h->is_dir) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EBADF, NULL, 0);
         }
-        size_t avail = body_len > sizeof(req) ? body_len - sizeof(req) : 0;
-        size_t to_write = req.size < avail ? req.size : avail;
-        uint8_t *buf = to_write > 0 ? malloc(to_write) : NULL;
-        if (to_write > 0 && !buf) {
-            return fs_reply(iov, total_iov, in.unique, -LINUX_ENOMEM, NULL, 0);
-        }
-        if (to_write > 0) {
-            virtio_iov_read(iov, total_iov, sizeof(in) + sizeof(req), buf, to_write);
-        }
+        struct iovec vecs[VIRTIO_FS_MAX_IOV];
+        int cnt = fs_data_iov(iov, total_iov, false, sizeof(in) + sizeof(req), req.size, vecs);
         ssize_t n = 0;
-        if (to_write > 0) {
+        if (cnt > 0) {
             do {
-                n = pwrite(h->fd, buf, to_write, (off_t)req.offset);
+                n = pwritev(h->fd, vecs, cnt, (off_t)req.offset);
             } while (n < 0 && errno == EINTR);
         }
-        free(buf);
         if (n < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
@@ -1429,8 +1710,9 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!node) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
+        int fd = fs_inode_fd(fs, node);
         struct statvfs stv;
-        if (fstatvfs(node->fd, &stv) < 0) {
+        if (fd < 0 || fstatvfs(fd, &stv) < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
         fuse_kstatfs_t ks = {
@@ -1450,7 +1732,10 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
     case FUSE_RELEASEDIR: {
         fuse_release_in_t req = {0};
         if (virtio_iov_read(iov, total_iov, sizeof(in), &req, sizeof(req)) == sizeof(req)) {
-            fs_release_handle(fs, req.fh);
+            fs_handle_t *h = fs_find_handle(fs, req.fh);
+            if (h) {
+                fs_free_handle(fs, h);
+            }
         }
         return fs_reply(iov, total_iov, in.unique, 0, NULL, 0);
     }
@@ -1462,15 +1747,17 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
         fs_handle_t *h = fs_find_handle(fs, req.fh);
-        int fd = h ? h->fd : -1;
-        if (fd < 0) {
+        int fd;
+        if (h) {
+            fd = h->fd;
+        } else {
             fs_inode_t *node = fs_find_inode(fs, in.nodeid);
             if (!node) {
                 return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
             }
-            fd = node->fd;
+            fd = fs_inode_fd(fs, node);
         }
-        if (fsync(fd) < 0) {
+        if (fd < 0 || fsync(fd) < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
         return fs_reply(iov, total_iov, in.unique, 0, NULL, 0);
@@ -1481,22 +1768,18 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!node) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
-        char path[PATH_MAX];
-        if (fcntl(node->fd, F_GETPATH, path) < 0) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
-        int fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        int fd = fs_inode_open(fs, node, O_RDONLY | O_DIRECTORY);
         if (fd < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
-        fs_handle_t *h = fs_alloc_handle(fs, node->nodeid, fd, true);
+        fs_handle_t *h = fs_alloc_handle(fs, node, fd, true);
         if (!h) {
             close(fd);
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOMEM, NULL, 0);
         }
         if (fs_snapshot_dir(h) < 0) {
             int saved = errno;
-            fs_release_handle(fs, h->fh);
+            fs_free_handle(fs, h);
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(saved), NULL, 0);
         }
         fuse_open_out_t resp = { .fh = h->fh };
@@ -1513,10 +1796,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         if (!h || !h->is_dir) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EBADF, NULL, 0);
         }
-        fs_inode_t *dir_node = fs_find_inode(fs, h->nodeid);
-        if (!dir_node) {
-            return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
-        }
+        fs_inode_t *dir_node = h->node;
         if (req.offset == 0 && fs_snapshot_dir(h) < 0) {
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
@@ -1643,6 +1923,7 @@ static void fs_drain_queue(virtio_fs_t *fs, uint32_t qidx) {
         }
         uint32_t written = fs_handle_request(fs, iov, out_cnt + in_cnt);
         virtqueue_push(dev, vq, head, written);
+        fs_trim_fds(fs);
         pushed = true;
     }
 
@@ -1697,26 +1978,51 @@ static void virtio_fs_queue_notify(virtio_dev_t *dev, uint32_t queue_idx) {
 }
 
 static void virtio_fs_reset_tables(virtio_fs_t *fs) {
-    for (size_t i = 0; i < fs->handle_cap; i++) {
-        if (fs->handles[i].in_use) {
-            fs_free_dir_entries(&fs->handles[i]);
-            if (fs->handles[i].fd >= 0) {
-                close(fs->handles[i].fd);
-                fs->handles[i].fd = -1;
-            }
-            fs->handles[i].in_use = false;
+    for (size_t i = 0; i <= fs->handles.mask; i++) {
+        fs_hlink_t *l = fs->handles.buckets[i];
+        while (l) {
+            fs_handle_t *h = FS_CONTAINER(l, fs_handle_t, link);
+            l = l->next;
+            fs_free_dir_entries(h);
+            close(h->fd);
+            free(h);
         }
     }
-    for (size_t i = 0; i < fs->inode_cap; i++) {
-        if (fs->inodes[i].in_use && fs->inodes[i].nodeid != FUSE_ROOT_ID) {
-            if (fs->inodes[i].fd >= 0) {
-                close(fs->inodes[i].fd);
-                fs->inodes[i].fd = -1;
+    for (size_t i = 0; i <= fs->inodes.mask; i++) {
+        fs_hlink_t *l = fs->inodes.buckets[i];
+        while (l) {
+            fs_inode_t *node = FS_CONTAINER(l, fs_inode_t, id_link);
+            l = l->next;
+            if (node == fs->root) {
+                continue;
             }
-            fs->inodes[i].in_use = false;
+            if (node->fd >= 0) {
+                close(node->fd);
+            }
+            free(node->name);
+            free(node);
         }
     }
+    fs_htable_clear(&fs->handles);
+    fs_htable_clear(&fs->inodes);
+    fs_htable_clear(&fs->inodes_by_dev_ino);
+    fs_list_init(&fs->lru);
+    fs->lru_count = 0;
+
+    fs_inode_t *root = fs->root;
+    root->refs = 0;
+    fs_list_init(&root->handles);
+    fs_htable_insert(&fs->inodes, &root->id_link, FUSE_ROOT_ID);
+    fs_htable_insert(&fs->inodes_by_dev_ino, &root->dev_ino_link, fs_dev_ino_key(root->dev, root->ino));
     fs->generation++;
+}
+
+static void virtio_fs_free(virtio_fs_t *fs) {
+    free(fs->handles.buckets);
+    free(fs->inodes_by_dev_ino.buckets);
+    free(fs->inodes.buckets);
+    free(fs->root);
+    free(fs);
 }
 
 static void virtio_fs_reset(virtio_dev_t *dev) {
@@ -1747,14 +2053,8 @@ static void virtio_fs_destroy(virtio_dev_t *dev) {
     pthread_mutex_destroy(&fs->lock);
 
     virtio_fs_reset_tables(fs);
-    for (size_t i = 0; i < fs->inode_cap; i++) {
-        if (fs->inodes[i].in_use && fs->inodes[i].fd >= 0) {
-            close(fs->inodes[i].fd);
-        }
-    }
-    free(fs->inodes);
-    free(fs->handles);
-    free(fs);
+    close(fs->root->fd);
+    virtio_fs_free(fs);
     dev->priv = NULL;
 }
 
@@ -1785,34 +2085,27 @@ virtio_dev_t *virtio_fs_create(vmm_machine_t *vm, uint32_t slot,
         close(root_fd);
         return NULL;
     }
+    fs->root = malloc(sizeof(*fs->root));
+    if (!fs->root || !fs_htable_init(&fs->inodes) || !fs_htable_init(&fs->inodes_by_dev_ino) ||
+        !fs_htable_init(&fs->handles)) {
+        virtio_fs_free(fs);
+        close(root_fd);
+        return NULL;
+    }
+    *fs->root = (fs_inode_t){
+        .nodeid = FUSE_ROOT_ID,
+        .nlookup = 1,
+        .dev = st.st_dev,
+        .ino = st.st_ino,
+        .fd = root_fd,
+    };
     fs->read_only = read_only;
     size_t tag_len = strnlen(tag, VIRTIO_FS_TAG_LEN);
     memcpy(fs->config.tag, tag, tag_len);
     fs->config.num_request_queues = 1;
     fs->next_nodeid = FUSE_ROOT_ID + 1;
     fs->next_fh = 1;
-    fs->generation = 1;
-
-    fs->inodes = calloc(128, sizeof(*fs->inodes));
-    fs->handles = calloc(64, sizeof(*fs->handles));
-    if (!fs->inodes || !fs->handles) {
-        free(fs->inodes);
-        free(fs->handles);
-        close(root_fd);
-        free(fs);
-        return NULL;
-    }
-    fs->inode_cap = 128;
-    fs->handle_cap = 64;
-    fs->inodes[0] = (fs_inode_t){
-        .nodeid = FUSE_ROOT_ID,
-        .generation = 0,
-        .dev = st.st_dev,
-        .ino = st.st_ino,
-        .fd = root_fd,
-        .nlookup = 1,
-        .in_use = true,
-    };
+    virtio_fs_reset_tables(fs);
 
     pthread_mutex_init(&fs->lock, NULL);
     pthread_cond_init(&fs->work_cond, NULL);
@@ -1824,10 +2117,8 @@ virtio_dev_t *virtio_fs_create(vmm_machine_t *vm, uint32_t slot,
         pthread_cond_destroy(&fs->idle_cond);
         pthread_cond_destroy(&fs->work_cond);
         pthread_mutex_destroy(&fs->lock);
-        free(fs->inodes);
-        free(fs->handles);
+        virtio_fs_free(fs);
         close(root_fd);
-        free(fs);
         return NULL;
     }
     fs->dev = dev;

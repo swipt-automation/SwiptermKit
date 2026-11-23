@@ -6,6 +6,7 @@
 #include "generated/a64_decode.inc"
 #include "generated/a64_sysreg_gen.inc"
 
+#include <pthread.h>
 #include <stdlib.h>
 #include <sys/sysctl.h>
 
@@ -93,7 +94,7 @@ CPU_COLD_MISS void cpu_fp_enter_guest_slow(vcpu_t *cpu) {
     cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
     ic->host_fpcr = cpu_hw_read_fpcr();
     ic->host_fpsr = cpu_hw_read_fpsr();
-    cpu_hw_write_fpcr(cpu->fpcr & CPU_FPCR_HW_MASK);
+    cpu_hw_write_fpcr(cpu->fpcr & CPU_FPCR_MASK);
     cpu_hw_write_fpsr(cpu->fpsr & CPU_FPSR_MASK);
     cpu->fp_host_active = true;
 }
@@ -220,16 +221,15 @@ CPU_ALWAYS_INLINE const ir_insn_t *cpu_resolve_jump_pc_nobudget(vcpu_t *cpu, uin
     }
     uint64_t asid_salt = cpu->tlb_asid_salt;
     uint64_t top = target >> 48;
-    uint64_t mmu_off = (asid_salt & (1ULL << 10)) >> 8;
     uint64_t page = target & 0x0000fffffffff000ULL;
     uint32_t idx;
     uint64_t tag;
     if (__builtin_expect(top == 0ULL, 1)) {
         idx = (uint32_t)(((target >> VMM_PAGE_SHIFT) ^ (uint32_t)asid_salt) & EXEC_CACHE_MASK);
-        tag = page | (asid_salt & 0xffff000000000000ULL) | mmu_off;
+        tag = page | (asid_salt & MMU_SALT_USER_TAG);
     } else if (__builtin_expect(top == 0xffffULL, 1)) {
         idx = (uint32_t)((target >> VMM_PAGE_SHIFT) & EXEC_CACHE_MASK);
-        tag = page | 0x2ULL | mmu_off;
+        tag = page | SOFTTLB_TAG_GLOBAL | (asid_salt & MMU_SALT_MMU_OFF);
     } else {
         cpu->pc = target;
         return NULL;
@@ -397,7 +397,7 @@ void vcpu_flush_icache_all(vcpu_t *cpu) {
     if (!ic) {
         return;
     }
-    for (uint32_t s = 0; s <= ic->set_mask; ++s) {
+    for (uint32_t s = 0; s < ICACHE_SETS; ++s) {
         for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
             ir_page_t *pg = ic->slots[s][w];
             if (pg) {
@@ -421,7 +421,7 @@ static void icache_invalidate_page(vcpu_t *cpu, cpu_icache_t *ic, ir_page_t *pg)
         cpu->ras_epoch++;
     }
     if (pg == ic->cur_page) {
-        cpu->exec_epoch++;
+        ic->cur_exec_epoch = 0;
     }
 }
 
@@ -430,7 +430,7 @@ void vcpu_flush_icache_pa(vcpu_t *cpu, uint64_t pa_page) {
     if (!ic) {
         return;
     }
-    ir_page_t **ways = ic->slots[(pa_page >> VMM_PAGE_SHIFT) & ic->set_mask];
+    ir_page_t **ways = ic->slots[(pa_page >> VMM_PAGE_SHIFT) & ICACHE_SET_MASK];
     for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
         if (ways[w] && ways[w]->pa_page == pa_page) {
             icache_invalidate_page(cpu, ic, ways[w]);
@@ -446,7 +446,7 @@ bool vcpu_flush_icache_va(vcpu_t *cpu, uint64_t va) {
     uint64_t va_page = va & ~(uint64_t)VMM_PAGE_MASK;
     uint64_t pa;
     if (!mmu_resolve_va_pa(cpu, va_page, &pa)) {
-        for (uint32_t s = 0; s <= ic->set_mask; ++s) {
+        for (uint32_t s = 0; s < ICACHE_SETS; ++s) {
             for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
                 ir_page_t *pg = ic->slots[s][w];
                 if (pg && pg->va_page == va_page && pg->pa_page != UINT64_MAX) {
@@ -454,8 +454,6 @@ bool vcpu_flush_icache_va(vcpu_t *cpu, uint64_t va) {
                 }
             }
         }
-        cpu->icache_shootdown_all = true;
-        cpu->icache_shootdown_pending = true;
         return false;
     }
 
@@ -518,7 +516,7 @@ void vcpu_destroy(vcpu_t *cpu) {
         cpu_stats_dump(cpu);
         free(ic->stats);
 #endif
-        for (uint32_t s = 0; s <= ic->set_mask; ++s) {
+        for (uint32_t s = 0; s < ICACHE_SETS; ++s) {
             for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
                 free(ic->slots[s][w]);
                 ic->slots[s][w] = NULL;
@@ -562,7 +560,6 @@ void vcpu_reset(vcpu_t *cpu, uint64_t entry_pc, uint64_t x0) {
         if (ic->next_gen == 0U) {
             ic->next_gen = 1U;
         }
-        ic->set_mask = (!vm || vm->ram_size >= (1536ULL << 20)) ? (ICACHE_SETS - 1U) : 255U;
         ic->ras_sp = 0U;
         memset(ic->exec_cache, 0, sizeof(ic->exec_cache));
         memset(ic->ras, 0, sizeof(ic->ras));
@@ -2569,10 +2566,20 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
     case A64_DEC_CRYPTOAES:      out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_AES; out->target_or_imm = word; return;
     case A64_DEC_CRYPTOSHA2:     out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_SHA2; out->target_or_imm = word; return;
     case A64_DEC_CRYPTOSHA3:     out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_SHA3; out->target_or_imm = word; return;
-    case A64_DEC_CRYPTO3_IMM6:   out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_IMM6; out->target_or_imm = word; return;
-    case A64_DEC_CRYPTO4:        out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_4; out->target_or_imm = word; return;
-    case A64_DEC_CRYPTOSHA512_2: out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_SHA512_2; out->target_or_imm = word; return;
-    case A64_DEC_CRYPTOSHA512_3: out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_SHA512_3; out->target_or_imm = word; return;
+    case A64_DEC_CRYPTO3_IMM6:
+    case A64_DEC_CRYPTO4:
+    case A64_DEC_CRYPTOSHA512_2:
+    case A64_DEC_CRYPTOSHA512_3: {
+        bool sha512 = dec == A64_DEC_CRYPTOSHA512_2 ||
+                      (dec == A64_DEC_CRYPTOSHA512_3 && ((word >> 10) & 3U) != 3U);
+        out->handler = (cpu_host_features() & (sha512 ? CPU_HOST_SHA512 : CPU_HOST_SHA3)) ? cpu_op_crypto : op_undef;
+        out->op = dec == A64_DEC_CRYPTO3_IMM6     ? SUBOP_CRYPTO_IMM6
+                  : dec == A64_DEC_CRYPTO4        ? SUBOP_CRYPTO_4
+                  : dec == A64_DEC_CRYPTOSHA512_2 ? SUBOP_CRYPTO_SHA512_2
+                                                  : SUBOP_CRYPTO_SHA512_3;
+        out->target_or_imm = word;
+        return;
+    }
 
     case A64_DEC_ASIMDIMM:       out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_IMM; out->target_or_imm = word; return;
     case A64_DEC_ASIMDINS:       out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_INS; out->target_or_imm = word; return;
@@ -2666,7 +2673,13 @@ CPU_COLD_MISS static void decode_tile_slow(ir_page_t *pg, uint32_t tile) {
     }
     fuse_tile(pg, base, tile_targets);
     for (uint32_t i = 0; i < TILE_INSNS; ++i) {
-        cpu_fast_decode(&pg->insns[base + i]);
+        ir_insn_t *ir = &pg->insns[base + i];
+        if (ir->flags & IR_FLAG_INPAGE) {
+            while (ir->target_ir->handler == op_nop) {
+                ++ir->target_ir;
+            }
+        }
+        cpu_fast_decode(ir);
     }
 }
 
@@ -2674,13 +2687,20 @@ void cpu_fast_decode_tile(ir_page_t *pg, uint32_t tile) {
     decode_tile_slow(pg, tile);
 }
 
+static uint8_t icache_plru_touch(uint8_t plru, uint32_t way) {
+    if (way < 2U) {
+        return (uint8_t)((plru & 4U) | 1U | ((way ^ 1U) << 1));
+    }
+    return (uint8_t)((plru & 2U) | (((way ^ 1U) & 1U) << 2));
+}
+
 static ir_page_t *icache_get_page(vcpu_t *cpu, uint64_t va_page, uint64_t pa_page, uintptr_t hva_page) {
     cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
-    uint32_t set = (uint32_t)((pa_page >> VMM_PAGE_SHIFT) & ic->set_mask);
+    uint32_t set = (uint32_t)((pa_page >> VMM_PAGE_SHIFT) & ICACHE_SET_MASK);
     for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
         ir_page_t *pg = ic->slots[set][w];
         if (pg && pg->pa_page == pa_page && pg->va_page == va_page && pg->el == cpu->el) {
-            ic->lru[set] = w ^ 1U;
+            ic->plru[set] = icache_plru_touch(ic->plru[set], w);
             return pg;
         }
     }
@@ -2690,8 +2710,9 @@ static ir_page_t *icache_get_page(vcpu_t *cpu, uint64_t va_page, uint64_t pa_pag
         atomic_fetch_or_explicit(word, mask, memory_order_seq_cst);
         atomic_thread_fence(memory_order_seq_cst);
     }
-    uint32_t victim = ic->lru[set] & 1U;
-    ic->lru[set] = victim ^ 1U;
+    uint8_t plru = ic->plru[set];
+    uint32_t victim = (plru & 1U) ? 2U + ((plru >> 2) & 1U) : (plru >> 1) & 1U;
+    ic->plru[set] = icache_plru_touch(plru, victim);
     ir_page_t *pg = ic->slots[set][victim];
     if (pg) {
         CPU_STAT(cpu, pages_replaced);
@@ -2731,7 +2752,6 @@ const ir_insn_t *cpu_fast_resolve(vcpu_t *cpu) {
         uint64_t va_page = pc & ~(uint64_t)VMM_PAGE_MASK;
         uint64_t asid_salt = cpu->tlb_asid_salt;
         uint64_t top = pc >> 48;
-        uint64_t mmu_off = (asid_salt & (1ULL << 10)) >> 8;
         uint64_t page = pc & 0x0000fffffffff000ULL;
         ir_page_t *pg = NULL;
         uint32_t ec_idx = 0;
@@ -2740,11 +2760,11 @@ const ir_insn_t *cpu_fast_resolve(vcpu_t *cpu) {
 
         if (__builtin_expect(top == 0ULL, 1)) {
             ec_idx = (uint32_t)(((pc >> VMM_PAGE_SHIFT) ^ (uint32_t)asid_salt) & EXEC_CACHE_MASK);
-            ec_tag = page | (asid_salt & 0xffff000000000000ULL) | mmu_off;
+            ec_tag = page | (asid_salt & MMU_SALT_USER_TAG);
             ec_eligible = true;
         } else if (__builtin_expect(top == 0xffffULL, 1)) {
             ec_idx = (uint32_t)((pc >> VMM_PAGE_SHIFT) & EXEC_CACHE_MASK);
-            ec_tag = page | 0x2ULL | mmu_off;
+            ec_tag = page | SOFTTLB_TAG_GLOBAL | (asid_salt & MMU_SALT_MMU_OFF);
             ec_eligible = true;
         }
 
