@@ -15,6 +15,7 @@
 #include <sys/mount.h>
 #include <sys/random.h>
 #include <sys/reboot.h>
+#include <sys/resource.h>
 #include <sys/signalfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -153,6 +154,13 @@ int read_all_blocking(int fd, void *buf, size_t len) {
     return 0;
 }
 
+static void ev_drop_pending(ev_node_t *node) {
+    for (int i = g_ep_index + 1; i < g_ep_count; i++) {
+        if (g_ep_events[i].data.ptr == node)
+            g_ep_events[i].data.ptr = NULL;
+    }
+}
+
 int ev_add(ev_node_t *node, int fd, uint32_t events, ev_cb_t cb, void *ctx) {
     node->fd = fd;
     node->events = events;
@@ -161,6 +169,8 @@ int ev_add(ev_node_t *node, int fd, uint32_t events, ev_cb_t cb, void *ctx) {
     struct epoll_event ev = {.events = events, .data.ptr = node};
     if (epoll_ctl(g_daemon.epfd, EPOLL_CTL_ADD, fd, &ev) < 0)
         return -errno;
+    if (events == 0)
+        epoll_ctl(g_daemon.epfd, EPOLL_CTL_DEL, fd, NULL);
     node->registered = true;
     return 0;
 }
@@ -170,21 +180,22 @@ int ev_mod(ev_node_t *node, uint32_t events) {
         return -ENOENT;
     if (node->events == events)
         return 0;
+    int op = events == 0 ? EPOLL_CTL_DEL : node->events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
     struct epoll_event ev = {.events = events, .data.ptr = node};
-    if (epoll_ctl(g_daemon.epfd, EPOLL_CTL_MOD, node->fd, &ev) < 0)
+    if (epoll_ctl(g_daemon.epfd, op, node->fd, &ev) < 0)
         return -errno;
+    if (events == 0)
+        ev_drop_pending(node);
     node->events = events;
     return 0;
 }
 
 void ev_del(ev_node_t *node) {
-    for (int i = g_ep_index + 1; i < g_ep_count; i++) {
-        if (g_ep_events[i].data.ptr == node)
-            g_ep_events[i].data.ptr = NULL;
-    }
+    ev_drop_pending(node);
     if (!node->registered)
         return;
-    epoll_ctl(g_daemon.epfd, EPOLL_CTL_DEL, node->fd, NULL);
+    if (node->events != 0)
+        epoll_ctl(g_daemon.epfd, EPOLL_CTL_DEL, node->fd, NULL);
     node->registered = false;
     node->events = 0;
 }
@@ -308,6 +319,20 @@ int vsock_connect_stream(uint32_t role, uint32_t resource_id, uint64_t token) {
     return fd;
 }
 
+
+static void raise_nofile_limit(void) {
+    FILE *f = fopen("/proc/sys/fs/nr_open", "re");
+    if (!f)
+        return;
+    unsigned long nr_open = 0;
+    bool ok = fscanf(f, "%lu", &nr_open) == 1;
+    fclose(f);
+    struct rlimit limit;
+    if (ok && getrlimit(RLIMIT_NOFILE, &limit) == 0) {
+        limit.rlim_max = nr_open;
+        (void)setrlimit(RLIMIT_NOFILE, &limit);
+    }
+}
 
 static void setup_initramfs_mounts(void) {
     ensure_dir("/proc", 0555);
@@ -980,6 +1005,7 @@ int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
 
     setup_initramfs_mounts();
+    raise_nofile_limit();
     int boot_rc = write_file(AT_FDCWD, "/proc/sys/kernel/modprobe", "/sbin/modprobe\n", O_TRUNC, 0);
     if (boot_rc < 0 && boot_rc != -ENOENT)
         boot_err_log("set the kernel modprobe path", boot_rc);

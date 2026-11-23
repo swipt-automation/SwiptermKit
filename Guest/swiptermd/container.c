@@ -27,41 +27,51 @@ static int g_device_map = -1;
 static int g_sessions_dir = -1;
 
 typedef struct device_key {
+    uint32_t type;
     uint32_t major_number;
     uint32_t minor_number;
 } device_key_t;
-
-static const device_key_t default_devices[] = {
-    {1, 3}, {1, 5}, {1, 7}, {1, 8}, {1, 9},
-    {5, 0}, {5, 1}, {5, 2},
-    {10, 200}, {10, 229}, {10, 203},
-    {0, 0},
-};
 
 enum {
     DEVICE_ANY_MINOR = UINT32_MAX,
     PTS_MAJOR_FIRST = 136,
     PTS_MAJOR_LAST = 143,
+    LOOP_MAJOR = 7,
+    LOOP_NODE_COUNT = 8,
+};
+
+static const device_key_t default_devices[] = {
+    {BPF_DEVCG_DEV_CHAR, 1, 3}, {BPF_DEVCG_DEV_CHAR, 1, 5}, {BPF_DEVCG_DEV_CHAR, 1, 7},
+    {BPF_DEVCG_DEV_CHAR, 1, 8}, {BPF_DEVCG_DEV_CHAR, 1, 9},
+    {BPF_DEVCG_DEV_CHAR, 5, 0}, {BPF_DEVCG_DEV_CHAR, 5, 1}, {BPF_DEVCG_DEV_CHAR, 5, 2},
+    {BPF_DEVCG_DEV_CHAR, 10, 200}, {BPF_DEVCG_DEV_CHAR, 10, 229}, {BPF_DEVCG_DEV_CHAR, 10, 203},
+    {BPF_DEVCG_DEV_CHAR, 10, 235}, {BPF_DEVCG_DEV_CHAR, 10, 237},
+    {BPF_DEVCG_DEV_CHAR, 0, 0},
+    {BPF_DEVCG_DEV_BLOCK, LOOP_MAJOR, DEVICE_ANY_MINOR},
 };
 
 static long bpf_call(enum bpf_cmd cmd, union bpf_attr *attr) {
     return syscall(SYS_bpf, cmd, attr, sizeof(*attr));
 }
 
-int device_permit(unsigned major_number, unsigned minor_number) {
-    device_key_t key = {major_number, minor_number};
+static int device_allow(const device_key_t *key) {
     uint32_t allowed = 1;
     union bpf_attr attr;
     memset(&attr, 0, sizeof(attr));
     attr.map_fd = (uint32_t)g_device_map;
-    attr.key = (uint64_t)(uintptr_t)&key;
+    attr.key = (uint64_t)(uintptr_t)key;
     attr.value = (uint64_t)(uintptr_t)&allowed;
     attr.flags = BPF_ANY;
     return bpf_call(BPF_MAP_UPDATE_ELEM, &attr) < 0 ? -errno : 0;
 }
 
+int device_permit(unsigned major_number, unsigned minor_number) {
+    device_key_t key = {BPF_DEVCG_DEV_CHAR, major_number, minor_number};
+    return device_allow(&key);
+}
+
 void device_revoke(unsigned major_number, unsigned minor_number) {
-    device_key_t key = {major_number, minor_number};
+    device_key_t key = {BPF_DEVCG_DEV_CHAR, major_number, minor_number};
     union bpf_attr attr;
     memset(&attr, 0, sizeof(attr));
     attr.map_fd = (uint32_t)g_device_map;
@@ -78,7 +88,7 @@ void device_revoke(unsigned major_number, unsigned minor_number) {
     BPF_INSN(BPF_LD | BPF_DW | BPF_IMM, BPF_REG_1, BPF_PSEUDO_MAP_FD, 0, map_fd), \
     BPF_INSN(0, 0, 0, 0, 0),                                                       \
     BPF_INSN(BPF_ALU64 | BPF_MOV | BPF_X, BPF_REG_2, BPF_REG_10, 0, 0),           \
-    BPF_INSN(BPF_ALU64 | BPF_ADD | BPF_K, BPF_REG_2, 0, 0, -8),                   \
+    BPF_INSN(BPF_ALU64 | BPF_ADD | BPF_K, BPF_REG_2, 0, 0, -12),                  \
     BPF_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_map_lookup_elem)
 
 static int device_policy_attach(void) {
@@ -93,7 +103,7 @@ static int device_policy_attach(void) {
         return -errno;
     (void)fcntl(g_device_map, F_SETFD, FD_CLOEXEC);
     for (size_t i = 0; i < sizeof(default_devices) / sizeof(default_devices[0]); i++) {
-        int rc = device_permit(default_devices[i].major_number, default_devices[i].minor_number);
+        int rc = device_allow(&default_devices[i]);
         if (rc < 0)
             return rc;
     }
@@ -106,10 +116,9 @@ static int device_policy_attach(void) {
     const struct bpf_insn program[] = {
         BPF_LOAD_CTX(BPF_REG_2, 0),
         BPF_INSN(BPF_ALU | BPF_AND | BPF_K, BPF_REG_2, 0, 0, 0xFFFF),
-        BPF_INSN(BPF_JMP | BPF_JEQ | BPF_K, BPF_REG_2, 0, 2, BPF_DEVCG_DEV_CHAR),
-        BPF_RETURN(0),
         BPF_LOAD_CTX(BPF_REG_3, 4),
         BPF_LOAD_CTX(BPF_REG_4, 8),
+        BPF_INSN(BPF_STX | BPF_MEM | BPF_W, BPF_REG_10, BPF_REG_2, -12, 0),
         BPF_INSN(BPF_STX | BPF_MEM | BPF_W, BPF_REG_10, BPF_REG_3, -8, 0),
         BPF_INSN(BPF_STX | BPF_MEM | BPF_W, BPF_REG_10, BPF_REG_4, -4, 0),
         BPF_LOOKUP_KEY(g_device_map),
@@ -183,7 +192,7 @@ static int make_mountpoint(const char *path, mode_t mode) {
 }
 
 static int make_device(const char *path, mode_t mode, unsigned major_number, unsigned minor_number) {
-    return mknod(path, S_IFCHR | mode, makedev(major_number, minor_number)) < 0 ? -errno : 0;
+    return mknod(path, mode, makedev(major_number, minor_number)) < 0 ? -errno : 0;
 }
 
 static int assemble_dev(void) {
@@ -193,16 +202,18 @@ static int assemble_dev(void) {
         unsigned major_number;
         unsigned minor_number;
     } nodes[] = {
-        {GUEST_ROOT "/dev/null", 0666, 1, 3},
-        {GUEST_ROOT "/dev/zero", 0666, 1, 5},
-        {GUEST_ROOT "/dev/full", 0666, 1, 7},
-        {GUEST_ROOT "/dev/random", 0666, 1, 8},
-        {GUEST_ROOT "/dev/urandom", 0666, 1, 9},
-        {GUEST_ROOT "/dev/tty", 0666, 5, 0},
-        {GUEST_ROOT "/dev/console", 0600, 5, 1},
-        {GUEST_ROOT "/dev/fuse", 0666, 10, 229},
-        {GUEST_ROOT "/dev/cuse", 0600, 10, 203},
-        {GUEST_ROOT "/dev/net/tun", 0666, 10, 200},
+        {GUEST_ROOT "/dev/null", S_IFCHR | 0666, 1, 3},
+        {GUEST_ROOT "/dev/zero", S_IFCHR | 0666, 1, 5},
+        {GUEST_ROOT "/dev/full", S_IFCHR | 0666, 1, 7},
+        {GUEST_ROOT "/dev/random", S_IFCHR | 0666, 1, 8},
+        {GUEST_ROOT "/dev/urandom", S_IFCHR | 0666, 1, 9},
+        {GUEST_ROOT "/dev/tty", S_IFCHR | 0666, 5, 0},
+        {GUEST_ROOT "/dev/console", S_IFCHR | 0600, 5, 1},
+        {GUEST_ROOT "/dev/fuse", S_IFCHR | 0666, 10, 229},
+        {GUEST_ROOT "/dev/cuse", S_IFCHR | 0600, 10, 203},
+        {GUEST_ROOT "/dev/autofs", S_IFCHR | 0600, 10, 235},
+        {GUEST_ROOT "/dev/loop-control", S_IFCHR | 0660, 10, 237},
+        {GUEST_ROOT "/dev/net/tun", S_IFCHR | 0666, 10, 200},
     };
     static const struct {
         const char *target;
@@ -225,6 +236,13 @@ static int assemble_dev(void) {
     }
     for (size_t i = 0; i < sizeof(nodes) / sizeof(nodes[0]); i++) {
         int rc = make_device(nodes[i].path, nodes[i].mode, nodes[i].major_number, nodes[i].minor_number);
+        if (rc < 0)
+            return rc;
+    }
+    for (unsigned i = 0; i < LOOP_NODE_COUNT; i++) {
+        char path[64];
+        snprintf(path, sizeof(path), GUEST_ROOT "/dev/loop%u", i);
+        int rc = make_device(path, S_IFBLK | 0660, LOOP_MAJOR, i);
         if (rc < 0)
             return rc;
     }
@@ -268,6 +286,8 @@ static int assemble_run(void) {
         {GUEST_ROOT "/run/systemd/network", 0755},
         {SYSTEMD_CONTROL, 0755},
         {SYSTEMD_CONTROL "/multi-user.target.wants", 0755},
+        {SYSTEMD_CONTROL "/rescue.target.wants", 0755},
+        {SYSTEMD_CONTROL "/emergency.target.wants", 0755},
     };
     for (size_t i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
         if (mkdir(dirs[i].path, dirs[i].mode) < 0)
@@ -276,6 +296,9 @@ static int assemble_run(void) {
     static const char sessions_unit[] =
         "[Unit]\n"
         "Description=Swipterm terminal sessions\n"
+        "DefaultDependencies=no\n"
+        "Conflicts=shutdown.target\n"
+        "Before=shutdown.target\n"
         "After=sysinit.target systemd-tmpfiles-setup.service systemd-user-sessions.service\n"
         "\n"
         "[Service]\n"
@@ -304,7 +327,9 @@ static int assemble_run(void) {
                         create, 0644);
     if (rc < 0)
         return rc;
-    if (symlink("../" SESSIONS_UNIT, SYSTEMD_CONTROL "/multi-user.target.wants/" SESSIONS_UNIT) < 0)
+    if (symlink("../" SESSIONS_UNIT, SYSTEMD_CONTROL "/multi-user.target.wants/" SESSIONS_UNIT) < 0 ||
+        symlink("../" SESSIONS_UNIT, SYSTEMD_CONTROL "/rescue.target.wants/" SESSIONS_UNIT) < 0 ||
+        symlink("../" SESSIONS_UNIT, SYSTEMD_CONTROL "/emergency.target.wants/" SESSIONS_UNIT) < 0)
         return -errno;
     if (mount("/init", GUEST_ROOT GUEST_TOOL_PATH, NULL, MS_BIND, NULL) < 0 ||
         mount(NULL, GUEST_ROOT GUEST_TOOL_PATH, NULL, MS_BIND | MS_REMOUNT | MS_RDONLY | MS_NODEV, NULL) < 0)
@@ -352,9 +377,6 @@ int container_mount_api(void) {
         mount("proc", "/proc", "proc", api_mount_flags, NULL) < 0 ||
         mount("cgroup2", CGROUP_ROOT, "cgroup2", api_mount_flags, NULL) < 0 ||
         mount("mqueue", "/dev/mqueue", "mqueue", api_mount_flags, NULL) < 0 ||
-        mount("/proc/sys", "/proc/sys", NULL, MS_BIND, NULL) < 0 ||
-        mount("/proc/sys/net", "/proc/sys/net", NULL, MS_BIND, NULL) < 0 ||
-        mount(NULL, "/proc/sys", NULL, MS_BIND | MS_REMOUNT | MS_RDONLY | api_mount_flags, NULL) < 0 ||
         mount(NULL, "/", NULL, MS_REC | MS_SHARED, NULL) < 0)
         return -errno;
     return 0;

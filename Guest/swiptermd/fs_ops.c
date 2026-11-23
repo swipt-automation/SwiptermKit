@@ -24,14 +24,6 @@ static size_t g_mount_count;
 static uint8_t g_resolver[4096];
 static size_t g_resolver_len;
 
-static void sync_root_fs(void) {
-    int fd = open(GUEST_ROOT, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (fd >= 0) {
-        (void)syncfs(fd);
-        close(fd);
-    }
-}
-
 static bool write_sysfs_str(const char *path, const char *val) {
     int fd = open(path, O_WRONLY | O_CLOEXEC);
     if (fd < 0)
@@ -224,7 +216,7 @@ int fs_open_parent(const char *guest_path, char *name_out, size_t name_cap) {
     return fs_open_in_root(to_rel_path(parent), O_PATH | O_DIRECTORY, 0);
 }
 
-int fs_write_file_jailed(const char *guest_path, const uint8_t *data, size_t len, uint32_t mode) {
+int fs_write_file_jailed(const char *guest_path, const uint8_t *data, size_t len, uint32_t mode, bool sync) {
     char parent[PATH_MAX];
     char name[NAME_MAX + 1];
     int err = split_parent_name(guest_path, parent, sizeof(parent), name, sizeof(name));
@@ -258,6 +250,8 @@ int fs_write_file_jailed(const char *guest_path, const uint8_t *data, size_t len
 
     err = write_all_blocking(fd, data, len);
     if (err == 0 && fchmod(fd, mode & 07777) < 0)
+        err = -errno;
+    if (err == 0 && sync && fsync(fd) < 0)
         err = -errno;
     close(fd);
 
@@ -422,13 +416,13 @@ void fs_handle_write(uint32_t req_id, const uint8_t *body, uint32_t len) {
             err = fd;
         } else {
             err = write_all_blocking(fd, data.ptr, data.len);
+            if (err == 0 && (flags & SWIPTERMD_FS_WRITE_FLAG_SYNC) && fsync(fd) < 0)
+                err = -errno;
             close(fd);
         }
     } else {
-        err = fs_write_file_jailed(path, data.ptr, data.len, mode);
+        err = fs_write_file_jailed(path, data.ptr, data.len, mode, flags & SWIPTERMD_FS_WRITE_FLAG_SYNC);
     }
-    if (err == 0)
-        sync_root_fs();
     ctrl_send_err_reply(SWIPTERMD_OP_FS_WRITE, req_id, err);
 }
 
@@ -535,8 +529,6 @@ void fs_handle_mkdir(uint32_t req_id, const uint8_t *body, uint32_t len) {
             }
         }
     }
-    if (err == 0)
-        sync_root_fs();
     ctrl_send_err_reply(SWIPTERMD_OP_FS_MKDIR, req_id, err);
 }
 
@@ -642,8 +634,6 @@ void fs_handle_remove(uint32_t req_id, const uint8_t *body, uint32_t len) {
     }
 
     close(pfd);
-    if (err == 0)
-        sync_root_fs();
     ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, err);
 }
 
@@ -822,8 +812,8 @@ int fs_apply_managed_resolver(void) {
         return 0;
     if (g_resolver_len == 0)
         return fs_write_file_jailed("/etc/resolv.conf", (const uint8_t *)GUEST_DEFAULT_RESOLV_CONF,
-                                    sizeof(GUEST_DEFAULT_RESOLV_CONF) - 1, 0644);
-    return fs_write_file_jailed("/etc/resolv.conf", g_resolver, g_resolver_len, 0644);
+                                    sizeof(GUEST_DEFAULT_RESOLV_CONF) - 1, 0644, false);
+    return fs_write_file_jailed("/etc/resolv.conf", g_resolver, g_resolver_len, 0644, false);
 }
 
 void fs_handle_sync_dns(uint32_t req_id, const uint8_t *body, uint32_t len) {
@@ -839,7 +829,7 @@ void fs_handle_sync_dns(uint32_t req_id, const uint8_t *body, uint32_t len) {
     }
     memcpy(g_resolver, data.ptr, data.len);
     g_resolver_len = data.len;
-    int err = fs_write_file_jailed(GUEST_RUN_HOST "/resolv.conf", g_resolver, g_resolver_len, 0644);
+    int err = fs_write_file_jailed(GUEST_RUN_HOST "/resolv.conf", g_resolver, g_resolver_len, 0644, false);
     if (err == 0 && g_daemon.init_started)
         err = fs_apply_managed_resolver();
     ctrl_send_err_reply(SWIPTERMD_OP_SYNC_DNS, req_id, err);

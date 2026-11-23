@@ -55,6 +55,16 @@ typedef struct cmd_invocation {
     struct cmd_invocation *next;
 } cmd_invocation_t;
 
+typedef struct cmd_request {
+    int fd;
+    ev_node_t ev;
+    int guest_fds[3];
+    uint8_t *payload;
+    uint32_t plen;
+    uint32_t got;
+    struct cmd_request *next;
+} cmd_request_t;
+
 typedef struct cuse_device {
     uint32_t device_id;
     int cuse_fd;
@@ -79,6 +89,7 @@ static char **g_cmd_names;
 static size_t g_cmd_count;
 static uint32_t g_next_inv_id = 1;
 static cmd_invocation_t *g_invocations;
+static cmd_request_t *g_cmd_requests;
 
 static cuse_device_t *g_cuse_devs;
 static cuse_pending_t *g_cuse_pending;
@@ -315,6 +326,8 @@ static int recv_stub_header(int fd, uint32_t *payload_len_out, int fds_out[3]) {
     do {
         n = recvmsg(fd, &msg, MSG_CMSG_CLOEXEC);
     } while (n < 0 && errno == EINTR);
+    if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        return -EAGAIN;
     if (n != (ssize_t)sizeof(hdr))
         return -EIO;
 
@@ -333,142 +346,190 @@ static int recv_stub_header(int fd, uint32_t *payload_len_out, int fds_out[3]) {
     return 0;
 }
 
+static void cmd_start(int cfd, const int guest_fds[3], const uint8_t *payload, uint32_t plen) {
+    swiptermd_buf_r_t pr = swiptermd_buf_r_init(payload, plen);
+    char name[256];
+    if (!swiptermd_r_str_copy(&pr, name, sizeof(name))) {
+        for (int i = 0; i < 3; i++)
+            close(guest_fds[i]);
+        close(cfd);
+        return;
+    }
+
+    if (strcmp(name, "open") == 0 || strcmp(name, "xdg-open") == 0)
+        sock_mirror_scan_now();
+
+    uint32_t inv_id = g_next_inv_id++;
+    if (inv_id == 0)
+        inv_id = g_next_inv_id++;
+    uint64_t token = 0;
+    (void)getrandom(&token, sizeof(token), 0);
+
+    static const uint32_t roles[3] = {
+        SWIPTERMD_STREAM_CMD_IN,
+        SWIPTERMD_STREAM_CMD_OUT,
+        SWIPTERMD_STREAM_CMD_ERR,
+    };
+    int vsock_fds[3] = {-1, -1, -1};
+    bool vsock_ok = true;
+    for (int i = 0; i < 3; i++) {
+        vsock_fds[i] = vsock_connect_stream(roles[i], inv_id, token);
+        if (vsock_fds[i] < 0) {
+            vsock_ok = false;
+            break;
+        }
+    }
+    if (!vsock_ok) {
+        for (int i = 0; i < 3; i++) {
+            if (vsock_fds[i] >= 0)
+                close(vsock_fds[i]);
+            close(guest_fds[i]);
+        }
+        close(cfd);
+        return;
+    }
+
+    cmd_invocation_t *inv = calloc(1, sizeof(*inv));
+    if (!inv) {
+        for (int i = 0; i < 3; i++) {
+            close(vsock_fds[i]);
+            close(guest_fds[i]);
+        }
+        close(cfd);
+        return;
+    }
+
+    inv->invocation_id = inv_id;
+    inv->start_req_id = ctrl_alloc_req_id();
+    inv->stub_fd = cfd;
+    ev_add(&inv->stub_ev, cfd, EPOLLIN, on_stub_event, inv);
+
+    for (int i = 0; i < 3; i++) {
+        cmd_chan_t *ch = &inv->chans[i];
+        ch->guest_fd = guest_fds[i];
+        ch->vsock_fd = vsock_fds[i];
+        ch->guest_is_source = (i == 0);
+        ch->inv = inv;
+
+        struct stat st;
+        bool is_reg = (fstat(guest_fds[i], &st) == 0 && S_ISREG(st.st_mode));
+        if (!is_reg && ev_add(&ch->guest_ev, guest_fds[i],
+                              ch->guest_is_source ? EPOLLIN : 0,
+                              on_cmd_chan_event, ch) == 0) {
+            ch->guest_epoll = true;
+        } else {
+            ch->guest_epoll = false;
+        }
+
+        ev_add(&ch->vsock_ev, vsock_fds[i], ch->guest_is_source ? 0 : EPOLLIN,
+               on_cmd_chan_event, ch);
+    }
+
+    inv->next = g_invocations;
+    g_invocations = inv;
+
+    uint8_t *frame = malloc(12 + plen);
+    if (frame) {
+        swiptermd_put_be32(frame + 0, inv_id);
+        swiptermd_put_be64(frame + 4, token);
+        memcpy(frame + 12, payload, plen);
+        ctrl_send_frame(SWIPTERMD_OP_CMD_START, inv->start_req_id, frame, 12 + plen);
+        free(frame);
+    }
+
+    if (!inv->chans[0].guest_epoll)
+        cmd_chan_pump(&inv->chans[0]);
+}
+
+static void cmd_request_detach(cmd_request_t *req) {
+    for (cmd_request_t **pp = &g_cmd_requests; *pp; pp = &(*pp)->next) {
+        if (*pp == req) {
+            *pp = req->next;
+            break;
+        }
+    }
+    ev_del(&req->ev);
+}
+
+static void cmd_request_destroy(cmd_request_t *req) {
+    cmd_request_detach(req);
+    for (int i = 0; i < 3; i++) {
+        if (req->guest_fds[i] >= 0)
+            close(req->guest_fds[i]);
+    }
+    close(req->fd);
+    free(req->payload);
+    free(req);
+}
+
+static void on_cmd_request_event(ev_node_t *node, uint32_t events) {
+    (void)events;
+    cmd_request_t *req = node->ctx;
+    if (!req->payload) {
+        int rc = recv_stub_header(req->fd, &req->plen, req->guest_fds);
+        if (rc == -EAGAIN)
+            return;
+        if (rc < 0 || req->plen == 0 || req->plen > SWIPTERMD_MAX_BODY_LEN - 64 ||
+            !(req->payload = malloc(req->plen))) {
+            cmd_request_destroy(req);
+            return;
+        }
+    }
+    while (req->got < req->plen) {
+        ssize_t n = read(req->fd, req->payload + req->got, req->plen - req->got);
+        if (n < 0 && errno == EINTR)
+            continue;
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            return;
+        if (n <= 0) {
+            cmd_request_destroy(req);
+            return;
+        }
+        req->got += (uint32_t)n;
+    }
+    cmd_request_detach(req);
+    cmd_start(req->fd, req->guest_fds, req->payload, req->plen);
+    free(req->payload);
+    free(req);
+}
+
 static void on_cmd_accept(ev_node_t *node, uint32_t events) {
     (void)node;
     if (!(events & EPOLLIN))
         return;
 
     for (;;) {
-        int cfd = accept4(g_cmd_listen_fd, NULL, NULL, SOCK_CLOEXEC);
+        int cfd = accept4(g_cmd_listen_fd, NULL, NULL, SOCK_CLOEXEC | SOCK_NONBLOCK);
         if (cfd < 0) {
             if (errno == EINTR)
                 continue;
             return;
         }
-
-        uint32_t plen = 0;
-        int guest_fds[3] = {-1, -1, -1};
-        if (recv_stub_header(cfd, &plen, guest_fds) < 0 || plen == 0 ||
-            plen > SWIPTERMD_MAX_BODY_LEN - 64) {
-            for (int i = 0; i < 3; i++) {
-                if (guest_fds[i] >= 0)
-                    close(guest_fds[i]);
-            }
+        cmd_request_t *req = calloc(1, sizeof(*req));
+        if (!req) {
             close(cfd);
             continue;
         }
-
-        uint8_t *payload = malloc(plen);
-        if (!payload || read_all_blocking(cfd, payload, plen) < 0) {
-            free(payload);
-            for (int i = 0; i < 3; i++)
-                close(guest_fds[i]);
+        req->fd = cfd;
+        req->guest_fds[0] = req->guest_fds[1] = req->guest_fds[2] = -1;
+        if (ev_add(&req->ev, cfd, EPOLLIN, on_cmd_request_event, req) < 0) {
             close(cfd);
+            free(req);
             continue;
         }
-
-        swiptermd_buf_r_t pr = swiptermd_buf_r_init(payload, plen);
-        char name[256];
-        if (!swiptermd_r_str_copy(&pr, name, sizeof(name))) {
-            free(payload);
-            for (int i = 0; i < 3; i++)
-                close(guest_fds[i]);
-            close(cfd);
-            continue;
-        }
-
-        if (strcmp(name, "open") == 0 || strcmp(name, "xdg-open") == 0)
-            sock_mirror_scan_now();
-
-        uint32_t inv_id = g_next_inv_id++;
-        if (inv_id == 0)
-            inv_id = g_next_inv_id++;
-        uint64_t token = 0;
-        (void)getrandom(&token, sizeof(token), 0);
-
-        static const uint32_t roles[3] = {
-            SWIPTERMD_STREAM_CMD_IN,
-            SWIPTERMD_STREAM_CMD_OUT,
-            SWIPTERMD_STREAM_CMD_ERR,
-        };
-        int vsock_fds[3] = {-1, -1, -1};
-        bool vsock_ok = true;
-        for (int i = 0; i < 3; i++) {
-            vsock_fds[i] = vsock_connect_stream(roles[i], inv_id, token);
-            if (vsock_fds[i] < 0) {
-                vsock_ok = false;
-                break;
-            }
-        }
-        if (!vsock_ok) {
-            for (int i = 0; i < 3; i++) {
-                if (vsock_fds[i] >= 0)
-                    close(vsock_fds[i]);
-                close(guest_fds[i]);
-            }
-            free(payload);
-            close(cfd);
-            continue;
-        }
-
-        cmd_invocation_t *inv = calloc(1, sizeof(*inv));
-        if (!inv) {
-            for (int i = 0; i < 3; i++) {
-                close(vsock_fds[i]);
-                close(guest_fds[i]);
-            }
-            free(payload);
-            close(cfd);
-            continue;
-        }
-
-        inv->invocation_id = inv_id;
-        inv->start_req_id = ctrl_alloc_req_id();
-        inv->stub_fd = cfd;
-        (void)set_nonblock(cfd);
-        ev_add(&inv->stub_ev, cfd, EPOLLIN, on_stub_event, inv);
-
-        for (int i = 0; i < 3; i++) {
-            cmd_chan_t *ch = &inv->chans[i];
-            ch->guest_fd = guest_fds[i];
-            ch->vsock_fd = vsock_fds[i];
-            ch->guest_is_source = (i == 0);
-            ch->inv = inv;
-
-            struct stat st;
-            bool is_reg = (fstat(guest_fds[i], &st) == 0 && S_ISREG(st.st_mode));
-            if (!is_reg && ev_add(&ch->guest_ev, guest_fds[i],
-                                  ch->guest_is_source ? EPOLLIN : 0,
-                                  on_cmd_chan_event, ch) == 0) {
-                ch->guest_epoll = true;
-            } else {
-                ch->guest_epoll = false;
-            }
-
-            ev_add(&ch->vsock_ev, vsock_fds[i], ch->guest_is_source ? 0 : EPOLLIN,
-                   on_cmd_chan_event, ch);
-        }
-
-        inv->next = g_invocations;
-        g_invocations = inv;
-
-        uint8_t *frame = malloc(12 + plen);
-        if (frame) {
-            swiptermd_put_be32(frame + 0, inv_id);
-            swiptermd_put_be64(frame + 4, token);
-            memcpy(frame + 12, payload, plen);
-            ctrl_send_frame(SWIPTERMD_OP_CMD_START, inv->start_req_id, frame, 12 + plen);
-            free(frame);
-        }
-        free(payload);
-
-        if (!inv->chans[0].guest_epoll)
-            cmd_chan_pump(&inv->chans[0]);
+        req->next = g_cmd_requests;
+        g_cmd_requests = req;
+        on_cmd_request_event(&req->ev, EPOLLIN);
     }
 }
 
-static int copy_cmd_stub(const char *dst_path) {
-    int sfd = open("/cmd_stub", O_RDONLY | O_CLOEXEC);
+#define PROFILE_HOOK "/etc/profile.d/zz-swipterm-host.sh"
+#define ZSH_HOOK "[ -r " PROFILE_HOOK " ] && . " PROFILE_HOOK "\n"
+
+static const char *const clip_tools[] = {"pbcopy", "pbpaste", "wl-copy", "wl-paste", "xclip", "xsel"};
+
+static int copy_executable(const char *src_path, const char *dst_path) {
+    int sfd = open(src_path, O_RDONLY | O_CLOEXEC);
     if (sfd < 0)
         return -errno;
     int dfd = open(dst_path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0755);
@@ -500,6 +561,35 @@ static int copy_cmd_stub(const char *dst_path) {
     return err;
 }
 
+static void export_path(const char *guest_dir) {
+    char script[1280];
+    int len = snprintf(script, sizeof(script),
+                       "case \":$PATH:\" in\n*\":%s:\"*) ;;\n*) PATH=\"${PATH:+$PATH:}%s\" ;;\nesac\nexport PATH\n",
+                       guest_dir, guest_dir);
+    (void)fs_write_file_jailed(PROFILE_HOOK, (const uint8_t *)script, (size_t)len, 0644, false);
+    len = snprintf(script, sizeof(script), "contains -- '%s' $PATH; or set -gx PATH $PATH '%s'\n", guest_dir,
+                   guest_dir);
+    (void)fs_write_file_jailed("/etc/fish/conf.d/zz-swipterm-host.fish", (const uint8_t *)script, (size_t)len, 0644,
+                               false);
+
+    int fd = fs_open_in_root("etc/zsh/zshenv", O_RDWR | O_CREAT | O_APPEND, 0644);
+    if (fd < 0)
+        return;
+    struct stat st;
+    char *content = NULL;
+    if (fstat(fd, &st) == 0 && (content = malloc((size_t)st.st_size + 1)) != NULL &&
+        read_all_blocking(fd, content, (size_t)st.st_size) == 0) {
+        content[st.st_size] = '\0';
+        if (!strstr(content, ZSH_HOOK)) {
+            if (st.st_size > 0 && content[st.st_size - 1] != '\n')
+                (void)write_all_blocking(fd, "\n", 1);
+            (void)write_all_blocking(fd, ZSH_HOOK, sizeof(ZSH_HOOK) - 1);
+        }
+    }
+    free(content);
+    close(fd);
+}
+
 int host_cmd_setup(const char *guest_dir) {
     if (!guest_dir || guest_dir[0] != '/')
         return -EINVAL;
@@ -508,16 +598,31 @@ int host_cmd_setup(const char *guest_dir) {
         return err;
 
     char stub_path[PATH_MAX];
+    char clip_path[PATH_MAX];
     char sock_path[PATH_MAX];
     if (snprintf(stub_path, sizeof(stub_path), "%s%s/.stub", GUEST_ROOT, guest_dir) >=
             (int)sizeof(stub_path) ||
+        snprintf(clip_path, sizeof(clip_path), "%s%s/.clip", GUEST_ROOT, guest_dir) >=
+            (int)sizeof(clip_path) ||
         snprintf(sock_path, sizeof(sock_path), "%s%s/.sock", GUEST_ROOT, guest_dir) >=
             (int)sizeof(sock_path))
         return -ENAMETOOLONG;
 
-    err = copy_cmd_stub(stub_path);
+    err = copy_executable("/cmd_stub", stub_path);
+    if (err == 0)
+        err = copy_executable("/guest_clip", clip_path);
     if (err < 0)
         return err;
+    for (size_t i = 0; i < sizeof(clip_tools) / sizeof(clip_tools[0]); i++) {
+        char link_path[PATH_MAX];
+        if (snprintf(link_path, sizeof(link_path), "%s%s/%s", GUEST_ROOT, guest_dir, clip_tools[i]) >=
+            (int)sizeof(link_path))
+            return -ENAMETOOLONG;
+        unlink(link_path);
+        if (symlink(".clip", link_path) < 0)
+            return -errno;
+    }
+    export_path(guest_dir);
 
     if (g_cmd_listen_fd >= 0) {
         ev_del(&g_cmd_listen_ev);
@@ -559,7 +664,8 @@ void host_cmd_handle_register(uint32_t req_id, const uint8_t *body, uint32_t len
         return;
     }
     if (name[0] == '\0' || strchr(name, '/') != NULL || strcmp(name, ".") == 0 ||
-        strcmp(name, "..") == 0 || strcmp(name, ".stub") == 0 || strcmp(name, ".sock") == 0) {
+        strcmp(name, "..") == 0 || strcmp(name, ".stub") == 0 || strcmp(name, ".clip") == 0 ||
+        strcmp(name, ".sock") == 0) {
         ctrl_send_err_reply(SWIPTERMD_OP_REGISTER_CMD, req_id, -EINVAL);
         return;
     }
@@ -578,6 +684,10 @@ void host_cmd_handle_register(uint32_t req_id, const uint8_t *body, uint32_t len
         return;
     }
 
+    for (size_t i = 0; i < sizeof(clip_tools) / sizeof(clip_tools[0]); i++) {
+        if (strcmp(clip_tools[i], name) == 0)
+            unlink(link_path);
+    }
     if (symlink(".stub", link_path) < 0) {
         ctrl_send_err_reply(SWIPTERMD_OP_REGISTER_CMD, req_id, -errno);
         return;
@@ -963,6 +1073,8 @@ void host_cmd_cuse_shutdown(void) {
         close(g_cmd_listen_fd);
         g_cmd_listen_fd = -1;
     }
+    while (g_cmd_requests)
+        cmd_request_destroy(g_cmd_requests);
     for (cmd_invocation_t *inv = g_invocations; inv; inv = inv->next) {
         ev_del(&inv->stub_ev);
         if (inv->stub_fd >= 0) {

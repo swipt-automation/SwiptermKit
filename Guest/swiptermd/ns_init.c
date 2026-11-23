@@ -27,7 +27,7 @@
 #define LXC_TEMPLATE_MAX_SIZE (64 * 1024)
 
 enum {
-    MANAGED_INIT_GRACE_MS = 2000,
+    MANAGED_INIT_GRACE_MS = 15000,
     MANAGED_INIT_POLL_NS = 5 * 1000 * 1000,
 };
 
@@ -119,7 +119,7 @@ static void apply_lxc_template(const char *guest_path) {
         size_t rest = strlen(cursor);
         memcpy(out + len, cursor, rest);
         len += rest;
-        int rc = fs_write_file_jailed(guest_path, (const uint8_t *)out, len, st.st_mode & 07777);
+        int rc = fs_write_file_jailed(guest_path, (const uint8_t *)out, len, st.st_mode & 07777, false);
         if (rc < 0)
             boot_err_log(guest_path, rc);
         free(out);
@@ -204,7 +204,7 @@ static void ensure_hosts_entry(void) {
             out_len += (size_t)entry_len;
             out[out_len++] = '\n';
         }
-        int rc = fs_write_file_jailed("/etc/hosts", (const uint8_t *)out, out_len, st.st_mode & 07777);
+        int rc = fs_write_file_jailed("/etc/hosts", (const uint8_t *)out, out_len, st.st_mode & 07777, false);
         if (rc < 0)
             boot_err_log("write /etc/hosts", rc);
         free(out);
@@ -526,7 +526,7 @@ static int container_init_entry(void *arg) {
 
 static char **decode_strv(swiptermd_buf_r_t *r) {
     uint32_t count = swiptermd_r_u32(r);
-    if (r->underflow || count > 4096)
+    if (r->underflow || count > (r->len - r->pos) / sizeof(uint32_t))
         return NULL;
     char **vec = calloc((size_t)count + 1, sizeof(char *));
     if (!vec)
@@ -590,7 +590,7 @@ static void prepare_managed_root(void) {
         if (fstatat(g_daemon.root_fd, "etc/hostname", &st, AT_SYMLINK_NOFOLLOW) < 0 || st.st_size == 0) {
             char line[sizeof(g_daemon.hostname) + 1];
             int line_len = snprintf(line, sizeof(line), "%s\n", g_daemon.hostname);
-            rc = fs_write_file_jailed("/etc/hostname", (const uint8_t *)line, (size_t)line_len, 0644);
+            rc = fs_write_file_jailed("/etc/hostname", (const uint8_t *)line, (size_t)line_len, 0644, false);
             if (rc < 0)
                 boot_err_log("write /etc/hostname", rc);
         } else {
@@ -600,7 +600,7 @@ static void prepare_managed_root(void) {
     }
     if (fstatat(g_daemon.root_fd, "etc/hosts", &st, AT_SYMLINK_NOFOLLOW) < 0 || st.st_size == 0) {
         static const char hosts[] = "127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n";
-        (void)fs_write_file_jailed("/etc/hosts", (const uint8_t *)hosts, sizeof(hosts) - 1, 0644);
+        (void)fs_write_file_jailed("/etc/hosts", (const uint8_t *)hosts, sizeof(hosts) - 1, 0644, false);
     }
     ensure_hosts_entry();
     if (fstatat(g_daemon.root_fd, "etc/mtab", &st, AT_SYMLINK_NOFOLLOW) < 0) {

@@ -36,6 +36,7 @@ enum {
 
 enum {
     SWIPTERMD_FS_WRITE_FLAG_APPEND = 1U << 0,
+    SWIPTERMD_FS_WRITE_FLAG_SYNC = 1U << 1,
 };
 
 enum {

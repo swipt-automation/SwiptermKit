@@ -515,7 +515,7 @@ static void on_proc_exit_event(ev_node_t *node, uint32_t events) {
 
 static char **decode_strv_spawn(swiptermd_buf_r_t *r) {
     uint32_t count = swiptermd_r_u32(r);
-    if (r->underflow || count > 4096)
+    if (r->underflow || count > (r->len - r->pos) / sizeof(uint32_t))
         return NULL;
     char **vec = calloc((size_t)count + 1, sizeof(char *));
     if (!vec)
@@ -991,10 +991,6 @@ void proc_handle_signal(uint32_t req_id, const uint8_t *body, uint32_t len) {
     int32_t sig;
     bool to_group;
     if (!swiptermd_dec_process_signal(body, len, &process_id, &sig, &to_group)) {
-        ctrl_send_err_reply(SWIPTERMD_OP_PROCESS_SIGNAL, req_id, -EINVAL);
-        return;
-    }
-    if (sig < 0 || sig >= 64) {
         ctrl_send_err_reply(SWIPTERMD_OP_PROCESS_SIGNAL, req_id, -EINVAL);
         return;
     }

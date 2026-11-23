@@ -22,7 +22,6 @@
 #include <sys/timerfd.h>
 #include <unistd.h>
 
-#define MIRROR_MAX_LISTENERS 256
 #define MIRROR_BUF_CAP 32768
 #define TRACEFS_DIR "/sys/kernel/tracing"
 #define LISTEN_EVENT_FORMAT TRACEFS_DIR "/events/sock/inet_sock_set_state/format"
@@ -62,6 +61,12 @@ typedef struct listener_key {
     uint8_t addr[16];
 } listener_key_t;
 
+typedef struct listener_set {
+    listener_key_t *items;
+    size_t count;
+    size_t cap;
+} listener_set_t;
+
 typedef struct listen_start {
     uint64_t skaddr;
     uint16_t family;
@@ -95,8 +100,7 @@ typedef struct tcp_proxy {
 static int g_diag_nl_fd = -1;
 static int g_scan_timer_fd = -1;
 static ev_node_t g_scan_timer_ev;
-static listener_key_t g_prev_listeners[MIRROR_MAX_LISTENERS];
-static size_t g_prev_count;
+static listener_set_t g_listeners;
 
 static trace_cpu_t *g_trace_cpus;
 static size_t g_trace_count;
@@ -106,8 +110,14 @@ static listen_start_t g_pending[MIRROR_PENDING_CAP];
 static size_t g_pending_count;
 static int g_settle_attempt = -1;
 
-static bool listener_eq(const listener_key_t *a, const listener_key_t *b) {
-    return a->family == b->family && a->port == b->port && memcmp(a->addr, b->addr, 16) == 0;
+static int listener_cmp(const void *a, const void *b) {
+    const listener_key_t *x = a;
+    const listener_key_t *y = b;
+    if (x->family != y->family)
+        return x->family < y->family ? -1 : 1;
+    if (x->port != y->port)
+        return x->port < y->port ? -1 : 1;
+    return memcmp(x->addr, y->addr, 16);
 }
 
 static bool is_mirrorable_addr(uint8_t family, const uint8_t addr[16]) {
@@ -116,19 +126,18 @@ static bool is_mirrorable_addr(uint8_t family, const uint8_t addr[16]) {
             return true;
         if (addr[0] == 127)
             return true;
-        return false;
+        return addr[0] == 10 && addr[1] == 0 && addr[2] == 2 && addr[3] == 15;
     }
     if (family == SWIPTERMD_MIRROR_AF_INET6) {
         static const uint8_t any6[16] = {0};
         static const uint8_t loop6[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
-        return memcmp(addr, any6, 16) == 0 || memcmp(addr, loop6, 16) == 0;
+        static const uint8_t guest6[16] = {0xfd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x15};
+        return memcmp(addr, any6, 16) == 0 || memcmp(addr, loop6, 16) == 0 || memcmp(addr, guest6, 16) == 0;
     }
     return false;
 }
 
-static void scan_family(int af, uint8_t wire_family, listener_key_t *out, size_t *count) {
-    if (g_diag_nl_fd < 0)
-        return;
+static bool scan_family(int af, uint8_t wire_family, listener_set_t *out) {
 
     struct {
         struct nlmsghdr nlh;
@@ -143,21 +152,21 @@ static void scan_family(int af, uint8_t wire_family, listener_key_t *out, size_t
     msg.req.idiag_states = 1U << TCP_LISTEN;
 
     if (send(g_diag_nl_fd, &msg, sizeof(msg), 0) < 0)
-        return;
+        return false;
 
     uint8_t buf[16384];
     for (;;) {
         ssize_t n = recv(g_diag_nl_fd, buf, sizeof(buf), 0);
         if (n <= 0)
-            return;
+            return false;
 
         for (struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
              NLMSG_OK(nlh, (unsigned int)n);
              nlh = NLMSG_NEXT(nlh, n)) {
             if (nlh->nlmsg_type == NLMSG_DONE)
-                return;
+                return true;
             if (nlh->nlmsg_type == NLMSG_ERROR)
-                return;
+                return false;
             if (nlh->nlmsg_len < NLMSG_LENGTH(sizeof(struct inet_diag_msg)))
                 continue;
 
@@ -183,15 +192,15 @@ static void scan_family(int af, uint8_t wire_family, listener_key_t *out, size_t
             if (!is_mirrorable_addr(wire_family, key.addr))
                 continue;
 
-            bool dup = false;
-            for (size_t i = 0; i < *count; i++) {
-                if (listener_eq(&out[i], &key)) {
-                    dup = true;
-                    break;
-                }
+            if (out->count == out->cap) {
+                size_t cap = out->cap ? out->cap * 2 : 64;
+                listener_key_t *items = realloc(out->items, cap * sizeof(*items));
+                if (!items)
+                    return false;
+                out->items = items;
+                out->cap = cap;
             }
-            if (!dup && *count < MIRROR_MAX_LISTENERS)
-                out[(*count)++] = key;
+            out->items[out->count++] = key;
         }
     }
 }
@@ -200,74 +209,67 @@ void sock_mirror_scan_now(void) {
     if (g_diag_nl_fd < 0)
         return;
 
-    listener_key_t cur[MIRROR_MAX_LISTENERS];
-    size_t cur_count = 0;
-    scan_family(AF_INET, SWIPTERMD_MIRROR_AF_INET, cur, &cur_count);
-    scan_family(AF_INET6, SWIPTERMD_MIRROR_AF_INET6, cur, &cur_count);
-
-    swiptermd_mirror_entry_t diffs[MIRROR_MAX_LISTENERS * 2];
-    uint32_t diff_count = 0;
-
-    for (size_t i = 0; i < cur_count; i++) {
-        bool existed = false;
-        for (size_t j = 0; j < g_prev_count; j++) {
-            if (listener_eq(&cur[i], &g_prev_listeners[j])) {
-                existed = true;
-                break;
-            }
+    listener_set_t cur = {0};
+    if (!scan_family(AF_INET, SWIPTERMD_MIRROR_AF_INET, &cur) ||
+        !scan_family(AF_INET6, SWIPTERMD_MIRROR_AF_INET6, &cur)) {
+        free(cur.items);
+        return;
+    }
+    if (cur.count > 0) {
+        qsort(cur.items, cur.count, sizeof(*cur.items), listener_cmp);
+        size_t unique = 1;
+        for (size_t i = 1; i < cur.count; i++) {
+            if (listener_cmp(&cur.items[i], &cur.items[unique - 1]) != 0)
+                cur.items[unique++] = cur.items[i];
         }
-        if (!existed) {
-            swiptermd_mirror_entry_t e = {
-                .family = cur[i].family,
-                .action = SWIPTERMD_MIRROR_ADDED,
-                .port = cur[i].port,
-            };
-            memcpy(e.addr, cur[i].addr, 16);
-            diffs[diff_count++] = e;
-        }
+        cur.count = unique;
     }
 
-    if (diff_count > 0) {
+    size_t wire_cap = 4 + (cur.count + g_listeners.count) * SWIPTERMD_MIRROR_ENTRY_WIRE_SIZE;
+    uint8_t *wire = malloc(wire_cap);
+    if (!wire) {
+        free(cur.items);
+        return;
+    }
+    swiptermd_buf_w_t w = swiptermd_buf_w_init(wire, wire_cap);
+    swiptermd_w_u32(&w, 0);
+    uint32_t diff_count = 0;
+    bool added = false;
+    for (size_t i = 0, j = 0; i < cur.count || j < g_listeners.count;) {
+        int order = i == cur.count            ? 1
+                    : j == g_listeners.count ? -1
+                                             : listener_cmp(&cur.items[i], &g_listeners.items[j]);
+        if (order == 0) {
+            i++;
+            j++;
+            continue;
+        }
+        const listener_key_t *key = order < 0 ? &cur.items[i++] : &g_listeners.items[j++];
+        swiptermd_mirror_entry_t e = {
+            .family = key->family,
+            .action = order < 0 ? SWIPTERMD_MIRROR_ADDED : SWIPTERMD_MIRROR_REMOVED,
+            .port = key->port,
+        };
+        memcpy(e.addr, key->addr, 16);
+        swiptermd_mirror_entry_encode(&w, &e);
+        added = added || order < 0;
+        diff_count++;
+    }
+
+    if (added) {
         for (size_t i = g_pending_count; i-- > 0;) {
             if (g_pending[i].port == 0)
                 g_pending[i] = g_pending[--g_pending_count];
         }
     }
 
-    for (size_t i = 0; i < g_prev_count; i++) {
-        bool still = false;
-        for (size_t j = 0; j < cur_count; j++) {
-            if (listener_eq(&g_prev_listeners[i], &cur[j])) {
-                still = true;
-                break;
-            }
-        }
-        if (!still) {
-            swiptermd_mirror_entry_t e = {
-                .family = g_prev_listeners[i].family,
-                .action = SWIPTERMD_MIRROR_REMOVED,
-                .port = g_prev_listeners[i].port,
-            };
-            memcpy(e.addr, g_prev_listeners[i].addr, 16);
-            diffs[diff_count++] = e;
-        }
+    free(g_listeners.items);
+    g_listeners = cur;
+
+    if (diff_count > 0) {
+        swiptermd_put_be32(wire, diff_count);
+        ctrl_send_frame(SWIPTERMD_OP_MIRROR_UPDATE, 0, wire, (uint32_t)w.len);
     }
-
-    memcpy(g_prev_listeners, cur, cur_count * sizeof(cur[0]));
-    g_prev_count = cur_count;
-
-    if (diff_count == 0)
-        return;
-
-    size_t wire_len = 4 + (size_t)diff_count * SWIPTERMD_MIRROR_ENTRY_WIRE_SIZE;
-    uint8_t *wire = malloc(wire_len);
-    if (!wire)
-        return;
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(wire, wire_len);
-    swiptermd_w_u32(&w, diff_count);
-    for (uint32_t i = 0; i < diff_count; i++)
-        swiptermd_mirror_entry_encode(&w, &diffs[i]);
-    ctrl_send_frame(SWIPTERMD_OP_MIRROR_UPDATE, 0, wire, (uint32_t)w.len);
     free(wire);
 }
 
@@ -640,8 +642,8 @@ void sock_mirror_handle_incoming(int vsock_fd, uint32_t resource_id) {
         sa.sin_family = AF_INET;
         sa.sin_port = htons(port);
         sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        for (size_t i = 0; i < g_prev_count; i++) {
-            const listener_key_t *l = &g_prev_listeners[i];
+        for (size_t i = 0; i < g_listeners.count; i++) {
+            const listener_key_t *l = &g_listeners.items[i];
             if (l->family != SWIPTERMD_MIRROR_AF_INET || l->port != port)
                 continue;
             uint32_t bound;
@@ -659,6 +661,18 @@ void sock_mirror_handle_incoming(int vsock_fd, uint32_t resource_id) {
         sa6.sin6_family = AF_INET6;
         sa6.sin6_port = htons(port);
         sa6.sin6_addr = in6addr_loopback;
+        for (size_t i = 0; i < g_listeners.count; i++) {
+            const listener_key_t *l = &g_listeners.items[i];
+            if (l->family != SWIPTERMD_MIRROR_AF_INET6 || l->port != port)
+                continue;
+            struct in6_addr bound;
+            memcpy(&bound, l->addr, sizeof(bound));
+            if (IN6_IS_ADDR_UNSPECIFIED(&bound) || IN6_IS_ADDR_LOOPBACK(&bound)) {
+                sa6.sin6_addr = in6addr_loopback;
+                break;
+            }
+            sa6.sin6_addr = bound;
+        }
         r = connect(tfd, (struct sockaddr *)&sa6, sizeof(sa6));
     }
 
