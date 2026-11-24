@@ -15,6 +15,8 @@
 #define GUEST_ROOT "/mnt/root"
 #define GUEST_RUN_HOST "/run/host"
 #define GUEST_NOTIFY_SOCKET GUEST_RUN_HOST "/notify"
+#define GUEST_WAYLAND_SOCKET GUEST_RUN_HOST "/wayland-0"
+#define GUEST_CLIPBOARD_SOCKET GUEST_RUN_HOST "/clipboard.sock"
 #define GUEST_TOOL_PATH GUEST_RUN_HOST "/swiptermd"
 #define GUEST_DEFAULT_RESOLV_CONF "nameserver 10.0.2.3\nnameserver fd00::3\n"
 #define SESSIONS_ANCHOR_COMMAND "sessions-anchor"
@@ -161,5 +163,9 @@ bool cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, ui
 void sock_mirror_init(void);
 void sock_mirror_scan_now(void);
 void sock_mirror_handle_incoming(int vsock_fd, uint32_t resource_id);
+
+int clipboard_setup(void);
+void clipboard_shutdown(void);
+void clipboard_handle_offer(const uint8_t *body, uint32_t len);
 
 #endif

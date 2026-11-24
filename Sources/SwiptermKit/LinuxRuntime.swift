@@ -31,6 +31,7 @@ public final class LinuxRuntime: @unchecked Sendable {
         public var consoleOutput: (@Sendable (Data) -> Void)?
         public var panicHandler: (@Sendable (String) -> Void)?
         public var haltHandler: (@Sendable (HaltReason) -> Void)?
+        public var clipboard: (any LinuxClipboard)?
 
         public init(
             root: URL,
@@ -43,7 +44,8 @@ public final class LinuxRuntime: @unchecked Sendable {
             extraKernelArguments: String? = nil,
             consoleOutput: (@Sendable (Data) -> Void)? = nil,
             panicHandler: (@Sendable (String) -> Void)? = nil,
-            haltHandler: (@Sendable (HaltReason) -> Void)? = nil
+            haltHandler: (@Sendable (HaltReason) -> Void)? = nil,
+            clipboard: (any LinuxClipboard)? = nil
         ) {
             self.root = root
             self.initMode = initMode
@@ -56,6 +58,7 @@ public final class LinuxRuntime: @unchecked Sendable {
             self.consoleOutput = consoleOutput
             self.panicHandler = panicHandler
             self.haltHandler = haltHandler
+            self.clipboard = clipboard
         }
     }
 
@@ -180,6 +183,7 @@ public final class LinuxRuntime: @unchecked Sendable {
             "HOME": "/root",
             "PATH": path,
             "TERM": "xterm-256color",
+            "WAYLAND_DISPLAY": "/run/host/wayland-0",
         ]
         self.handle = handle
         self.network = network
@@ -271,7 +275,8 @@ public final class LinuxRuntime: @unchecked Sendable {
         let callbacks = RuntimeCallbacks(
             consoleOutput: configuration.initMode == .system ? configuration.consoleOutput : nil,
             haltHandler: configuration.haltHandler,
-            panicHandler: configuration.panicHandler
+            panicHandler: configuration.panicHandler,
+            clipboard: configuration.clipboard
         )
         var networkError: NSError?
         guard let network = LibswiptermCreateNetwork(&networkError) else {
@@ -591,5 +596,14 @@ public final class LinuxRuntime: @unchecked Sendable {
                 stateCondition.broadcast()
             }
         }
+    }
+
+    public func setClipboardOffers(_ mimes: [String]) throws(LinuxError) {
+        let code = try withActiveHandle { runtimeHandle in
+            withCStringArray(mimes) { array in
+                swipterm_set_clipboard_offers(runtimeHandle, mimes.count, array)
+            }
+        }
+        try check(code)
     }
 }

@@ -54,6 +54,12 @@ typedef enum {
 } swipterm_halt_reason;
 
 typedef struct {
+    const char *mime;
+    const void *data;
+    size_t length;
+} swipterm_clipboard_item;
+
+typedef struct {
     void *context;
     void (*console_output)(void *context, const void *data, size_t length);
     void (*halt)(void *context, swipterm_halt_reason reason, int wait_status);
@@ -68,6 +74,8 @@ typedef struct {
     ssize_t (*device_read)(void *file, void *buffer, size_t length);
     ssize_t (*device_write)(void *file, const void *buffer, size_t length);
     void (*device_close)(void *file);
+    int (*clipboard_read)(void *context, const char *mime, void **data_out, size_t *length_out);
+    void (*clipboard_write)(void *context, size_t count, const swipterm_clipboard_item *items);
 } swipterm_callbacks;
 
 typedef enum {
@@ -205,5 +213,6 @@ void swipterm_invocation_finish(swipterm_invocation *invocation, int status);
 void swipterm_invocation_release(swipterm_invocation *invocation);
 
 int swipterm_register_device(swipterm_runtime *runtime, const char *path, void *context);
+int swipterm_set_clipboard_offers(swipterm_runtime *runtime, size_t count, const char *const *mimes);
 
 #endif

@@ -6,15 +6,18 @@ final class RuntimeCallbacks: Sendable {
     let consoleOutput: (@Sendable (Data) -> Void)?
     let haltHandler: (@Sendable (LinuxRuntime.HaltReason) -> Void)?
     let panicHandler: (@Sendable (String) -> Void)?
+    let clipboard: (any LinuxClipboard)?
 
     init(
         consoleOutput: (@Sendable (Data) -> Void)?,
         haltHandler: (@Sendable (LinuxRuntime.HaltReason) -> Void)?,
-        panicHandler: (@Sendable (String) -> Void)?
+        panicHandler: (@Sendable (String) -> Void)?,
+        clipboard: (any LinuxClipboard)?
     ) {
         self.consoleOutput = consoleOutput
         self.haltHandler = haltHandler
         self.panicHandler = panicHandler
+        self.clipboard = clipboard
     }
 
     func makeTable(includeConsoleOutput: Bool, includePanic: Bool) -> swipterm_callbacks {
@@ -106,7 +109,41 @@ final class RuntimeCallbacks: Sendable {
             },
             device_close: { file in
                 Unmanaged<DeviceFileBox>.fromOpaque(file!).takeRetainedValue().file.close()
-            }
+            },
+            clipboard_read: clipboard != nil ? { context, mime, dataOut, lengthOut in
+                let clipboard = Unmanaged<RuntimeCallbacks>.fromOpaque(context!).takeUnretainedValue().clipboard!
+                do {
+                    guard let data = try clipboard.read(mime: String(cString: mime!)) else {
+                        return -LinuxError.ENOENT.rawValue
+                    }
+                    let buffer = malloc(max(data.count, 1))
+                    guard let buffer else {
+                        return -LinuxError.ENOMEM.rawValue
+                    }
+                    if !data.isEmpty {
+                        data.copyBytes(to: buffer.assumingMemoryBound(to: UInt8.self), count: data.count)
+                    }
+                    dataOut!.pointee = buffer
+                    lengthOut!.pointee = data.count
+                    return 0
+                } catch {
+                    return -((error as? LinuxError) ?? .EIO).rawValue
+                }
+            } : nil,
+            clipboard_write: clipboard != nil ? { context, count, items in
+                let clipboard = Unmanaged<RuntimeCallbacks>.fromOpaque(context!).takeUnretainedValue().clipboard!
+                var decoded: [LinuxClipboardItem] = []
+                decoded.reserveCapacity(count)
+                if let items {
+                    for index in 0..<count {
+                        let item = items[index]
+                        let mime = String(cString: item.mime!)
+                        let data = item.length > 0 && item.data != nil ? Data(bytes: item.data!, count: item.length) : Data()
+                        decoded.append(LinuxClipboardItem(mime: mime, data: data))
+                    }
+                }
+                clipboard.write(decoded)
+            } : nil
         )
     }
 }

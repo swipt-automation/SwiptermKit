@@ -25,7 +25,9 @@ static const char *const login_paths[] = {
 };
 
 static bool login_env_allowed(const char *entry) {
-    static const char *const names[] = {"TERM=", "COLORTERM=", "LANG=", "LANGUAGE=", "BROWSER=", "TZ="};
+    static const char *const names[] = {
+        "TERM=", "COLORTERM=", "LANG=", "LANGUAGE=", "BROWSER=", "TZ=", "WAYLAND_DISPLAY=",
+    };
     for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
         if (strncmp(entry, names[i], strlen(names[i])) == 0)
             return true;

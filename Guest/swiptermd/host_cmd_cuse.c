@@ -564,11 +564,15 @@ static int copy_executable(const char *src_path, const char *dst_path) {
 static void export_path(const char *guest_dir) {
     char script[1280];
     int len = snprintf(script, sizeof(script),
-                       "case \":$PATH:\" in\n*\":%s:\"*) ;;\n*) PATH=\"${PATH:+$PATH:}%s\" ;;\nesac\nexport PATH\n",
+                       "case \":$PATH:\" in\n*\":%s:\"*) ;;\n*) PATH=\"${PATH:+$PATH:}%s\" ;;\nesac\n"
+                       "[ -n \"${WAYLAND_DISPLAY:-}\" ] || WAYLAND_DISPLAY=" GUEST_WAYLAND_SOCKET "\n"
+                       "export PATH WAYLAND_DISPLAY\n",
                        guest_dir, guest_dir);
     (void)fs_write_file_jailed(PROFILE_HOOK, (const uint8_t *)script, (size_t)len, 0644, false);
-    len = snprintf(script, sizeof(script), "contains -- '%s' $PATH; or set -gx PATH $PATH '%s'\n", guest_dir,
-                   guest_dir);
+    len = snprintf(script, sizeof(script),
+                   "contains -- '%s' $PATH; or set -gx PATH $PATH '%s'\n"
+                   "set -q WAYLAND_DISPLAY; or set -gx WAYLAND_DISPLAY '" GUEST_WAYLAND_SOCKET "'\n",
+                   guest_dir, guest_dir);
     (void)fs_write_file_jailed("/etc/fish/conf.d/zz-swipterm-host.fish", (const uint8_t *)script, (size_t)len, 0644,
                                false);
 

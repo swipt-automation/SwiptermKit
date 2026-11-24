@@ -36,6 +36,8 @@ enum {
     MAX_DEV_READ_CHUNK = 1024 * 1024,
     FS_READ_CHUNK_SIZE = 1024 * 1024,
     FS_WRITE_CHUNK_SIZE = 4 * 1024 * 1024,
+    MAX_CLIPBOARD_MIMES = 64,
+    MAX_CLIPBOARD_MIME_LEN = 256,
 };
 
 typedef struct pending_req {
@@ -181,6 +183,8 @@ struct swipterm_runtime {
     _Atomic uint64_t next_file_id;
 
     pthread_mutex_t state_lock;
+    pthread_mutex_t clipboard_write_lock;
+    uint64_t clipboard_write_seq;
     pthread_cond_t hello_cond;
     pthread_cond_t halt_cond;
     pthread_cond_t ready_cond;
@@ -744,6 +748,225 @@ typedef struct data_accept_args {
     int host_fd;
 } data_accept_args_t;
 
+static bool clipboard_read_exact(swipterm_runtime *rt, int fd, void *buf, size_t len) {
+    uint8_t *p = buf;
+    while (len > 0) {
+        if (atomic_load(&rt->shutting_down)) {
+            return false;
+        }
+        struct pollfd pfds[2] = {
+            {.fd = fd, .events = POLLIN},
+            {.fd = rt->shutdown_pipe[0], .events = POLLIN},
+        };
+        int ready = poll(pfds, 2, -1);
+        if (ready < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+        if (pfds[1].revents != 0 || atomic_load(&rt->shutting_down)) {
+            return false;
+        }
+        ssize_t n = read(fd, p, len);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+        if (n == 0) {
+            return false;
+        }
+        p += (size_t)n;
+        len -= (size_t)n;
+    }
+    return true;
+}
+
+static bool clipboard_write_exact(swipterm_runtime *rt, int fd, const void *buf, size_t len) {
+    const uint8_t *p = buf;
+    int fl = fcntl(fd, F_GETFL, 0);
+    if (fl >= 0) {
+        (void)fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+    }
+    while (len > 0) {
+        if (atomic_load(&rt->shutting_down)) {
+            return false;
+        }
+        ssize_t n = write(fd, p, len);
+        if (n > 0) {
+            p += (size_t)n;
+            len -= (size_t)n;
+            continue;
+        }
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            struct pollfd pfds[2] = {
+                {.fd = fd, .events = POLLOUT},
+                {.fd = rt->shutdown_pipe[0], .events = POLLIN},
+            };
+            int wr = poll(pfds, 2, -1);
+            if (wr < 0 && errno == EINTR) {
+                continue;
+            }
+            if (wr <= 0 || pfds[1].revents != 0 || (pfds[0].revents & (POLLERR | POLLHUP | POLLNVAL))) {
+                return false;
+            }
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static void handle_clipboard_read_stream(swipterm_runtime *rt, int fd) {
+    uint8_t len_buf[4];
+    if (!clipboard_read_exact(rt, fd, len_buf, sizeof(len_buf))) {
+        close(fd);
+        return;
+    }
+    uint32_t mime_len = swiptermd_get_be32(len_buf);
+    char mime[MAX_CLIPBOARD_MIME_LEN];
+    if (mime_len == 0 || mime_len >= sizeof(mime) || !clipboard_read_exact(rt, fd, mime, mime_len)) {
+        close(fd);
+        return;
+    }
+    mime[mime_len] = '\0';
+
+    void *data = NULL;
+    size_t data_len = 0;
+    int status = rt->callbacks.clipboard_read
+                     ? rt->callbacks.clipboard_read(rt->callbacks.context, mime, &data, &data_len)
+                     : -LINUX_ENOSYS;
+    uint8_t status_buf[4];
+    swiptermd_put_be32(status_buf, (uint32_t)(int32_t)status);
+    if (clipboard_write_exact(rt, fd, status_buf, sizeof(status_buf)) && status == 0 && data_len > 0 && data) {
+        (void)clipboard_write_exact(rt, fd, data, data_len);
+    }
+    free(data);
+    close(fd);
+}
+
+static void handle_clipboard_write_stream(swipterm_runtime *rt, int fd, uint64_t seq) {
+    int fl = fcntl(fd, F_GETFL, 0);
+    if (fl >= 0) {
+        (void)fcntl(fd, F_SETFL, fl | O_NONBLOCK);
+    }
+    uint8_t *buf = NULL;
+    size_t len = 0;
+    size_t cap = 0;
+    bool ok = true;
+
+    for (;;) {
+        if (atomic_load(&rt->shutting_down)) {
+            ok = false;
+            break;
+        }
+        if (cap - len < 16384) {
+            size_t ncap = cap ? cap * 2 : 16384;
+            if (ncap > SWIPTERMD_MAX_CLIPBOARD_STREAM_LEN) {
+                ncap = SWIPTERMD_MAX_CLIPBOARD_STREAM_LEN;
+            }
+            if (ncap <= len) {
+                ok = false;
+                break;
+            }
+            uint8_t *nb = realloc(buf, ncap);
+            if (!nb) {
+                ok = false;
+                break;
+            }
+            buf = nb;
+            cap = ncap;
+        }
+        ssize_t n = read(fd, buf + len, cap - len);
+        if (n > 0) {
+            len += (size_t)n;
+            continue;
+        }
+        if (n == 0) {
+            break;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            struct pollfd pfds[2] = {
+                {.fd = fd, .events = POLLIN},
+                {.fd = rt->shutdown_pipe[0], .events = POLLIN},
+            };
+            int ready = poll(pfds, 2, -1);
+            if (ready < 0 && errno == EINTR) {
+                continue;
+            }
+            if (ready <= 0 || pfds[1].revents != 0 || atomic_load(&rt->shutting_down)) {
+                ok = false;
+                break;
+            }
+            continue;
+        }
+        ok = false;
+        break;
+    }
+    close(fd);
+
+    if (!ok || !rt->callbacks.clipboard_write || len < 4) {
+        free(buf);
+        return;
+    }
+
+    swiptermd_buf_r_t r = swiptermd_buf_r_init(buf, len);
+    uint32_t count = swiptermd_r_u32(&r);
+    if (r.underflow || count > MAX_CLIPBOARD_MIMES) {
+        free(buf);
+        return;
+    }
+
+    swipterm_clipboard_item *items = count > 0 ? calloc(count, sizeof(*items)) : NULL;
+    char **mimes = count > 0 ? calloc(count, sizeof(*mimes)) : NULL;
+    if (count > 0 && (!items || !mimes)) {
+        free(items);
+        free(mimes);
+        free(buf);
+        return;
+    }
+
+    bool parsed = true;
+    for (uint32_t i = 0; i < count; i++) {
+        if (!rpc_r_str_dup(&r, &mimes[i])) {
+            parsed = false;
+            break;
+        }
+        swiptermd_slice_t payload = swiptermd_r_bytes(&r);
+        if (r.underflow) {
+            parsed = false;
+            break;
+        }
+        items[i].mime = mimes[i];
+        items[i].data = payload.ptr;
+        items[i].length = payload.len;
+    }
+
+    if (parsed) {
+        pthread_mutex_lock(&rt->clipboard_write_lock);
+        if (seq > rt->clipboard_write_seq && !atomic_load(&rt->shutting_down)) {
+            rt->clipboard_write_seq = seq;
+            rt->callbacks.clipboard_write(rt->callbacks.context, count, items);
+        }
+        pthread_mutex_unlock(&rt->clipboard_write_lock);
+    }
+
+    for (uint32_t i = 0; i < count; i++) {
+        free(mimes[i]);
+    }
+    free(mimes);
+    free(items);
+    free(buf);
+}
+
 static void *data_stream_thread(void *arg) {
     data_accept_args_t *da = arg;
     swipterm_runtime *rt = da->rt;
@@ -820,6 +1043,12 @@ static void *data_stream_thread(void *arg) {
     case SWIPTERMD_STREAM_CMD_OUT:
     case SWIPTERMD_STREAM_CMD_ERR:
         attach_vsock_to_route(rt, hdr.role, hdr.token, fd);
+        break;
+    case SWIPTERMD_STREAM_CLIPBOARD_READ:
+        handle_clipboard_read_stream(rt, fd);
+        break;
+    case SWIPTERMD_STREAM_CLIPBOARD_WRITE:
+        handle_clipboard_write_stream(rt, fd, hdr.token);
         break;
     default:
         close(fd);
@@ -2003,6 +2232,7 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
     rt->shutdown_pipe[1] = -1;
     pthread_mutex_init(&rt->control_tx_lock, NULL);
     pthread_mutex_init(&rt->state_lock, NULL);
+    pthread_mutex_init(&rt->clipboard_write_lock, NULL);
     pthread_cond_init(&rt->hello_cond, NULL);
     pthread_cond_init(&rt->halt_cond, NULL);
     pthread_cond_init(&rt->ready_cond, NULL);
@@ -2319,6 +2549,7 @@ void swipterm_shutdown(swipterm_runtime *rt) {
     }
     pthread_mutex_destroy(&rt->control_tx_lock);
     pthread_mutex_destroy(&rt->state_lock);
+    pthread_mutex_destroy(&rt->clipboard_write_lock);
     pthread_cond_destroy(&rt->hello_cond);
     pthread_cond_destroy(&rt->halt_cond);
     pthread_cond_destroy(&rt->ready_cond);
@@ -3495,4 +3726,26 @@ int swipterm_register_device(swipterm_runtime *rt, const char *path, void *conte
         free(entry);
     }
     return rc;
+}
+
+int swipterm_set_clipboard_offers(swipterm_runtime *rt, size_t count, const char *const *mimes) {
+    if (!rt || (count > 0 && !mimes) || count > MAX_CLIPBOARD_MIMES) {
+        return -LINUX_EINVAL;
+    }
+    if (!guest_has_capability(rt, SWIPTERMD_CAP_CLIPBOARD)) {
+        return -LINUX_ENODEV;
+    }
+    size_t body_size = rpc_strv_wire_size(mimes, (uint32_t)count);
+    if (body_size > SWIPTERMD_MAX_BODY_LEN) {
+        return -LINUX_EINVAL;
+    }
+    uint8_t *buf = malloc(body_size);
+    if (!buf) {
+        return -LINUX_ENOMEM;
+    }
+    swiptermd_buf_w_t w = swiptermd_buf_w_init(buf, body_size);
+    swiptermd_w_strv(&w, mimes, (uint32_t)count);
+    bool ok = !w.overflow && control_send(rt, SWIPTERMD_OP_CLIPBOARD_OFFER, 0, buf, (uint32_t)w.len);
+    free(buf);
+    return ok ? 0 : -LINUX_EIO;
 }

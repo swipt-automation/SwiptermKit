@@ -665,6 +665,7 @@ static void finish(void) {
     }
     proc_pty_shutdown();
     host_cmd_cuse_shutdown();
+    clipboard_shutdown();
     notify_close();
     sessions_shutdown();
     reap_children(REAP_GRACE_MS);
@@ -795,6 +796,9 @@ static void dispatch_ctrl_frame(const swiptermd_frame_hdr_t *hdr, const uint8_t 
         break;
     case SWIPTERMD_OP_REGISTER_DEVICE:
         cuse_handle_register_device(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_CLIPBOARD_OFFER:
+        clipboard_handle_offer(body, hdr->body_len);
         break;
     default:
         ctrl_send_err_reply(hdr->opcode, hdr->req_id, -ENOSYS);
@@ -1028,6 +1032,13 @@ int main(int argc, char **argv) {
     if (boot_rc < 0)
         boot_err_log("host command setup", boot_rc);
 
+    bool clipboard_ok = true;
+    boot_rc = clipboard_setup();
+    if (boot_rc < 0) {
+        boot_err_log("clipboard setup", boot_rc);
+        clipboard_ok = false;
+    }
+
     boot_rc = notify_setup();
     if (boot_rc < 0) {
         boot_err_log("notify socket", boot_rc);
@@ -1064,6 +1075,8 @@ int main(int argc, char **argv) {
         caps |= SWIPTERMD_CAP_DEVICES;
     if (virtiofs_available())
         caps |= SWIPTERMD_CAP_VIRTIOFS;
+    if (clipboard_ok)
+        caps |= SWIPTERMD_CAP_CLIPBOARD;
     uint8_t hello[SWIPTERMD_HELLO_REQ_SIZE];
     swiptermd_enc_hello(hello, g_daemon.session_nonce, caps);
     ctrl_send_frame(SWIPTERMD_OP_HELLO, ctrl_alloc_req_id(), hello, sizeof(hello));

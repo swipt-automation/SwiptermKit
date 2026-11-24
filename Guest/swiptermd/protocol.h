@@ -14,6 +14,7 @@ enum {
     SWIPTERMD_FRAME_HEADER_SIZE = 12,
     SWIPTERMD_ATTACH_HEADER_SIZE = 24,
     SWIPTERMD_MAX_BODY_LEN = 16U * 1024U * 1024U,
+    SWIPTERMD_MAX_CLIPBOARD_STREAM_LEN = 64U * 1024U * 1024U + 4096U,
 };
 
 #define SWIPTERMD_OP_REPLY_FLAG 0x8000U
@@ -58,6 +59,8 @@ typedef enum swiptermd_opcode {
     SWIPTERMD_OP_DEV_CLOSE = 0x0064,
 
     SWIPTERMD_OP_MIRROR_UPDATE = 0x0070,
+
+    SWIPTERMD_OP_CLIPBOARD_OFFER = 0x0080,
 } swiptermd_opcode_t;
 
 typedef enum swiptermd_stream_role {
@@ -70,6 +73,8 @@ typedef enum swiptermd_stream_role {
     SWIPTERMD_STREAM_CMD_ERR = 7,
     SWIPTERMD_STREAM_CONSOLE = 8,
     SWIPTERMD_STREAM_TCP_MIRROR = 9,
+    SWIPTERMD_STREAM_CLIPBOARD_READ = 10,
+    SWIPTERMD_STREAM_CLIPBOARD_WRITE = 11,
 } swiptermd_stream_role_t;
 
 typedef enum swiptermd_capability {
@@ -78,6 +83,7 @@ typedef enum swiptermd_capability {
     SWIPTERMD_CAP_STOP_STATUS = 1U << 2,
     SWIPTERMD_CAP_DEVICES = 1U << 3,
     SWIPTERMD_CAP_VIRTIOFS = 1U << 4,
+    SWIPTERMD_CAP_CLIPBOARD = 1U << 5,
 } swiptermd_capability_t;
 
 typedef enum swiptermd_ready_level {
