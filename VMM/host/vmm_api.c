@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <mach/mach.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -1839,10 +1840,21 @@ static void vmm_on_panic(void *ctx, const char *message) {
 static size_t default_ram_size(void) {
     const uint64_t step = 16ULL << 20;
     const uint64_t min_size = 256ULL << 20;
-    uint64_t memsize = 0;
-    size_t len = sizeof(memsize);
-    (void)sysctlbyname("hw.memsize", &memsize, &len, NULL, 0);
-    uint64_t target = (memsize / 2) & ~(step - 1);
+    const uint64_t host_reserve = 512ULL << 20;
+    task_vm_info_data_t info = {0};
+    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+    (void)task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count);
+    uint64_t target;
+    // limit_bytes_remaining is 0 when the kernel enforces no footprint limit on this process.
+    if (info.limit_bytes_remaining > 0) {
+        uint64_t limit = (info.phys_footprint + info.limit_bytes_remaining + step / 2) & ~(step - 1);
+        target = limit - host_reserve;
+    } else {
+        uint64_t memsize = 0;
+        size_t len = sizeof(memsize);
+        (void)sysctlbyname("hw.memsize", &memsize, &len, NULL, 0);
+        target = (memsize / 2) & ~(step - 1);
+    }
     return (size_t)(target < min_size ? min_size : target);
 }
 
