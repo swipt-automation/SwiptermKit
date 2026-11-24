@@ -1,217 +1,188 @@
 import Foundation
 import LibSwipterm
 
-public struct HTTPRequest: Sendable {
-    public var url: URL
-    public var method: String
-    public var headers: [String: String]
-    public var body: Data?
-    /// A value that is not positive disables the timeout.
-    public var timeout: Duration
+extension LibswiptermHTTPRequest: @retroactive @unchecked Sendable {}
+extension LibswiptermHTTPResponse: @retroactive @unchecked Sendable {}
 
-    public init(
-        url: URL,
-        method: String = "GET",
-        headers: [String: String] = [:],
-        body: Data? = nil,
-        timeout: Duration = .seconds(60)
-    ) {
-        self.url = url
-        self.method = method
-        self.headers = headers
-        self.body = body
-        self.timeout = timeout
+public enum HTTPClient {
+    public static func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let (body, response) = try await bytes(for: request)
+        return try await (body.readToEnd(), response)
     }
-}
 
-public struct HTTPResponse: Sendable {
-    /// The URL after redirects.
-    public let url: URL
-    public let statusCode: Int
-    public let headers: [String: String]
+    public static func data(from url: URL) async throws -> (Data, HTTPURLResponse) {
+        try await data(for: URLRequest(url: url))
+    }
 
-    init(_ response: LibswiptermHTTPResponse, requestURL: URL) {
-        url = URL(string: response.url()) ?? requestURL
-        statusCode = Int(response.statusCode())
+    public static func bytes(for request: URLRequest) async throws -> (HTTPBody, HTTPURLResponse) {
+        let (call, response, httpResponse) = try await execute(request)
+        return (HTTPBody(request: call, response: response), httpResponse)
+    }
+
+    public static func bytes(from url: URL) async throws -> (HTTPBody, HTTPURLResponse) {
+        try await bytes(for: URLRequest(url: url))
+    }
+
+    /// `destination` is replaced only after the whole body is written.
+    public static func download(
+        for request: URLRequest,
+        to destination: URL,
+        progress: (@Sendable (_ bytesWritten: Int64, _ totalBytes: Int64?) -> Void)? = nil
+    ) async throws -> HTTPURLResponse {
+        let (call, response, httpResponse) = try await execute(request)
+        let handler = progress.map { DownloadHandler(onProgress: $0) }
+        try await perform(call) {
+            try response.download(destination.path(percentEncoded: false), handler: handler)
+        }
+        return httpResponse
+    }
+
+    /// `destination` is replaced only after the whole body is written.
+    public static func download(
+        from url: URL,
+        to destination: URL,
+        progress: (@Sendable (_ bytesWritten: Int64, _ totalBytes: Int64?) -> Void)? = nil
+    ) async throws -> HTTPURLResponse {
+        try await download(for: URLRequest(url: url), to: destination, progress: progress)
+    }
+
+    private static func execute(
+        _ request: URLRequest
+    ) async throws -> (LibswiptermHTTPRequest, LibswiptermHTTPResponse, HTTPURLResponse) {
+        var error: NSError?
+        guard let call = LibswiptermNewHTTPRequest(
+            request.httpMethod ?? "GET",
+            request.url?.absoluteString ?? "",
+            request.httpBody,
+            request.timeoutInterval,
+            &error
+        ) else {
+            throw error!
+        }
+        for (name, value) in request.allHTTPHeaderFields ?? [:] {
+            call.setHeader(name, value: value)
+        }
+        let response = try await perform(call) { try call.execute() }
         var headers: [String: String] = [:]
         for index in 0 ..< response.headerCount() {
             headers[response.headerName(index)] = response.headerValue(index)
         }
-        self.headers = headers
-    }
-
-    public func value(forHTTPHeaderField field: String) -> String? {
-        headers.first { $0.key.caseInsensitiveCompare(field) == .orderedSame }?.value
-    }
-}
-
-public struct HTTPDownloadProgress: Sendable {
-    public struct Source: Sendable {
-        public let url: URL
-        public let bytesWritten: Int64
-        public let activeStreams: Int
-        public let failed: Bool
-    }
-
-    public let bytesWritten: Int64
-    public let totalBytes: Int64?
-    public let activeStreams: Int
-    /// Sources that are transferring or have written bytes, in the order they joined.
-    public let sources: [Source]
-
-    init(_ progress: LibswiptermHTTPDownloadProgress, urls: [URL]) {
-        bytesWritten = progress.written()
-        totalBytes = progress.total() < 0 ? nil : progress.total()
-        activeStreams = Int(progress.streams())
-        sources = (0 ..< progress.sourceCount()).map { index in
-            Source(
-                url: urls[Int(progress.sourceIndex(index))],
-                bytesWritten: progress.sourceWritten(index),
-                activeStreams: Int(progress.sourceStreams(index)),
-                failed: progress.sourceFailed(index)
-            )
-        }
-    }
-}
-
-public enum HTTPError: Error, Hashable, Sendable {
-    case unexpectedStatus(Int)
-    case contentLengthMismatch(expected: Int64, actual: Int64)
-    case emptyBody
-
-    init?(_ failure: LibswiptermHTTPFailure) {
-        switch failure.kind {
-        case LibswiptermHTTPFailureStatus:
-            self = .unexpectedStatus(Int(failure.status))
-        case LibswiptermHTTPFailureContentLength:
-            self = .contentLengthMismatch(expected: failure.expectedBytes, actual: failure.actualBytes)
-        case LibswiptermHTTPFailureEmptyBody:
-            self = .emptyBody
-        default:
-            return nil
-        }
-    }
-}
-
-extension HTTPError: LocalizedError {
-    public var errorDescription: String? {
-        switch self {
-        case let .unexpectedStatus(code):
-            "HTTP status \(code) \(HTTPURLResponse.localizedString(forStatusCode: code))"
-        case let .contentLengthMismatch(expected, actual):
-            "Content-Length mismatch: expected \(expected), got \(actual)"
-        case .emptyBody:
-            "Empty response body"
-        }
-    }
-}
-
-public enum HTTPClient {
-    public static func data(for request: HTTPRequest) async throws -> (Data, HTTPResponse) {
-        try await execute(request, readBody: true)
-    }
-
-    /// Returns when the response header arrives, without reading the body.
-    public static func response(for request: HTTPRequest) async throws -> HTTPResponse {
-        try await execute(request, readBody: false).1
-    }
-
-    private static func execute(_ request: HTTPRequest, readBody: Bool) async throws -> (Data, HTTPResponse) {
-        var error: NSError?
-        guard let call = LibswiptermNewHTTPRequest(request.method, request.url.absoluteString, request.body, &error) else {
-            throw error!
-        }
-        for (name, value) in request.headers {
-            call.setHeader(name, value: value)
-        }
-        let milliseconds = (request.timeout / .milliseconds(1)).rounded(.up)
-        let timeout = milliseconds <= 0 ? 0 : milliseconds >= Double(Int64.max) ? Int64.max : Int64(milliseconds)
-        let handle = UnsafeSendable(value: call)
-        return try await perform(cancel: { handle.value.cancel() }) {
-            do {
-                let response = try handle.value.execute(timeout, readBody: readBody)
-                return (response.body() ?? Data(), HTTPResponse(response, requestURL: request.url))
-            } catch {
-                throw handle.value.failure().flatMap(HTTPError.init) ?? error
-            }
-        }
-    }
-
-    /// A failure before the first byte throws immediately; a transfer interrupted after it resumes where it stopped.
-    /// `destination` is replaced only by a complete file; a failed download removes its partial data.
-    public static func download(
-        from url: URL,
-        to destination: URL,
-        expectedBytes: Int64? = nil,
-        progress: @escaping @Sendable (_ bytesWritten: Int64, _ totalBytes: Int64?) -> Void = { _, _ in }
-    ) async throws {
-        try await download(
-            from: [url],
-            to: destination,
-            expectedBytes: expectedBytes,
-            progress: { progress($0.bytesWritten, $0.totalBytes) }
-        )
-    }
-
-    /// Every URL must serve the same file. With more than one URL, the URLs that support byte ranges download
-    /// disjoint ranges concurrently, and a range that fails on one URL is downloaded from the others.
-    /// A failure to write the destination throws `POSIXError`.
-    public static func download(
-        from urls: [URL],
-        to destination: URL,
-        expectedBytes: Int64? = nil,
-        progress: @escaping @Sendable (HTTPDownloadProgress) -> Void = { _ in }
-    ) async throws {
-        let call = LibswiptermNewHTTPDownload(
-            urls[0].absoluteString,
-            destination.path(percentEncoded: false),
-            expectedBytes ?? 0
+        let httpResponse = HTTPURLResponse(
+            url: URL(string: response.url())!,
+            statusCode: Int(response.statusCode()),
+            httpVersion: response.proto(),
+            headerFields: headers
         )!
-        for url in urls.dropFirst() {
-            call.addURL(url.absoluteString)
-        }
-        let handle = UnsafeSendable(value: call)
-        let handler = DownloadHandler(urls: urls, onProgress: progress)
-        try await perform(cancel: { handle.value.cancel() }) {
-            do {
-                try handle.value.run(handler)
-            } catch {
-                let failure = handle.value.failure()
-                if let failure, failure.kind == LibswiptermHTTPFailureFile, let code = POSIXErrorCode(rawValue: failure.errorNumber) {
-                    throw POSIXError(code, userInfo: [NSLocalizedDescriptionKey: error.localizedDescription])
-                }
-                throw failure.flatMap(HTTPError.init) ?? error
-            }
-        }
+        return (call, response, httpResponse)
     }
 
     private static func perform<Result: Sendable>(
-        cancel: @escaping @Sendable () -> Void,
+        _ call: LibswiptermHTTPRequest,
         _ body: @escaping @Sendable () throws -> Result
     ) async throws -> Result {
         do {
             return try await withTaskCancellationHandler {
                 try await blocking(body)
             } onCancel: {
-                cancel()
+                call.cancel()
             }
         } catch {
-            try Task.checkCancellation()
-            throw error
+            throw call.failure(error)
         }
     }
 }
 
-private final class DownloadHandler: NSObject, LibswiptermHTTPDownloadHandlerProtocol, Sendable {
-    private let urls: [URL]
-    private let onProgress: @Sendable (HTTPDownloadProgress) -> Void
+public final class HTTPBody: Sendable {
+    private let request: LibswiptermHTTPRequest
+    private let response: LibswiptermHTTPResponse
+    private let queue = DispatchQueue(label: "SwiptermKit.HTTPBody")
 
-    init(urls: [URL], onProgress: @escaping @Sendable (HTTPDownloadProgress) -> Void) {
-        self.urls = urls
+    init(request: LibswiptermHTTPRequest, response: LibswiptermHTTPResponse) {
+        self.request = request
+        self.response = response
+    }
+
+    deinit {
+        response.close()
+    }
+
+    public func read(maxLength: Int = 65536) async throws -> Data? {
+        precondition(maxLength > 0)
+        let data: Data?
+        do {
+            data = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    queue.async {
+                        continuation.resume(with: Result {
+                            try self.response.read(Int64(maxLength))
+                            return self.response.chunk()
+                        })
+                    }
+                }
+            } onCancel: {
+                close()
+            }
+        } catch {
+            throw request.failure(error)
+        }
+        if data == nil {
+            try Task.checkCancellation()
+        }
+        return data
+    }
+
+    public func readToEnd() async throws -> Data {
+        var data = Data()
+        while let chunk = try await read() {
+            data.append(chunk)
+        }
+        return data
+    }
+
+    public func close() {
+        response.close()
+    }
+}
+
+extension HTTPBody: AsyncSequence {
+    public typealias Element = Data
+
+    public struct AsyncIterator: AsyncIteratorProtocol {
+        let body: HTTPBody
+
+        public mutating func next() async throws -> Data? {
+            try await body.read()
+        }
+    }
+
+    public func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(body: self)
+    }
+}
+
+private extension LibswiptermHTTPRequest {
+    func failure(_ error: Error) -> Error {
+        if Task.isCancelled {
+            return CancellationError()
+        }
+        if timedOut() {
+            return URLError(.timedOut)
+        }
+        if let code = POSIXErrorCode(rawValue: errorNumber()) {
+            return POSIXError(code, userInfo: [NSLocalizedDescriptionKey: error.localizedDescription])
+        }
+        return error
+    }
+}
+
+private final class DownloadHandler: NSObject, LibswiptermHTTPDownloadHandlerProtocol, Sendable {
+    private let onProgress: @Sendable (_ bytesWritten: Int64, _ totalBytes: Int64?) -> Void
+
+    init(onProgress: @escaping @Sendable (_ bytesWritten: Int64, _ totalBytes: Int64?) -> Void) {
         self.onProgress = onProgress
     }
 
-    func progress(_ progress: LibswiptermHTTPDownloadProgress?) {
-        onProgress(HTTPDownloadProgress(progress!, urls: urls))
+    func progress(_ written: Int64, total: Int64) {
+        onProgress(written, total < 0 ? nil : total)
     }
 }
