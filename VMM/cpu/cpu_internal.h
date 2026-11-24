@@ -51,7 +51,7 @@ enum {
     IR_PAGE_INSNS = 1024,
     TILE_SHIFT = 5,
     TILE_INSNS = 1U << TILE_SHIFT,
-    ICACHE_SETS = 4096,
+    ICACHE_SETS = 512,
     ICACHE_SET_MASK = ICACHE_SETS - 1,
     ICACHE_WAYS = 4,
     EXEC_CACHE_ENTRIES = 16384,
@@ -158,6 +158,8 @@ typedef struct cpu_icache {
     exec_cache_entry_t exec_cache[2][EXEC_CACHE_ENTRIES];
     uint8_t plru[ICACHE_SETS];
     ir_page_t *slots[ICACHE_SETS][ICACHE_WAYS];
+    ir_page_t *page_pool;
+    uint32_t page_count;
     cpu_jit_arena_t jit;
     uint32_t jit_generation;
 } cpu_icache_t;

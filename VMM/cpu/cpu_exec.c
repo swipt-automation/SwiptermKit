@@ -9,6 +9,7 @@
 
 #include <pthread.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <sys/sysctl.h>
 
 #ifdef CPU_STATS
@@ -501,7 +502,10 @@ void vcpu_init(vcpu_t *cpu, vmm_machine_t *vm, uint32_t cpu_id) {
     cpu->vm = vm;
     cpu->cpu_id = cpu_id;
     cpu->mpidr_el1 = 0x80000000ULL | (uint64_t)cpu_id;
-    cpu->icache = calloc(1, sizeof(cpu_icache_t));
+    cpu_icache_t *ic = calloc(1, sizeof(cpu_icache_t));
+    ic->page_pool = mmap(NULL, sizeof(ir_page_t) * ICACHE_SETS * ICACHE_WAYS, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANON, -1, 0);
+    cpu->icache = ic;
 #ifdef CPU_STATS
     ((cpu_icache_t *)cpu->icache)->stats = calloc(1, sizeof(cpu_stats_t));
 #endif
@@ -522,15 +526,10 @@ void vcpu_destroy(vcpu_t *cpu) {
             free(ic->jit.work);
             cpu_jit_arena_release(cpu->vm);
         }
-        for (uint32_t s = 0; s < ICACHE_SETS; ++s) {
-            for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
-                if (ic->slots[s][w]) {
-                    free(ic->slots[s][w]->jit);
-                }
-                free(ic->slots[s][w]);
-                ic->slots[s][w] = NULL;
-            }
+        for (uint32_t i = 0; i < ic->page_count; ++i) {
+            free(ic->page_pool[i].jit);
         }
+        munmap(ic->page_pool, sizeof(ir_page_t) * ICACHE_SETS * ICACHE_WAYS);
         free(ic);
         cpu->icache = NULL;
     }
@@ -2709,11 +2708,15 @@ static uint8_t icache_plru_touch(uint8_t plru, uint32_t way) {
 static ir_page_t *icache_get_page(vcpu_t *cpu, uint64_t va_page, uint64_t pa_page, uintptr_t hva_page) {
     cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
     uint32_t set = (uint32_t)((pa_page >> VMM_PAGE_SHIFT) & ICACHE_SET_MASK);
+    uint32_t victim = ICACHE_WAYS;
     for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
         ir_page_t *pg = ic->slots[set][w];
         if (pg && pg->pa_page == pa_page && pg->va_page == va_page && pg->el == cpu->el) {
             ic->plru[set] = icache_plru_touch(ic->plru[set], w);
             return pg;
+        }
+        if (pg && pg->pa_page == UINT64_MAX) {
+            victim = w;
         }
     }
     uint64_t mask;
@@ -2723,14 +2726,16 @@ static ir_page_t *icache_get_page(vcpu_t *cpu, uint64_t va_page, uint64_t pa_pag
         atomic_thread_fence(memory_order_seq_cst);
     }
     uint8_t plru = ic->plru[set];
-    uint32_t victim = (plru & 1U) ? 2U + ((plru >> 2) & 1U) : (plru >> 1) & 1U;
+    if (victim == ICACHE_WAYS) {
+        victim = (plru & 1U) ? 2U + ((plru >> 2) & 1U) : (plru >> 1) & 1U;
+    }
     ic->plru[set] = icache_plru_touch(plru, victim);
     ir_page_t *pg = ic->slots[set][victim];
     if (pg) {
         CPU_STAT(cpu, pages_replaced);
     }
     if (!pg) {
-        pg = calloc(1, sizeof(ir_page_t));
+        pg = &ic->page_pool[ic->page_count++];
         ic->slots[set][victim] = pg;
     }
     pg->pa_page = pa_page;
