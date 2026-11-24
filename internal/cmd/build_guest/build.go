@@ -2,9 +2,8 @@ package main
 
 import (
 	"compress/gzip"
-	"context"
-	"errors"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
-	"github.com/swipt-automation/SwiptermKit/internal/httpclient"
 )
 
 const (
@@ -132,13 +130,9 @@ func (b *builder) prepareSource(link string, directory string) error {
 			return err
 		}
 		os.Stderr.WriteString("download " + link + "\n")
-		client := httpclient.NewClient(nil)
 		for retry := 0; ; retry++ {
-			err = client.Download(context.Background(), httpclient.DownloadOptions{
-				URL:         link,
-				Destination: tarball,
-			}, silentDownload{})
-			if _, transient := errors.AsType[*httpclient.TransientError](err); !transient || retry == downloadRetries {
+			err = download(link, tarball)
+			if err == nil || retry == downloadRetries {
 				break
 			}
 			time.Sleep(time.Second << retry)
@@ -283,6 +277,26 @@ func run(command *exec.Cmd) error {
 	return nil
 }
 
-type silentDownload struct{}
-
-func (silentDownload) Progress(httpclient.Progress) {}
+func download(link string, destination string) error {
+	response, err := http.Get(link)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return E.New("unexpected status: ", response.Status)
+	}
+	file, err := os.CreateTemp(filepath.Dir(destination), "."+filepath.Base(destination)+".*")
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(file, response.Body)
+	err = E.Errors(err, file.Close())
+	if err == nil {
+		err = os.Rename(file.Name(), destination)
+	}
+	if err != nil {
+		os.Remove(file.Name())
+	}
+	return err
+}

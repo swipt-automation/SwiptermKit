@@ -5,118 +5,124 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/fs"
 	"maps"
 	"math"
 	"net/http"
+	"net/http/httptrace"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
-
-	"github.com/swipt-automation/SwiptermKit/internal/httpclient"
 )
 
 const (
-	HTTPFailureStatus int32 = iota + 1
-	HTTPFailureContentLength
-	HTTPFailureEmptyBody
-	HTTPFailureFile
+	userAgent        = "SwiptermKit/1.0"
+	readBufferSize   = 64 << 10
+	progressInterval = 100 * time.Millisecond
 )
 
-var httpClient = httpclient.NewClient(nil)
-
-type HTTPFailure struct {
-	Kind          int32
-	Status        int32
-	ExpectedBytes int64
-	ActualBytes   int64
-	ErrorNumber   int32
-}
-
-func newHTTPFailure(err error) *HTTPFailure {
-	if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
-		if errno, ok := errors.AsType[syscall.Errno](pathErr.Err); ok {
-			return &HTTPFailure{Kind: HTTPFailureFile, ErrorNumber: int32(errno)}
-		}
-	}
-	if linkErr, ok := errors.AsType[*os.LinkError](err); ok {
-		if errno, ok := errors.AsType[syscall.Errno](linkErr.Err); ok {
-			return &HTTPFailure{Kind: HTTPFailureFile, ErrorNumber: int32(errno)}
-		}
-	}
-	if status, ok := errors.AsType[*httpclient.StatusError](err); ok {
-		return &HTTPFailure{Kind: HTTPFailureStatus, Status: int32(status.StatusCode)}
-	}
-	if length, ok := errors.AsType[*httpclient.ContentLengthError](err); ok {
-		return &HTTPFailure{Kind: HTTPFailureContentLength, ExpectedBytes: length.Expected, ActualBytes: length.Actual}
-	}
-	if errors.Is(err, httpclient.ErrEmptyBody) {
-		return &HTTPFailure{Kind: HTTPFailureEmptyBody}
-	}
-	return nil
-}
+var httpClient = func() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSHandshakeTimeout = 0
+	return &http.Client{Transport: transport}
+}()
 
 type HTTPRequest struct {
-	request *http.Request
-	cancel  context.CancelFunc
-	failure *HTTPFailure
+	request     *http.Request
+	cancel      context.CancelCauseFunc
+	timeout     time.Duration
+	idle        *time.Timer
+	errorNumber int32
 }
 
-func NewHTTPRequest(method string, link string, body []byte) (*HTTPRequest, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewHTTPRequest(method string, link string, body []byte, timeout float64) (*HTTPRequest, error) {
+	ctx, cancel := context.WithCancelCause(context.Background())
 	request, err := http.NewRequestWithContext(ctx, method, link, bytes.NewReader(body))
 	if err != nil {
-		cancel()
+		cancel(err)
 		return nil, err
 	}
-	return &HTTPRequest{request: request, cancel: cancel}, nil
+	r := &HTTPRequest{request: request, cancel: cancel}
+	if timeout > 0 {
+		r.timeout = time.Duration(min(timeout, float64(math.MaxInt64/time.Second)) * float64(time.Second))
+		r.idle = time.AfterFunc(r.timeout, func() {
+			cancel(context.DeadlineExceeded)
+		})
+		r.idle.Stop()
+	}
+	return r, nil
 }
 
 func (r *HTTPRequest) SetHeader(name string, value string) {
 	r.request.Header.Set(name, value)
 }
 
-func (r *HTTPRequest) Execute(timeoutMilliseconds int64, readBody bool) (*HTTPResponse, error) {
-	ctx := r.request.Context()
-	if timeoutMilliseconds > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(min(timeoutMilliseconds, math.MaxInt64/int64(time.Millisecond)))*time.Millisecond)
-		defer cancel()
+func (r *HTTPRequest) Execute() (*HTTPResponse, error) {
+	if r.request.Header.Get("User-Agent") == "" {
+		r.request.Header.Set("User-Agent", userAgent)
 	}
-	response, err := httpClient.Do(r.request.WithContext(ctx))
+	request := r.request.WithContext(httptrace.WithClientTrace(r.request.Context(), &httptrace.ClientTrace{
+		GotConn: func(httptrace.GotConnInfo) {
+			r.arm()
+		},
+	}))
+	r.arm()
+	response, err := httpClient.Do(request)
+	r.disarm()
 	if err != nil {
-		r.failure = newHTTPFailure(err)
 		return nil, err
 	}
-	defer response.Body.Close()
-	var body []byte
-	if readBody {
-		body, err = io.ReadAll(response.Body)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return &HTTPResponse{
+		request:  r,
 		response: response,
 		names:    slices.Sorted(maps.Keys(response.Header)),
-		body:     body,
 	}, nil
 }
 
 func (r *HTTPRequest) Cancel() {
-	r.cancel()
+	r.cancel(context.Canceled)
 }
 
-func (r *HTTPRequest) Failure() *HTTPFailure {
-	return r.failure
+func (r *HTTPRequest) TimedOut() bool {
+	return errors.Is(context.Cause(r.request.Context()), context.DeadlineExceeded)
+}
+
+func (r *HTTPRequest) ErrorNumber() int32 {
+	return r.errorNumber
+}
+
+func (r *HTTPRequest) arm() {
+	if r.idle != nil {
+		r.idle.Reset(r.timeout)
+	}
+}
+
+func (r *HTTPRequest) disarm() {
+	if r.idle != nil {
+		r.idle.Stop()
+	}
+}
+
+func (r *HTTPRequest) fileError(err error) error {
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
+		r.errorNumber = int32(errno)
+	}
+	return err
+}
+
+type HTTPDownloadHandler interface {
+	Progress(written int64, total int64)
 }
 
 type HTTPResponse struct {
+	request  *HTTPRequest
 	response *http.Response
 	names    []string
-	body     []byte
+	chunk    []byte
+	closed   atomic.Bool
 }
 
 func (r *HTTPResponse) StatusCode() int32 {
@@ -125,6 +131,10 @@ func (r *HTTPResponse) StatusCode() int32 {
 
 func (r *HTTPResponse) URL() string {
 	return r.response.Request.URL.String()
+}
+
+func (r *HTTPResponse) Proto() string {
+	return r.response.Proto
 }
 
 func (r *HTTPResponse) HeaderCount() int32 {
@@ -139,94 +149,93 @@ func (r *HTTPResponse) HeaderValue(index int32) string {
 	return strings.Join(r.response.Header.Values(r.names[index]), ", ")
 }
 
-func (r *HTTPResponse) Body() []byte {
-	return r.body
-}
-
-type HTTPDownloadHandler interface {
-	Progress(progress *HTTPDownloadProgress)
-}
-
-type HTTPDownloadProgress struct {
-	progress httpclient.Progress
-}
-
-func (p *HTTPDownloadProgress) Written() int64 {
-	return p.progress.Written
-}
-
-func (p *HTTPDownloadProgress) Total() int64 {
-	return p.progress.Total
-}
-
-func (p *HTTPDownloadProgress) Streams() int32 {
-	return int32(p.progress.Streams)
-}
-
-func (p *HTTPDownloadProgress) SourceCount() int32 {
-	return int32(len(p.progress.Sources))
-}
-
-func (p *HTTPDownloadProgress) SourceIndex(index int32) int32 {
-	return int32(p.progress.Sources[index].Index)
-}
-
-func (p *HTTPDownloadProgress) SourceWritten(index int32) int64 {
-	return p.progress.Sources[index].Written
-}
-
-func (p *HTTPDownloadProgress) SourceStreams(index int32) int32 {
-	return int32(p.progress.Sources[index].Streams)
-}
-
-func (p *HTTPDownloadProgress) SourceFailed(index int32) bool {
-	return p.progress.Sources[index].Failed
-}
-
-type downloadHandler struct {
-	HTTPDownloadHandler
-}
-
-func (h downloadHandler) Progress(progress httpclient.Progress) {
-	h.HTTPDownloadHandler.Progress(&HTTPDownloadProgress{progress: progress})
-}
-
-type HTTPDownload struct {
-	options httpclient.DownloadOptions
-	ctx     context.Context
-	cancel  context.CancelFunc
-	failure *HTTPFailure
-}
-
-func NewHTTPDownload(link string, destination string, expectedBytes int64) *HTTPDownload {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &HTTPDownload{
-		options: httpclient.DownloadOptions{
-			URLs:          []string{link},
-			Destination:   destination,
-			ExpectedBytes: expectedBytes,
-		},
-		ctx:    ctx,
-		cancel: cancel,
+func (r *HTTPResponse) Read(maxLength int64) error {
+	buffer := make([]byte, maxLength)
+	for {
+		n, err := r.read(buffer)
+		if n > 0 {
+			r.chunk = buffer[:n]
+			return nil
+		}
+		if errors.Is(err, io.EOF) || err != nil && r.closed.Load() {
+			r.chunk = nil
+			return nil
+		}
+		if err != nil {
+			return err
+		}
 	}
 }
 
-func (d *HTTPDownload) AddURL(link string) {
-	d.options.URLs = append(d.options.URLs, link)
+func (r *HTTPResponse) Chunk() []byte {
+	return r.chunk
 }
 
-func (d *HTTPDownload) Run(handler HTTPDownloadHandler) error {
-	err := httpClient.Download(d.ctx, d.options, downloadHandler{handler})
+func (r *HTTPResponse) Download(destination string, handler HTTPDownloadHandler) error {
+	defer r.Close()
+	file, err := os.CreateTemp(filepath.Dir(destination), "."+filepath.Base(destination)+".*")
 	if err != nil {
-		d.failure = newHTTPFailure(err)
+		return r.request.fileError(err)
+	}
+	err = r.transfer(file, handler)
+	closeErr := file.Close()
+	if err == nil && closeErr != nil {
+		err = r.request.fileError(closeErr)
+	}
+	if err == nil {
+		err = os.Rename(file.Name(), destination)
+		if err != nil {
+			err = r.request.fileError(err)
+		}
+	}
+	if err != nil {
+		os.Remove(file.Name())
 	}
 	return err
 }
 
-func (d *HTTPDownload) Cancel() {
-	d.cancel()
+func (r *HTTPResponse) transfer(file *os.File, handler HTTPDownloadHandler) error {
+	buffer := make([]byte, readBufferSize)
+	var (
+		written  int64
+		reported time.Time
+	)
+	for {
+		n, err := r.read(buffer)
+		if n > 0 {
+			_, writeErr := file.Write(buffer[:n])
+			if writeErr != nil {
+				return r.request.fileError(writeErr)
+			}
+			written += int64(n)
+			if handler != nil && time.Since(reported) >= progressInterval {
+				reported = time.Now()
+				handler.Progress(written, r.response.ContentLength)
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			if handler != nil {
+				handler.Progress(written, r.response.ContentLength)
+			}
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
 }
 
-func (d *HTTPDownload) Failure() *HTTPFailure {
-	return d.failure
+func (r *HTTPResponse) read(buffer []byte) (int, error) {
+	r.request.arm()
+	n, err := r.response.Body.Read(buffer)
+	r.request.disarm()
+	return n, err
+}
+
+func (r *HTTPResponse) Close() {
+	if r.closed.Swap(true) {
+		return
+	}
+	r.request.Cancel()
+	r.response.Body.Close()
 }
