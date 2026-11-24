@@ -84,8 +84,34 @@ Lcold:
     mov x2, x21
     mov x3, x22
     bl _cpu_fast_call
+Lcold_return:
     cbz x0, Lresolve
     b Lreload
+
+Ljit_enter:
+    ldur x16, [x25, #(PAGE_JIT - PAGE_INSNS)]
+    sub x17, x20, x25
+    add x16, x16, x17, lsr #3
+    ldr w17, [x16]
+    and w9, w17, #0xff
+    cbz w9, Ljit_compile
+    sub w17, w17, #1
+    str w17, [x16]
+    lsr w17, w17, #8
+    add x16, x24, w17, uxtw
+    br x16
+
+Ljit_compile:
+    COMMIT
+    mov x0, x19
+    mov x1, x20
+    bl _cpu_jit_enter
+    cmn w0, #1
+    b.eq Lresolve
+    ldr w9, [x19, #CPU_NZCV]
+    msr nzcv, x9
+    add x16, x24, w0, uxtw
+    br x16
 
 #ifdef CPU_STATS
 Lstat_dispatch:
@@ -796,6 +822,7 @@ Lbr:
 
 Lret:
     READ_X x13, IR_RN
+Lret_target:
     sub w15, w28, #1
     and w15, w15, #15
     ldr x14, [x19, #CPU_ICACHE]
@@ -2168,6 +2195,12 @@ EXCLUSIVE_STORE stlxr64, casal, x, 8
 .private_extern _cpu_pt_offsets
 _cpu_pt_offsets:
 #include "generated/a64_passthrough_offsets.inc"
+
+.p2align 2
+.globl _cpu_fast_base_offset
+.private_extern _cpu_fast_base_offset
+_cpu_fast_base_offset:
+    .long Lcpu_fast_base - _cpu_fast_run
 
 .p2align 2
 .globl _cpu_fast_offsets

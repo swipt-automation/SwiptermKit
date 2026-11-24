@@ -52,6 +52,7 @@ CHECK_OFFSET(ir_page_t, pa_page, PAGE_PA);
 CHECK_OFFSET(ir_page_t, va_page, PAGE_VA);
 CHECK_OFFSET(ir_page_t, decoded_mask, PAGE_DECODED_MASK);
 CHECK_OFFSET(ir_page_t, gen, PAGE_GEN);
+CHECK_OFFSET(ir_page_t, jit, PAGE_JIT);
 CHECK_OFFSET(ir_page_t, insns, PAGE_INSNS);
 CHECK_OFFSET(cpu_icache_t, cur_page, IC_CUR_PAGE);
 CHECK_OFFSET(cpu_icache_t, cur_exec_epoch, IC_CUR_EXEC_EPOCH);

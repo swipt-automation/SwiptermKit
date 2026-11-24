@@ -86,12 +86,18 @@ enum : uint32_t {
     CPU_FPSR_IDC = 1U << 7,
 };
 
+typedef struct cpu_jit_page {
+    uint32_t entry[IR_PAGE_INSNS];
+    uint32_t word[IR_PAGE_INSNS];
+} cpu_jit_page_t;
+
 typedef struct ir_page {
     uint64_t pa_page;
     uint64_t va_page;
     uintptr_t hva_page;
     uint32_t decoded_mask;
     uint32_t gen;
+    cpu_jit_page_t *jit;
     uint8_t el;
     ir_insn_t insns[IR_PAGE_INSNS + 1];
 } ir_page_t;
@@ -116,6 +122,27 @@ typedef struct ras_entry {
 
 static_assert(sizeof(ras_entry_t) == 32);
 
+typedef struct cpu_jit_arena {
+    uint8_t *rx;
+    uint8_t *rw;
+    uint32_t size;
+    uint32_t used;
+    uint32_t base_offset;
+    uint32_t region_size;
+    void *work;
+} cpu_jit_arena_t;
+
+extern _Atomic uint32_t cpu_jit_generation;
+
+uintptr_t cpu_fast_base(void);
+void cpu_jit_reserve(void);
+bool cpu_jit_arena_acquire(vmm_machine_t *vm, uint32_t cpu_id, cpu_jit_arena_t *out);
+void cpu_jit_arena_release(vmm_machine_t *vm);
+void cpu_jit_arena_write(const cpu_jit_arena_t *arena, uint32_t offset, const uint32_t *code, uint32_t words);
+uint32_t cpu_jit_enter(vcpu_t *cpu, ir_insn_t *ir);
+const ir_insn_t *cpu_fast_call(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
+bool cpu_jit_native(const ir_insn_t *ir);
+
 typedef struct cpu_icache {
     ir_page_t *cur_page;
     uint64_t cur_exec_epoch;
@@ -131,7 +158,14 @@ typedef struct cpu_icache {
     exec_cache_entry_t exec_cache[2][EXEC_CACHE_ENTRIES];
     uint8_t plru[ICACHE_SETS];
     ir_page_t *slots[ICACHE_SETS][ICACHE_WAYS];
+    cpu_jit_arena_t jit;
+    uint32_t jit_generation;
 } cpu_icache_t;
+
+CPU_ALWAYS_INLINE bool cpu_jit_stale(const vcpu_t *cpu) {
+    return atomic_load_explicit(&cpu_jit_generation, memory_order_relaxed) !=
+           ((const cpu_icache_t *)cpu->icache)->jit_generation;
+}
 
 CPU_ALWAYS_INLINE _Atomic uint64_t *cpu_icache_ram_word(const vmm_machine_t *vm, uint64_t pa_page,
                                                        uint64_t *mask_out) {

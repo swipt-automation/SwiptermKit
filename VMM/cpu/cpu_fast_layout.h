@@ -67,7 +67,8 @@
 #define PAGE_VA 8
 #define PAGE_DECODED_MASK 24
 #define PAGE_GEN 28
-#define PAGE_INSNS 40
+#define PAGE_JIT 32
+#define PAGE_INSNS 48
 
 #define IC_CUR_PAGE 0
 #define IC_CUR_EXEC_EPOCH 8

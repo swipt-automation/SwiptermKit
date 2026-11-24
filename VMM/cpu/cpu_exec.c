@@ -3,6 +3,7 @@
 #endif
 
 #include "cpu_internal.h"
+#include "../include/CSwiptermKit/swipterm.h"
 #include "generated/a64_decode.inc"
 #include "generated/a64_sysreg_gen.inc"
 
@@ -407,6 +408,7 @@ void vcpu_flush_icache_all(vcpu_t *cpu) {
             }
         }
     }
+    ic->jit.used = 0;
     cpu->exec_epoch++;
     cpu->ras_epoch++;
 }
@@ -516,8 +518,15 @@ void vcpu_destroy(vcpu_t *cpu) {
         cpu_stats_dump(cpu);
         free(ic->stats);
 #endif
+        if (ic->jit.work) {
+            free(ic->jit.work);
+            cpu_jit_arena_release(cpu->vm);
+        }
         for (uint32_t s = 0; s < ICACHE_SETS; ++s) {
             for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
+                if (ic->slots[s][w]) {
+                    free(ic->slots[s][w]->jit);
+                }
                 free(ic->slots[s][w]);
                 ic->slots[s][w] = NULL;
             }
@@ -2653,14 +2662,16 @@ static void fuse_tile(ir_page_t *pg, uint32_t base, uint32_t tile_targets) {
 }
 
 #include "cpu_fast_decode.inc"
+#include "cpu_jit.inc"
 
 CPU_COLD_MISS static void decode_tile_slow(ir_page_t *pg, uint32_t tile) {
     uint32_t base = tile << TILE_SHIFT;
     uint32_t tile_targets = 0;
+    uint32_t tile_words[TILE_INSNS];
     const uint32_t *words = (const uint32_t *)pg->hva_page;
     for (uint32_t i = 0; i < TILE_INSNS; ++i) {
-        uint32_t word = __atomic_load_n(words + base + i, __ATOMIC_RELAXED);
-        predecode_insn(word, pg->va_page + (uint64_t)(base + i) * 4ULL, pg, base + i, tile, &tile_targets);
+        tile_words[i] = __atomic_load_n(words + base + i, __ATOMIC_RELAXED);
+        predecode_insn(tile_words[i], pg->va_page + (uint64_t)(base + i) * 4ULL, pg, base + i, tile, &tile_targets);
     }
     pg->decoded_mask |= (1U << tile);
 #ifdef CPU_STATS
@@ -2680,6 +2691,7 @@ CPU_COLD_MISS static void decode_tile_slow(ir_page_t *pg, uint32_t tile) {
             }
         }
         cpu_fast_decode(ir);
+        cpu_jit_mark(pg, ir, tile_words[i]);
     }
 }
 
@@ -2727,6 +2739,9 @@ static ir_page_t *icache_get_page(vcpu_t *cpu, uint64_t va_page, uint64_t pa_pag
     pg->decoded_mask = 0;
     pg->gen = ++ic->next_gen;
     pg->el = cpu->el;
+    if (ic->jit.work != NULL && pg->jit == NULL) {
+        pg->jit = malloc(sizeof(cpu_jit_page_t));
+    }
     pg->insns[IR_PAGE_INSNS].handler = op_page_end;
     pg->insns[IR_PAGE_INSNS].fast_offset = cpu_fast_offsets[FAST_page_end];
     return pg;
@@ -2736,6 +2751,9 @@ const ir_insn_t *cpu_fast_resolve(vcpu_t *cpu) {
     cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
 
     while (!atomic_load_explicit(&cpu->stop_requested, memory_order_acquire)) {
+        if (__builtin_expect(cpu_jit_stale(cpu), 0)) {
+            cpu_jit_sync(cpu);
+        }
         mmu_poll_shootdown(cpu);
 
         if ((cpu->daif & (1U << 7)) == 0 &&

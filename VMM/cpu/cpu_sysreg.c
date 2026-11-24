@@ -44,7 +44,7 @@ uint32_t cpu_host_features(void) {
 
 bool vcpu_check_interrupts(vcpu_t *cpu) {
     bool icache_flushed = mmu_poll_shootdown(cpu);
-    if (icache_flushed) {
+    if (icache_flushed || cpu_jit_stale(cpu)) {
         return true;
     }
     if (atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {

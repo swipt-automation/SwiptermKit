@@ -94,6 +94,11 @@ typedef struct {
     char fallback_reason[2048];
 } swipterm_boot_info;
 
+bool swipterm_jit_is_prepared(void);
+bool swipterm_jit_is_enabled(void);
+void swipterm_jit_set_enabled(bool enabled);
+bool swipterm_jit_prepare(char **error_message);
+
 int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, char **error_message);
 void swipterm_begin_shutdown(swipterm_runtime *runtime);
 void swipterm_shutdown(swipterm_runtime *runtime);

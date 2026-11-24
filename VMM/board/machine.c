@@ -1,6 +1,7 @@
 #include "board_internal.h"
 #include "machine.h"
 
+#include "../cpu/cpu_internal.h"
 #include "../mmu/mmu.h"
 
 #include <errno.h>
@@ -1157,6 +1158,8 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
         }
         return NULL;
     }
+
+    cpu_jit_reserve();
 
     int snap_rc = 0;
     if (config->snapshot_path && config->snapshot_path[0] != '\0') {

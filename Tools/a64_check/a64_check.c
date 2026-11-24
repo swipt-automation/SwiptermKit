@@ -1,6 +1,7 @@
 #include "board/machine.h"
 #include "cpu/cpu_internal.h"
 #include "state.h"
+#include "swipterm.h"
 
 #include <fcntl.h>
 #include <libkern/OSCacheControl.h>
@@ -74,7 +75,12 @@ static uint32_t *native_slots;
 static sigjmp_buf native_jump;
 static volatile sig_atomic_t native_signal;
 static uint32_t host_features;
+static bool jit_mode;
 static uint64_t rng_state = 0x9E3779B97F4A7C15ULL;
+
+static bool fast_path(const ir_insn_t *ir) {
+    return jit_mode ? cpu_jit_native(ir) : ir->fast_offset != 0;
+}
 
 static uint64_t rng(void) {
     rng_state ^= rng_state << 13;
@@ -177,9 +183,13 @@ static const ir_insn_t *resolve_at(uint64_t pc) {
 static outcome_t guest_run(uint64_t pc, uint32_t count, const test_state_t *in, test_state_t *out,
                            bool force_cold, bool fp_active, uint32_t *fast_mask) {
     ir_insn_t *ir = (ir_insn_t *)resolve_at(pc);
+    ir_page_t *page = ((cpu_icache_t *)cpu->icache)->cur_page;
     *fast_mask = 0;
     for (uint32_t i = 0; i < count; ++i) {
-        if (ir[i].fast_offset != 0) {
+        if (fast_path(&ir[i])) {
+            if (jit_mode) {
+                page->jit->entry[ir + i - page->insns] &= ~0xFFU;
+            }
             *fast_mask |= 1U << i;
             if (force_cold) {
                 ir[i].fast_offset = 0;
@@ -565,7 +575,7 @@ static void fuzz_case(const a64_leaf_t *leaf, const uint32_t *template, uint32_t
     }
     fuzz.total++;
     uint64_t pc = place_code(&word, 1);
-    bool is_fast = resolve_at(pc)->fast_offset != 0;
+    bool is_fast = fast_path(resolve_at(pc));
     fuzz.fast += is_fast;
     if (native == OUTCOME_UNDEFINED && is_fast) {
         fuzz.fast_bad++;
@@ -712,7 +722,7 @@ static void system_case(const char *name, const uint32_t *words, uint32_t count,
     uint64_t pc = place_code(words, count);
     const ir_insn_t *ir = resolve_at(pc);
     for (uint32_t i = 0; i < count; ++i) {
-        if (ir[i].fast_offset == 0) {
+        if (!fast_path(&ir[i])) {
             fuzz.fast_bad++;
             if (*shown < 4) {
                 ++*shown;
@@ -908,7 +918,7 @@ static int command_spec(int argc, char **argv) {
             }
             const ir_insn_t *ir = resolve_at(place_code(&word, 1));
             by_leaf[l].total++;
-            by_leaf[l].fast += ir->fast_offset != 0;
+            by_leaf[l].fast += fast_path(ir);
         }
         cold_leaves += by_leaf[l].fast == 0;
         partial_leaves += by_leaf[l].fast != 0 && by_leaf[l].fast != by_leaf[l].total;
@@ -1074,7 +1084,7 @@ static int command_elf(int argc, char **argv) {
                                 continue;
                             }
                             by_leaf[leaf].total++;
-                            by_leaf[leaf].fast += ir[k].fast_offset != 0;
+                            by_leaf[leaf].fast += fast_path(&ir[k]);
                             if (pairs && k + 1 < TILE_INSNS && insn_va + 4 < page_end && ir[k].fast_offset != 0 &&
                                 ir[k + 1].fast_offset != 0) {
                                 uint64_t key = (uint64_t)ir[k].fast_offset << 32 | ir[k + 1].fast_offset;
@@ -1149,7 +1159,7 @@ static int command_coverage(int argc, char **argv) {
                 }
             }
             ++valid;
-            fast += resolve_at(place_code(&word, 1))->fast_offset != 0;
+            fast += fast_path(resolve_at(place_code(&word, 1)));
         }
         if (fast == valid) {
             continue;
@@ -1281,9 +1291,22 @@ static int command_stats(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+    if (argc > 1 && strcmp(argv[1], "-j") == 0) {
+        char *jit_error = nullptr;
+        if (!swipterm_jit_prepare(&jit_error)) {
+            fprintf(stderr, "swipterm_jit_prepare: %s\n", jit_error ? jit_error : "failed");
+            free(jit_error);
+            fprintf(stderr, "executable memory is unavailable\n");
+            return 1;
+        }
+        jit_mode = true;
+        --argc;
+        ++argv;
+    }
     if (argc < 2) {
         fprintf(stderr,
-                "usage: a64_check fuzz [-n COUNT] [-s SEED] [-v] [-p] [FILTER]\n"
+                "usage: a64_check [-j] COMMAND ...\n"
+                "       a64_check fuzz [-n COUNT] [-s SEED] [-v] [-p] [FILTER]\n"
                 "       a64_check stubs [COUNT]\n"
                 "       a64_check system [COUNT]\n"
                 "       a64_check spec [COUNT [SUBGROUP]]\n"

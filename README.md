@@ -8,7 +8,7 @@
 
 ## Architecture
 
-- VMM: A high-performance user-space system emulator that boots unmodified Linux kernels without JIT or hypervisor entitlements.
+- VMM: A high-performance user-space system emulator that boots unmodified Linux kernels without JIT or hypervisor entitlements, and runs guest code through a native ARM64 JIT when the host has prepared executable memory.
 - Root Image Builder: Builds bootable ext4 root images from distribution rootfs archives and kernel packages on the host.
 - Guest Runtime (`swiptermd`): A lightweight initramfs and guest agent handling terminal sessions, file transfer, host integration, and system init handoff.
 - Network Stack: High-performance user-space NAT networking and automatic port mirroring built on [sing-tun](https://github.com/SagerNet/sing-tun).

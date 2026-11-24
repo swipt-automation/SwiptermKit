@@ -114,6 +114,36 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
     }
 
+    public struct JITError: LocalizedError, Sendable {
+        public let message: String
+
+        public var errorDescription: String? {
+            message
+        }
+    }
+
+    /// While this and `isJITEnabled` are both `true`, guest code runs through the JIT, otherwise through the interpreter.
+    /// Running machines follow changes to either at the next vCPU safe point without restarting.
+    public static var isJITPrepared: Bool {
+        swipterm_jit_is_prepared()
+    }
+
+    public static var isJITEnabled: Bool {
+        get { swipterm_jit_is_enabled() }
+        set { swipterm_jit_set_enabled(newValue) }
+    }
+
+    /// Prepares the process-wide executable region once; later calls succeed immediately once prepared.
+    /// On iOS the process must be attached to a debugger that answers `brk #0xf00d` (`x16 = 1` prepares the region,
+    /// `x16 = 0` detaches), and the debugger is asked to detach before this returns.
+    public static func prepareJIT() throws {
+        var message: UnsafeMutablePointer<CChar>?
+        guard swipterm_jit_prepare(&message) else {
+            defer { free(message) }
+            throw JITError(message: message.map { String(cString: $0) } ?? "Failed to prepare executable memory.")
+        }
+    }
+
     public let defaultEnvironment: [String: String]
     public let bootedKernel: BootedKernel
     public var fileSystem: LinuxFileSystem {
