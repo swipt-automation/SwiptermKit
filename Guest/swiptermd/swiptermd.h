@@ -143,8 +143,6 @@ void fs_handle_remove(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_unmount(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_unmount_all(void);
-void fs_handle_sync_dns(uint32_t req_id, const uint8_t *body, uint32_t len);
-int fs_apply_managed_resolver(void);
 int fs_open_in_root(const char *rel, uint64_t flags, uint64_t mode);
 int fs_open_parent(const char *guest_path, char *name_out, size_t name_cap);
 int fs_write_file_jailed(const char *guest_path, const uint8_t *data, size_t len, uint32_t mode, bool sync);

@@ -108,6 +108,15 @@ extension HTTPError: LocalizedError {
 
 public enum HTTPClient {
     public static func data(for request: HTTPRequest) async throws -> (Data, HTTPResponse) {
+        try await execute(request, readBody: true)
+    }
+
+    /// Returns when the response header arrives, without reading the body.
+    public static func response(for request: HTTPRequest) async throws -> HTTPResponse {
+        try await execute(request, readBody: false).1
+    }
+
+    private static func execute(_ request: HTTPRequest, readBody: Bool) async throws -> (Data, HTTPResponse) {
         var error: NSError?
         guard let call = LibswiptermNewHTTPRequest(request.method, request.url.absoluteString, request.body, &error) else {
             throw error!
@@ -120,7 +129,7 @@ public enum HTTPClient {
         let handle = UnsafeSendable(value: call)
         return try await perform(cancel: { handle.value.cancel() }) {
             do {
-                let response = try handle.value.execute(timeout)
+                let response = try handle.value.execute(timeout, readBody: readBody)
                 return (response.body() ?? Data(), HTTPResponse(response, requestURL: request.url))
             } catch {
                 throw handle.value.failure().flatMap(HTTPError.init) ?? error
@@ -146,6 +155,7 @@ public enum HTTPClient {
 
     /// Every URL must serve the same file. With more than one URL, the URLs that support byte ranges download
     /// disjoint ranges concurrently, and a range that fails on one URL is downloaded from the others.
+    /// A failure to write the destination throws `POSIXError`.
     public static func download(
         from urls: [URL],
         to destination: URL,
@@ -166,7 +176,11 @@ public enum HTTPClient {
             do {
                 try handle.value.run(handler)
             } catch {
-                throw handle.value.failure().flatMap(HTTPError.init) ?? error
+                let failure = handle.value.failure()
+                if let failure, failure.kind == LibswiptermHTTPFailureFile, let code = POSIXErrorCode(rawValue: failure.errorNumber) {
+                    throw POSIXError(code, userInfo: [NSLocalizedDescriptionKey: error.localizedDescription])
+                }
+                throw failure.flatMap(HTTPError.init) ?? error
             }
         }
     }

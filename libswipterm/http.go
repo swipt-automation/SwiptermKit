@@ -5,11 +5,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"maps"
 	"math"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/swipt-automation/SwiptermKit/internal/httpclient"
@@ -19,6 +22,7 @@ const (
 	HTTPFailureStatus int32 = iota + 1
 	HTTPFailureContentLength
 	HTTPFailureEmptyBody
+	HTTPFailureFile
 )
 
 var httpClient = httpclient.NewClient(nil)
@@ -28,9 +32,20 @@ type HTTPFailure struct {
 	Status        int32
 	ExpectedBytes int64
 	ActualBytes   int64
+	ErrorNumber   int32
 }
 
 func newHTTPFailure(err error) *HTTPFailure {
+	if pathErr, ok := errors.AsType[*fs.PathError](err); ok {
+		if errno, ok := errors.AsType[syscall.Errno](pathErr.Err); ok {
+			return &HTTPFailure{Kind: HTTPFailureFile, ErrorNumber: int32(errno)}
+		}
+	}
+	if linkErr, ok := errors.AsType[*os.LinkError](err); ok {
+		if errno, ok := errors.AsType[syscall.Errno](linkErr.Err); ok {
+			return &HTTPFailure{Kind: HTTPFailureFile, ErrorNumber: int32(errno)}
+		}
+	}
 	if status, ok := errors.AsType[*httpclient.StatusError](err); ok {
 		return &HTTPFailure{Kind: HTTPFailureStatus, Status: int32(status.StatusCode)}
 	}
@@ -63,7 +78,7 @@ func (r *HTTPRequest) SetHeader(name string, value string) {
 	r.request.Header.Set(name, value)
 }
 
-func (r *HTTPRequest) Execute(timeoutMilliseconds int64) (*HTTPResponse, error) {
+func (r *HTTPRequest) Execute(timeoutMilliseconds int64, readBody bool) (*HTTPResponse, error) {
 	ctx := r.request.Context()
 	if timeoutMilliseconds > 0 {
 		var cancel context.CancelFunc
@@ -76,9 +91,12 @@ func (r *HTTPRequest) Execute(timeoutMilliseconds int64) (*HTTPResponse, error) 
 		return nil, err
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, err
+	var body []byte
+	if readBody {
+		body, err = io.ReadAll(response.Body)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &HTTPResponse{
 		response: response,

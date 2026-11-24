@@ -6,7 +6,7 @@ package vmm
 #cgo iossimulator LDFLAGS: -L${SRCDIR}/../../build/iphonesimulator
 #cgo macos LDFLAGS: -L${SRCDIR}/../../build/macosx
 #cgo darwin,!ios,!macos LDFLAGS: -L${SRCDIR}/../../build/macosx
-#cgo LDFLAGS: -lvmm -larchive -llzma -lz -lresolv
+#cgo LDFLAGS: -lvmm -larchive -lz
 #include <errno.h>
 #include "network.h"
 */

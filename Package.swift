@@ -20,8 +20,6 @@ let package = Package(
             publicHeadersPath: ".",
             linkerSettings: [
                 .linkedLibrary("archive"),
-                .linkedLibrary("lzma"),
-                .linkedLibrary("resolv"),
                 .linkedLibrary("z"),
             ]
         ),

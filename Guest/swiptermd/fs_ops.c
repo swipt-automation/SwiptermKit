@@ -21,8 +21,6 @@ typedef struct active_mount {
 
 static active_mount_t *g_mounts;
 static size_t g_mount_count;
-static uint8_t g_resolver[4096];
-static size_t g_resolver_len;
 
 static bool write_sysfs_str(const char *path, const char *val) {
     int fd = open(path, O_WRONLY | O_CLOEXEC);
@@ -805,32 +803,4 @@ void fs_handle_unmount(uint32_t req_id, const uint8_t *body, uint32_t len) {
     free(g_mounts[idx].guest_path);
     g_mounts[idx] = g_mounts[--g_mount_count];
     ctrl_send_err_reply(SWIPTERMD_OP_FS_UNMOUNT, req_id, 0);
-}
-
-int fs_apply_managed_resolver(void) {
-    if (g_daemon.init_mode != SWIPTERMD_INIT_MANAGED)
-        return 0;
-    if (g_resolver_len == 0)
-        return fs_write_file_jailed("/etc/resolv.conf", (const uint8_t *)GUEST_DEFAULT_RESOLV_CONF,
-                                    sizeof(GUEST_DEFAULT_RESOLV_CONF) - 1, 0644, false);
-    return fs_write_file_jailed("/etc/resolv.conf", g_resolver, g_resolver_len, 0644, false);
-}
-
-void fs_handle_sync_dns(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
-    swiptermd_slice_t data = swiptermd_r_bytes(&r);
-    if (r.underflow) {
-        ctrl_send_err_reply(SWIPTERMD_OP_SYNC_DNS, req_id, -EINVAL);
-        return;
-    }
-    if (data.len > sizeof(g_resolver)) {
-        ctrl_send_err_reply(SWIPTERMD_OP_SYNC_DNS, req_id, -E2BIG);
-        return;
-    }
-    memcpy(g_resolver, data.ptr, data.len);
-    g_resolver_len = data.len;
-    int err = fs_write_file_jailed(GUEST_RUN_HOST "/resolv.conf", g_resolver, g_resolver_len, 0644, false);
-    if (err == 0 && g_daemon.init_started)
-        err = fs_apply_managed_resolver();
-    ctrl_send_err_reply(SWIPTERMD_OP_SYNC_DNS, req_id, err);
 }

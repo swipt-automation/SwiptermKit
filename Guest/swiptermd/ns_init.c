@@ -582,7 +582,8 @@ void ns_close_namespaces(void) {
 }
 
 static void prepare_managed_root(void) {
-    int rc = fs_apply_managed_resolver();
+    int rc = fs_write_file_jailed("/etc/resolv.conf", (const uint8_t *)GUEST_DEFAULT_RESOLV_CONF,
+                                  sizeof(GUEST_DEFAULT_RESOLV_CONF) - 1, 0644, false);
     if (rc < 0)
         boot_err_log("write /etc/resolv.conf", rc);
     struct stat st;

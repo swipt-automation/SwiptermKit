@@ -5,6 +5,7 @@
 #include "../include/CSwiptermKit/swipterm.h"
 #include "../virtio/virtio_mmio.h"
 
+#include <lzma.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -44,7 +45,7 @@ void swipterm_network_set_session(swipterm_network *network, uint64_t session_no
 void swipterm_network_push_listeners(swipterm_network *network, const swiptermd_mirror_entry_t *entries,
                                      size_t count);
 
-// The iOS and macOS SDKs ship libarchive and liblzma without headers.
+// The iOS and macOS SDKs ship libarchive without headers.
 
 typedef int64_t la_int64_t;
 typedef ssize_t la_ssize_t;
@@ -144,118 +145,6 @@ extern void archive_entry_set_rdevminor(struct archive_entry *, unsigned int);
 extern void archive_entry_set_symlink(struct archive_entry *, const char *);
 extern void archive_entry_set_hardlink(struct archive_entry *, const char *);
 extern void archive_entry_sparse_add_entry(struct archive_entry *, la_int64_t offset, la_int64_t length);
-
-typedef enum {
-    LZMA_RESERVED_ENUM = 0,
-} lzma_reserved_enum;
-
-typedef enum {
-    LZMA_OK = 0,
-    LZMA_STREAM_END = 1,
-    LZMA_BUF_ERROR = 10,
-} lzma_ret;
-
-typedef enum {
-    LZMA_RUN = 0,
-    LZMA_FINISH = 3,
-} lzma_action;
-
-typedef enum {
-    LZMA_CHECK_NONE = 0,
-} lzma_check;
-
-typedef struct lzma_allocator lzma_allocator;
-typedef struct lzma_internal_s lzma_internal;
-typedef struct lzma_filter lzma_filter;
-
-typedef struct {
-    const uint8_t *next_in;
-    size_t avail_in;
-    uint64_t total_in;
-    uint8_t *next_out;
-    size_t avail_out;
-    uint64_t total_out;
-    const lzma_allocator *allocator;
-    lzma_internal *internal;
-    void *reserved_ptr1;
-    void *reserved_ptr2;
-    void *reserved_ptr3;
-    void *reserved_ptr4;
-    uint64_t seek_pos;
-    uint64_t reserved_int2;
-    size_t reserved_int3;
-    size_t reserved_int4;
-    lzma_reserved_enum reserved_enum1;
-    lzma_reserved_enum reserved_enum2;
-} lzma_stream;
-
-typedef struct {
-    uint32_t flags;
-    uint32_t threads;
-    uint64_t block_size;
-    uint32_t timeout;
-    uint32_t preset;
-    const lzma_filter *filters;
-    lzma_check check;
-    lzma_reserved_enum reserved_enum1;
-    lzma_reserved_enum reserved_enum2;
-    lzma_reserved_enum reserved_enum3;
-    uint32_t reserved_int1;
-    uint32_t reserved_int2;
-    uint32_t reserved_int3;
-    uint32_t reserved_int4;
-    uint64_t memlimit_threading;
-    uint64_t memlimit_stop;
-    uint64_t reserved_int7;
-    uint64_t reserved_int8;
-    void *reserved_ptr1;
-    void *reserved_ptr2;
-    void *reserved_ptr3;
-    void *reserved_ptr4;
-} lzma_mt;
-
-typedef unsigned char lzma_bool;
-typedef uint64_t lzma_vli;
-typedef struct lzma_index_s lzma_index;
-
-typedef struct {
-    uint32_t version;
-    lzma_vli backward_size;
-    lzma_check check;
-    lzma_reserved_enum reserved_enum1;
-    lzma_reserved_enum reserved_enum2;
-    lzma_reserved_enum reserved_enum3;
-    lzma_reserved_enum reserved_enum4;
-    lzma_bool reserved_bool1;
-    lzma_bool reserved_bool2;
-    lzma_bool reserved_bool3;
-    lzma_bool reserved_bool4;
-    lzma_bool reserved_bool5;
-    lzma_bool reserved_bool6;
-    lzma_bool reserved_bool7;
-    lzma_bool reserved_bool8;
-    uint32_t reserved_int1;
-    uint32_t reserved_int2;
-} lzma_stream_flags;
-
-#define LZMA_CONCATENATED UINT32_C(0x08)
-#define LZMA_STREAM_HEADER_SIZE 12
-
-extern lzma_ret lzma_stream_decoder_mt(lzma_stream *strm, const lzma_mt *options);
-extern lzma_ret lzma_auto_decoder(lzma_stream *strm, uint64_t memlimit, uint32_t flags);
-extern lzma_ret lzma_code(lzma_stream *strm, lzma_action action);
-extern void lzma_end(lzma_stream *strm);
-extern uint32_t lzma_cputhreads(void);
-extern lzma_ret lzma_stream_footer_decode(lzma_stream_flags *options, const uint8_t *in);
-extern lzma_ret lzma_index_buffer_decode(lzma_index **i, uint64_t *memlimit, const lzma_allocator *allocator,
-                                         const uint8_t *in, size_t *in_pos, size_t in_size);
-extern lzma_vli lzma_index_stream_size(const lzma_index *i);
-extern lzma_vli lzma_index_uncompressed_size(const lzma_index *i);
-extern void lzma_index_end(lzma_index *i, const lzma_allocator *allocator);
-
-static_assert(sizeof(lzma_stream_flags) == 56);
-static_assert(offsetof(lzma_stream_flags, backward_size) == 8);
-static_assert(offsetof(lzma_stream_flags, check) == 16);
 
 typedef struct archive_input {
     int fd;

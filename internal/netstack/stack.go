@@ -42,7 +42,7 @@ type Stack struct {
 	tun            *tun.MemoryTun
 	stack          *tun.Go
 	icmp           *ping.Port
-	dns            *dnsForwarder
+	dns            *dnsResolver
 	connections    *ConnectionManager
 	mirror         *portMirror
 	outboundAccess sync.Mutex
@@ -62,7 +62,7 @@ func New(logger logger.ContextLogger) (*Stack, error) {
 		logger:      logger,
 		network:     network,
 		icmp:        ping.NewPort(ctx, logger, nil, udpTimeout, icmpFlowMax),
-		dns:         &dnsForwarder{},
+		dns:         &dnsResolver{ctx: ctx, queries: make(map[uint64]*dnsPendingQuery)},
 		connections: &ConnectionManager{logger: logger},
 	}
 	s.tun = tun.NewMemoryTun(tun.MemoryTunOptions{
@@ -109,12 +109,7 @@ func (s *Stack) Handle() uintptr {
 	return s.network.Handle()
 }
 
-func (s *Stack) SyncDNS() {
-	s.dns.reset()
-}
-
 func (s *Stack) ResetNetwork() {
-	s.dns.reset()
 	s.stack.ResetNetwork()
 }
 

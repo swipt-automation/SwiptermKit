@@ -21,10 +21,6 @@ func (n *Network) Handle() int64 {
 	return int64(n.stack.Handle())
 }
 
-func (n *Network) SyncDNS() {
-	n.stack.SyncDNS()
-}
-
 func (n *Network) ResetNetwork() {
 	n.stack.ResetNetwork()
 }

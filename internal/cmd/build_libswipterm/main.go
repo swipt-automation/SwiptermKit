@@ -151,20 +151,17 @@ func gomobileBinDirectory() string {
 }
 
 func buildLibraries() error {
-	var sources, zstdSources []string
-	for _, pattern := range []string{"VMM/board/*.c", "VMM/cpu/*.c", "VMM/host/*.c", "VMM/mmu/*.c", "VMM/virtio/*.c", "VMM/cpu/cpu_fast_arm64.S"} {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return err
-		}
-		sources = append(sources, matches...)
+	sources, err := glob("VMM/board/*.c", "VMM/cpu/*.c", "VMM/host/*.c", "VMM/mmu/*.c", "VMM/virtio/*.c", "VMM/cpu/cpu_fast_arm64.S")
+	if err != nil {
+		return err
 	}
-	for _, pattern := range []string{"VMM/deps/zstd/lib/common/*.c", "VMM/deps/zstd/lib/decompress/*.c"} {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return err
-		}
-		zstdSources = append(zstdSources, matches...)
+	zstdSources, err := glob("VMM/deps/zstd/lib/common/*.c", "VMM/deps/zstd/lib/decompress/*.c")
+	if err != nil {
+		return err
+	}
+	xzSources, err := glob("VMM/deps/xz/src/common/*.c", "VMM/deps/xz/src/liblzma/*/*.c")
+	if err != nil {
+		return err
 	}
 	clang, err := output(exec.Command("xcrun", "--find", "clang"))
 	if err != nil {
@@ -190,32 +187,39 @@ func buildLibraries() error {
 		}
 		base := []string{
 			"-target", platform.target, "-isysroot", sdkPath, "-O3", "-g", "-fno-common",
-			"-IVMM/include/CSwiptermKit", "-IVMM/deps/zstd/lib", "-IVMM/deps/zstd/lib/common",
+			"-IVMM/include/CSwiptermKit", "-IVMM/deps/zstd/lib", "-IVMM/deps/zstd/lib/common", "-IVMM/deps/xz/src/liblzma/api",
 			"-DZSTD_LEGACY_SUPPORT=0", "-DXXH_NAMESPACE=swipterm_zstd_", statistics,
 		}
 		vmmFlags := append(slices.Clone(base), "-std=gnu2x", "-Wall", "-Wextra", "-Werror")
 		zstdFlags := append(slices.Clone(base), "-std=gnu11", "-w")
-		flags[index] = strings.Join(append(vmmFlags, zstdFlags...), "\n")
+		xzFlags := append(slices.Clone(base), "-std=gnu11", "-w", "-fvisibility=hidden", "-DHAVE_CONFIG_H", "-DNDEBUG",
+			"-IVMM/deps/xz", "-IVMM/deps/xz/src/common", "-IVMM/deps/xz/src/liblzma/common", "-IVMM/deps/xz/src/liblzma/check",
+			"-IVMM/deps/xz/src/liblzma/lz", "-IVMM/deps/xz/src/liblzma/rangecoder", "-IVMM/deps/xz/src/liblzma/lzma",
+			"-IVMM/deps/xz/src/liblzma/delta", "-IVMM/deps/xz/src/liblzma/simple",
+		)
+		flags[index] = strings.Join(slices.Concat(vmmFlags, zstdFlags, xzFlags), "\n")
 		flagFiles[index] = filepath.Join(buildPath, platform.sdk, "flags")
 		previous, _ := os.ReadFile(flagFiles[index])
 		rebuild := string(previous) != flags[index]
-		for _, source := range slices.Concat(sources, zstdSources) {
-			arguments := vmmFlags
-			if slices.Contains(zstdSources, source) {
-				arguments = zstdFlags
-			}
-			object := filepath.Join(buildPath, platform.sdk, source+".o")
-			objects[index] = append(objects[index], object)
-			if !rebuild && upToDate(object) {
-				continue
-			}
-			group.Go(func() error {
-				err := os.MkdirAll(filepath.Dir(object), 0o755)
-				if err != nil {
-					return err
+		for _, unit := range []struct{ sources, arguments []string }{
+			{sources, vmmFlags},
+			{zstdSources, zstdFlags},
+			{xzSources, xzFlags},
+		} {
+			for _, source := range unit.sources {
+				object := filepath.Join(buildPath, platform.sdk, source+".o")
+				objects[index] = append(objects[index], object)
+				if !rebuild && upToDate(object) {
+					continue
 				}
-				return run(exec.Command(clang, append(slices.Clone(arguments), "-MMD", "-MP", "-c", source, "-o", object)...))
-			})
+				group.Go(func() error {
+					err := os.MkdirAll(filepath.Dir(object), 0o755)
+					if err != nil {
+						return err
+					}
+					return run(exec.Command(clang, append(slices.Clone(unit.arguments), "-MMD", "-MP", "-c", source, "-o", object)...))
+				})
+			}
 		}
 	}
 	err = group.Wait()
@@ -235,6 +239,18 @@ func buildLibraries() error {
 		}
 	}
 	return nil
+}
+
+func glob(patterns ...string) ([]string, error) {
+	var matches []string
+	for _, pattern := range patterns {
+		patternMatches, err := filepath.Glob(pattern)
+		if err != nil {
+			return nil, err
+		}
+		matches = append(matches, patternMatches...)
+	}
+	return matches, nil
 }
 
 func upToDate(object string) bool {

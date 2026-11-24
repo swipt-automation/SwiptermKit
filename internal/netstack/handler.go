@@ -1,15 +1,17 @@
 package netstack
 
 import (
-	"bytes"
 	"context"
 	"net"
 	"net/netip"
 
 	"github.com/sagernet/sing-tun"
 	"github.com/sagernet/sing-tun/gtcpip/header"
+	"github.com/sagernet/sing/common/buf"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
+
+	mDNS "github.com/miekg/dns"
 )
 
 const dnsPort = 53
@@ -37,14 +39,24 @@ func (s *Stack) JudgeFlow(network uint8, source netip.AddrPort, destination neti
 }
 
 func (s *Stack) NewDNSPacket(payload []byte, source M.Socksaddr, destination M.Socksaddr, writer N.PacketWriter) {
-	query := bytes.Clone(payload)
+	var query mDNS.Msg
+	err := query.Unpack(payload)
+	if err != nil {
+		s.logger.DebugContext(s.ctx, "dns: parse query from ", source, ": ", err)
+		return
+	}
 	go func() {
-		response, err := s.dns.exchange(s.ctx, query)
-		if err != nil {
-			s.logger.DebugContext(s.ctx, "dns: exchange for ", source, ": ", err)
-			return
+		response := s.exchangeDNS(s.ctx, &query)
+		maxLength := mDNS.MinMsgSize
+		opt := query.IsEdns0()
+		if opt != nil {
+			maxLength = max(maxLength, int(opt.UDPSize()))
 		}
-		err = writer.WritePacket(response, destination)
+		response.Truncate(maxLength)
+		packet, err := response.Pack()
+		if err == nil {
+			err = writer.WritePacket(buf.As(packet), destination)
+		}
 		if err != nil {
 			s.logger.DebugContext(s.ctx, "dns: write response to ", source, ": ", err)
 		}
@@ -53,12 +65,8 @@ func (s *Stack) NewDNSPacket(payload []byte, source M.Socksaddr, destination M.S
 
 func (s *Stack) NewConnectionEx(ctx context.Context, conn net.Conn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
 	if destination.Addr == inet4DNS || destination.Addr == inet6DNS {
-		server, loaded := s.dns.server()
-		if !loaded {
-			N.CloseOnHandshakeFailure(conn, onClose, errNoDNSServer)
-			return
-		}
-		destination = M.SocksaddrFromNetIP(server)
+		s.connections.closeHandler(ctx, conn, onClose)(s.serveDNSStream(ctx, conn))
+		return
 	}
 	s.connections.NewConnection(ctx, conn, destination, onClose)
 }

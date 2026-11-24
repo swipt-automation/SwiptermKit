@@ -787,9 +787,6 @@ static void dispatch_ctrl_frame(const swiptermd_frame_hdr_t *hdr, const uint8_t 
     case SWIPTERMD_OP_FS_UNMOUNT:
         fs_handle_unmount(hdr->req_id, body, hdr->body_len);
         break;
-    case SWIPTERMD_OP_SYNC_DNS:
-        fs_handle_sync_dns(hdr->req_id, body, hdr->body_len);
-        break;
     case SWIPTERMD_OP_REGISTER_CMD:
         host_cmd_handle_register(hdr->req_id, body, hdr->body_len);
         break;

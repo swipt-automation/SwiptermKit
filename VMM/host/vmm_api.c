@@ -10,10 +10,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <netdb.h>
 #include <poll.h>
 #include <pthread.h>
-#include <resolv.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -2397,48 +2395,6 @@ void swipterm_resume(swipterm_runtime *rt) {
     uint8_t req[SWIPTERMD_RESUME_REQ_SIZE];
     swiptermd_enc_resume_req(req, (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec);
     (void)control_send(rt, SWIPTERMD_OP_RESUME, 0, req, sizeof(req));
-}
-
-int swipterm_sync_dns(swipterm_runtime *rt) {
-    if (!rt) {
-        return -LINUX_EINVAL;
-    }
-    struct __res_state state;
-    memset(&state, 0, sizeof(state));
-    if (res_ninit(&state) != 0) {
-        return -LINUX_EIO;
-    }
-    char conf[4096];
-    size_t length = 0;
-    if (state.dnsrch[0] != NULL) {
-        length = (size_t)snprintf(conf, sizeof(conf), "search");
-        for (int i = 0; state.dnsrch[i] != NULL; i++) {
-            int n = snprintf(conf + length, sizeof(conf) - length, " %s", state.dnsrch[i]);
-            if (n < 0 || (size_t)n >= sizeof(conf) - length) {
-                break;
-            }
-            length += (size_t)n;
-        }
-        conf[length++] = '\n';
-    }
-    res_ndestroy(&state);
-    static const char servers[] = "nameserver 10.0.2.3\nnameserver fd00::3\n";
-    if (length + sizeof(servers) > sizeof(conf)) {
-        length = 0;
-    }
-    memcpy(conf + length, servers, sizeof(servers) - 1);
-    length += sizeof(servers) - 1;
-
-    size_t req_size = 4 + length;
-    uint8_t *req_buf = malloc(req_size);
-    if (!req_buf) {
-        return -LINUX_ENOMEM;
-    }
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(req_buf, req_size);
-    swiptermd_w_bytes(&w, conf, (uint32_t)length);
-    int rc = control_rpc_status(rt, SWIPTERMD_OP_SYNC_DNS, req_buf, (uint32_t)w.len);
-    free(req_buf);
-    return rc;
 }
 
 int swipterm_wait_ready(swipterm_runtime *rt, swipterm_readiness readiness, int timeout_ms) {

@@ -3,6 +3,7 @@ module github.com/swipt-automation/SwiptermKit
 go 1.26.8
 
 require (
+	github.com/miekg/dns v1.1.72
 	github.com/sagernet/gomobile v0.1.13
 	github.com/sagernet/sing v0.9.7-0.20261110095940-27b73774b240
 	github.com/sagernet/sing-tun v0.9.7-0.20261123035353-695e0f7bfedf
@@ -25,6 +26,8 @@ require (
 	github.com/vishvananda/netns v0.0.4 // indirect
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
 	golang.org/x/exp v0.0.0-20250711185948-6ae5c78190dc // indirect
+	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
+	golang.org/x/tools v0.40.0 // indirect
 )

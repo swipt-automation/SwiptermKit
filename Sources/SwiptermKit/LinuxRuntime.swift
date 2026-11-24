@@ -27,7 +27,6 @@ public final class LinuxRuntime: @unchecked Sendable {
         public var hostCommandsDirectory: String?
         public var memorySize: UInt64?
         public var cpuCount: Int?
-        public var autoSyncDNS: Bool
         public var extraKernelArguments: String?
         public var consoleOutput: (@Sendable (Data) -> Void)?
         public var panicHandler: (@Sendable (String) -> Void)?
@@ -41,7 +40,6 @@ public final class LinuxRuntime: @unchecked Sendable {
             hostCommandsDirectory: String? = "/run/host-bin",
             memorySize: UInt64? = nil,
             cpuCount: Int? = nil,
-            autoSyncDNS: Bool = true,
             extraKernelArguments: String? = nil,
             consoleOutput: (@Sendable (Data) -> Void)? = nil,
             panicHandler: (@Sendable (String) -> Void)? = nil,
@@ -54,7 +52,6 @@ public final class LinuxRuntime: @unchecked Sendable {
             self.hostCommandsDirectory = hostCommandsDirectory
             self.memorySize = memorySize
             self.cpuCount = cpuCount
-            self.autoSyncDNS = autoSyncDNS
             self.extraKernelArguments = extraKernelArguments
             self.consoleOutput = consoleOutput
             self.panicHandler = panicHandler
@@ -276,32 +273,26 @@ public final class LinuxRuntime: @unchecked Sendable {
             initCommand = ("/sbin/init", ["/sbin/init"], ["PATH=\(Self.systemPath)", "TERM=linux"])
         }
 
-        if configuration.autoSyncDNS {
-            try? runtime.syncDNS()
-            let monitor = NWPathMonitor()
-            monitor.pathUpdateHandler = { [weak runtime] path in
-                guard let runtime else { return }
-                let previous = runtime.networkPath
-                runtime.networkPath = path
-                guard let previous else { return }
-                guard path.status != previous.status || path.availableInterfaces.first != previous.availableInterfaces.first else {
-                    try? runtime.syncDNS()
-                    return
-                }
-                try? runtime.withActiveHandle { handle throws(LinuxError) in
-                    runtime.network.resetNetwork()
-                    try check(swipterm_sync_dns(handle))
-                }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak runtime] path in
+            guard let runtime else { return }
+            let previous = runtime.networkPath
+            runtime.networkPath = path
+            guard let previous,
+                  path.status != previous.status || path.availableInterfaces.first != previous.availableInterfaces.first
+            else { return }
+            try? runtime.withActiveHandle { _ in
+                runtime.network.resetNetwork()
             }
-            monitor.start(queue: DispatchQueue(label: "SwiptermKit.PathMonitor"))
-            let installed = runtime.stateCondition.withLock { () -> Bool in
-                guard !runtime.isShutDown else { return false }
-                runtime.pathMonitor = monitor
-                return true
-            }
-            if !installed {
-                monitor.cancel()
-            }
+        }
+        monitor.start(queue: DispatchQueue(label: "SwiptermKit.PathMonitor"))
+        let installed = runtime.stateCondition.withLock { () -> Bool in
+            guard !runtime.isShutDown else { return false }
+            runtime.pathMonitor = monitor
+            return true
+        }
+        if !installed {
+            monitor.cancel()
         }
         do {
             try Task.checkCancellation()
@@ -400,15 +391,7 @@ public final class LinuxRuntime: @unchecked Sendable {
     }
 
     public func resume() {
-        guard (try? withActiveHandle { swipterm_resume($0) }) != nil else { return }
-        try? syncDNS()
-    }
-
-    public func syncDNS() throws(LinuxError) {
-        try withActiveHandle { handle throws(LinuxError) in
-            network.syncDNS()
-            try check(swipterm_sync_dns(handle))
-        }
+        try? withActiveHandle { swipterm_resume($0) }
     }
 
     /// Throws `LinuxError.ETIMEDOUT` after `timeout`, and `LinuxError.ESRCH` when the guest init has exited.

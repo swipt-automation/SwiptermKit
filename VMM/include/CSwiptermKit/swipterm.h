@@ -101,7 +101,6 @@ int swipterm_start_init(swipterm_runtime *runtime, const char *path,
                         size_t argc, const char *const *argv, const char *const *envp);
 void swipterm_suspend(swipterm_runtime *runtime);
 void swipterm_resume(swipterm_runtime *runtime);
-int swipterm_sync_dns(swipterm_runtime *runtime);
 void swipterm_get_boot_info(swipterm_runtime *runtime, swipterm_boot_info *info_out);
 
 typedef enum {
