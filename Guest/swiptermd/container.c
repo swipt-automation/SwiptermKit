@@ -45,7 +45,7 @@ static const device_key_t default_devices[] = {
     {BPF_DEVCG_DEV_CHAR, 1, 8}, {BPF_DEVCG_DEV_CHAR, 1, 9},
     {BPF_DEVCG_DEV_CHAR, 5, 0}, {BPF_DEVCG_DEV_CHAR, 5, 1}, {BPF_DEVCG_DEV_CHAR, 5, 2},
     {BPF_DEVCG_DEV_CHAR, 10, 200}, {BPF_DEVCG_DEV_CHAR, 10, 229}, {BPF_DEVCG_DEV_CHAR, 10, 203},
-    {BPF_DEVCG_DEV_CHAR, 10, 235}, {BPF_DEVCG_DEV_CHAR, 10, 237},
+    {BPF_DEVCG_DEV_CHAR, 10, 232}, {BPF_DEVCG_DEV_CHAR, 10, 235}, {BPF_DEVCG_DEV_CHAR, 10, 237},
     {BPF_DEVCG_DEV_CHAR, 0, 0},
     {BPF_DEVCG_DEV_BLOCK, LOOP_MAJOR, DEVICE_ANY_MINOR},
 };
@@ -236,6 +236,11 @@ static int assemble_dev(void) {
     }
     for (size_t i = 0; i < sizeof(nodes) / sizeof(nodes[0]); i++) {
         int rc = make_device(nodes[i].path, nodes[i].mode, nodes[i].major_number, nodes[i].minor_number);
+        if (rc < 0)
+            return rc;
+    }
+    if (access("/sys/class/misc/kvm", F_OK) == 0) {
+        int rc = make_device(GUEST_ROOT "/dev/kvm", S_IFCHR | 0666, 10, 232);
         if (rc < 0)
             return rc;
     }

@@ -435,14 +435,18 @@ static bool random_instance(const a64_leaf_t *leaf, const uint32_t *template, ui
                 address = (address | 0xFFF) - ((r >> 20) & 31);
             }
             if (base == 31) {
-                st->sp = address & ~15ULL;
+                address &= ~15ULL;
+                st->sp = address;
             } else if (base < 31) {
                 st->x[base] = address;
             }
             if (index < 31) {
                 st->x[index] = (r >> 32) & 0x38;
             }
-            *native_differs = subgroup_is_atomic(leaf) && (address & 15) != 0;
+            bool ordered = strcmp(leaf->subgroup, "ldst/ldapstl_unscaled") == 0;
+            uint64_t effective = address + (uint64_t)cpu_sext((word >> 12) & 0x1FFU, 9);
+            *native_differs = (subgroup_is_atomic(leaf) && (address & 15) != 0) ||
+                              (ordered && (effective & ((1ULL << (word >> 30)) - 1)) != 0);
         }
         *word_out = word;
         return true;
@@ -1138,10 +1142,12 @@ static int command_coverage(int argc, char **argv) {
     }
     fclose(in);
     setup_native();
+    const uint32_t udf = 0;
+    ir_handler_fn undefined = resolve_at(place_code(&udf, 1))->handler;
     for (uint32_t l = 0; l < LEAF_COUNT; ++l) {
         const a64_leaf_t *leaf = &a64_leaves[l];
         bool native = leaf_fuzzable(leaf);
-        uint32_t valid = 0, fast = 0;
+        uint32_t valid = 0, fast = 0, undefined_count = 0;
         for (uint32_t t = 0; t < 64; ++t) {
             uint32_t word;
             test_state_t state, out;
@@ -1158,10 +1164,12 @@ static int command_coverage(int argc, char **argv) {
                     continue;
                 }
             }
+            const ir_insn_t *ir = resolve_at(place_code(&word, 1));
             ++valid;
-            fast += fast_path(resolve_at(place_code(&word, 1)));
+            fast += fast_path(ir);
+            undefined_count += ir->handler == undefined;
         }
-        if (fast == valid) {
+        if (fast == valid || ((leaf->features & ~host_features) != 0 && undefined_count == valid)) {
             continue;
         }
         ++slow;

@@ -25,7 +25,6 @@ enum : uint32_t {
     X_ZR = 31,
     SLOT_SP = REG_SP,
     SLOTS = REG_SP + 1,
-    V_LIST = 16,
 };
 
 static const uint8_t jit_pool[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15};
@@ -49,6 +48,7 @@ typedef enum jit_kind : uint8_t {
     JIT_PAIR,
     JIT_LIT,
     JIT_ORD,
+    JIT_RCPC,
     JIT_EXCL,
     JIT_EXCLP,
     JIT_ATOMIC,
@@ -59,7 +59,6 @@ typedef enum jit_kind : uint8_t {
     JIT_SIMD,
     JIT_SIMD_IMM,
     JIT_TBL,
-    JIT_CRYPTO,
     JIT_HELPER,
     JIT_SEVL,
     JIT_BARRIER,
@@ -83,6 +82,8 @@ typedef enum jit_sysreg : uint8_t {
     JIT_SR_CURRENTEL,
     JIT_SR_CNTVCT,
     JIT_SR_CNTPCT,
+    JIT_SR_CNTFRQ,
+    JIT_SR_DCZID,
 } jit_sysreg_t;
 
 typedef enum jit_sysop : uint8_t {
@@ -98,12 +99,15 @@ typedef enum jit_stub_kind : uint8_t {
     JIT_STUB_GOTO,
     JIT_STUB_WAKE,
     JIT_STUB_RETURN,
+    JIT_STUB_FP,
 } jit_stub_kind_t;
 
 typedef struct jit_regs {
     int8_t host[SLOTS];
     int8_t guest[32];
     uint64_t dirty;
+    uint32_t vloaded;
+    uint32_t vdirty;
 } jit_regs_t;
 
 typedef struct jit_stub {
@@ -143,6 +147,7 @@ typedef struct jit {
     int32_t cold;
     uint8_t fp;
     uint8_t el;
+    uint8_t world;
 } jit_t;
 
 typedef struct jit_fields {
@@ -169,6 +174,12 @@ static inline uint32_t A_SUBWI(uint32_t rd, uint32_t rn, uint32_t imm) {
 }
 static inline uint32_t A_ADDR(uint32_t rd, uint32_t rn, uint32_t rm, uint32_t lsl) {
     return 0x8B000000U | (rm << 16) | (lsl << 10) | (rn << 5) | rd;
+}
+static inline uint32_t A_SUBR(uint32_t rd, uint32_t rn, uint32_t rm) {
+    return 0xCB000000U | (rm << 16) | (rn << 5) | rd;
+}
+static inline uint32_t A_SUBI(uint32_t rd, uint32_t rn, uint32_t imm) {
+    return 0xD1000000U | (imm << 10) | (rn << 5) | rd;
 }
 static inline uint32_t A_ADDX(uint32_t rd, uint32_t rn, uint32_t rm, uint32_t option, uint32_t amount) {
     return 0x8B200000U | (rm << 16) | (option << 13) | (amount << 10) | (rn << 5) | rd;
@@ -263,6 +274,21 @@ static inline uint32_t A_STPX(uint32_t rt, uint32_t rt2, uint32_t rn, uint32_t o
 static inline uint32_t A_STPQ(uint32_t rt, uint32_t rt2, uint32_t rn, uint32_t offset) {
     return 0xAD000000U | (((offset >> 4) & 0x7FU) << 15) | (rt2 << 10) | (rn << 5) | rt;
 }
+static inline uint32_t A_LDPQ(uint32_t rt, uint32_t rt2, uint32_t rn, uint32_t offset) {
+    return 0xAD400000U | (((offset >> 4) & 0x7FU) << 15) | (rt2 << 10) | (rn << 5) | rt;
+}
+static inline uint32_t A_LDPX_POST(uint32_t rt, uint32_t rt2, uint32_t rn, uint32_t offset) {
+    return 0xA8C00000U | (((offset >> 3) & 0x7FU) << 15) | (rt2 << 10) | (rn << 5) | rt;
+}
+static inline uint32_t A_STPX_POST(uint32_t rt, uint32_t rt2, uint32_t rn, uint32_t offset) {
+    return 0xA8800000U | (((offset >> 3) & 0x7FU) << 15) | (rt2 << 10) | (rn << 5) | rt;
+}
+static inline uint32_t A_LDRB_POST(uint32_t rt, uint32_t rn, uint32_t offset) {
+    return 0x38400400U | ((offset & 0x1FFU) << 12) | (rn << 5) | rt;
+}
+static inline uint32_t A_STRB_POST(uint32_t rt, uint32_t rn, uint32_t offset) {
+    return 0x38000400U | ((offset & 0x1FFU) << 12) | (rn << 5) | rt;
+}
 static inline uint32_t A_LDARW(uint32_t rt, uint32_t rn) {
     return 0x88DFFC00U | (rn << 5) | rt;
 }
@@ -304,7 +330,8 @@ enum : uint32_t {
     A_MSR_FPCR = 0xD51B4400U,
     A_DMB_ISH = 0xD5033BBFU,
     A_DMB_ISHLD = 0xD50339BFU,
-    A_MOVI_V0_ZERO = 0x6F00E400U,
+    A_DMB_ISHST = 0xD5033ABFU,
+    A_DC_ZVA = 0xD50B7420U,
 };
 
 static uint32_t jit_bitmask(uint64_t imm, bool wide) {
@@ -449,6 +476,8 @@ static void jit_regs_clear(jit_regs_t *regs) {
     memset(regs->host, -1, sizeof(regs->host));
     memset(regs->guest, -1, sizeof(regs->guest));
     regs->dirty = 0;
+    regs->vloaded = 0;
+    regs->vdirty = 0;
 }
 
 static uint32_t jit_stub(jit_t *j, jit_stub_kind_t kind, uint64_t target) {
@@ -593,6 +622,28 @@ static void jit_write_from(jit_t *j, uint32_t reg, uint32_t host) {
     }
 }
 
+static void jit_vector_spill(jit_t *j, uint32_t vregs, bool load) {
+    for (uint32_t reg = 0; reg < 32; ++reg) {
+        if ((vregs & (1U << reg)) == 0) {
+            continue;
+        }
+        uint32_t offset = CPU_V + reg * 16U;
+        if (reg < 31 && (vregs & (1U << (reg + 1U)))) {
+            jit_emit(j, load ? A_LDPQ(reg, reg + 1U, X_CPU, offset) : A_STPQ(reg, reg + 1U, X_CPU, offset));
+            ++reg;
+        } else {
+            jit_emit(j, load ? A_LDRQ(reg, X_CPU, offset) : A_STRQ(reg, X_CPU, offset));
+        }
+    }
+}
+
+static void jit_vector_use(jit_t *j, uint32_t reg) {
+    if ((j->regs.vloaded & (1U << reg)) == 0) {
+        jit_emit(j, A_LDRQ(reg, X_CPU, CPU_V + reg * 16U));
+        j->regs.vloaded |= 1U << reg;
+    }
+}
+
 static void jit_flush(jit_t *j, const jit_regs_t *regs) {
     for (uint32_t slot = 0; slot < SLOTS; ++slot) {
         if ((regs->dirty & (1ULL << slot)) == 0) {
@@ -605,6 +656,7 @@ static void jit_flush(jit_t *j, const jit_regs_t *regs) {
             jit_emit(j, A_STRX((uint32_t)regs->host[slot], X_CPU, slot * 8U));
         }
     }
+    jit_vector_spill(j, regs->vdirty, false);
 }
 
 static void jit_reload(jit_t *j, const jit_regs_t *regs) {
@@ -613,6 +665,7 @@ static void jit_reload(jit_t *j, const jit_regs_t *regs) {
             jit_emit(j, A_LDRX((uint32_t)regs->host[slot], X_CPU, slot * 8U));
         }
     }
+    jit_vector_spill(j, regs->vloaded, true);
 }
 
 static void jit_set_ir(jit_t *j, uint32_t index) {
@@ -742,7 +795,7 @@ static void jit_fp(jit_t *j, uint8_t level) {
     }
     if (level == 2) {
         jit_emit(j, A_LDRB(X_TMP2, X_CPU, CPU_FP_ACTIVE));
-        jit_to_stub(j, A_CBZ(X_TMP2, false, false, 0), jit_cold(j));
+        jit_call_stub(j, JIT_STUB_FP, A_CBZ(X_TMP2, false, false, 0));
     }
     j->fp = level;
 }
@@ -929,6 +982,33 @@ static bool jit_dp_fields(a64_dec_op_t dec, jit_fields_t *f, bool *keep) {
     case A64_DEC_DP_3SRC_UMULH:
         *f = (jit_fields_t){F_ZR, F_ZR, F_ZR, F_ZR};
         return true;
+    case A64_DEC_DP_1SRC_ABS:
+    case A64_DEC_DP_1SRC_CNT:
+    case A64_DEC_DP_1SRC_CTZ:
+    case A64_DEC_MINMAX_IMM_SMAX:
+    case A64_DEC_MINMAX_IMM_SMIN:
+    case A64_DEC_MINMAX_IMM_UMAX:
+    case A64_DEC_MINMAX_IMM_UMIN:
+        *f = (jit_fields_t){F_ZR, F_ZR, F_NONE, F_NONE};
+        return true;
+    case A64_DEC_DP_2SRC_SMAX:
+    case A64_DEC_DP_2SRC_SMIN:
+    case A64_DEC_DP_2SRC_UMAX:
+    case A64_DEC_DP_2SRC_UMIN:
+        *f = (jit_fields_t){F_ZR, F_ZR, F_ZR, F_NONE};
+        return true;
+    case A64_DEC_RMIF_RMIF:
+    case A64_DEC_SETF_SETF8:
+    case A64_DEC_SETF_SETF16:
+        *f = (jit_fields_t){F_NONE, F_ZR, F_NONE, F_NONE};
+        return (cpu_host_features() & CPU_HOST_FEAT_FlagM) != 0U;
+    case A64_DEC_PSTATE_CFINV:
+        *f = (jit_fields_t){F_NONE, F_NONE, F_NONE, F_NONE};
+        return (cpu_host_features() & CPU_HOST_FEAT_FlagM) != 0U;
+    case A64_DEC_PSTATE_XAFLAG:
+    case A64_DEC_PSTATE_AXFLAG:
+        *f = (jit_fields_t){F_NONE, F_NONE, F_NONE, F_NONE};
+        return (cpu_host_features() & CPU_HOST_FEAT_FlagM2) != 0U;
     default:
         return false;
     }
@@ -942,8 +1022,10 @@ static jit_sysreg_t jit_sysreg_read(uint16_t key, uint32_t *offset) {
     case A64_SYSREG_DAIF: return JIT_SR_DAIF;
     case A64_SYSREG_SP_EL0: return JIT_SR_SP_EL0;
     case A64_SYSREG_CURRENTEL: return JIT_SR_CURRENTEL;
-    case A64_SYSREG_CNTVCT_EL0: return JIT_SR_CNTVCT;
-    case A64_SYSREG_CNTPCT_EL0: return JIT_SR_CNTPCT;
+    case A64_SYSREG_CNTVCT_EL0:
+    case A64_SYSREG_CNTVCTSS_EL0: return JIT_SR_CNTVCT;
+    case A64_SYSREG_CNTPCT_EL0:
+    case A64_SYSREG_CNTPCTSS_EL0: return JIT_SR_CNTPCT;
     case A64_SYSREG_TPIDR_EL0: *offset = offsetof(vcpu_t, tpidr_el0); return JIT_SR_FIELD_EL0;
     case A64_SYSREG_TPIDRRO_EL0: *offset = offsetof(vcpu_t, tpidrro_el0); return JIT_SR_FIELD_EL0;
     case A64_SYSREG_MPIDR_EL1: *offset = offsetof(vcpu_t, mpidr_el1); return JIT_SR_FIELD;
@@ -953,16 +1035,17 @@ static jit_sysreg_t jit_sysreg_read(uint16_t key, uint32_t *offset) {
     case A64_SYSREG_TTBR0_EL1: *offset = offsetof(vcpu_t, ttbr0_el1); return JIT_SR_FIELD;
     case A64_SYSREG_TTBR1_EL1: *offset = offsetof(vcpu_t, ttbr1_el1); return JIT_SR_FIELD;
     case A64_SYSREG_TCR_EL1: *offset = offsetof(vcpu_t, tcr_el1); return JIT_SR_FIELD;
-    case A64_SYSREG_AFSR0_EL1: *offset = offsetof(vcpu_t, sysregs.afsr0_el1); return JIT_SR_FIELD;
-    case A64_SYSREG_AFSR1_EL1: *offset = offsetof(vcpu_t, sysregs.afsr1_el1); return JIT_SR_FIELD;
+    case A64_SYSREG_AFSR0_EL1: *offset = offsetof(vcpu_t, afsr0_el1); return JIT_SR_FIELD;
+    case A64_SYSREG_AFSR1_EL1: *offset = offsetof(vcpu_t, afsr1_el1); return JIT_SR_FIELD;
     case A64_SYSREG_ESR_EL1: *offset = offsetof(vcpu_t, esr_el1); return JIT_SR_FIELD;
     case A64_SYSREG_FAR_EL1: *offset = offsetof(vcpu_t, far_el1); return JIT_SR_FIELD;
     case A64_SYSREG_PAR_EL1: *offset = offsetof(vcpu_t, par_el1); return JIT_SR_FIELD;
     case A64_SYSREG_MAIR_EL1: *offset = offsetof(vcpu_t, mair_el1); return JIT_SR_FIELD;
-    case A64_SYSREG_AMAIR_EL1: *offset = offsetof(vcpu_t, sysregs.amair_el1); return JIT_SR_FIELD;
+    case A64_SYSREG_AMAIR_EL1: *offset = offsetof(vcpu_t, amair_el1); return JIT_SR_FIELD;
     case A64_SYSREG_VBAR_EL1: *offset = offsetof(vcpu_t, vbar_el1); return JIT_SR_FIELD;
     case A64_SYSREG_CONTEXTIDR_EL1: *offset = offsetof(vcpu_t, contextidr_el1); return JIT_SR_FIELD;
     case A64_SYSREG_TPIDR_EL1: *offset = offsetof(vcpu_t, tpidr_el1); return JIT_SR_FIELD;
+    case A64_SYSREG_TPIDR_EL2: *offset = offsetof(vcpu_t, tpidr_el2); return JIT_SR_FIELD;
     case A64_SYSREG_CNTKCTL_EL1: *offset = offsetof(vcpu_t, cntkctl_el1); return JIT_SR_FIELD;
     case A64_SYSREG_SPSR_EL1: *offset = offsetof(vcpu_t, spsr_el1); return JIT_SR_FIELD;
     case A64_SYSREG_ELR_EL1: *offset = offsetof(vcpu_t, elr_el1); return JIT_SR_FIELD;
@@ -970,10 +1053,11 @@ static jit_sysreg_t jit_sysreg_read(uint16_t key, uint32_t *offset) {
     case A64_SYSREG_CSSELR_EL1: *offset = offsetof(vcpu_t, sysregs.csselr_el1); return JIT_SR_FIELD;
     case A64_SYSREG_OSDLR_EL1: *offset = offsetof(vcpu_t, sysregs.osdlr_el1); return JIT_SR_FIELD;
     case A64_SYSREG_UAO: *offset = offsetof(vcpu_t, sysregs.uao); return JIT_SR_FIELD;
+    case A64_SYSREG_CNTFRQ_EL0: return JIT_SR_CNTFRQ;
+    case A64_SYSREG_DCZID_EL0: return JIT_SR_DCZID;
     case A64_SYSREG_MIDR_EL1:
     case A64_SYSREG_REVIDR_EL1:
     case A64_SYSREG_AIDR_EL1:
-    case A64_SYSREG_CNTFRQ_EL0:
     case A64_SYSREG_CNTP_TVAL_EL0:
     case A64_SYSREG_CNTP_CTL_EL0:
     case A64_SYSREG_CNTP_CVAL_EL0:
@@ -983,7 +1067,6 @@ static jit_sysreg_t jit_sysreg_read(uint16_t key, uint32_t *offset) {
     case A64_SYSREG_SPSEL:
     case A64_SYSREG_PAN:
     case A64_SYSREG_CTR_EL0:
-    case A64_SYSREG_DCZID_EL0:
     case A64_SYSREG_CLIDR_EL1:
     case A64_SYSREG_CCSIDR_EL1:
     case A64_SYSREG_MDCCSR_EL0:
@@ -1024,14 +1107,15 @@ static jit_sysreg_t jit_sysreg_write(uint16_t key, uint32_t *offset) {
     case A64_SYSREG_TPIDR_EL0: *offset = offsetof(vcpu_t, tpidr_el0); return JIT_SR_FIELD_EL0;
     case A64_SYSREG_TPIDRRO_EL0: *offset = offsetof(vcpu_t, tpidrro_el0); return JIT_SR_FIELD;
     case A64_SYSREG_TPIDR_EL1: *offset = offsetof(vcpu_t, tpidr_el1); return JIT_SR_FIELD;
+    case A64_SYSREG_TPIDR_EL2: *offset = offsetof(vcpu_t, tpidr_el2); return JIT_SR_FIELD;
     case A64_SYSREG_ACTLR_EL1: *offset = offsetof(vcpu_t, sysregs.actlr_el1); return JIT_SR_FIELD;
-    case A64_SYSREG_AFSR0_EL1: *offset = offsetof(vcpu_t, sysregs.afsr0_el1); return JIT_SR_FIELD;
-    case A64_SYSREG_AFSR1_EL1: *offset = offsetof(vcpu_t, sysregs.afsr1_el1); return JIT_SR_FIELD;
+    case A64_SYSREG_AFSR0_EL1: *offset = offsetof(vcpu_t, afsr0_el1); return JIT_SR_FIELD;
+    case A64_SYSREG_AFSR1_EL1: *offset = offsetof(vcpu_t, afsr1_el1); return JIT_SR_FIELD;
     case A64_SYSREG_ESR_EL1: *offset = offsetof(vcpu_t, esr_el1); return JIT_SR_FIELD;
     case A64_SYSREG_FAR_EL1: *offset = offsetof(vcpu_t, far_el1); return JIT_SR_FIELD;
     case A64_SYSREG_PAR_EL1: *offset = offsetof(vcpu_t, par_el1); return JIT_SR_FIELD;
     case A64_SYSREG_MAIR_EL1: *offset = offsetof(vcpu_t, mair_el1); return JIT_SR_FIELD;
-    case A64_SYSREG_AMAIR_EL1: *offset = offsetof(vcpu_t, sysregs.amair_el1); return JIT_SR_FIELD;
+    case A64_SYSREG_AMAIR_EL1: *offset = offsetof(vcpu_t, amair_el1); return JIT_SR_FIELD;
     case A64_SYSREG_VBAR_EL1: *offset = offsetof(vcpu_t, vbar_el1); return JIT_SR_FIELD;
     case A64_SYSREG_CONTEXTIDR_EL1: *offset = offsetof(vcpu_t, contextidr_el1); return JIT_SR_FIELD;
     case A64_SYSREG_CNTKCTL_EL1: *offset = offsetof(vcpu_t, cntkctl_el1); return JIT_SR_FIELD;
@@ -1068,19 +1152,30 @@ static jit_sysreg_t jit_sysreg_write(uint16_t key, uint32_t *offset) {
     }
 }
 
-static jit_sysreg_t jit_sysreg(uint32_t word, uint8_t el, uint32_t *offset) {
+static jit_sysreg_t jit_sysreg(uint32_t word, const ir_page_t *pg, uint32_t *offset) {
     uint16_t key = (uint16_t)(word >> 5);
     bool read = ((word >> 21) & 1U) != 0;
     jit_sysreg_t kind = read ? jit_sysreg_read(key, offset) : jit_sysreg_write(key, offset);
-    if (el == 0 && (kind == JIT_SR_FIELD || kind == JIT_SR_SP_EL0 ||
-                    (((word >> 16) & 7U) != 3U && kind != JIT_SR_FPCR && kind != JIT_SR_FPSR))) {
+    if (pg->el == 0 && (kind == JIT_SR_FIELD || kind == JIT_SR_SP_EL0 ||
+                        (((word >> 16) & 7U) != 3U && kind != JIT_SR_FPCR && kind != JIT_SR_FPSR))) {
         return JIT_SR_NONE;
+    }
+    if (pg->world == VCPU_WORLD_GUEST) {
+        if (key == A64_SYSREG_TPIDR_EL2 || cpu_sysreg_trapped(pg->traps, word)) {
+            return JIT_SR_NONE;
+        }
+        if (key == A64_SYSREG_MPIDR_EL1 || (key == A64_SYSREG_DCZID_EL0 && (pg->traps & CPU_TRAP_TDZ) != 0)) {
+            return JIT_SR_HELPER;
+        }
+    }
+    if (kind == JIT_SR_FIELD && pg->world == VCPU_WORLD_HOST_NVHE && cpu_field_banked(*offset)) {
+        return JIT_SR_HELPER;
     }
     return kind;
 }
 
-static jit_sysop_t jit_sysop(uint32_t word, uint8_t el) {
-    if (el == 0 && ((word >> 16) & 7U) != 3U) {
+static jit_sysop_t jit_sysop(uint32_t word, const ir_page_t *pg) {
+    if ((pg->el == 0 && ((word >> 16) & 7U) != 3U) || cpu_sysop_trapped(pg->traps, word)) {
         return JIT_SYS_NONE;
     }
     switch (A64_SYSOP_KEY((word >> 16) & 7U, (word >> 12) & 15U, (word >> 8) & 15U, (word >> 5) & 7U)) {
@@ -1088,7 +1183,8 @@ static jit_sysop_t jit_sysop(uint32_t word, uint8_t el) {
     case A64_SYSOP_DC_CVAC:
     case A64_SYSOP_DC_CVAU:
     case A64_SYSOP_DC_CIVAC:
-    case A64_SYSOP_DC_CVAP: return JIT_SYS_DC_EL0;
+    case A64_SYSOP_DC_CVAP:
+    case A64_SYSOP_DC_CVADP: return JIT_SYS_DC_EL0;
     case A64_SYSOP_DC_IVAC:
     case A64_SYSOP_DC_ISW:
     case A64_SYSOP_DC_CSW:
@@ -1119,7 +1215,7 @@ static uint32_t jit_multi_regs(uint32_t word) {
     return regs[(word >> 12) & 15U];
 }
 
-static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, uint8_t el) {
+static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, const ir_page_t *pg) {
     if (ir->handler == op_undef) {
         return JIT_NONE;
     }
@@ -1161,18 +1257,19 @@ static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, uint8_t el) {
         return JIT_PAIR;
     case A64_DEC_LOADLIT: return JIT_LIT;
     case A64_DEC_LDST_ORD: return JIT_ORD;
+    case A64_DEC_LDAPSTL_UNSCALED: return JIT_RCPC;
     case A64_DEC_LDST_EXCLR: return JIT_EXCL;
     case A64_DEC_LDST_EXCLP: return JIT_EXCLP;
     case A64_DEC_LSE_MEMOP:
     case A64_DEC_LSE_CAS: {
         const cpu_pt_leaf_t *leaf = jit_pt(word, &offset);
-        return !leaf ? JIT_NONE : (leaf->features & cpu_pt_missing_features()) ? JIT_HELPER : JIT_ATOMIC;
+        return !leaf ? JIT_NONE : (leaf->features & ~cpu_host_features()) ? JIT_HELPER : JIT_ATOMIC;
     }
     case A64_DEC_LSE_CASP:
         if ((word & (1U << 16)) || (word & 1U) || !jit_pt(word, &offset)) {
             return JIT_NONE;
         }
-        return (cpu_pt_missing_features() & CPU_PT_FEAT_LSE) ? JIT_HELPER : JIT_CASP;
+        return (cpu_host_features() & CPU_HOST_FEAT_LSE) ? JIT_CASP : JIT_HELPER;
     case A64_DEC_ASISDLSE:
     case A64_DEC_ASISDLSEP: {
         uint32_t opcode = (word >> 12) & 15U;
@@ -1190,6 +1287,11 @@ static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, uint8_t el) {
         return JIT_MOPS;
     case A64_DEC_ASIMDTBL:
         return JIT_TBL;
+    case A64_DEC_ASIMDIMM:
+        if (cpu_pt_find(word) < 0) {
+            return JIT_SIMD_IMM;
+        }
+        [[fallthrough]];
     case A64_DEC_CRYPTOAES:
     case A64_DEC_CRYPTOSHA2:
     case A64_DEC_CRYPTOSHA3:
@@ -1197,12 +1299,6 @@ static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, uint8_t el) {
     case A64_DEC_CRYPTO4:
     case A64_DEC_CRYPTOSHA512_2:
     case A64_DEC_CRYPTOSHA512_3:
-        return JIT_CRYPTO;
-    case A64_DEC_ASIMDIMM:
-        if (cpu_pt_find(word) < 0) {
-            return JIT_SIMD_IMM;
-        }
-        [[fallthrough]];
     case A64_DEC_ASIMDALL:
     case A64_DEC_ASIMDDIFF:
     case A64_DEC_ASIMDELEM:
@@ -1235,7 +1331,7 @@ static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, uint8_t el) {
     case A64_DEC_FLOATIMM:
     case A64_DEC_FLOATSEL: {
         const cpu_pt_leaf_t *leaf = jit_pt(word, &offset);
-        return !leaf ? JIT_NONE : (leaf->features & cpu_pt_missing_features()) ? JIT_HELPER : JIT_SIMD;
+        return !leaf ? JIT_NONE : (leaf->features & ~cpu_host_features()) ? JIT_HELPER : JIT_SIMD;
     }
     case A64_DEC_HINTS_SEV: return JIT_HELPER;
     case A64_DEC_HINTS_SEVL: return JIT_SEVL;
@@ -1247,11 +1343,11 @@ static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, uint8_t el) {
     case A64_DEC_PSTATE_MSR:
         return ((word >> 16) & 7U) == 3U && ((word >> 5) & 6U) == 6U ? JIT_DAIF : JIT_NONE;
     case A64_DEC_SYSTEMMOVE_MRS:
-        return jit_sysreg(word, el, &offset) != JIT_SR_NONE ? JIT_MRS : JIT_NONE;
+        return jit_sysreg(word, pg, &offset) != JIT_SR_NONE ? JIT_MRS : JIT_NONE;
     case A64_DEC_SYSTEMMOVE_MSR:
-        return jit_sysreg(word, el, &offset) != JIT_SR_NONE ? JIT_MSR : JIT_NONE;
+        return jit_sysreg(word, pg, &offset) != JIT_SR_NONE ? JIT_MSR : JIT_NONE;
     case A64_DEC_SYSTEMINSTRS_SYS:
-        return jit_sysop(word, el) != JIT_SYS_NONE ? JIT_SYS : JIT_NONE;
+        return jit_sysop(word, pg) != JIT_SYS_NONE ? JIT_SYS : JIT_NONE;
     default:
         return JIT_NONE;
     }
@@ -1326,7 +1422,7 @@ static void jit_ldst(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     uint32_t bytes = 1U << scale;
     uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
     uint32_t index = dec == A64_DEC_LDST_REGOFF ? jit_read(j, (word >> 16) & 31U, false) : X_ZR;
-    uint32_t data = vector ? V_LIST : load ? jit_write(j, rt, false, false) : jit_read(j, rt, false);
+    uint32_t data = vector ? rt : load ? jit_write(j, rt, false, false) : jit_read(j, rt, false);
     if (vector) {
         jit_fp(j, 1);
     }
@@ -1350,20 +1446,20 @@ static void jit_ldst(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     }
     uint32_t bank = load ? X_TLB_R : X_TLB_W;
     if (dec == A64_DEC_LDST_UNPRIV) {
-        jit_emit(j, A_ADDI(X_TMP1, X_CPU, CPU_TLB, 0));
+        jit_emit(j, A_ANDI(X_TMP1, X_TLB_R, ~(((uint64_t)SOFTTLB_BANKS << TLB_BANK_SHIFT) - 1U)));
         if (!load) {
             jit_emit(j, A_ADDI(X_TMP1, X_TMP1, 1U << (TLB_BANK_SHIFT - 12), 1));
         }
         bank = X_TMP1;
     }
     jit_tlb(j, bank, bytes, bytes, false);
-    uint32_t vreg = CPU_V + rt * 16U;
     if (vector && !load) {
-        jit_emit(j, A_LDRQ(V_LIST, X_CPU, vreg));
+        jit_vector_use(j, rt);
     }
     jit_emit(j, (size << 30) | (7U << 27) | ((uint32_t)vector << 26) | (opc << 22) | (X_ADDR << 5) | data);
     if (vector && load) {
-        jit_emit(j, A_STRQ(V_LIST, X_CPU, vreg));
+        j->regs.vloaded |= 1U << rt;
+        j->regs.vdirty |= 1U << rt;
     }
     if (dec == A64_DEC_LDST_IMMPRE || dec == A64_DEC_LDST_IMMPOST) {
         jit_add_imm(j, base, base, imm);
@@ -1382,7 +1478,7 @@ static void jit_pair(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     uint32_t scale = vector ? 2U + opc : 2U + (opc >> 1);
     int64_t imm = cpu_sext((word >> 15) & 0x7FU, 7) * (int64_t)(1U << scale);
     uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
-    uint32_t first = V_LIST, second = V_LIST + 1U;
+    uint32_t first = rt, second = rt2;
     if (!vector) {
         if (load) {
             first = jit_write(j, rt, false, false);
@@ -1401,17 +1497,18 @@ static void jit_pair(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     jit_add_imm(j, X_ADDR, base, dec == A64_DEC_LDST_PAIR_POST ? 0 : imm);
     jit_tlb(j, load ? X_TLB_R : X_TLB_W, 2U << scale, 1U << scale, false);
     if (vector && !load) {
-        jit_emit(j, A_LDRQ(V_LIST, X_CPU, CPU_V + rt * 16U));
-        jit_emit(j, A_LDRQ(V_LIST + 1U, X_CPU, CPU_V + rt2 * 16U));
+        jit_vector_use(j, rt);
+        jit_vector_use(j, rt2);
     }
     uint32_t host = (word & 0xFE400000U) | (dec == A64_DEC_LDST_NAPAIR ? 0U : 0x01000000U) | (second << 10) |
                     (X_ADDR << 5) | first;
     jit_emit(j, host);
     if (vector && load) {
-        jit_emit(j, A_STRQ(V_LIST, X_CPU, CPU_V + rt * 16U));
-        jit_emit(j, A_STRQ(V_LIST + 1U, X_CPU, CPU_V + rt2 * 16U));
+        uint32_t written = (1U << rt) | (1U << rt2);
+        j->regs.vloaded |= written;
+        j->regs.vdirty |= written;
     }
-    if (second == X_TMP2) {
+    if (!vector && second == X_TMP2) {
         jit_emit(j, A_MOV(first, X_TMP2));
     }
     if (dec == A64_DEC_LDST_PAIR_PRE || dec == A64_DEC_LDST_PAIR_POST) {
@@ -1430,7 +1527,7 @@ static void jit_literal(jit_t *j, uint32_t word) {
     static const uint8_t bytes[2][3] = {{4, 8, 4}, {4, 8, 16}};
     uint32_t opc = word >> 30, rt = word & 31U;
     bool vector = ((word >> 26) & 1U) != 0;
-    uint32_t data = vector ? V_LIST : jit_write(j, rt, false, false);
+    uint32_t data = vector ? rt : jit_write(j, rt, false, false);
     if (vector) {
         jit_fp(j, 1);
     }
@@ -1438,7 +1535,8 @@ static void jit_literal(jit_t *j, uint32_t word) {
     jit_tlb(j, X_TLB_R, bytes[vector][opc], bytes[vector][opc], false);
     jit_emit(j, (vector ? simd[opc] : gpr[opc]) | (X_ADDR << 5) | data);
     if (vector) {
-        jit_emit(j, A_STRQ(V_LIST, X_CPU, CPU_V + rt * 16U));
+        j->regs.vloaded |= 1U << rt;
+        j->regs.vdirty |= 1U << rt;
     } else {
         jit_dirty(j, rt, false);
     }
@@ -1461,6 +1559,31 @@ static void jit_ordered(jit_t *j, uint32_t word) {
     jit_atomic_base(j, rn, base, !load, 1U << (word >> 30));
     jit_emit(j, (word & ~0x3FFU) | (1U << 15) | (X_ADDR << 5) | data);
     if (load) {
+        jit_dirty(j, rt, false);
+    } else {
+        jit_wake(j);
+    }
+}
+
+static void jit_rcpc(jit_t *j, uint32_t word) {
+    static const uint32_t extend[4][4] = {
+        [2] = {0x93401C00U, 0x93403C00U, 0x93407C00U},
+        [3] = {0x13001C00U, 0x13003C00U},
+    };
+    uint32_t rt = word & 31U, rn = (word >> 5) & 31U, opc = (word >> 22) & 3U, size = word >> 30;
+    bool load = opc != 0U;
+    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
+    uint32_t data = load ? jit_write(j, rt, false, false) : jit_read(j, rt, false);
+    if (rn == 31) {
+        jit_sp_check(j, base);
+    }
+    jit_add_imm(j, X_ADDR, base, cpu_sext((word >> 12) & 0x1FFU, 9));
+    jit_tlb(j, load ? X_TLB_R : X_TLB_W, 1U << size, 1U << size, true);
+    jit_emit(j, (load ? 0x08DFFC00U : 0x089FFC00U) | (size << 30) | (X_ADDR << 5) | data);
+    if (load) {
+        if (extend[opc][size]) {
+            jit_emit(j, extend[opc][size] | (data << 5) | data);
+        }
         jit_dirty(j, rt, false);
     } else {
         jit_wake(j);
@@ -1667,13 +1790,6 @@ static void jit_compare_swap_pair(jit_t *j, uint32_t word) {
     jit_wake(j);
 }
 
-static void jit_vector_list(jit_t *j, uint32_t first, uint32_t count, bool store) {
-    for (uint32_t i = 0; i < count; ++i) {
-        uint32_t offset = CPU_V + ((first + i) & 31U) * 16U;
-        jit_emit(j, store ? A_STRQ(V_LIST + i, X_CPU, offset) : A_LDRQ(V_LIST + i, X_CPU, offset));
-    }
-}
-
 static void jit_vector_structure(jit_t *j, uint32_t word, bool single) {
     bool load = ((word >> 22) & 1U) != 0;
     bool post = ((word >> 23) & 1U) != 0;
@@ -1698,12 +1814,17 @@ static void jit_vector_structure(jit_t *j, uint32_t word, bool single) {
     }
     jit_emit(j, A_MOV(X_ADDR, base));
     jit_tlb(j, load ? X_TLB_R : X_TLB_W, bytes, align, false);
-    if (single || !load) {
-        jit_vector_list(j, rt, count, false);
+    uint32_t list = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        list |= 1U << ((rt + i) & 31U);
+        if (single || !load) {
+            jit_vector_use(j, (rt + i) & 31U);
+        }
     }
-    jit_emit(j, (word & ~((1U << 23) | 0x001F03FFU)) | (X_ADDR << 5) | V_LIST);
+    jit_emit(j, (word & ~((1U << 23) | 0x001F03E0U)) | (X_ADDR << 5));
     if (load) {
-        jit_vector_list(j, rt, count, true);
+        j->regs.vloaded |= list;
+        j->regs.vdirty |= list;
     }
     if (post) {
         if (rm == 31) {
@@ -1713,10 +1834,6 @@ static void jit_vector_structure(jit_t *j, uint32_t word, bool single) {
         }
         j->regs.dirty |= 1ULL << (rn == 31 ? SLOT_SP : rn);
     }
-}
-
-static void jit_vector_load(jit_t *j, uint32_t reg, uint32_t vreg) {
-    jit_emit(j, A_LDRQ(vreg, X_CPU, CPU_V + reg * 16U));
 }
 
 static void jit_simd(jit_t *j, uint32_t word) {
@@ -1741,79 +1858,115 @@ static void jit_simd(jit_t *j, uint32_t word) {
     jit_fp(j, 2);
     for (uint32_t i = 0; i < 4; ++i) {
         if (leaf->slots[i].kind == CPU_PT_V) {
-            jit_vector_load(j, regs[i], i);
-            host[i] = i;
-        }
-        if (leaf->slots[i].kind != CPU_PT_NONE) {
+            jit_vector_use(j, regs[i]);
+        } else if (leaf->slots[i].kind != CPU_PT_NONE) {
             word = jit_field(word, leaf->slots[i].start, leaf->slots[i].width, host[i]);
         }
     }
-    if (wide) {
-        word &= ~(1U << 20);
-    }
     jit_emit(j, word);
     if (leaf->slots[0].kind == CPU_PT_V) {
-        jit_emit(j, A_STRQ(0, X_CPU, CPU_V + regs[0] * 16U));
+        j->regs.vdirty |= 1U << regs[0];
     } else if (leaf->slots[0].kind == CPU_PT_XW) {
         jit_dirty(j, regs[0], false);
     }
 }
 
-static void jit_crypto(jit_t *j, uint32_t word, a64_dec_op_t dec) {
-    uint32_t fields;
-    switch (dec) {
-    case A64_DEC_CRYPTOAES:
-    case A64_DEC_CRYPTOSHA2:
-    case A64_DEC_CRYPTOSHA512_2:
-        fields = 3U;
-        break;
-    case A64_DEC_CRYPTO4:
-        fields = 15U;
-        break;
-    default:
-        fields = 7U;
-        break;
-    }
-    uint32_t rd = word & 31U;
-    static const uint8_t starts[4] = {0, 5, 16, 10};
-    jit_fp(j, 2);
-    for (uint32_t i = 0; i < 4; ++i) {
-        if (fields & (1U << i)) {
-            jit_vector_load(j, (word >> starts[i]) & 31U, i);
-            word = jit_field(word, starts[i], 5, i);
-        }
-    }
-    jit_emit(j, word);
-    jit_emit(j, A_STRQ(0, X_CPU, CPU_V + rd * 16U));
-}
-
 static void jit_simd_imm(jit_t *j, uint32_t word) {
     uint32_t rd = word & 31U;
     jit_fp(j, 2);
-    jit_vector_load(j, rd, 0);
-    jit_emit(j, word & ~31U);
-    jit_emit(j, A_STRQ(0, X_CPU, CPU_V + rd * 16U));
+    jit_vector_use(j, rd);
+    jit_emit(j, word);
+    j->regs.vdirty |= 1U << rd;
 }
 
 static void jit_table(jit_t *j, uint32_t word) {
     uint32_t rd = word & 31U, rn = (word >> 5) & 31U, rm = (word >> 16) & 31U;
     jit_fp(j, 2);
-    jit_vector_load(j, rd, 0);
-    jit_vector_load(j, rm, 1);
-    jit_vector_list(j, rn, ((word >> 13) & 3U) + 1U, false);
-    jit_emit(j, (word & ~0x001F03FFU) | (1U << 16) | (V_LIST << 5));
-    jit_emit(j, A_STRQ(0, X_CPU, CPU_V + rd * 16U));
+    jit_vector_use(j, rm);
+    for (uint32_t i = 0; i <= ((word >> 13) & 3U); ++i) {
+        jit_vector_use(j, (rn + i) & 31U);
+    }
+    if (word & (1U << 12)) {
+        jit_vector_use(j, rd);
+    }
+    jit_emit(j, word);
+    j->regs.vloaded |= 1U << rd;
+    j->regs.vdirty |= 1U << rd;
 }
 
 static void jit_mops(jit_t *j, uint32_t word, a64_dec_op_t dec) {
-    uint32_t stage = dec == A64_DEC_MOPS_CPY ? (word >> 22) & 3U : (word >> 14) & 3U;
-    uint32_t xn = jit_read(j, (word >> 5) & 31U, false);
+    bool copy = dec == A64_DEC_MOPS_CPY;
+    uint32_t stage = copy ? (word >> 22) & 3U : (word >> 14) & 3U;
+    uint32_t unprivileged = (word >> 12) & (copy ? 3U : 1U);
+    uint32_t rd = word & 31U, rn = (word >> 5) & 31U, rs = (word >> 16) & 31U;
+    uint32_t xn = jit_read(j, rn, false);
     jit_el0_check(j, CPU_SCTLR, 33);
-    if (stage == 0) {
-        jit_helper(j);
-    } else {
+    if (stage != 0) {
         jit_to_stub(j, A_CBZ(xn, true, true, 0), jit_cold(j));
+        return;
     }
+    if (unprivileged != 0 && j->el != 0) {
+        jit_helper(j);
+        return;
+    }
+    uint32_t xd = jit_read(j, rd, false), xs = jit_read(j, rs, false);
+    uint32_t cold = jit_cold(j);
+    jit_emit(j, A_SUBI(X_TMP1, xn, 1));
+    jit_emit(j, A_LSRI(X_TMP2, X_TMP1, 12));
+    jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
+    for (uint32_t i = 0; i < (copy ? 2U : 1U); ++i) {
+        jit_emit(j, A_ANDI(X_TMP2, i == 0 ? xd : xs, VMM_PAGE_MASK));
+        jit_emit(j, A_ADDR(X_TMP2, X_TMP2, X_TMP1, 0));
+        jit_emit(j, A_LSRI(X_TMP2, X_TMP2, 12));
+        jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
+    }
+    if (copy) {
+        jit_emit(j, A_SUBR(X_TMP2, xd, xs));
+        jit_emit(j, A_ANDI(X_TMP2, X_TMP2, 0x00FFFFFFFFFFFFFFULL));
+        jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1));
+        jit_emit(j, A_LSRI(X_TMP, X_TMP2, 12));
+        jit_emit(j, A_CBZ(X_TMP, true, true, 3));
+        jit_emit(j, A_SUBR(X_TMP2, X_TMP2, X_TMP1));
+        jit_to_stub(j, A_TBZ(X_TMP2, 63, true, 0), cold);
+        jit_emit(j, A_MOV(X_ADDR, xs));
+        jit_tlb(j, X_TLB_R, 1, 1, false);
+        jit_emit(j, A_MOV(X_TMP1, X_ADDR));
+    }
+    jit_emit(j, A_MOV(X_ADDR, xd));
+    jit_tlb(j, X_TLB_W, 1, 1, false);
+    if (!copy) {
+        jit_emit(j, A_ANDI(X_TMP, xs, 0xFF));
+        for (uint32_t shift = 8; shift < 64; shift *= 2) {
+            jit_emit(j, A_ORR(X_TMP, X_TMP, X_TMP, shift));
+        }
+    }
+    jit_emit(j, A_LSRI(X_TMP2, xn, 4));
+    jit_emit(j, A_CBZ(X_TMP2, true, false, copy ? 5 : 4));
+    if (copy) {
+        jit_emit(j, A_LDPX_POST(X_TMP, X_LR, X_TMP1, 16));
+        jit_emit(j, A_STPX_POST(X_TMP, X_LR, X_ADDR, 16));
+    } else {
+        jit_emit(j, A_STPX_POST(X_TMP, X_TMP, X_ADDR, 16));
+    }
+    jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1));
+    jit_emit(j, A_CBZ(X_TMP2, true, true, copy ? -3 : -2));
+    jit_emit(j, A_ANDI(X_TMP2, xn, 15));
+    jit_emit(j, A_CBZ(X_TMP2, true, false, copy ? 5 : 4));
+    if (copy) {
+        jit_emit(j, A_LDRB_POST(X_TMP, X_TMP1, 1));
+    }
+    jit_emit(j, A_STRB_POST(X_TMP, X_ADDR, 1));
+    jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1));
+    jit_emit(j, A_CBZ(X_TMP2, true, true, copy ? -3 : -2));
+    jit_emit(j, A_ADDR(xd, xd, xn, 0));
+    if (copy) {
+        jit_emit(j, A_ADDR(xs, xs, xn, 0));
+        jit_dirty(j, rs, false);
+    }
+    jit_emit(j, A_MOV(xn, X_ZR));
+    jit_emit(j, A_MSR_NZCV(X_ZR));
+    jit_dirty(j, rd, false);
+    jit_dirty(j, rn, false);
 }
 
 static void jit_daif(jit_t *j, uint32_t word) {
@@ -1823,6 +1976,8 @@ static void jit_daif(jit_t *j, uint32_t word) {
     if (!set) {
         jit_emit(j, A_ADDI(X_TMP2, X_CPU, CPU_IRQ, 0));
         jit_emit(j, A_LDARW(X_TMP2, X_TMP2));
+        jit_emit(j, A_LDRB(X_TMP, X_CPU, CPU_IRQ_MASK));
+        jit_emit(j, A_ANDW(X_TMP2, X_TMP2, X_TMP));
         jit_to_stub(j, A_CBZ(X_TMP2, false, true, 0), jit_cold(j));
     }
     jit_emit(j, A_LDRW(X_TMP2, X_CPU, CPU_DAIF));
@@ -1838,19 +1993,29 @@ static void jit_fpsr_mask(jit_t *j) {
 
 static void jit_mrs(jit_t *j, uint32_t word) {
     uint32_t offset = 0, rt = word & 31U;
-    jit_sysreg_t kind = jit_sysreg(word, j->el, &offset);
+    jit_sysreg_t kind = jit_sysreg(word, j->pg, &offset);
     if (kind == JIT_SR_HELPER) {
         jit_helper(j);
         return;
     }
     if (kind == JIT_SR_CNTVCT || kind == JIT_SR_CNTPCT) {
         jit_el0_check(j, CPU_CNTKCTL, kind == JIT_SR_CNTVCT ? 1 : 0);
+        uint32_t base = kind == JIT_SR_CNTVCT ? CPU_CNTV_BASE : CPU_CNTP_BASE;
+        if (vmm_timer_native()) {
+            uint32_t data = jit_write(j, rt, false, false);
+            jit_jump(j, cpu_fast_base() + cpu_fast_offsets[FAST_cntvct_read], true);
+            jit_emit(j, A_LDRX(X_TMP, X_CPU, base));
+            jit_emit(j, A_SUBR(data, X_TMP2, X_TMP));
+            jit_dirty(j, rt, false);
+            return;
+        }
         jit_flush(j, &j->regs);
         jit_regs_clear(&j->regs);
         jit_emit(j, A_MRS_NZCV(X_TMP));
         jit_emit(j, A_STRW(X_TMP, X_CPU, CPU_NZCV));
-        jit_emit(j, A_LDRX(0, X_CPU, CPU_VM));
-        jit_call(j, (const void *)vmm_timer_cntvct);
+        jit_call(j, (const void *)vmm_timer_ticks);
+        jit_emit(j, A_LDRX(X_TMP, X_CPU, base));
+        jit_emit(j, A_SUBR(0, 0, X_TMP));
         jit_emit(j, A_LDRW(X_TMP, X_CPU, CPU_NZCV));
         jit_emit(j, A_MSR_NZCV(X_TMP));
         if (rt != 31) {
@@ -1858,7 +2023,6 @@ static void jit_mrs(jit_t *j, uint32_t word) {
         }
         return;
     }
-    uint32_t sp = kind == JIT_SR_SP_EL0 ? jit_slot(j, SLOT_SP, true) : 0;
     uint32_t data = rt == 31 ? X_TMP1 : jit_write(j, rt, false, false);
     switch (kind) {
     case JIT_SR_NZCV:
@@ -1884,14 +2048,29 @@ static void jit_mrs(jit_t *j, uint32_t word) {
         jit_emit(j, A_ANDWI(data, X_TMP2, 0x3C0U));
         break;
     case JIT_SR_SP_EL0:
-        jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_SP));
-        jit_emit(j, A_LDRB(X_TMP, X_CPU, CPU_SPSEL));
-        jit_emit(j, A_CBZ(X_TMP, false, true, 2));
-        jit_emit(j, A_MOV(X_TMP2, sp));
-        jit_emit(j, A_MOV(data, X_TMP2));
+        jit_emit(j, A_LDRB(X_TMP2, X_CPU, CPU_SPSEL));
+        jit_to_stub(j, A_CBZ(X_TMP2, false, false, 0), jit_cold(j));
+        jit_emit(j, A_LDRX(data, X_CPU, CPU_SP));
+        break;
+    case JIT_SR_CNTFRQ:
+        if (j->el == 0) {
+            jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_CNTKCTL));
+            jit_emit(j, A_ANDI(X_TMP2, X_TMP2, 3));
+            jit_to_stub(j, A_CBZ(X_TMP2, true, false, 0), jit_cold(j));
+        }
+        jit_mov_imm(j, data, vmm_timer_cntfrq());
+        break;
+    case JIT_SR_DCZID:
+        jit_emit(j, A_MOVZW(data, VMM_DCZID_BS));
+        if (j->el == 0) {
+            jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_SCTLR));
+            jit_emit(j, A_UBFX(X_TMP2, X_TMP2, 14, 1));
+            jit_emit(j, A_EORWI(X_TMP2, X_TMP2, 1));
+            jit_emit(j, A_ORR(data, data, X_TMP2, 4));
+        }
         break;
     case JIT_SR_CURRENTEL:
-        jit_mov_imm(j, data, (uint64_t)j->el << 2);
+        jit_mov_imm(j, data, (uint64_t)(j->el != 0 && j->world != VCPU_WORLD_GUEST ? 2U : j->el) << 2);
         break;
     default:
         jit_emit(j, A_LDRX(data, X_CPU, offset));
@@ -1902,7 +2081,7 @@ static void jit_mrs(jit_t *j, uint32_t word) {
 
 static void jit_msr(jit_t *j, uint32_t word) {
     uint32_t offset = 0;
-    jit_sysreg_t kind = jit_sysreg(word, j->el, &offset);
+    jit_sysreg_t kind = jit_sysreg(word, j->pg, &offset);
     if (kind == JIT_SR_HELPER) {
         jit_helper(j);
         return;
@@ -1929,9 +2108,11 @@ static void jit_msr(jit_t *j, uint32_t word) {
         jit_el0_check(j, CPU_SCTLR, 9);
         jit_emit(j, A_MOVZW(X_TMP, 0x3C0U));
         jit_emit(j, A_ANDW(X_TMP2, data, X_TMP));
-        jit_emit(j, A_TBZ(X_TMP2, 7, true, 4));
+        jit_emit(j, A_TBZ(X_TMP2, 7, true, 6));
         jit_emit(j, A_ADDI(X_TMP, X_CPU, CPU_IRQ, 0));
         jit_emit(j, A_LDARW(X_TMP, X_TMP));
+        jit_emit(j, A_LDRB(X_TMP1, X_CPU, CPU_IRQ_MASK));
+        jit_emit(j, A_ANDW(X_TMP, X_TMP, X_TMP1));
         jit_to_stub(j, A_CBZ(X_TMP, false, true, 0), jit_cold(j));
         jit_emit(j, A_STRW(X_TMP2, X_CPU, CPU_DAIF));
         break;
@@ -1948,17 +2129,23 @@ static void jit_msr(jit_t *j, uint32_t word) {
 
 static void jit_sys(jit_t *j, uint32_t word) {
     uint32_t data = jit_read(j, word & 31U, false);
-    switch (jit_sysop(word, j->el)) {
-    case JIT_SYS_ZVA:
+    switch (jit_sysop(word, j->pg)) {
+    case JIT_SYS_ZVA: {
         jit_el0_check(j, CPU_SCTLR, 14);
         jit_emit(j, A_MOVN(X_TMP2, (4U << VMM_DCZID_BS) - 1U, 0));
         jit_emit(j, A_AND(X_ADDR, data, X_TMP2));
         jit_tlb(j, X_TLB_W, 1, 1, false);
-        jit_emit(j, A_MOVI_V0_ZERO);
-        for (uint32_t offset = 0; offset < (4U << VMM_DCZID_BS); offset += 32) {
-            jit_emit(j, A_STPQ(0, 0, X_ADDR, offset));
+        uint64_t dczid;
+        __asm__("mrs %0, dczid_el0" : "=r"(dczid));
+        if ((dczid & 0x1FU) == VMM_DCZID_BS) {
+            jit_emit(j, A_DC_ZVA | X_ADDR);
+            break;
+        }
+        for (uint32_t offset = 0; offset < (4U << VMM_DCZID_BS); offset += 16) {
+            jit_emit(j, A_STPX(X_ZR, X_ZR, X_ADDR, offset));
         }
         break;
+    }
     case JIT_SYS_DC_EL0:
         jit_el0_check(j, CPU_SCTLR, 26);
         break;
@@ -1975,9 +2162,16 @@ static void jit_sys(jit_t *j, uint32_t word) {
     }
 }
 
-static void jit_barrier(jit_t *j) {
+static void jit_barrier(jit_t *j, uint32_t word, a64_dec_op_t dec) {
+    if (dec == A64_DEC_BARRIERS_DMB) {
+        static const uint32_t domains[4] = {A_DMB_ISH, A_DMB_ISHLD, A_DMB_ISHST, A_DMB_ISH};
+        jit_emit(j, domains[(word >> 8) & 3U]);
+        return;
+    }
     uint32_t cold = jit_cold(j);
-    jit_emit(j, A_DMB_ISH);
+    if (dec == A64_DEC_BARRIERS_DSB) {
+        jit_emit(j, A_DMB_ISH);
+    }
     jit_emit(j, A_LDRB(X_TMP2, X_CPU, CPU_ICACHE_SHOOTDOWN));
     jit_to_stub(j, A_CBZ(X_TMP2, false, true, 0), cold);
     jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_ICACHE));
@@ -1989,7 +2183,7 @@ static void jit_barrier(jit_t *j) {
 
 static bool jit_insn(jit_t *j, uint32_t word, const ir_insn_t *ir, bool *ended) {
     a64_dec_op_t dec = a64_decode_word(word);
-    jit_kind_t kind = jit_classify(word, ir, j->el);
+    jit_kind_t kind = jit_classify(word, ir, j->pg);
     switch (kind) {
     case JIT_NONE:
         return false;
@@ -2058,6 +2252,9 @@ static bool jit_insn(jit_t *j, uint32_t word, const ir_insn_t *ir, bool *ended) 
     case JIT_ORD:
         jit_ordered(j, word);
         break;
+    case JIT_RCPC:
+        jit_rcpc(j, word);
+        break;
     case JIT_EXCL:
         jit_exclusive(j, word);
         break;
@@ -2088,9 +2285,6 @@ static bool jit_insn(jit_t *j, uint32_t word, const ir_insn_t *ir, bool *ended) 
     case JIT_TBL:
         jit_table(j, word);
         break;
-    case JIT_CRYPTO:
-        jit_crypto(j, word, dec);
-        break;
     case JIT_HELPER:
         jit_helper(j);
         break;
@@ -2100,7 +2294,7 @@ static bool jit_insn(jit_t *j, uint32_t word, const ir_insn_t *ir, bool *ended) 
         jit_emit(j, A_STLRB(X_TMP2, X_ADDR));
         break;
     case JIT_BARRIER:
-        jit_barrier(j);
+        jit_barrier(j, word, dec);
         break;
     case JIT_CLREX:
         jit_emit(j, A_STRB(X_ZR, X_CPU, CPU_EXCL_VALID));
@@ -2139,12 +2333,18 @@ static void jit_emit_stub(jit_t *j, const jit_stub_t *stub) {
         jit_interp(j, FAST_cold_return);
         break;
     case JIT_STUB_WAKE:
+    case JIT_STUB_FP:
         jit_flush(j, &stub->regs);
         jit_emit(j, A_MRS_NZCV(X_TMP));
         jit_emit(j, A_STRW(X_TMP, X_CPU, CPU_NZCV));
-        jit_emit(j, A_LDRX(0, X_CPU, CPU_VM));
-        jit_emit(j, A_MOV(1, X_ADDR));
-        jit_call(j, (const void *)vmm_vcpu_wfe_notify_write);
+        if (stub->kind == JIT_STUB_WAKE) {
+            jit_emit(j, A_LDRX(0, X_CPU, CPU_VM));
+            jit_emit(j, A_MOV(1, X_ADDR));
+            jit_call(j, (const void *)vmm_vcpu_wfe_notify_write);
+        } else {
+            jit_emit(j, A_MOV(0, X_CPU));
+            jit_call(j, (const void *)cpu_fp_enter_guest_slow);
+        }
         jit_emit(j, A_LDRW(X_TMP, X_CPU, CPU_NZCV));
         jit_emit(j, A_MSR_NZCV(X_TMP));
         jit_reload(j, &stub->regs);
@@ -2207,6 +2407,7 @@ uint32_t cpu_jit_enter(vcpu_t *cpu, ir_insn_t *ir) {
         .rx = (uintptr_t)arena->rx + arena->used,
         .start = (uint32_t)(ir - pg->insns),
         .el = pg->el,
+        .world = pg->world,
     };
     jit_regs_clear(&j.regs);
     uint32_t words = jit_compile(&j);
@@ -2226,7 +2427,7 @@ bool cpu_jit_native(const ir_insn_t *ir) {
 }
 
 static void cpu_jit_mark(ir_page_t *pg, ir_insn_t *ir, uint32_t word) {
-    if (pg->jit && jit_classify(word, ir, pg->el) != JIT_NONE) {
+    if (pg->jit && jit_classify(word, ir, pg) != JIT_NONE) {
         uint32_t index = (uint32_t)(ir - pg->insns);
         pg->jit->entry[index] = ir->fast_offset << 8 | JIT_HEAT;
         pg->jit->word[index] = word;

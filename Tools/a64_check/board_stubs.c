@@ -15,5 +15,7 @@ bool vmm_preboot_trap(vcpu_t *) { return false; }
 uint64_t vmm_mmio_read(vmm_machine_t *, vcpu_t *, uint64_t, uint32_t) { return 0; }
 void vmm_mmio_write(vmm_machine_t *, vcpu_t *, uint64_t, uint32_t, uint64_t) {}
 uint64_t vmm_timer_cntfrq(void) { return 24000000; }
+uint64_t vmm_timer_ticks(void) { return 0; }
 uint64_t vmm_timer_cntvct(const vmm_machine_t *) { return 0; }
 void vmm_timer_write(vcpu_t *, uint64_t *reg, uint64_t value) { *reg = value; }
+bool vmm_timer_native(void) { return false; }

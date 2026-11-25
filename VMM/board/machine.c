@@ -14,17 +14,25 @@
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <time.h>
 #include <unistd.h>
 
 #if defined(__APPLE__)
 #include <mach/mach.h>
+#include <mach/mach_time.h>
 #include <mach/vm_map.h>
 #endif
 
+#define WFE_POLL_MIN_TICKS 24U
+#define WFE_POLL_MAX_TICKS 480U
+#define WFI_POLL_MIN_TICKS 48U
+#define WFI_POLL_MAX_TICKS 1200U
+
 #define VMM_SNAPSHOT_MAGIC 0x53575054534e4150ULL
-#define VMM_SNAPSHOT_VERSION 4U
+#define VMM_SNAPSHOT_VERSION 5U
 #define VMM_SNAPSHOT_PREBOOT 1U
+#define VMM_SNAPSHOT_EL2 2U
 #define VMM_SNAPSHOT_WRITE_MAX ((size_t)16 << 20)
 #define ARM64_IMAGE_MAGIC 0x644d5241U
 
@@ -51,34 +59,21 @@ typedef struct vmm_snapshot_vcpu {
     uint8_t el;
     uint8_t spsel;
     uint8_t pan;
-    uint8_t pad0;
+    uint8_t world;
     uint32_t fpcr;
     uint32_t fpsr;
     alignas(16) __uint128_t v[32];
-    uint64_t sctlr_el1;
-    uint64_t cpacr_el1;
-    uint64_t tcr_el1;
-    uint64_t ttbr0_el1;
-    uint64_t ttbr1_el1;
-    uint64_t mair_el1;
-    uint64_t vbar_el1;
-    uint64_t esr_el1;
-    uint64_t far_el1;
-    uint64_t elr_el1;
-    uint64_t spsr_el1;
+    vcpu_bank_t bank;
     uint64_t tpidr_el0;
     uint64_t tpidrro_el0;
     uint64_t tpidr_el1;
-    uint64_t contextidr_el1;
-    uint64_t cntkctl_el1;
-    uint64_t cntv_ctl_el0;
-    uint64_t cntv_cval_el0;
-    uint64_t cntp_ctl_el0;
-    uint64_t cntp_cval_el0;
+    uint64_t tpidr_el2;
     uint64_t mdscr_el1;
     uint64_t par_el1;
     uint64_t mpidr_el1;
+    vcpu_timer_t timers[VCPU_TIMER_COUNT];
     vcpu_sysreg_state_t sysregs;
+    vcpu_el2_state_t el2;
 } vmm_snapshot_vcpu_t;
 
 typedef struct vmm_snapshot_footer {
@@ -96,36 +91,25 @@ static void vcpu_save_snapshot(const vcpu_t *cpu, vmm_snapshot_vcpu_t *out) {
     out->el = cpu->el;
     out->spsel = cpu->spsel;
     out->pan = cpu->pan;
+    out->world = cpu->world;
     out->fpcr = cpu->fpcr;
     out->fpsr = cpu->fpsr;
     memcpy(out->v, cpu->v, sizeof(out->v));
-    out->sctlr_el1 = cpu->sctlr_el1;
-    out->cpacr_el1 = cpu->cpacr_el1;
-    out->tcr_el1 = cpu->tcr_el1;
-    out->ttbr0_el1 = cpu->ttbr0_el1;
-    out->ttbr1_el1 = cpu->ttbr1_el1;
-    out->mair_el1 = cpu->mair_el1;
-    out->vbar_el1 = cpu->vbar_el1;
-    out->esr_el1 = cpu->esr_el1;
-    out->far_el1 = cpu->far_el1;
-    out->elr_el1 = cpu->elr_el1;
-    out->spsr_el1 = cpu->spsr_el1;
+    out->bank = cpu->bank;
     out->tpidr_el0 = cpu->tpidr_el0;
     out->tpidrro_el0 = cpu->tpidrro_el0;
     out->tpidr_el1 = cpu->tpidr_el1;
-    out->contextidr_el1 = cpu->contextidr_el1;
-    out->cntkctl_el1 = cpu->cntkctl_el1;
-    out->cntv_ctl_el0 = cpu->cntv_ctl_el0;
-    out->cntv_cval_el0 = cpu->cntv_cval_el0;
-    out->cntp_ctl_el0 = cpu->cntp_ctl_el0;
-    out->cntp_cval_el0 = cpu->cntp_cval_el0;
+    out->tpidr_el2 = cpu->tpidr_el2;
     out->mdscr_el1 = cpu->mdscr_el1;
     out->par_el1 = cpu->par_el1;
     out->mpidr_el1 = cpu->mpidr_el1;
+    memcpy(out->timers, cpu->timers, sizeof(out->timers));
     out->sysregs = cpu->sysregs;
+    out->el2 = cpu->el2;
 }
 
 static void vcpu_load_snapshot(vcpu_t *cpu, const vmm_snapshot_vcpu_t *in) {
+    vcpu_set_world(cpu, in->world);
     memcpy(cpu->x, in->x, sizeof(in->x));
     cpu->x[31] = 0;
     cpu->x[32] = 0;
@@ -143,30 +127,18 @@ static void vcpu_load_snapshot(vcpu_t *cpu, const vmm_snapshot_vcpu_t *in) {
     cpu->fpcr = in->fpcr;
     cpu->fpsr = in->fpsr;
     memcpy(cpu->v, in->v, sizeof(cpu->v));
-    cpu->sctlr_el1 = in->sctlr_el1;
-    cpu->cpacr_el1 = in->cpacr_el1;
-    cpu->tcr_el1 = in->tcr_el1;
-    cpu->ttbr0_el1 = in->ttbr0_el1;
-    cpu->ttbr1_el1 = in->ttbr1_el1;
-    cpu->mair_el1 = in->mair_el1;
-    cpu->vbar_el1 = in->vbar_el1;
-    cpu->esr_el1 = in->esr_el1;
-    cpu->far_el1 = in->far_el1;
-    cpu->elr_el1 = in->elr_el1;
-    cpu->spsr_el1 = in->spsr_el1;
+    cpu->bank = in->bank;
     cpu->tpidr_el0 = in->tpidr_el0;
     cpu->tpidrro_el0 = in->tpidrro_el0;
     cpu->tpidr_el1 = in->tpidr_el1;
-    cpu->contextidr_el1 = in->contextidr_el1;
-    cpu->cntkctl_el1 = in->cntkctl_el1;
-    cpu->cntv_ctl_el0 = in->cntv_ctl_el0;
-    cpu->cntv_cval_el0 = in->cntv_cval_el0;
-    cpu->cntp_ctl_el0 = in->cntp_ctl_el0;
-    cpu->cntp_cval_el0 = in->cntp_cval_el0;
+    cpu->tpidr_el2 = in->tpidr_el2;
     cpu->mdscr_el1 = in->mdscr_el1;
     cpu->par_el1 = in->par_el1;
     cpu->mpidr_el1 = in->mpidr_el1;
+    memcpy(cpu->timers, in->timers, sizeof(cpu->timers));
     cpu->sysregs = in->sysregs;
+    cpu->el2 = in->el2;
+    vcpu_sync_el2(cpu);
     mmu_tlbi_all(cpu);
     mmu_update_asid_salt(cpu);
     vcpu_flush_icache_all(cpu);
@@ -370,7 +342,7 @@ void vmm_vcpu_wake(vmm_machine_t *vm, uint32_t cpu_id) {
     }
     vcpu_t *cpu = vm->cpus[cpu_id];
     atomic_store_explicit(&cpu->event_reg, true, memory_order_release);
-    atomic_thread_fence(memory_order_seq_cst);
+    vmm_host_sev();
     if (!atomic_load_explicit(&cpu->halted_wfi, memory_order_seq_cst)) {
         return;
     }
@@ -380,6 +352,18 @@ void vmm_vcpu_wake(vmm_machine_t *vm, uint32_t cpu_id) {
     pthread_mutex_lock(&priv->wfe_lock[cpu_id]);
     pthread_cond_signal(&priv->wfe_cond[cpu_id]);
     pthread_mutex_unlock(&priv->wfe_lock[cpu_id]);
+}
+
+static inline void host_monitor_arm(const void *p) {
+    uint32_t tmp;
+    __asm__ __volatile__("ldaxrb %w0, [%1]" : "=r"(tmp) : "r"(p) : "memory");
+}
+
+static uint32_t poll_budget_next(uint32_t budget, uint64_t blocked, uint32_t min, uint32_t max) {
+    if (blocked <= max) {
+        return budget * 2U < max ? budget * 2U : max;
+    }
+    return budget / 2U > min ? budget / 2U : min;
 }
 
 static bool wfe_excl_changed(const vcpu_t *cpu) {
@@ -392,7 +376,9 @@ static bool wfe_excl_changed(const vcpu_t *cpu) {
     case 2: return __atomic_load_n((const uint16_t *)p, __ATOMIC_ACQUIRE) != (uint16_t)cpu->excl_val;
     case 4: return __atomic_load_n((const uint32_t *)p, __ATOMIC_ACQUIRE) != (uint32_t)cpu->excl_val;
     case 8: return __atomic_load_n((const uint64_t *)p, __ATOMIC_ACQUIRE) != (uint64_t)cpu->excl_val;
-    case 16: return __atomic_load_n((const __uint128_t *)p, __ATOMIC_ACQUIRE) != cpu->excl_val;
+    case 16:
+        return __atomic_load_n((const uint64_t *)p, __ATOMIC_ACQUIRE) != (uint64_t)cpu->excl_val ||
+               __atomic_load_n((const uint64_t *)p + 1, __ATOMIC_ACQUIRE) != (uint64_t)(cpu->excl_val >> 64);
     default: return false;
     }
 }
@@ -406,23 +392,38 @@ void vmm_vcpu_wfe(vcpu_t *cpu) {
     if (!priv || cpu->cpu_id >= vm->cpu_count || vm->cpu_count <= 1) {
         return;
     }
-    for (uint32_t spin = 0; spin < 64; spin++) {
-        if (wfe_excl_changed(cpu) ||
-            atomic_exchange_explicit(&cpu->event_reg, false, memory_order_acq_rel)) {
+
+    const void *watch = (cpu->excl_valid && cpu->excl_hva != 0) ? (const void *)cpu->excl_hva
+                                                                 : (const void *)&cpu->irq_pending;
+    uint32_t budget = cpu->wfe_poll_ticks < WFE_POLL_MIN_TICKS ? WFE_POLL_MIN_TICKS : cpu->wfe_poll_ticks;
+    uint64_t poll_start = mach_absolute_time();
+    for (;;) {
+        mmu_poll_shootdown(cpu);
+        host_monitor_arm(watch);
+        bool ev = atomic_load_explicit(&cpu->event_reg, memory_order_acquire);
+        if (ev || wfe_excl_changed(cpu)) {
+            __asm__ __volatile__("clrex" ::: "memory");
+            if (ev) {
+                atomic_store_explicit(&cpu->event_reg, false, memory_order_release);
+            }
             cpu->excl_valid = false;
             cpu->excl_hva = 0;
             return;
         }
-        if (atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) ||
+        if ((atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) ||
             atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) ||
             atomic_load_explicit(&vm->suspended, memory_order_acquire) ||
             !atomic_load_explicit(&vm->running, memory_order_acquire)) {
+            __asm__ __volatile__("clrex" ::: "memory");
             return;
         }
-#if defined(__aarch64__)
-        __asm__ __volatile__("yield");
-#endif
+        if (mach_absolute_time() - poll_start >= budget) {
+            break;
+        }
+        // XNU arm64 enables SCTLR_EL1.nTWE and ~1us CNTKCTL_EL1.EVNTEN WFE event stream for EL0.
+        __asm__ __volatile__("wfe" ::: "memory");
     }
+    __asm__ __volatile__("clrex" ::: "memory");
 
     uint32_t id = cpu->cpu_id;
     uintptr_t watch_line = (cpu->excl_valid && cpu->excl_hva != 0) ? (cpu->excl_hva & ~(uintptr_t)63U) : 0;
@@ -442,10 +443,11 @@ void vmm_vcpu_wfe(vcpu_t *cpu) {
     atomic_thread_fence(memory_order_seq_cst);
     mmu_poll_shootdown(cpu);
 
+    uint64_t block_start = mach_absolute_time();
     pthread_mutex_lock(&priv->wfe_lock[id]);
     if (!atomic_exchange_explicit(&cpu->event_reg, false, memory_order_acq_rel) &&
         !wfe_excl_changed(cpu) &&
-        !atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) &&
+        !(atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) &&
         !atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) &&
         !atomic_load_explicit(&vm->suspended, memory_order_acquire) &&
         atomic_load_explicit(&vm->running, memory_order_acquire)) {
@@ -454,6 +456,8 @@ void vmm_vcpu_wfe(vcpu_t *cpu) {
         atomic_store_explicit(&cpu->event_reg, false, memory_order_release);
     }
     pthread_mutex_unlock(&priv->wfe_lock[id]);
+    cpu->wfe_poll_ticks = poll_budget_next(budget, mach_absolute_time() - block_start,
+                                           WFE_POLL_MIN_TICKS, WFE_POLL_MAX_TICKS);
 
     atomic_fetch_sub_explicit(&vm->wfe_waiters, 1, memory_order_acq_rel);
     atomic_store_explicit(&cpu->wfe_watch_hva, 0, memory_order_release);
@@ -467,12 +471,16 @@ void vmm_vcpu_sev(vmm_machine_t *vm) {
         return;
     }
     for (uint32_t i = 0; i < vm->cpu_count && i < VMM_MAX_VCPUS; i++) {
-        vcpu_t *c = vm->cpus[i];
-        if (!c) {
-            continue;
+        if (vm->cpus[i]) {
+            atomic_store_explicit(&vm->cpus[i]->event_reg, true, memory_order_release);
         }
-        atomic_store_explicit(&c->event_reg, true, memory_order_release);
-        if (atomic_load_explicit(&vm->wfe_waiters, memory_order_acquire) != 0) {
+    }
+    vmm_host_sev();
+    if (atomic_load_explicit(&vm->wfe_waiters, memory_order_acquire) == 0) {
+        return;
+    }
+    for (uint32_t i = 0; i < vm->cpu_count && i < VMM_MAX_VCPUS; i++) {
+        if (vm->cpus[i]) {
             pthread_mutex_lock(&priv->wfe_lock[i]);
             pthread_cond_signal(&priv->wfe_cond[i]);
             pthread_mutex_unlock(&priv->wfe_lock[i]);
@@ -513,25 +521,41 @@ void vmm_vcpu_wfi(vcpu_t *cpu) {
 
     uint32_t id = cpu->cpu_id;
 
-    if (atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) ||
-        atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) ||
-        atomic_load_explicit(&vm->suspended, memory_order_acquire) ||
-        !atomic_load_explicit(&vm->running, memory_order_acquire)) {
-        return;
+    uint32_t budget = cpu->wfi_poll_ticks < WFI_POLL_MIN_TICKS ? WFI_POLL_MIN_TICKS : cpu->wfi_poll_ticks;
+    uint64_t poll_start = mach_absolute_time();
+    for (;;) {
+        mmu_poll_shootdown(cpu);
+        host_monitor_arm(&cpu->irq_pending);
+        if ((atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) ||
+            atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) ||
+            atomic_load_explicit(&vm->suspended, memory_order_acquire) ||
+            !atomic_load_explicit(&vm->running, memory_order_acquire)) {
+            __asm__ __volatile__("clrex" ::: "memory");
+            return;
+        }
+        if (mach_absolute_time() - poll_start >= budget) {
+            break;
+        }
+        // XNU arm64 enables SCTLR_EL1.nTWE and ~1us CNTKCTL_EL1.EVNTEN WFE event stream for EL0.
+        __asm__ __volatile__("wfe" ::: "memory");
     }
+    __asm__ __volatile__("clrex" ::: "memory");
 
     atomic_store_explicit(&cpu->halted_wfi, true, memory_order_seq_cst);
     atomic_thread_fence(memory_order_seq_cst);
     mmu_poll_shootdown(cpu);
 
+    uint64_t block_start = mach_absolute_time();
     pthread_mutex_lock(&priv->wfi_lock[id]);
-    while (!atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) &&
+    while (!(atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) &&
            !atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) &&
            !atomic_load_explicit(&vm->suspended, memory_order_acquire) &&
            atomic_load_explicit(&vm->running, memory_order_acquire)) {
         pthread_cond_wait(&priv->wfi_cond[id], &priv->wfi_lock[id]);
     }
     pthread_mutex_unlock(&priv->wfi_lock[id]);
+    cpu->wfi_poll_ticks = poll_budget_next(budget, mach_absolute_time() - block_start,
+                                           WFI_POLL_MIN_TICKS, WFI_POLL_MAX_TICKS);
 
     atomic_store_explicit(&cpu->halted_wfi, false, memory_order_seq_cst);
     mmu_poll_shootdown(cpu);
@@ -560,16 +584,120 @@ bool vmm_handle_psci(vcpu_t *cpu) {
 
     switch (func_id) {
     case SMCCC_VERSION:
-        cpu->x[0] = 0x00010001ULL;
+        cpu->x[0] = SMCCC_VERSION_1_2;
         return true;
 
-    case SMCCC_ARCH_FEATURES: {
-        uint32_t fid = (uint32_t)cpu->x[1];
-        if (fid == SMCCC_VERSION || fid == SMCCC_ARCH_FEATURES) {
-            cpu->x[0] = 0;
-        } else {
-            cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
+    case SMCCC_ARCH_FEATURES:
+        switch ((uint32_t)cpu->x[1]) {
+        case SMCCC_VERSION:
+        case SMCCC_ARCH_FEATURES:
+        case SMCCC_ARCH_SOC_ID:
+            cpu->x[0] = (uint64_t)SMCCC_RET_SUCCESS;
+            break;
+        case SMCCC_ARCH_WORKAROUND_1:
+        case SMCCC_ARCH_WORKAROUND_2:
+        case SMCCC_ARCH_WORKAROUND_3:
+            cpu->x[0] = SMCCC_ARCH_WORKAROUND_RET_UNAFFECTED;
+            break;
+        default:
+            cpu->x[0] = (uint64_t)SMCCC_RET_NOT_SUPPORTED;
+            break;
         }
+        return true;
+
+    case SMCCC_ARCH_SOC_ID: {
+        uint32_t cpufamily = 0;
+        size_t len = sizeof(cpufamily);
+        sysctlbyname("hw.cpufamily", &cpufamily, &len, NULL, 0);
+        switch ((uint32_t)cpu->x[1]) {
+        case 0:
+            cpu->x[0] = (JEP106_APPLE << 16) | (cpufamily >> 16);
+            break;
+        case 1:
+            cpu->x[0] = cpufamily & 0xFFFFU;
+            break;
+        default:
+            cpu->x[0] = (uint64_t)SMCCC_RET_INVALID_PARAMETER;
+            break;
+        }
+        return true;
+    }
+
+    case SMCCC_TRNG_VERSION:
+        cpu->x[0] = SMCCC_TRNG_VERSION_1_0;
+        return true;
+
+    case SMCCC_TRNG_FEATURES:
+        switch ((uint32_t)cpu->x[1]) {
+        case SMCCC_TRNG_VERSION:
+        case SMCCC_TRNG_FEATURES:
+        case SMCCC_TRNG_GET_UUID:
+        case SMCCC_TRNG_RND32:
+        case SMCCC_TRNG_RND64:
+            cpu->x[0] = (uint64_t)SMCCC_RET_SUCCESS;
+            break;
+        default:
+            cpu->x[0] = (uint64_t)TRNG_RET_NOT_SUPPORTED;
+            break;
+        }
+        return true;
+
+    case SMCCC_TRNG_GET_UUID:
+        cpu->x[0] = 0xCA1A8AF3U;
+        cpu->x[1] = 0x8A48FB9AU;
+        cpu->x[2] = 0xB76E669CU;
+        cpu->x[3] = 0x3A45579CU;
+        return true;
+
+    case SMCCC_TRNG_RND32:
+    case SMCCC_TRNG_RND64: {
+        uint32_t reg_bits = (func_id == SMCCC_TRNG_RND64) ? 64U : 32U;
+        uint64_t bits = (func_id == SMCCC_TRNG_RND64) ? cpu->x[1] : (uint32_t)cpu->x[1];
+        if (bits == 0 || bits > reg_bits * 3U) {
+            cpu->x[0] = (uint64_t)TRNG_RET_INVALID_PARAMETERS;
+            return true;
+        }
+        uint64_t entropy[3];
+        arc4random_buf(entropy, sizeof(entropy));
+        for (uint32_t i = 0; i < 3; i++) {
+            uint64_t remaining = bits > (uint64_t)i * reg_bits ? bits - (uint64_t)i * reg_bits : 0;
+            uint64_t width = remaining < reg_bits ? remaining : reg_bits;
+            cpu->x[3 - i] = entropy[i] & (width == 64 ? UINT64_MAX : (1ULL << width) - 1ULL);
+        }
+        cpu->x[0] = (uint64_t)SMCCC_RET_SUCCESS;
+        return true;
+    }
+
+    case SMCCC_VENDOR_HYP_CALL_UID:
+        cpu->x[0] = 0xB66FB428U;
+        cpu->x[1] = 0xE911C52EU;
+        cpu->x[2] = 0x564BCAA9U;
+        cpu->x[3] = 0x743A004DU;
+        return true;
+
+    case SMCCC_KVM_FEATURES:
+        cpu->x[0] = (1U << SMCCC_KVM_FUNC_FEATURES) | (1U << SMCCC_KVM_FUNC_PTP);
+        cpu->x[1] = 0;
+        cpu->x[2] = 0;
+        cpu->x[3] = 0;
+        return true;
+
+    case SMCCC_KVM_PTP: {
+        uint32_t counter_id = (uint32_t)cpu->x[1];
+        if (counter_id != SMCCC_KVM_PTP_VIRT_COUNTER && counter_id != SMCCC_KVM_PTP_PHYS_COUNTER) {
+            cpu->x[0] = (uint64_t)SMCCC_RET_NOT_SUPPORTED;
+            return true;
+        }
+        uint64_t realtime_ns;
+        uint64_t cycles;
+        vmm_timer_sample_realtime(vm, &realtime_ns, &cycles);
+        if (counter_id == SMCCC_KVM_PTP_VIRT_COUNTER) {
+            cycles -= cpu->cntvct_base - cpu->cntpct_base;
+        }
+        cpu->x[0] = realtime_ns >> 32;
+        cpu->x[1] = (uint32_t)realtime_ns;
+        cpu->x[2] = cycles >> 32;
+        cpu->x[3] = (uint32_t)cycles;
         return true;
     }
 
@@ -580,6 +708,7 @@ bool vmm_handle_psci(vcpu_t *cpu) {
     case PSCI_FN_FEATURES: {
         uint32_t fid = (uint32_t)cpu->x[1];
         switch (fid) {
+        case SMCCC_VERSION:
         case PSCI_FN_VERSION:
         case PSCI_FN_CPU_SUSPEND:
         case PSCI_FN64_CPU_SUSPEND:
@@ -804,6 +933,12 @@ uint64_t vmm_mmio_read(vmm_machine_t *vm, vcpu_t *cpu, uint64_t gpa, uint32_t si
     if (gpa >= VMM_GICC_BASE && gpa < VMM_GICC_BASE + VMM_GICC_SIZE) {
         return gicv2_cpu_read(vm->gic, cpu, (uint32_t)(gpa - VMM_GICC_BASE), size);
     }
+    if (gpa >= VMM_GICH_BASE && gpa < VMM_GICH_BASE + VMM_GICH_SIZE) {
+        return gicv2_hyp_read(vm->gic, cpu, (uint32_t)(gpa - VMM_GICH_BASE));
+    }
+    if (gpa >= VMM_GICV_BASE && gpa < VMM_GICV_BASE + VMM_GICV_SIZE) {
+        return gicv2_vcpu_read(vm->gic, cpu, (uint32_t)(gpa - VMM_GICV_BASE));
+    }
     if (gpa >= VMM_UART0_BASE && gpa < VMM_UART0_BASE + VMM_UART0_SIZE) {
         return pl011_read(vm->uart, (uint32_t)(gpa - VMM_UART0_BASE), size);
     }
@@ -833,6 +968,14 @@ void vmm_mmio_write(vmm_machine_t *vm, vcpu_t *cpu, uint64_t gpa, uint32_t size,
     }
     if (gpa >= VMM_GICC_BASE && gpa < VMM_GICC_BASE + VMM_GICC_SIZE) {
         gicv2_cpu_write(vm->gic, cpu, (uint32_t)(gpa - VMM_GICC_BASE), size, val);
+        return;
+    }
+    if (gpa >= VMM_GICH_BASE && gpa < VMM_GICH_BASE + VMM_GICH_SIZE) {
+        gicv2_hyp_write(vm->gic, cpu, (uint32_t)(gpa - VMM_GICH_BASE), val);
+        return;
+    }
+    if (gpa >= VMM_GICV_BASE && gpa < VMM_GICV_BASE + VMM_GICV_SIZE) {
+        gicv2_vcpu_write(vm->gic, cpu, (uint32_t)(gpa - VMM_GICV_BASE), val);
         return;
     }
     if (gpa >= VMM_UART0_BASE && gpa < VMM_UART0_BASE + VMM_UART0_SIZE) {
@@ -936,7 +1079,7 @@ static int try_restore_snapshot(vmm_machine_priv_t *priv, const vmm_config_t *co
     if (rc < 0 || hdr.magic != VMM_SNAPSHOT_MAGIC || hdr.version != VMM_SNAPSHOT_VERSION ||
         hdr.cpu_count != requested_cpu_count || hdr.ram_size != requested_ram_size ||
         hdr.ram_size != footer.state_offset ||
-        hdr.flags != (config->preboot_checkpoint ? VMM_SNAPSHOT_PREBOOT : 0) ||
+        hdr.flags != ((config->preboot_checkpoint ? VMM_SNAPSHOT_PREBOOT : 0) | (config->el2 ? VMM_SNAPSHOT_EL2 : 0)) ||
         memcmp(hdr.key, config->snapshot_key, sizeof(hdr.key)) != 0 ||
         hdr.online_mask == 0 || (hdr.online_mask >> hdr.cpu_count) != 0 ||
         hdr.gic_state_size != sizeof(gicv2_snapshot_t) ||
@@ -1015,6 +1158,9 @@ static int try_restore_snapshot(vmm_machine_priv_t *priv, const vmm_config_t *co
         memset(mem, 0, sizeof(vcpu_t));
         vm->cpus[i] = (vcpu_t *)mem;
         vcpu_init(vm->cpus[i], vm, i);
+        if (config->el2) {
+            vcpu_enable_el2(vm->cpus[i]);
+        }
         vcpu_load_snapshot(vm->cpus[i], &vcpu_states[i]);
         bool online = ((hdr.online_mask >> i) & 1U) != 0;
         atomic_store_explicit(&priv->cpu_online[i], online, memory_order_release);
@@ -1122,6 +1268,7 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
     priv->blk_fd = -1;
     atomic_init(&priv->preboot_phase, config->preboot_checkpoint ? VMM_PREBOOT_ARMED : VMM_PREBOOT_DISABLED);
     memcpy(priv->snapshot_key, config->snapshot_key, sizeof(priv->snapshot_key));
+    priv->el2 = config->el2;
     pthread_mutex_init(&priv->state_lock, NULL);
     pthread_cond_init(&priv->suspend_cond, NULL);
     for (uint32_t i = 0; i < VMM_MAX_VCPUS; i++) {
@@ -1203,6 +1350,9 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
             memset(mem, 0, sizeof(vcpu_t));
             vm->cpus[i] = (vcpu_t *)mem;
             vcpu_init(vm->cpus[i], vm, i);
+            if (config->el2) {
+                vcpu_enable_el2(vm->cpus[i]);
+            }
             mmu_tlbi_all(vm->cpus[i]);
             mmu_update_asid_salt(vm->cpus[i]);
         }
@@ -1515,7 +1665,7 @@ int vmm_save_snapshot(vmm_machine_t *vm, const char *path) {
             .gic_state_size = (uint32_t)sizeof(gicv2_snapshot_t),
             .uart_state_size = (uint32_t)sizeof(pl011_snapshot_t),
             .rtc_state_size = (uint32_t)sizeof(pl031_snapshot_t),
-            .flags = phase == VMM_PREBOOT_REACHED ? VMM_SNAPSHOT_PREBOOT : 0,
+            .flags = (phase == VMM_PREBOOT_REACHED ? VMM_SNAPSHOT_PREBOOT : 0) | (priv->el2 ? VMM_SNAPSHOT_EL2 : 0),
         };
         memcpy(hdr.key, priv->snapshot_key, sizeof(hdr.key));
         for (uint32_t i = 0; i < vm->cpu_count; i++) {

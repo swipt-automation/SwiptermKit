@@ -11,6 +11,10 @@
 
 #define VMM_TIMER_FREQ 24000000ULL
 
+enum {
+    GICV2_LIST_REGS = 4,
+};
+
 typedef struct gicv2_snapshot {
     uint32_t dist_enabled;
     uint32_t spi_enabled[3];
@@ -29,8 +33,13 @@ typedef struct gicv2_snapshot {
         uint32_t level_local;
         uint32_t active_local;
         uint32_t icfgr_ppi;
+        uint32_t apr;
         uint8_t sgi_pending[16];
         uint8_t priority_local[32];
+        uint32_t gich_hcr;
+        uint32_t gich_vmcr;
+        uint32_t gich_apr;
+        uint32_t gich_lr[GICV2_LIST_REGS];
     } cpu[VMM_MAX_VCPUS];
 } gicv2_snapshot_t;
 
@@ -63,7 +72,6 @@ typedef struct vmm_timer_state {
     pthread_cond_t cond;
     uint64_t deadlines[VMM_MAX_VCPUS];
     bool stop;
-    _Atomic uint64_t boot_ticks;
     _Atomic bool active;
 } vmm_timer_state_t;
 
@@ -94,6 +102,7 @@ typedef struct vmm_machine_priv {
     uint32_t suspended_count;
     bool halt_notified;
     bool restored_from_snapshot;
+    bool el2;
     _Atomic vmm_preboot_phase_t preboot_phase;
     uint8_t snapshot_key[32];
 
@@ -131,10 +140,14 @@ static inline uint64_t vmm_initrd_addr(size_t ram_size, size_t initramfs_size) {
 
 void *gicv2_create(vmm_machine_t *vm);
 void gicv2_destroy(void *gic);
-void gicv2_set_timer_ppis(vmm_machine_t *vm, uint32_t cpu_id, bool virt, bool phys);
+void gicv2_set_timer_ppis(vmm_machine_t *vm, uint32_t cpu_id, uint32_t lines);
 uint64_t gicv2_dist_read(void *gic, vcpu_t *cpu, uint32_t offset, uint32_t size);
 void gicv2_dist_write(void *gic, vcpu_t *cpu, uint32_t offset, uint32_t size, uint64_t val);
 uint64_t gicv2_cpu_read(void *gic, vcpu_t *cpu, uint32_t offset, uint32_t size);
+uint64_t gicv2_hyp_read(void *gic, vcpu_t *cpu, uint32_t offset);
+void gicv2_hyp_write(void *gic, vcpu_t *cpu, uint32_t offset, uint64_t val);
+uint64_t gicv2_vcpu_read(void *gic, vcpu_t *cpu, uint32_t offset);
+void gicv2_vcpu_write(void *gic, vcpu_t *cpu, uint32_t offset, uint64_t val);
 void gicv2_cpu_write(void *gic, vcpu_t *cpu, uint32_t offset, uint32_t size, uint64_t val);
 void gicv2_save_state(const void *gic, gicv2_snapshot_t *out);
 void gicv2_load_state(void *gic, const gicv2_snapshot_t *in);
@@ -160,6 +173,10 @@ void vmm_timer_disarm_all(vmm_machine_priv_t *priv);
 void vmm_timer_sync_all(vmm_machine_priv_t *priv);
 void vmm_timer_set_cntvct(vmm_machine_t *vm, uint64_t cntvct);
 void vmm_timer_sync(vcpu_t *cpu);
+
+static inline void vmm_host_sev(void) {
+    __asm__ __volatile__("dsb ish\n\tsev" ::: "memory");
+}
 
 void vmm_vcpu_wake(vmm_machine_t *vm, uint32_t cpu_id);
 void vmm_vcpu_wfe(vcpu_t *cpu);

@@ -49,10 +49,8 @@ typedef enum vcpu_stop_reason : uint32_t {
 
 typedef struct vcpu_sysreg_state {
     uint64_t csselr_el1;
-    uint64_t afsr0_el1;
-    uint64_t afsr1_el1;
-    uint64_t amair_el1;
     uint64_t actlr_el1;
+    uint64_t mdccint_el1;
     uint64_t osdlr_el1;
     uint64_t oslsr_el1;
     uint64_t uao;
@@ -61,6 +59,66 @@ typedef struct vcpu_sysreg_state {
     uint64_t dbgwvr[16];
     uint64_t dbgwcr[16];
 } vcpu_sysreg_state_t;
+
+typedef struct vcpu_mmu_ctx vcpu_mmu_ctx_t;
+
+enum : uint8_t {
+    VCPU_WORLD_GUEST = 0,
+    VCPU_WORLD_HOST = 1,
+    VCPU_WORLD_HOST_NVHE = 2,
+};
+
+enum {
+    VCPU_CTX_MAIN = 0,
+    VCPU_CTX_L2_SLOTS = 2,
+    VCPU_CTX_COUNT = 1 + VCPU_CTX_L2_SLOTS,
+};
+
+enum : uint32_t {
+    VCPU_IRQ_PHYS = 1U << 0,
+    VCPU_IRQ_VIRT = 1U << 1,
+    VCPU_IRQ_VI = 1U << 2,
+};
+
+enum {
+    VCPU_TIMER_PHYS = 0,
+    VCPU_TIMER_VIRT = 1,
+    VCPU_TIMER_HYP_PHYS = 2,
+    VCPU_TIMER_HYP_VIRT = 3,
+    VCPU_TIMER_COUNT = 4,
+};
+
+typedef struct vcpu_timer {
+    uint64_t ctl;
+    uint64_t cval;
+} vcpu_timer_t;
+
+#define VCPU_BANKED_REGS(X)                                                    \
+    X(sctlr_el1) X(cpacr_el1) X(tcr_el1) X(ttbr0_el1) X(ttbr1_el1)             \
+    X(mair_el1) X(vbar_el1) X(esr_el1) X(far_el1) X(elr_el1) X(spsr_el1)       \
+    X(contextidr_el1) X(cntkctl_el1) X(amair_el1) X(afsr0_el1) X(afsr1_el1)
+
+#define VCPU_BANK_FIELD(name) uint64_t name;
+
+typedef struct vcpu_bank {
+    VCPU_BANKED_REGS(VCPU_BANK_FIELD)
+} vcpu_bank_t;
+
+typedef struct vcpu_el2_state {
+    vcpu_bank_t shadow;
+    uint64_t shadow_sp;
+    uint64_t hcr;
+    uint64_t mdcr;
+    uint64_t hstr;
+    uint64_t hacr;
+    uint64_t actlr;
+    uint64_t vttbr;
+    uint64_t vtcr;
+    uint64_t vpidr;
+    uint64_t vmpidr;
+    uint64_t hpfar;
+    uint64_t cntvoff;
+} vcpu_el2_state_t;
 
 struct vcpu {
     uint64_t x[33];
@@ -75,6 +133,8 @@ struct vcpu {
     uint8_t excl_size;
     bool excl_valid;
     bool fp_host_active;
+    uint8_t world;
+    bool has_el2;
     int32_t backedge_budget;
     uint32_t fpcr;
     uint32_t fpsr;
@@ -85,6 +145,8 @@ struct vcpu {
     _Atomic bool halted_wfi;
     _Atomic bool event_reg;
     uint32_t cpu_id;
+    uint8_t irq_mask;
+    uint8_t irq_force;
 
     uint64_t tlb_asid_salt;
     uint64_t tlb_epoch_local;
@@ -105,35 +167,40 @@ struct vcpu {
     uint64_t ic_ivau_last_va_page;
     alignas(16) __uint128_t excl_val;
 
-    uint64_t sctlr_el1;
-    uint64_t cpacr_el1;
-    uint64_t tcr_el1;
-    uint64_t ttbr0_el1;
-    uint64_t ttbr1_el1;
-    uint64_t mair_el1;
-    uint64_t vbar_el1;
-    uint64_t esr_el1;
-    uint64_t far_el1;
-    uint64_t elr_el1;
-    uint64_t spsr_el1;
+    union {
+        vcpu_bank_t bank;
+        struct {
+            VCPU_BANKED_REGS(VCPU_BANK_FIELD)
+        };
+    };
     uint64_t tpidr_el0;
     uint64_t tpidrro_el0;
     uint64_t tpidr_el1;
-    uint64_t contextidr_el1;
-    uint64_t cntkctl_el1;
-    uint64_t cntv_ctl_el0;
-    uint64_t cntv_cval_el0;
-    uint64_t cntp_ctl_el0;
-    uint64_t cntp_cval_el0;
+    uint64_t tpidr_el2;
+    uint64_t cntpct_base;
+    uint64_t cntvct_base;
     uint64_t mdscr_el1;
     uint64_t par_el1;
     uint64_t mpidr_el1;
+    vcpu_timer_t timers[VCPU_TIMER_COUNT];
     vcpu_sysreg_state_t sysregs;
 
-    alignas(64) softtlb_entry_t tlb[SOFTTLB_BANK_COUNT][SOFTTLB_ENTRIES];
+    softtlb_entry_t (*tlb)[SOFTTLB_ENTRIES];
+    void *exec_cache;
+    vcpu_mmu_ctx_t *mmu_ctx[VCPU_CTX_COUNT];
+    vcpu_el2_state_t el2;
     uintptr_t excl_hva;
     _Atomic uintptr_t wfe_watch_hva;
     uint64_t icache_pending_pa[VCPU_ICACHE_PENDING];
+    uint32_t wfe_poll_ticks;
+    uint32_t wfi_poll_ticks;
+    uint32_t traps;
+    uint32_t guest_traps;
+    uint16_t l2_vmid[VCPU_CTX_L2_SLOTS];
+    uint8_t ctx_slot;
+    uint8_t ctx_stale;
+    uint8_t l2_victim;
+    bool main_guest;
 };
 
 static_assert(alignof(vcpu_t) >= 16);
@@ -141,7 +208,12 @@ static_assert(sizeof(((vcpu_t *)0)->v) == 32 * 16);
 
 void vcpu_init(vcpu_t *cpu, vmm_machine_t *vm, uint32_t cpu_id);
 void vcpu_destroy(vcpu_t *cpu);
+void vcpu_enable_el2(vcpu_t *cpu);
 void vcpu_reset(vcpu_t *cpu, uint64_t entry_pc, uint64_t x0);
+void vcpu_set_world(vcpu_t *cpu, uint8_t world);
+void vcpu_sync_el2(vcpu_t *cpu);
+void vcpu_update_irq_gate(vcpu_t *cpu);
+void vcpu_update_counter_bases(vcpu_t *cpu);
 vcpu_stop_reason_t vcpu_run(vcpu_t *cpu);
 void vcpu_raise_exception(vcpu_t *cpu, uint32_t esr, uint64_t far, uint64_t elr);
 void vcpu_eret(vcpu_t *cpu);

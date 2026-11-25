@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/sysctl.h>
 
 enum : uint32_t {
     FDT_MAGIC = 0xd00dfeedU,
@@ -16,6 +17,8 @@ enum : uint32_t {
     FDT_END = 0x00000009U,
     FDT_PHANDLE_GIC = 1U,
     FDT_PHANDLE_CLK = 2U,
+    FDT_PHANDLE_L2 = 3U,
+    FDT_CACHE_LINE_SIZE = 64U,
 };
 
 typedef struct fdt_buf {
@@ -151,6 +154,15 @@ static void fdt_prop_reg2(fdt_writer_t *w, uint64_t addr, uint64_t size) {
     fdt_prop_cells(w, "reg", cells, 4);
 }
 
+static uint32_t host_sysctl_u32(const char *name) {
+    uint64_t value = 0;
+    size_t len = sizeof(value);
+    if (sysctlbyname(name, &value, &len, NULL, 0) != 0) {
+        return 0;
+    }
+    return (uint32_t)value;
+}
+
 int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
               void *buf, size_t buf_size, size_t *out_size) {
     if (!vm || !buf) {
@@ -161,8 +173,21 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
 
     fdt_writer_t w = {0};
 
+    char product[64];
+    size_t product_len = sizeof(product);
+    char model[96];
+    if (sysctlbyname("hw.product", product, &product_len, NULL, 0) == 0) {
+        snprintf(model, sizeof(model), "Swipterm (%s)", product);
+    } else {
+        snprintf(model, sizeof(model), "Swipterm");
+    }
+    uint32_t l1i_size = host_sysctl_u32("hw.perflevel0.l1icachesize");
+    uint32_t l1d_size = host_sysctl_u32("hw.perflevel0.l1dcachesize");
+    uint32_t l2_size = host_sysctl_u32("hw.perflevel0.l2cachesize");
+
     fdt_begin_node(&w, "");
     fdt_prop(&w, "compatible", "linux,dummy-virt", sizeof("linux,dummy-virt"));
+    fdt_prop(&w, "model", model, strlen(model) + 1);
     fdt_prop_u32(&w, "#address-cells", 2);
     fdt_prop_u32(&w, "#size-cells", 2);
     fdt_prop_u32(&w, "interrupt-parent", FDT_PHANDLE_GIC);
@@ -193,6 +218,27 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
         fdt_prop(&w, "compatible", "arm,armv8", sizeof("arm,armv8"));
         fdt_prop_u32(&w, "reg", i);
         fdt_prop(&w, "enable-method", "psci", sizeof("psci"));
+        if (l1i_size != 0) {
+            fdt_prop_u32(&w, "i-cache-size", l1i_size);
+            fdt_prop_u32(&w, "i-cache-line-size", FDT_CACHE_LINE_SIZE);
+        }
+        if (l1d_size != 0) {
+            fdt_prop_u32(&w, "d-cache-size", l1d_size);
+            fdt_prop_u32(&w, "d-cache-line-size", FDT_CACHE_LINE_SIZE);
+        }
+        if (l2_size != 0) {
+            fdt_prop_u32(&w, "next-level-cache", FDT_PHANDLE_L2);
+        }
+        buf_put_be32(&w.dt_struct, FDT_END_NODE);
+    }
+    if (l2_size != 0) {
+        fdt_begin_node(&w, "l2-cache");
+        fdt_prop(&w, "compatible", "cache", sizeof("cache"));
+        fdt_prop_u32(&w, "cache-level", 2);
+        fdt_prop(&w, "cache-unified", NULL, 0);
+        fdt_prop_u32(&w, "cache-size", l2_size);
+        fdt_prop_u32(&w, "cache-line-size", FDT_CACHE_LINE_SIZE);
+        fdt_prop_u32(&w, "phandle", FDT_PHANDLE_L2);
         buf_put_be32(&w.dt_struct, FDT_END_NODE);
     }
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
@@ -200,7 +246,8 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     fdt_begin_node(&w, "psci");
     static const char psci_compat[] = "arm,psci-1.0\0arm,psci-0.2";
     fdt_prop(&w, "compatible", psci_compat, sizeof(psci_compat));
-    fdt_prop(&w, "method", "hvc", sizeof("hvc"));
+    const char *conduit = config && config->el2 ? "smc" : "hvc";
+    fdt_prop(&w, "method", conduit, strlen(conduit) + 1);
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
 
     fdt_begin_node(&w, "apb-pclk");
@@ -217,13 +264,22 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     fdt_prop_u32(&w, "#address-cells", 2);
     fdt_prop_u32(&w, "#size-cells", 2);
     fdt_prop(&w, "interrupt-controller", NULL, 0);
-    uint32_t gic_reg[8] = {
+    uint32_t gic_reg[16] = {
         (uint32_t)(VMM_GICD_BASE >> 32), (uint32_t)VMM_GICD_BASE,
         (uint32_t)(VMM_GICD_SIZE >> 32), (uint32_t)VMM_GICD_SIZE,
         (uint32_t)(VMM_GICC_BASE >> 32), (uint32_t)VMM_GICC_BASE,
         (uint32_t)(VMM_GICC_SIZE >> 32), (uint32_t)VMM_GICC_SIZE,
+        (uint32_t)(VMM_GICH_BASE >> 32), (uint32_t)VMM_GICH_BASE,
+        (uint32_t)(VMM_GICH_SIZE >> 32), (uint32_t)VMM_GICH_SIZE,
+        (uint32_t)(VMM_GICV_BASE >> 32), (uint32_t)VMM_GICV_BASE,
+        (uint32_t)(VMM_GICV_SIZE >> 32), (uint32_t)VMM_GICV_SIZE,
     };
-    fdt_prop_cells(&w, "reg", gic_reg, 8);
+    bool el2 = config && config->el2;
+    fdt_prop_cells(&w, "reg", gic_reg, el2 ? 16 : 8);
+    if (el2) {
+        uint32_t maint_irq[3] = {1, VMM_IRQ_GIC_MAINT - VMM_IRQ_PPI_BASE, (((1U << cpu_count) - 1U) << 8) | 4U};
+        fdt_prop_cells(&w, "interrupts", maint_irq, 3);
+    }
     fdt_prop_u32(&w, "phandle", FDT_PHANDLE_GIC);
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
 
@@ -231,13 +287,14 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     fdt_prop(&w, "compatible", "arm,armv8-timer", sizeof("arm,armv8-timer"));
     fdt_prop(&w, "always-on", NULL, 0);
     uint32_t ppi_flags = (((1U << cpu_count) - 1U) << 8) | 8U;
-    uint32_t timer_irqs[12] = {
-        1, 13, ppi_flags,
-        1, 14, ppi_flags,
-        1, 11, ppi_flags,
-        1, 10, ppi_flags,
+    uint32_t timer_irqs[15] = {
+        1, VMM_IRQ_TIMER_SEC_PHYS - VMM_IRQ_PPI_BASE, ppi_flags,
+        1, VMM_IRQ_TIMER_PHYS - VMM_IRQ_PPI_BASE, ppi_flags,
+        1, VMM_IRQ_TIMER_VIRT - VMM_IRQ_PPI_BASE, ppi_flags,
+        1, VMM_IRQ_TIMER_HYP_PHYS - VMM_IRQ_PPI_BASE, ppi_flags,
+        1, VMM_IRQ_TIMER_HYP_VIRT - VMM_IRQ_PPI_BASE, ppi_flags,
     };
-    fdt_prop_cells(&w, "interrupts", timer_irqs, 12);
+    fdt_prop_cells(&w, "interrupts", timer_irqs, 15);
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
 
     fdt_begin_node(&w, "pl011@9000000");

@@ -86,6 +86,75 @@ enum : uint32_t {
     CPU_FPSR_IDC = 1U << 7,
 };
 
+enum : uint64_t {
+    HCR_EL2_VM = 1ULL << 0,
+    HCR_EL2_PTW = 1ULL << 2,
+    HCR_EL2_FMO = 1ULL << 3,
+    HCR_EL2_IMO = 1ULL << 4,
+    HCR_EL2_AMO = 1ULL << 5,
+    HCR_EL2_VF = 1ULL << 6,
+    HCR_EL2_VI = 1ULL << 7,
+    HCR_EL2_VSE = 1ULL << 8,
+    HCR_EL2_FB = 1ULL << 9,
+    HCR_EL2_TWI = 1ULL << 13,
+    HCR_EL2_TWE = 1ULL << 14,
+    HCR_EL2_TID1 = 1ULL << 16,
+    HCR_EL2_TID2 = 1ULL << 17,
+    HCR_EL2_TID3 = 1ULL << 18,
+    HCR_EL2_TSC = 1ULL << 19,
+    HCR_EL2_TIDCP = 1ULL << 20,
+    HCR_EL2_TACR = 1ULL << 21,
+    HCR_EL2_TSW = 1ULL << 22,
+    HCR_EL2_TPCP = 1ULL << 23,
+    HCR_EL2_TPU = 1ULL << 24,
+    HCR_EL2_TTLB = 1ULL << 25,
+    HCR_EL2_TVM = 1ULL << 26,
+    HCR_EL2_TGE = 1ULL << 27,
+    HCR_EL2_TDZ = 1ULL << 28,
+    HCR_EL2_HCD = 1ULL << 29,
+    HCR_EL2_TRVM = 1ULL << 30,
+    HCR_EL2_RW = 1ULL << 31,
+    HCR_EL2_E2H = 1ULL << 34,
+    HCR_EL2_FWB = 1ULL << 46,
+    MDCR_EL2_TPMCR = 1ULL << 5,
+    MDCR_EL2_TPM = 1ULL << 6,
+    MDCR_EL2_TDE = 1ULL << 8,
+    MDCR_EL2_TDA = 1ULL << 9,
+    MDCR_EL2_TDOSA = 1ULL << 10,
+    MDCR_EL2_TDRA = 1ULL << 11,
+    VTCR_EL2_VS = 1ULL << 19,
+    VTCR_EL2_HA = 1ULL << 21,
+    VTCR_EL2_HD = 1ULL << 22,
+    CPTR_EL2_TFP = 1ULL << 10,
+    SCTLR_EL2_RESET = 0x30C50830ULL,
+    CPTR_EL2_RESET = 0x33FFULL,
+    CNTHCTL_EL2_MASK = 0x3EFFFULL,
+};
+
+enum : uint32_t {
+    CPU_TRAP_TVM = 1U << 0,
+    CPU_TRAP_TRVM = 1U << 1,
+    CPU_TRAP_TACR = 1U << 2,
+    CPU_TRAP_TID1 = 1U << 3,
+    CPU_TRAP_TID2 = 1U << 4,
+    CPU_TRAP_TID3 = 1U << 5,
+    CPU_TRAP_TSW = 1U << 6,
+    CPU_TRAP_TPCP = 1U << 7,
+    CPU_TRAP_TPU = 1U << 8,
+    CPU_TRAP_TIDCP = 1U << 9,
+    CPU_TRAP_TDZ = 1U << 10,
+    CPU_TRAP_TWI = 1U << 11,
+    CPU_TRAP_TWE = 1U << 12,
+    CPU_TRAP_TTLB = 1U << 13,
+    CPU_TRAP_TDA = 1U << 14,
+    CPU_TRAP_TDOSA = 1U << 15,
+    CPU_TRAP_TPM = 1U << 16,
+    CPU_TRAP_CNTPCT = 1U << 17,
+    CPU_TRAP_CNTP = 1U << 18,
+    CPU_TRAP_CNTV = 1U << 19,
+    CPU_TRAP_CNTVCT = 1U << 20,
+};
+
 typedef struct cpu_jit_page {
     uint32_t entry[IR_PAGE_INSNS];
     uint32_t word[IR_PAGE_INSNS];
@@ -99,6 +168,8 @@ typedef struct ir_page {
     uint32_t gen;
     cpu_jit_page_t *jit;
     uint8_t el;
+    uint8_t world;
+    uint32_t traps;
     ir_insn_t insns[IR_PAGE_INSNS + 1];
 } ir_page_t;
 
@@ -111,6 +182,15 @@ typedef struct exec_cache_entry {
 } exec_cache_entry_t;
 
 static_assert(sizeof(exec_cache_entry_t) == 32);
+
+struct vcpu_mmu_ctx {
+    softtlb_entry_t tlb[SOFTTLB_BANK_COUNT][SOFTTLB_ENTRIES];
+    exec_cache_entry_t exec_cache[2][EXEC_CACHE_ENTRIES];
+};
+
+CPU_ALWAYS_INLINE exec_cache_entry_t (*cpu_exec_cache(const vcpu_t *cpu))[EXEC_CACHE_ENTRIES] {
+    return (exec_cache_entry_t (*)[EXEC_CACHE_ENTRIES])cpu->exec_cache;
+}
 
 typedef struct ras_entry {
     uint64_t pc;
@@ -155,7 +235,6 @@ typedef struct cpu_icache {
     struct cpu_stats *stats;
 #endif
     alignas(64) ras_entry_t ras[RAS_SIZE];
-    exec_cache_entry_t exec_cache[2][EXEC_CACHE_ENTRIES];
     uint8_t plru[ICACHE_SETS];
     ir_page_t *slots[ICACHE_SETS][ICACHE_WAYS];
     ir_page_t *page_pool;
@@ -278,9 +357,37 @@ CPU_ALWAYS_INLINE uint64_t cpu_lane_replicate(uint64_t val, uint32_t ebytes) {
     }
 }
 
-CPU_ALWAYS_INLINE bool cpu_fp_enabled(const vcpu_t *cpu) {
+CPU_ALWAYS_INLINE bool cpu_fp_el1_enabled(const vcpu_t *cpu) {
+    if (cpu->world == VCPU_WORLD_HOST_NVHE) {
+        return (cpu->cpacr_el1 & CPTR_EL2_TFP) == 0;
+    }
     uint32_t fpen = (uint32_t)((cpu->cpacr_el1 >> 20) & 3U);
     return cpu->el == 0 ? (fpen == 3U) : ((fpen & 1U) != 0);
+}
+
+CPU_ALWAYS_INLINE bool cpu_fp_el2_enabled(const vcpu_t *cpu) {
+    if (cpu->world != VCPU_WORLD_GUEST || !cpu->has_el2) {
+        return true;
+    }
+    uint64_t cptr = cpu->el2.shadow.cpacr_el1;
+    return (cpu->el2.hcr & HCR_EL2_E2H) != 0 ? ((cptr >> 20) & 1U) != 0 : (cptr & CPTR_EL2_TFP) == 0;
+}
+
+CPU_ALWAYS_INLINE bool cpu_fp_enabled(const vcpu_t *cpu) {
+    return cpu_fp_el1_enabled(cpu) && cpu_fp_el2_enabled(cpu);
+}
+
+CPU_ALWAYS_INLINE uint32_t cpu_current_el(const vcpu_t *cpu) {
+    return cpu->el != 0 && cpu->world != VCPU_WORLD_GUEST ? 2U : cpu->el;
+}
+
+CPU_ALWAYS_INLINE uint16_t cpu_vmid(const vcpu_t *cpu) {
+    uint64_t vmid = cpu->el2.vttbr >> 48;
+    return (uint16_t)((cpu->el2.vtcr & VTCR_EL2_VS) != 0 ? vmid : (vmid & 0xFFU));
+}
+
+CPU_ALWAYS_INLINE bool cpu_field_banked(size_t offset) {
+    return offset >= offsetof(vcpu_t, bank) && offset < offsetof(vcpu_t, bank) + sizeof(vcpu_bank_t);
 }
 
 #if defined(__aarch64__)
@@ -472,11 +579,15 @@ CPU_COLD_MISS cpu_read_res_t cpu_read_8_miss(vcpu_t *cpu, const ir_insn_t *ir, u
 CPU_COLD_MISS cpu_read_res_t cpu_read_16_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va);
 CPU_COLD_MISS cpu_read_res_t cpu_read_32_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va);
 CPU_COLD_MISS cpu_read_res_t cpu_read_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va);
+CPU_COLD_MISS bool cpu_read_pair_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
+                                         uint64_t va, uint64_t *out1, uint64_t *out2);
 CPU_COLD_MISS bool cpu_read_128_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, __uint128_t *out);
 CPU_COLD_MISS bool cpu_write_8_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint8_t val);
 CPU_COLD_MISS bool cpu_write_16_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint16_t val);
 CPU_COLD_MISS bool cpu_write_32_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint32_t val);
 CPU_COLD_MISS bool cpu_write_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint64_t val);
+CPU_COLD_MISS bool cpu_write_pair_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
+                                          uint64_t va, uint64_t val1, uint64_t val2);
 CPU_COLD_MISS bool cpu_write_128_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, __uint128_t val);
 
 CPU_ALWAYS_INLINE bool cpu_read_8(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
@@ -548,13 +659,11 @@ CPU_ALWAYS_INLINE bool cpu_read_pair_64(vcpu_t *cpu, const ir_insn_t *ir, uint32
     uintptr_t hva;
     if (__builtin_expect((va & 7ULL) == 0 && (va & VMM_PAGE_MASK) <= (VMM_PAGE_SIZE - 16U), 1)) {
         if (__builtin_expect(mmu_tlb_lookup_aligned(tlb_r, cpu->tlb_asid_salt, va, &hva), 1)) {
-            *out1 = __atomic_load_n((const uint64_t *)hva, __ATOMIC_RELAXED);
-            *out2 = __atomic_load_n((const uint64_t *)(hva + 8), __ATOMIC_RELAXED);
+            __asm__ volatile("ldp %0, %1, [%2]" : "=r"(*out1), "=r"(*out2) : "r"(hva) : "memory");
             return true;
         }
     }
-    return cpu_read_64(cpu, ir, pc_off, tlb_r, va, out1) &&
-           cpu_read_64(cpu, ir, pc_off, tlb_r, va + 8ULL, out2);
+    return cpu_read_pair_64_miss(cpu, ir, pc_off, va, out1, out2);
 }
 
 CPU_ALWAYS_INLINE bool cpu_read_128(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
@@ -628,13 +737,11 @@ CPU_ALWAYS_INLINE bool cpu_write_pair_64(vcpu_t *cpu, const ir_insn_t *ir, uint3
     uintptr_t hva;
     if (__builtin_expect((va & 7ULL) == 0 && (va & VMM_PAGE_MASK) <= (VMM_PAGE_SIZE - 16U), 1)) {
         if (__builtin_expect(mmu_tlb_lookup_aligned(tlb_w, cpu->tlb_asid_salt, va, &hva), 1)) {
-            __atomic_store_n((uint64_t *)hva, val1, __ATOMIC_RELAXED);
-            __atomic_store_n((uint64_t *)(hva + 8), val2, __ATOMIC_RELAXED);
+            __asm__ volatile("stp %0, %1, [%2]" : : "r"(val1), "r"(val2), "r"(hva) : "memory");
             return true;
         }
     }
-    return cpu_write_64(cpu, ir, pc_off, tlb_w, va, val1) &&
-           cpu_write_64(cpu, ir, pc_off, tlb_w, va + 8ULL, val2);
+    return cpu_write_pair_64_miss(cpu, ir, pc_off, va, val1, val2);
 }
 
 CPU_ALWAYS_INLINE bool cpu_write_128(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
@@ -647,15 +754,27 @@ CPU_ALWAYS_INLINE bool cpu_write_128(vcpu_t *cpu, const ir_insn_t *ir, uint32_t 
     return cpu_write_128_miss(cpu, ir, pc_off, va, val);
 }
 
+void vcpu_raise_exception_el2(vcpu_t *cpu, uint32_t esr, uint64_t far, uint64_t elr);
+
+CPU_ALWAYS_INLINE uint32_t vcpu_irq_deliverable(const vcpu_t *cpu) {
+    uint32_t pending = atomic_load_explicit(&cpu->irq_pending, memory_order_acquire);
+    return pending & ((cpu->daif & (1U << 7)) ? cpu->irq_force : cpu->irq_mask);
+}
+
 CPU_ALWAYS_INLINE void vcpu_raise_undef(vcpu_t *cpu, uint64_t elr) {
     vcpu_raise_exception(cpu, 1U << 25, 0, elr);
 }
 
 CPU_ALWAYS_INLINE void vcpu_raise_fp_trap(vcpu_t *cpu, uint64_t elr) {
-    vcpu_raise_exception(cpu, (0x07U << 26) | (1U << 25) | (0x1EU << 20), 0, elr);
+    uint32_t esr = (0x07U << 26) | (1U << 25) | (0x1EU << 20);
+    if (cpu_fp_el1_enabled(cpu)) {
+        vcpu_raise_exception_el2(cpu, esr, 0, elr);
+    } else {
+        vcpu_raise_exception(cpu, esr, 0, elr);
+    }
 }
 
-CPU_ALWAYS_INLINE void vcpu_raise_sys_trap(vcpu_t *cpu, uint32_t word, uint64_t elr) {
+CPU_ALWAYS_INLINE uint32_t vcpu_sys_trap_esr(uint32_t word) {
     uint32_t op0 = (word >> 19) & 3U;
     uint32_t op1 = (word >> 16) & 7U;
     uint32_t crn = (word >> 12) & 15U;
@@ -665,15 +784,24 @@ CPU_ALWAYS_INLINE void vcpu_raise_sys_trap(vcpu_t *cpu, uint32_t word, uint64_t 
     uint32_t dir = (word >> 21) & 1U;
     uint32_t iss = (op0 << 20) | (op2 << 17) | (op1 << 14) | (crn << 10) |
                    (rt << 5) | (crm << 1) | dir;
-    vcpu_raise_exception(cpu, (0x18U << 26) | (1U << 25) | iss, 0, elr);
+    return (0x18U << 26) | (1U << 25) | iss;
 }
 
-CPU_ALWAYS_INLINE void vcpu_raise_data_abort(vcpu_t *cpu, uint64_t va, uint32_t fsc,
-                                             bool is_write, uint64_t elr) {
-    uint32_t ec = cpu->el ? 0x25U : 0x24U;
-    uint32_t esr = (ec << 26) | (1U << 25) | (is_write ? (1U << 6) : 0U) | (fsc & 0x3FU);
-    vcpu_raise_exception(cpu, esr, va, elr);
+CPU_ALWAYS_INLINE void vcpu_raise_sys_trap(vcpu_t *cpu, uint32_t word, uint64_t elr) {
+    vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, elr);
 }
+
+void vcpu_raise_abort(vcpu_t *cpu, uint64_t va, const mmu_translation_t *tr, bool is_write, uint64_t elr,
+                      bool fetch);
+
+CPU_ALWAYS_INLINE void vcpu_raise_data_abort(vcpu_t *cpu, uint64_t va, const mmu_translation_t *tr,
+                                             bool is_write, uint64_t elr) {
+    vcpu_raise_abort(cpu, va, tr, is_write, elr, false);
+}
+
+uint32_t cpu_guest_traps(const vcpu_t *cpu);
+bool cpu_sysreg_trapped(uint32_t traps, uint32_t word);
+bool cpu_sysop_trapped(uint32_t traps, uint32_t word);
 
 CPU_ALWAYS_INLINE bool cpu_check_sp_align(vcpu_t *cpu, uint32_t rn, uint64_t elr) {
     if (__builtin_expect(rn == 31U, 0)) {
@@ -705,13 +833,6 @@ enum : uint16_t {
     SUBOP_FP_IMM,
     SUBOP_FP_2INT,
     SUBOP_FP_2FIX,
-    SUBOP_CRYPTO_AES,
-    SUBOP_CRYPTO_SHA2,
-    SUBOP_CRYPTO_SHA3,
-    SUBOP_CRYPTO_IMM6,
-    SUBOP_CRYPTO_4,
-    SUBOP_CRYPTO_SHA512_2,
-    SUBOP_CRYPTO_SHA512_3,
     SUBOP_SIMD_IMM,
     SUBOP_SIMD_INS,
     SUBOP_SIMD_ONE,
@@ -741,9 +862,22 @@ enum : uint16_t {
 bool vcpu_decode_bitmask(uint32_t n, uint32_t imms, uint32_t immr, bool is_64,
                          bool immediate, uint64_t *wmask_out, uint64_t *tmask_out);
 
+#define CPU_HOST_FEATURES(X)                                                                   \
+    X(AES) X(BF16) X(CSSC) X(DotProd) X(FCMA) X(FHM) X(FlagM) X(FlagM2) X(FP16) X(FRINTTS) X(I8MM) \
+    X(JSCVT) X(LRCPC) X(LSE) X(LSE2) X(RDM) X(SHA1) X(SHA256) X(SHA3) X(SHA512)
+
 enum : uint32_t {
-    CPU_HOST_SHA3 = 1U << 0,
-    CPU_HOST_SHA512 = 1U << 1,
+#define CPU_HOST_FEATURE_INDEX(name) CPU_HOST_INDEX_##name,
+    CPU_HOST_FEATURES(CPU_HOST_FEATURE_INDEX)
+#undef CPU_HOST_FEATURE_INDEX
+};
+
+enum : uint32_t {
+#define CPU_HOST_FEATURE_BIT(name) CPU_HOST_FEAT_##name = 1U << CPU_HOST_INDEX_##name,
+    CPU_HOST_FEATURES(CPU_HOST_FEATURE_BIT)
+#undef CPU_HOST_FEATURE_BIT
+    CPU_HOST_NATIVE = CPU_HOST_FEAT_AES | CPU_HOST_FEAT_BF16 | CPU_HOST_FEAT_FRINTTS | CPU_HOST_FEAT_I8MM |
+                      CPU_HOST_FEAT_SHA1 | CPU_HOST_FEAT_SHA256 | CPU_HOST_FEAT_SHA3 | CPU_HOST_FEAT_SHA512,
 };
 
 uint32_t cpu_host_features(void);
@@ -755,6 +889,7 @@ void vmm_vcpu_wfe_notify_write(vmm_machine_t *vm, uintptr_t hva);
 
 void cpu_op_ldst_unpriv(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_ldst_ord(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
+void cpu_op_ldapstl_unscaled(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_ldst_exclr(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_ldst_exclp(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_lse_cas(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
@@ -768,7 +903,7 @@ void cpu_op_simd_ldst_single(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *
 void cpu_op_crc32(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_fp_scalar(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_simd_dp(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
-void cpu_op_crypto(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
+void cpu_op_native(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 
 void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
@@ -776,6 +911,7 @@ void cpu_op_pstate_msr(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r,
 void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_svc(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_hvc(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
+void cpu_op_smc(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_brk(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_hlt(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_eret(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);

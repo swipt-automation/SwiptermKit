@@ -23,6 +23,7 @@ typedef struct vmm_config {
     bool snapshot_required;
     uint8_t snapshot_key[32];
     const char *cmdline;
+    bool el2;
     swipterm_network *network;
     void *callback_ctx;
     void (*console_output)(void *ctx, const void *data, size_t len);
@@ -52,6 +53,7 @@ struct vmm_machine {
     _Atomic uint32_t wfe_waiters;
     _Atomic bool running;
     _Atomic bool suspended;
+    _Atomic uint64_t timer_base;
 
     virtio_dev_t *virtio_devs[VMM_VIRTIO_MMIO_SLOTS];
     void *gic;
@@ -86,7 +88,10 @@ uint64_t vmm_mmio_read(vmm_machine_t *vm, vcpu_t *cpu, uint64_t gpa, uint32_t si
 void vmm_mmio_write(vmm_machine_t *vm, vcpu_t *cpu, uint64_t gpa, uint32_t size, uint64_t val);
 
 uint64_t vmm_timer_cntfrq(void);
+uint64_t vmm_timer_ticks(void);
 uint64_t vmm_timer_cntvct(const vmm_machine_t *vm);
+bool vmm_timer_native(void);
+void vmm_timer_sample_realtime(const vmm_machine_t *vm, uint64_t *realtime_ns, uint64_t *cntvct);
 void vmm_timer_write(vcpu_t *cpu, uint64_t *reg, uint64_t value);
 void vmm_vcpu_wfi(vcpu_t *cpu);
 

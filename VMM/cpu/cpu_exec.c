@@ -112,7 +112,6 @@ CPU_COLD_MISS void cpu_fp_leave_guest_slow(vcpu_t *cpu) {
 CPU_COLD_MISS cpu_read_res_t cpu_read_8_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va) {
     uint8_t v = 0;
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     bool ok = mmu_read_8_slow(cpu, va, &v);
     return (cpu_read_res_t){v, ok};
 }
@@ -120,7 +119,6 @@ CPU_COLD_MISS cpu_read_res_t cpu_read_8_miss(vcpu_t *cpu, const ir_insn_t *ir, u
 CPU_COLD_MISS cpu_read_res_t cpu_read_16_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va) {
     uint16_t v = 0;
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     bool ok = mmu_read_16_slow(cpu, va, &v);
     return (cpu_read_res_t){v, ok};
 }
@@ -128,7 +126,6 @@ CPU_COLD_MISS cpu_read_res_t cpu_read_16_miss(vcpu_t *cpu, const ir_insn_t *ir, 
 CPU_COLD_MISS cpu_read_res_t cpu_read_32_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va) {
     uint32_t v = 0;
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     bool ok = mmu_read_32_slow(cpu, va, &v);
     return (cpu_read_res_t){v, ok};
 }
@@ -136,44 +133,49 @@ CPU_COLD_MISS cpu_read_res_t cpu_read_32_miss(vcpu_t *cpu, const ir_insn_t *ir, 
 CPU_COLD_MISS cpu_read_res_t cpu_read_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va) {
     uint64_t v = 0;
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     bool ok = mmu_read_64_slow(cpu, va, &v);
     return (cpu_read_res_t){v, ok};
 }
 
+CPU_COLD_MISS bool cpu_read_pair_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
+                                         uint64_t va, uint64_t *out1, uint64_t *out2) {
+    cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
+    return mmu_read_pair_64_slow(cpu, va, out1, out2);
+}
+
 CPU_COLD_MISS bool cpu_read_128_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, __uint128_t *out) {
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     return mmu_read_128_slow(cpu, va, out);
 }
 
 CPU_COLD_MISS bool cpu_write_8_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint8_t val) {
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     return mmu_write_8_slow(cpu, va, val);
 }
 
 CPU_COLD_MISS bool cpu_write_16_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint16_t val) {
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     return mmu_write_16_slow(cpu, va, val);
 }
 
 CPU_COLD_MISS bool cpu_write_32_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint32_t val) {
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     return mmu_write_32_slow(cpu, va, val);
 }
 
 CPU_COLD_MISS bool cpu_write_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint64_t val) {
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     return mmu_write_64_slow(cpu, va, val);
+}
+
+CPU_COLD_MISS bool cpu_write_pair_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
+                                          uint64_t va, uint64_t val1, uint64_t val2) {
+    cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
+    return mmu_write_pair_64_slow(cpu, va, val1, val2);
 }
 
 CPU_COLD_MISS bool cpu_write_128_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, __uint128_t val) {
     cpu->pc = cpu_ir_pc(cpu, ir) + pc_off;
-    cpu_fp_leave_guest(cpu);
     return mmu_write_128_slow(cpu, va, val);
 }
 
@@ -236,7 +238,7 @@ CPU_ALWAYS_INLINE const ir_insn_t *cpu_resolve_jump_pc_nobudget(vcpu_t *cpu, uin
         cpu->pc = target;
         return NULL;
     }
-    const exec_cache_entry_t *e = &ic->exec_cache[cpu->el][idx];
+    const exec_cache_entry_t *e = &cpu_exec_cache(cpu)[cpu->el][idx];
     if (__builtin_expect(e->tag == tag && e->exec_epoch == cpu->exec_epoch &&
                          e->pg != NULL && e->pg->gen == e->pg_gen, 1)) {
         ir_page_t *npg = e->pg;
@@ -317,81 +319,195 @@ bool vcpu_decode_bitmask(uint32_t n, uint32_t imms, uint32_t immr, bool is_64,
 }
 
 static uint64_t pack_spsr(const vcpu_t *cpu) {
-    uint64_t mode = cpu->el == 0 ? 0ULL : (4ULL | (uint64_t)(cpu->spsel & 1U));
+    uint64_t mode = cpu->el == 0 ? 0ULL : (((uint64_t)cpu_current_el(cpu) << 2) | (uint64_t)(cpu->spsel & 1U));
     return (uint64_t)(cpu->nzcv & 0xF0000000U) |
            ((uint64_t)(cpu->pan & 1U) << 22) |
            (uint64_t)(cpu->daif & 0x3C0U) |
            mode;
 }
 
-static uint64_t exception_vector_base_off(const vcpu_t *cpu) {
-    if (cpu->el == 0) {
-        return 0x400ULL;
+static uint8_t host_world(const vcpu_t *cpu) {
+    return (cpu->el2.hcr & HCR_EL2_E2H) != 0 ? VCPU_WORLD_HOST : VCPU_WORLD_HOST_NVHE;
+}
+
+static void take_exception(vcpu_t *cpu, uint64_t vector, uint32_t esr, uint64_t far, uint64_t elr,
+                           bool sync, bool to_el2) {
+    uint64_t spsr = pack_spsr(cpu);
+    bool lower = cpu->el == 0 || (to_el2 && cpu->world == VCPU_WORLD_GUEST);
+    uint64_t off = vector + (lower ? 0x400ULL : (cpu->spsel ? 0x200ULL : 0x000ULL));
+    if (to_el2 && cpu->world == VCPU_WORLD_GUEST) {
+        vcpu_set_world(cpu, host_world(cpu));
     }
-    return cpu->spsel ? 0x200ULL : 0x000ULL;
+    cpu->spsr_el1 = spsr;
+    cpu->elr_el1 = elr;
+    if (sync) {
+        cpu->esr_el1 = esr;
+        cpu->far_el1 = far;
+    }
+    cpu->el = 1;
+    cpu->spsel = 1;
+    cpu->daif |= 0x3C0U;
+    if ((cpu->sctlr_el1 & (1ULL << 23)) == 0) {
+        cpu->pan = 1;
+    }
+    mmu_update_asid_salt(cpu);
+    cpu->excl_valid = false;
+    cpu->excl_hva = 0;
+    atomic_store_explicit(&cpu->event_reg, true, memory_order_release);
+    cpu->ras_epoch++;
+    cpu->pc = (cpu->vbar_el1 & ~0x7FFULL) + off;
 }
 
 void vcpu_raise_exception(vcpu_t *cpu, uint32_t esr, uint64_t far, uint64_t elr) {
-    uint64_t off = exception_vector_base_off(cpu);
-    cpu->spsr_el1 = pack_spsr(cpu);
-    cpu->elr_el1 = elr;
-    cpu->esr_el1 = esr;
-    cpu->far_el1 = far;
-    cpu->el = 1;
-    cpu->spsel = 1;
-    cpu->daif |= 0x3C0U;
-    if ((cpu->sctlr_el1 & (1ULL << 23)) == 0) {
-        cpu->pan = 1;
-    }
-    mmu_update_asid_salt(cpu);
-    cpu->excl_valid = false;
-    cpu->excl_hva = 0;
-    atomic_store_explicit(&cpu->event_reg, true, memory_order_release);
-    cpu->ras_epoch++;
-    cpu->pc = (cpu->vbar_el1 & ~0x7FFULL) + off;
+    take_exception(cpu, 0, esr, far, elr, true, false);
 }
 
-static void vcpu_take_irq(vcpu_t *cpu) {
-    uint64_t off = exception_vector_base_off(cpu) + 0x80ULL;
-    cpu->spsr_el1 = pack_spsr(cpu);
-    cpu->elr_el1 = cpu->pc;
-    cpu->el = 1;
-    cpu->spsel = 1;
-    cpu->daif |= 0x3C0U;
-    if ((cpu->sctlr_el1 & (1ULL << 23)) == 0) {
-        cpu->pan = 1;
+void vcpu_raise_exception_el2(vcpu_t *cpu, uint32_t esr, uint64_t far, uint64_t elr) {
+    take_exception(cpu, 0, esr, far, elr, true, true);
+}
+
+static void vcpu_take_irq(vcpu_t *cpu, uint32_t bits) {
+    take_exception(cpu, 0x80ULL, 0, 0, cpu->pc, false, (bits & cpu->irq_force) != 0);
+}
+
+void vcpu_update_irq_gate(vcpu_t *cpu) {
+    if (cpu->world == VCPU_WORLD_GUEST && (cpu->el2.hcr & (HCR_EL2_IMO | HCR_EL2_TGE)) != 0) {
+        cpu->irq_mask = VCPU_IRQ_PHYS | VCPU_IRQ_VIRT | VCPU_IRQ_VI;
+        cpu->irq_force = VCPU_IRQ_PHYS;
+    } else {
+        cpu->irq_mask = VCPU_IRQ_PHYS;
+        cpu->irq_force = 0;
     }
-    mmu_update_asid_salt(cpu);
-    cpu->excl_valid = false;
-    cpu->excl_hva = 0;
-    atomic_store_explicit(&cpu->event_reg, true, memory_order_release);
-    cpu->ras_epoch++;
-    cpu->pc = (cpu->vbar_el1 & ~0x7FFULL) + off;
+    if ((cpu->el2.hcr & HCR_EL2_VI) != 0) {
+        atomic_fetch_or_explicit(&cpu->irq_pending, VCPU_IRQ_VI, memory_order_acq_rel);
+    } else {
+        atomic_fetch_and_explicit(&cpu->irq_pending, ~VCPU_IRQ_VI, memory_order_acq_rel);
+    }
 }
 
 void vcpu_eret(vcpu_t *cpu) {
     uint64_t spsr = cpu->spsr_el1;
+    uint64_t elr = cpu->elr_el1;
+    uint32_t mode = (uint32_t)(spsr & 0x1FU);
+    uint32_t target = mode >> 2;
+    if (cpu->world == VCPU_WORLD_GUEST && target > 1U) {
+        target = 1U;
+    }
+    if (cpu->world != VCPU_WORLD_GUEST) {
+        uint64_t host = HCR_EL2_E2H | HCR_EL2_TGE;
+        if (target == 1U || (target == 0U && (cpu->el2.hcr & host) != host)) {
+            vcpu_set_world(cpu, VCPU_WORLD_GUEST);
+        }
+    }
     cpu->nzcv = (uint32_t)(spsr & 0xF0000000U);
     cpu->daif = (uint32_t)(spsr & 0x3C0U);
-    uint8_t new_pan = (uint8_t)((spsr >> 22) & 1U);
-    uint32_t mode = (uint32_t)(spsr & 0x1FU);
-    if (mode == 0U) {
-        cpu->el = 0;
-        cpu->spsel = 0;
-    } else if (mode == 4U) {
-        cpu->el = 1;
-        cpu->spsel = 0;
-    } else {
-        cpu->el = 1;
-        cpu->spsel = 1;
-    }
-    cpu->pan = new_pan;
+    cpu->el = target != 0U;
+    cpu->spsel = target != 0U && (mode & 1U) != 0;
+    cpu->pan = (uint8_t)((spsr >> 22) & 1U);
     mmu_update_asid_salt(cpu);
     cpu->excl_valid = false;
     cpu->excl_hva = 0;
     atomic_store_explicit(&cpu->event_reg, true, memory_order_release);
     cpu->ras_epoch++;
-    cpu->pc = cpu->elr_el1;
+    cpu->pc = elr;
+}
+
+static void invalidate_ctx_tlb(vcpu_mmu_ctx_t *ctx) {
+    for (uint32_t b = 0; b < SOFTTLB_BANK_COUNT; ++b) {
+        for (uint32_t i = 0; i < SOFTTLB_ENTRIES; ++i) {
+            ctx->tlb[b][i].tag = SOFTTLB_TAG_INVALID;
+            ctx->tlb[b][i].addend = 0;
+        }
+    }
+}
+
+static vcpu_mmu_ctx_t *alloc_ctx(void) {
+    vcpu_mmu_ctx_t *ctx = NULL;
+    posix_memalign((void **)&ctx, sizeof(ctx->tlb), sizeof(*ctx));
+    invalidate_ctx_tlb(ctx);
+    memset(ctx->exec_cache, 0, sizeof(ctx->exec_cache));
+    return ctx;
+}
+
+static_assert(VCPU_CTX_L2_SLOTS == 2);
+
+static void vcpu_select_ctx(vcpu_t *cpu) {
+    uint32_t slot = VCPU_CTX_MAIN;
+    if (cpu->world == VCPU_WORLD_GUEST && (cpu->el2.hcr & HCR_EL2_VM) != 0) {
+        uint16_t vmid = cpu_vmid(cpu);
+        for (uint32_t i = 0; i < VCPU_CTX_L2_SLOTS; ++i) {
+            if (cpu->mmu_ctx[1U + i] && cpu->l2_vmid[i] == vmid) {
+                slot = 1U + i;
+                break;
+            }
+        }
+        if (slot == VCPU_CTX_MAIN) {
+            slot = 1U + cpu->l2_victim;
+            if (cpu->mmu_ctx[slot]) {
+                cpu->ctx_stale |= (uint8_t)(1U << slot);
+            }
+            cpu->l2_vmid[slot - 1U] = vmid;
+        }
+        cpu->l2_victim = (uint8_t)((slot - 1U) ^ 1U);
+    } else if (cpu->main_guest != (cpu->world == VCPU_WORLD_GUEST)) {
+        cpu->main_guest = cpu->world == VCPU_WORLD_GUEST;
+        cpu->ctx_stale |= 1U << VCPU_CTX_MAIN;
+    }
+    vcpu_mmu_ctx_t *ctx = cpu->mmu_ctx[slot];
+    if (!ctx) {
+        ctx = alloc_ctx();
+        cpu->mmu_ctx[slot] = ctx;
+    }
+    if ((cpu->ctx_stale & (1U << slot)) != 0) {
+        cpu->ctx_stale &= (uint8_t)~(1U << slot);
+        invalidate_ctx_tlb(ctx);
+        cpu->exec_epoch++;
+    }
+    cpu->ctx_slot = (uint8_t)slot;
+    cpu->tlb = ctx->tlb;
+    cpu->exec_cache = ctx->exec_cache;
+}
+
+void vcpu_update_counter_bases(vcpu_t *cpu) {
+    uint64_t base = cpu->vm ? atomic_load_explicit(&cpu->vm->timer_base, memory_order_relaxed) : 0;
+    cpu->cntpct_base = base;
+    cpu->cntvct_base = base + (cpu->world == VCPU_WORLD_HOST ? 0 : cpu->el2.cntvoff);
+}
+
+void vcpu_sync_el2(vcpu_t *cpu) {
+    uint32_t traps = 0;
+    if (cpu->world == VCPU_WORLD_GUEST) {
+        traps = cpu_guest_traps(cpu);
+        if (traps != cpu->guest_traps) {
+            cpu->guest_traps = traps;
+            cpu->exec_epoch++;
+        }
+    }
+    cpu->traps = traps;
+    vcpu_select_ctx(cpu);
+    vcpu_update_irq_gate(cpu);
+    vcpu_update_counter_bases(cpu);
+    mmu_update_asid_salt(cpu);
+}
+
+void vcpu_set_world(vcpu_t *cpu, uint8_t world) {
+    uint8_t old = cpu->world;
+    if (old == world) {
+        return;
+    }
+    if ((old == VCPU_WORLD_GUEST) != (world == VCPU_WORLD_GUEST)) {
+        vcpu_bank_t bank = cpu->bank;
+        cpu->bank = cpu->el2.shadow;
+        cpu->el2.shadow = bank;
+        uint64_t sp = cpu->sp_el[1];
+        cpu->sp_el[1] = cpu->el2.shadow_sp;
+        cpu->el2.shadow_sp = sp;
+    } else {
+        cpu->exec_epoch++;
+    }
+    cpu->world = world;
+    cpu->ras_epoch++;
+    vcpu_sync_el2(cpu);
 }
 
 void vcpu_flush_icache_all(vcpu_t *cpu) {
@@ -488,15 +604,6 @@ bool vcpu_flush_icache_va(vcpu_t *cpu, uint64_t va) {
     return false;
 }
 
-static void invalidate_softtlb(vcpu_t *cpu) {
-    for (uint32_t b = 0; b < SOFTTLB_BANK_COUNT; ++b) {
-        for (uint32_t i = 0; i < SOFTTLB_ENTRIES; ++i) {
-            cpu->tlb[b][i].tag = SOFTTLB_TAG_INVALID;
-            cpu->tlb[b][i].addend = 0;
-        }
-    }
-}
-
 void vcpu_init(vcpu_t *cpu, vmm_machine_t *vm, uint32_t cpu_id) {
     memset(cpu, 0, sizeof(*cpu));
     cpu->vm = vm;
@@ -510,6 +617,11 @@ void vcpu_init(vcpu_t *cpu, vmm_machine_t *vm, uint32_t cpu_id) {
     ((cpu_icache_t *)cpu->icache)->stats = calloc(1, sizeof(cpu_stats_t));
 #endif
     vcpu_reset(cpu, 0, 0);
+}
+
+void vcpu_enable_el2(vcpu_t *cpu) {
+    cpu->has_el2 = true;
+    vcpu_reset(cpu, cpu->pc, cpu->x[0]);
 }
 
 void vcpu_destroy(vcpu_t *cpu) {
@@ -533,6 +645,10 @@ void vcpu_destroy(vcpu_t *cpu) {
         free(ic);
         cpu->icache = NULL;
     }
+    for (uint32_t i = 0; i < VCPU_CTX_COUNT; ++i) {
+        free(cpu->mmu_ctx[i]);
+        cpu->mmu_ctx[i] = NULL;
+    }
 }
 
 void vcpu_reset(vcpu_t *cpu, uint64_t entry_pc, uint64_t x0) {
@@ -540,12 +656,17 @@ void vcpu_reset(vcpu_t *cpu, uint64_t entry_pc, uint64_t x0) {
     uint32_t cpu_id = cpu->cpu_id;
     uint64_t mpidr = cpu->mpidr_el1;
     void *icache = cpu->icache;
+    bool has_el2 = cpu->has_el2;
+    vcpu_mmu_ctx_t *ctx[VCPU_CTX_COUNT];
+    memcpy(ctx, cpu->mmu_ctx, sizeof(ctx));
 
     memset(cpu, 0, sizeof(*cpu));
     cpu->vm = vm;
     cpu->cpu_id = cpu_id;
     cpu->mpidr_el1 = mpidr;
     cpu->icache = icache;
+    cpu->has_el2 = has_el2;
+    memcpy(cpu->mmu_ctx, ctx, sizeof(ctx));
 
     cpu->x[0] = x0;
     cpu->pc = entry_pc;
@@ -555,6 +676,15 @@ void vcpu_reset(vcpu_t *cpu, uint64_t entry_pc, uint64_t x0) {
     cpu->backedge_budget = BACKEDGE_BUDGET_INIT;
     cpu->sctlr_el1 = 0x00C50838ULL;
     cpu->cpacr_el1 = 3ULL << 20;
+    if (has_el2) {
+        cpu->world = VCPU_WORLD_HOST_NVHE;
+        cpu->el2.shadow = cpu->bank;
+        cpu->sctlr_el1 = SCTLR_EL2_RESET;
+        cpu->cpacr_el1 = CPTR_EL2_RESET;
+        cpu->el2.hcr = HCR_EL2_RW;
+        cpu->el2.vpidr = 0x000F0010ULL;
+        cpu->el2.vmpidr = mpidr;
+    }
     cpu->exec_epoch = 1ULL;
     cpu->ras_epoch = 1ULL;
     cpu->ic_ivau_last_va_page = UINT64_MAX;
@@ -569,11 +699,19 @@ void vcpu_reset(vcpu_t *cpu, uint64_t entry_pc, uint64_t x0) {
             ic->next_gen = 1U;
         }
         ic->ras_sp = 0U;
-        memset(ic->exec_cache, 0, sizeof(ic->exec_cache));
         memset(ic->ras, 0, sizeof(ic->ras));
     }
 
-    invalidate_softtlb(cpu);
+    for (uint32_t i = 0; i < VCPU_CTX_COUNT; ++i) {
+        if (cpu->mmu_ctx[i]) {
+            invalidate_ctx_tlb(cpu->mmu_ctx[i]);
+            memset(cpu->mmu_ctx[i]->exec_cache, 0, sizeof(cpu->mmu_ctx[i]->exec_cache));
+        }
+    }
+    cpu->main_guest = cpu->world == VCPU_WORLD_GUEST;
+    vcpu_select_ctx(cpu);
+    vcpu_update_irq_gate(cpu);
+    vcpu_update_counter_bases(cpu);
     vcpu_flush_icache_all(cpu);
     if (cpu->vm) {
         mmu_update_asid_salt(cpu);
@@ -1124,6 +1262,68 @@ static CPU_NOINLINE void op_dp_1src(vcpu_t *cpu, const ir_insn_t *ir,
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
 }
 
+static uint64_t cssc_minmax(uint32_t opc, uint32_t bits, uint64_t a, uint64_t b) {
+    bool less = (opc & 1U) ? a < b : cpu_sext(a, bits) < cpu_sext(b, bits);
+    return less == ((opc & 2U) != 0) ? a : b;
+}
+
+static CPU_NOINLINE void op_cssc(vcpu_t *cpu, const ir_insn_t *ir,
+                                 softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
+    uint32_t word = (uint32_t)ir->target_or_imm;
+    uint32_t bits = (word >> 31) ? 64U : 32U;
+    uint64_t mask = bits == 64U ? UINT64_MAX : UINT32_MAX;
+    uint64_t n = cpu_get_x(cpu, (word >> 5) & 31U) & mask;
+    uint64_t res;
+    if (((word >> 27) & 1U) == 0U) {
+        uint32_t opc = (word >> 18) & 3U;
+        uint32_t imm8 = (word >> 10) & 0xFFU;
+        res = cssc_minmax(opc, bits, n, (opc & 1U) ? imm8 : (uint64_t)(int64_t)(int8_t)imm8);
+    } else if (((word >> 30) & 1U) == 0U) {
+        res = cssc_minmax((word >> 10) & 3U, bits, n, cpu_get_x(cpu, (word >> 16) & 31U) & mask);
+    } else {
+        switch ((word >> 10) & 0x3FU) {
+        case 6U: res = n == 0U ? bits : (uint64_t)__builtin_ctzll(n); break;
+        case 7U: res = (uint64_t)__builtin_popcountll(n); break;
+        default: res = cpu_sext(n, bits) < 0 ? -n : n; break;
+        }
+    }
+    cpu_set_x(cpu, word & 31U, res & mask);
+    CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
+}
+
+static CPU_NOINLINE void op_flagm(vcpu_t *cpu, const ir_insn_t *ir,
+                                  softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
+    uint32_t word = (uint32_t)ir->target_or_imm;
+    uint32_t n = (cpu->nzcv >> 31) & 1U, z = (cpu->nzcv >> 30) & 1U;
+    uint32_t c = (cpu->nzcv >> 29) & 1U, v = (cpu->nzcv >> 28) & 1U;
+    if (word == 0xD500401FU) {
+        c ^= 1U;
+    } else if (word == 0xD500403FU) {
+        uint32_t nn = !c && !z, nz = z && c, nc = c || z, nv = !c && z;
+        n = nn, z = nz, c = nc, v = nv;
+    } else if (word == 0xD500405FU) {
+        z = z | v;
+        c = c & !v;
+        n = 0U;
+        v = 0U;
+    } else if ((word >> 31) == 0U) {
+        uint32_t x = (uint32_t)cpu_get_x(cpu, (word >> 5) & 31U);
+        uint32_t msb = ((word >> 14) & 1U) ? 15U : 7U;
+        n = (x >> msb) & 1U;
+        z = (x & ((2U << msb) - 1U)) == 0U;
+        v = ((x >> (msb + 1U)) ^ (x >> msb)) & 1U;
+    } else {
+        uint64_t x = cpu_get_x(cpu, (word >> 5) & 31U);
+        uint32_t shift = (word >> 15) & 63U;
+        uint32_t flags = (uint32_t)((x >> shift) | (shift ? x << (64U - shift) : 0U)) & 15U;
+        uint32_t keep = (cpu->nzcv >> 28) & ~word & 15U;
+        cpu->nzcv = ((flags & word & 15U) | keep) << 28;
+        CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
+    }
+    cpu->nzcv = (n << 31) | (z << 30) | (c << 29) | (v << 28);
+    CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
+}
+
 static CPU_NOINLINE void op_dp_2src(vcpu_t *cpu, const ir_insn_t *ir,
                                     softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
     bool wide = (ir->flags & IR_FLAG_WIDE) != 0;
@@ -1598,7 +1798,7 @@ static CPU_NOINLINE void op_ldst_pair(vcpu_t *cpu, const ir_insn_t *ir,
                 v1 = is_signed ? (uint64_t)(int64_t)(int32_t)a : (uint64_t)a;
                 v2 = is_signed ? (uint64_t)(int64_t)(int32_t)b : (uint64_t)b;
             } else {
-                ok = cpu_read_64(cpu, ir, 0, tlb_r, va, &v1) && cpu_read_64(cpu, ir, 0, tlb_r, va + step, &v2);
+                ok = cpu_read_pair_64(cpu, ir, 0, tlb_r, va, &v1, &v2);
             }
             if (!ok) return;
             if (ir->flags & (IR_FLAG_PRE | IR_FLAG_POST)) cpu_set_xsp(cpu, ir->rn, base + off);
@@ -1623,8 +1823,7 @@ static CPU_NOINLINE void op_ldst_pair(vcpu_t *cpu, const ir_insn_t *ir,
                 ok = cpu_write_32(cpu, ir, 0, tlb_w, va, (uint32_t)cpu_get_x(cpu, ir->rd)) &&
                      cpu_write_32(cpu, ir, 0, tlb_w, va + step, (uint32_t)cpu_get_x(cpu, ir->rm));
             } else {
-                ok = cpu_write_64(cpu, ir, 0, tlb_w, va, cpu_get_x(cpu, ir->rd)) &&
-                     cpu_write_64(cpu, ir, 0, tlb_w, va + step, cpu_get_x(cpu, ir->rm));
+                ok = cpu_write_pair_64(cpu, ir, 0, tlb_w, va, cpu_get_x(cpu, ir->rd), cpu_get_x(cpu, ir->rm));
             }
         }
         if (!ok) return;
@@ -1928,6 +2127,8 @@ static void predecode_pair(uint32_t word, ir_insn_t *out, uint16_t wb_flag) {
     out->op = (uint16_t)(scale | (is_load ? 8U : 0U) | (is_signed ? 16U : 0U));
 }
 
+static bool predecode_native(uint32_t word, ir_insn_t *out);
+
 static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t idx,
                            uint32_t tile, uint32_t *tile_targets) {
     ir_insn_t *out = &pg->insns[idx];
@@ -1943,7 +2144,6 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
     switch (dec) {
     case A64_DEC_UNDEF:
     case A64_DEC_PERM_UNDEF_UDF:
-    case A64_DEC_EXCEPTION_SMC:
     case A64_DEC_EXCEPTION_DCPS1:
     case A64_DEC_EXCEPTION_DCPS2:
     case A64_DEC_EXCEPTION_DCPS3:
@@ -1953,6 +2153,7 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
         return;
 
     case A64_DEC_HINT_NOP:
+    case A64_DEC_BARRIERS_SB:
         out->handler = op_nop;
         return;
     case A64_DEC_HINTS_WFI:
@@ -1984,6 +2185,10 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
         out->handler = cpu_op_hvc;
         out->target_or_imm = (word >> 5) & 0xFFFFU;
         return;
+    case A64_DEC_EXCEPTION_SMC:
+        out->handler = cpu_op_smc;
+        out->target_or_imm = (word >> 5) & 0xFFFFU;
+        return;
     case A64_DEC_EXCEPTION_BRK:
         out->handler = cpu_op_brk;
         out->target_or_imm = (word >> 5) & 0xFFFFU;
@@ -2006,6 +2211,29 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
         return;
     case A64_DEC_PSTATE_MSR:
         out->handler = cpu_op_pstate_msr;
+        out->target_or_imm = word;
+        return;
+    case A64_DEC_PSTATE_CFINV:
+    case A64_DEC_PSTATE_XAFLAG:
+    case A64_DEC_PSTATE_AXFLAG:
+    case A64_DEC_RMIF_RMIF:
+    case A64_DEC_SETF_SETF8:
+    case A64_DEC_SETF_SETF16:
+        out->handler = op_flagm;
+        out->target_or_imm = word;
+        return;
+    case A64_DEC_DP_1SRC_ABS:
+    case A64_DEC_DP_1SRC_CNT:
+    case A64_DEC_DP_1SRC_CTZ:
+    case A64_DEC_DP_2SRC_SMAX:
+    case A64_DEC_DP_2SRC_SMIN:
+    case A64_DEC_DP_2SRC_UMAX:
+    case A64_DEC_DP_2SRC_UMIN:
+    case A64_DEC_MINMAX_IMM_SMAX:
+    case A64_DEC_MINMAX_IMM_SMIN:
+    case A64_DEC_MINMAX_IMM_UMAX:
+    case A64_DEC_MINMAX_IMM_UMIN:
+        out->handler = (cpu_host_features() & CPU_HOST_FEAT_CSSC) ? op_cssc : op_undef;
         out->target_or_imm = word;
         return;
     case A64_DEC_SYSTEMINSTRS_SYS:
@@ -2524,6 +2752,7 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
         out->simm = cpu_sext((word >> 12) & 0x1FFU, 9);
         return;
     case A64_DEC_LDST_ORD:     out->handler = cpu_op_ldst_ord; out->target_or_imm = word; return;
+    case A64_DEC_LDAPSTL_UNSCALED: out->handler = cpu_op_ldapstl_unscaled; out->target_or_imm = word; return;
     case A64_DEC_LDST_EXCLR:   out->handler = cpu_op_ldst_exclr; out->target_or_imm = word; return;
     case A64_DEC_LDST_EXCLP:   out->handler = cpu_op_ldst_exclp; out->target_or_imm = word; return;
     case A64_DEC_LSE_CAS:      out->handler = cpu_op_lse_cas; out->target_or_imm = word; return;
@@ -2561,7 +2790,9 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
     case A64_DEC_ASISDLSO:
     case A64_DEC_ASISDLSOP:    out->handler = cpu_op_simd_ldst_single; out->target_or_imm = word; return;
 
-    case A64_DEC_FLOATDP1:     out->handler = cpu_op_fp_scalar; out->op = SUBOP_FP_DP1; out->target_or_imm = word; return;
+    case A64_DEC_FLOATDP1:
+        if (predecode_native(word, out)) return;
+        out->handler = cpu_op_fp_scalar; out->op = SUBOP_FP_DP1; out->target_or_imm = word; return;
     case A64_DEC_FLOATDP2:     out->handler = cpu_op_fp_scalar; out->op = SUBOP_FP_DP2; out->target_or_imm = word; return;
     case A64_DEC_FLOATDP3:     out->handler = cpu_op_fp_scalar; out->op = SUBOP_FP_DP3; out->target_or_imm = word; return;
     case A64_DEC_FLOATCMP:     out->handler = cpu_op_fp_scalar; out->op = SUBOP_FP_CMP; out->target_or_imm = word; return;
@@ -2571,23 +2802,17 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
     case A64_DEC_FLOAT2INT:    out->handler = cpu_op_fp_scalar; out->op = SUBOP_FP_2INT; out->target_or_imm = word; return;
     case A64_DEC_FLOAT2FIX:    out->handler = cpu_op_fp_scalar; out->op = SUBOP_FP_2FIX; out->target_or_imm = word; return;
 
-    case A64_DEC_CRYPTOAES:      out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_AES; out->target_or_imm = word; return;
-    case A64_DEC_CRYPTOSHA2:     out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_SHA2; out->target_or_imm = word; return;
-    case A64_DEC_CRYPTOSHA3:     out->handler = cpu_op_crypto; out->op = SUBOP_CRYPTO_SHA3; out->target_or_imm = word; return;
+    case A64_DEC_CRYPTOAES:
+    case A64_DEC_CRYPTOSHA2:
+    case A64_DEC_CRYPTOSHA3:
     case A64_DEC_CRYPTO3_IMM6:
     case A64_DEC_CRYPTO4:
     case A64_DEC_CRYPTOSHA512_2:
-    case A64_DEC_CRYPTOSHA512_3: {
-        bool sha512 = dec == A64_DEC_CRYPTOSHA512_2 ||
-                      (dec == A64_DEC_CRYPTOSHA512_3 && ((word >> 10) & 3U) != 3U);
-        out->handler = (cpu_host_features() & (sha512 ? CPU_HOST_SHA512 : CPU_HOST_SHA3)) ? cpu_op_crypto : op_undef;
-        out->op = dec == A64_DEC_CRYPTO3_IMM6     ? SUBOP_CRYPTO_IMM6
-                  : dec == A64_DEC_CRYPTO4        ? SUBOP_CRYPTO_4
-                  : dec == A64_DEC_CRYPTOSHA512_2 ? SUBOP_CRYPTO_SHA512_2
-                                                  : SUBOP_CRYPTO_SHA512_3;
-        out->target_or_imm = word;
+    case A64_DEC_CRYPTOSHA512_3:
+        if (!predecode_native(word, out)) {
+            out->handler = op_undef;
+        }
         return;
-    }
 
     case A64_DEC_ASIMDIMM:       out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_IMM; out->target_or_imm = word; return;
     case A64_DEC_ASIMDINS:       out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_INS; out->target_or_imm = word; return;
@@ -2597,12 +2822,18 @@ static void predecode_insn(uint32_t word, uint64_t pc, ir_page_t *pg, uint32_t i
     case A64_DEC_ASIMDTBL:       out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_TBL; out->target_or_imm = word; return;
     case A64_DEC_ASIMDSAME:      out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_SAME; out->target_or_imm = word; return;
     case A64_DEC_ASIMDSAMEFP16:  out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_SAME_FP16; out->target_or_imm = word; return;
-    case A64_DEC_ASIMDSAME2:     out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_SAME2; out->target_or_imm = word; return;
-    case A64_DEC_ASIMDMISC:      out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_MISC; out->target_or_imm = word; return;
+    case A64_DEC_ASIMDSAME2:
+        if (predecode_native(word, out)) return;
+        out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_SAME2; out->target_or_imm = word; return;
+    case A64_DEC_ASIMDMISC:
+        if (predecode_native(word, out)) return;
+        out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_MISC; out->target_or_imm = word; return;
     case A64_DEC_ASIMDMISCFP16:  out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_MISC_FP16; out->target_or_imm = word; return;
     case A64_DEC_ASIMDSHF:       out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_SHF; out->target_or_imm = word; return;
     case A64_DEC_ASIMDDIFF:      out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_DIFF; out->target_or_imm = word; return;
-    case A64_DEC_ASIMDELEM:      out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_ELEM; out->target_or_imm = word; return;
+    case A64_DEC_ASIMDELEM:
+        if (predecode_native(word, out)) return;
+        out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_ELEM; out->target_or_imm = word; return;
     case A64_DEC_ASIMDALL:       out->handler = cpu_op_simd_dp; out->op = SUBOP_SIMD_ALL; out->target_or_imm = word; return;
     case A64_DEC_ASISDSAME:      out->handler = cpu_op_simd_dp; out->op = SUBOP_SISD_SAME; out->target_or_imm = word; return;
     case A64_DEC_ASISDSAMEFP16:  out->handler = cpu_op_simd_dp; out->op = SUBOP_SISD_SAME_FP16; out->target_or_imm = word; return;
@@ -2689,7 +2920,7 @@ CPU_COLD_MISS static void decode_tile_slow(ir_page_t *pg, uint32_t tile) {
                 ++ir->target_ir;
             }
         }
-        cpu_fast_decode(ir);
+        cpu_fast_decode(ir, pg);
         cpu_jit_mark(pg, ir, tile_words[i]);
     }
 }
@@ -2711,7 +2942,8 @@ static ir_page_t *icache_get_page(vcpu_t *cpu, uint64_t va_page, uint64_t pa_pag
     uint32_t victim = ICACHE_WAYS;
     for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
         ir_page_t *pg = ic->slots[set][w];
-        if (pg && pg->pa_page == pa_page && pg->va_page == va_page && pg->el == cpu->el) {
+        if (pg && pg->pa_page == pa_page && pg->va_page == va_page && pg->el == cpu->el &&
+            pg->world == cpu->world && pg->traps == cpu->traps) {
             ic->plru[set] = icache_plru_touch(ic->plru[set], w);
             return pg;
         }
@@ -2744,6 +2976,8 @@ static ir_page_t *icache_get_page(vcpu_t *cpu, uint64_t va_page, uint64_t pa_pag
     pg->decoded_mask = 0;
     pg->gen = ++ic->next_gen;
     pg->el = cpu->el;
+    pg->world = cpu->world;
+    pg->traps = cpu->traps;
     if (ic->jit.work != NULL && pg->jit == NULL) {
         pg->jit = malloc(sizeof(cpu_jit_page_t));
     }
@@ -2761,9 +2995,9 @@ const ir_insn_t *cpu_fast_resolve(vcpu_t *cpu) {
         }
         mmu_poll_shootdown(cpu);
 
-        if ((cpu->daif & (1U << 7)) == 0 &&
-            atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) != 0) {
-            vcpu_take_irq(cpu);
+        uint32_t irq = vcpu_irq_deliverable(cpu);
+        if (irq != 0) {
+            vcpu_take_irq(cpu, irq);
         }
 
         if (__builtin_expect((cpu->pc & 3ULL) != 0, 0)) {
@@ -2792,7 +3026,7 @@ const ir_insn_t *cpu_fast_resolve(vcpu_t *cpu) {
         }
 
         if (ec_eligible) {
-            const exec_cache_entry_t *e = &ic->exec_cache[cpu->el][ec_idx];
+            const exec_cache_entry_t *e = &cpu_exec_cache(cpu)[cpu->el][ec_idx];
             if (__builtin_expect(e->tag == ec_tag && e->exec_epoch == cpu->exec_epoch &&
                                  e->pg != NULL && e->pg->gen == e->pg_gen, 1)) {
                 pg = e->pg;
@@ -2805,14 +3039,15 @@ const ir_insn_t *cpu_fast_resolve(vcpu_t *cpu) {
             bool cacheable = false;
             CPU_STAT(cpu, resolve_misses);
             if (!mmu_translate_exec(cpu, va_page, cpu->el, &tr, &cacheable)) {
-                uint32_t ec = cpu->el ? 0x21U : 0x20U;
-                uint32_t fsc = tr.ok ? 0x10U : (tr.fault_fsc & 0x3FU);
-                vcpu_raise_exception(cpu, (ec << 26) | (1U << 25) | fsc, pc, pc);
+                if (tr.ok) {
+                    tr.fault_fsc = 0x10U;
+                }
+                vcpu_raise_abort(cpu, pc, &tr, false, pc, true);
                 continue;
             }
             pg = icache_get_page(cpu, va_page, tr.pa & ~(uint64_t)VMM_PAGE_MASK, tr.hva);
             if (ec_eligible && cacheable) {
-                exec_cache_entry_t *e = &ic->exec_cache[cpu->el][ec_idx];
+                exec_cache_entry_t *e = &cpu_exec_cache(cpu)[cpu->el][ec_idx];
                 e->tag = ec_tag;
                 e->exec_epoch = cpu->exec_epoch;
                 e->pg = pg;

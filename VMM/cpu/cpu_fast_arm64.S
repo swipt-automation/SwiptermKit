@@ -3,9 +3,6 @@
 #include "cpu_fast_layout.h"
 
 .arch_extension crc
-.arch_extension aes
-.arch_extension sha2
-.arch_extension sha3
 .arch_extension lse
 
 .text
@@ -14,27 +11,39 @@
 .private_extern _cpu_fast_run
 _cpu_fast_run:
     .cfi_startproc
-    stp x29, x30, [sp, #-96]!
-    .cfi_def_cfa_offset 96
-    .cfi_offset x29, -96
-    .cfi_offset x30, -88
+    stp x29, x30, [sp, #-160]!
+    .cfi_def_cfa_offset 160
+    .cfi_offset x29, -160
+    .cfi_offset x30, -152
     mov x29, sp
-    .cfi_def_cfa x29, 96
+    .cfi_def_cfa x29, 160
     stp x19, x20, [sp, #16]
-    .cfi_offset x19, -80
-    .cfi_offset x20, -72
+    .cfi_offset x19, -144
+    .cfi_offset x20, -136
     stp x21, x22, [sp, #32]
-    .cfi_offset x21, -64
-    .cfi_offset x22, -56
+    .cfi_offset x21, -128
+    .cfi_offset x22, -120
     stp x23, x24, [sp, #48]
-    .cfi_offset x23, -48
-    .cfi_offset x24, -40
+    .cfi_offset x23, -112
+    .cfi_offset x24, -104
     stp x25, x26, [sp, #64]
-    .cfi_offset x25, -32
-    .cfi_offset x26, -24
+    .cfi_offset x25, -96
+    .cfi_offset x26, -88
     stp x27, x28, [sp, #80]
-    .cfi_offset x27, -16
-    .cfi_offset x28, -8
+    .cfi_offset x27, -80
+    .cfi_offset x28, -72
+    stp d8, d9, [sp, #96]
+    .cfi_offset d8, -64
+    .cfi_offset d9, -56
+    stp d10, d11, [sp, #112]
+    .cfi_offset d10, -48
+    .cfi_offset d11, -40
+    stp d12, d13, [sp, #128]
+    .cfi_offset d12, -32
+    .cfi_offset d13, -24
+    stp d14, d15, [sp, #144]
+    .cfi_offset d14, -16
+    .cfi_offset d15, -8
     mov x19, x0
     adr x24, Lcpu_fast_base
     b Lresolve
@@ -147,7 +156,7 @@ Lreload:
     ldr x11, [x11, w10, uxtw #3]
     str x11, [x19, #CPU_FAST_SP]
 
-    add x21, x19, #CPU_TLB
+    ldr x21, [x19, #CPU_TLB]
     add x21, x21, x9, lsl #(TLB_BANK_SHIFT + 1)
     add x22, x21, #(1 << (TLB_BANK_SHIFT - 12)), lsl #12
     ldr x23, [x19, #CPU_SALT]
@@ -178,8 +187,13 @@ Lasync_check:
     ldr x9, [x19, #CPU_IRQ]
     tbnz x9, #((CPU_STOP - CPU_IRQ) * 8), Lcross_slow
     cbz w9, 1f
-    ldr w0, [x19, #CPU_DAIF]
-    tbz w0, #7, Lcross_slow
+    ldrh w0, [x19, #CPU_IRQ_MASK]
+    ldr w1, [x19, #CPU_DAIF]
+    ubfx w1, w1, #7, #1
+    lsl w1, w1, #3
+    lsr w0, w0, w1
+    and w0, w0, w9
+    cbnz w0, Lcross_slow
 1:
     ldr x9, [x19, #CPU_VM]
     ldp x0, x1, [x9, #VM_TLB_EPOCH]
@@ -214,9 +228,8 @@ Lcross_page:
     orr x10, x10, x11
 3:
     and w9, w9, #((1 << (EXEC_BANK_SHIFT - 5)) - 1)
-    ldr x14, [x19, #CPU_ICACHE]
+    ldr x14, [x19, #CPU_EXEC_CACHE]
     ldrb w11, [x19, #CPU_EL]
-    add x14, x14, #IC_EXEC_CACHE
     add x14, x14, x11, lsl #EXEC_BANK_SHIFT
     add x14, x14, x9, lsl #5
     ldp x11, x12, [x14]
@@ -610,7 +623,7 @@ PAIR_FORMS ldpsw64, ldpsw, x, 4, load
 .macro UNPRIV name, insn, width, bytes, dir
 L\name:
     ADDRESS off
-    add x16, x19, #CPU_TLB
+    and x16, x21, #~((SOFTTLB_BANKS << TLB_BANK_SHIFT) - 1)
 .ifc \dir, load
     TLB x16, \bytes, \bytes
     \insn \width\()15, [x12]
@@ -638,9 +651,13 @@ UNPRIV ldtrsw64, ldrsw, x, 4, load
 UNPRIV ldtrsb32, ldrsb, w, 1, load
 UNPRIV ldtrsh32, ldrsh, w, 2, load
 
-.macro ORDERED name, insn, width, bytes, dir
+.macro ORDERED name, insn, width, bytes, dir, offset=0, extend=, extended=x
 L\name:
     BASE
+.if \offset
+    ldrsw x13, [x20, #IR_IMM_HI]
+    add x10, x10, x13
+.endif
 .if \bytes > 1
     and x9, x10, #(\bytes - 1)
     cbnz x9, Lcold
@@ -649,6 +666,9 @@ L\name:
 .ifc \dir, load
     TLB x21, 1, 1
     \insn \width\()15, [x12]
+.ifnb \extend
+    \extend \extended\()15, w15
+.endif
     WRITE_X x15
 .else
     TLB x22, 1, 1
@@ -672,6 +692,146 @@ ORDERED stlr8, stlrb, w, 1, store
 ORDERED stlr16, stlrh, w, 2, store
 ORDERED stlr32, stlr, w, 4, store
 ORDERED stlr64, stlr, x, 8, store
+ORDERED ldapur8, ldarb, w, 1, load, 1
+ORDERED ldapur16, ldarh, w, 2, load, 1
+ORDERED ldapur32, ldar, w, 4, load, 1
+ORDERED ldapur64, ldar, x, 8, load, 1
+ORDERED ldapursb64, ldarb, w, 1, load, 1, sxtb, x
+ORDERED ldapursh64, ldarh, w, 2, load, 1, sxth, x
+ORDERED ldapursw64, ldar, w, 4, load, 1, sxtw, x
+ORDERED ldapursb32, ldarb, w, 1, load, 1, sxtb, w
+ORDERED ldapursh32, ldarh, w, 2, load, 1, sxth, w
+ORDERED stlur8, stlrb, w, 1, store, 1
+ORDERED stlur16, stlrh, w, 2, store, 1
+ORDERED stlur32, stlr, w, 4, store, 1
+ORDERED stlur64, stlr, x, 8, store, 1
+
+Lcfinv:
+    mrs x9, nzcv
+    eor x9, x9, #(1 << 29)
+    msr nzcv, x9
+    NEXT
+
+Lxaflag:
+    mrs x9, nzcv
+    ubfx w10, w9, #30, #1
+    ubfx w11, w9, #29, #1
+    orr w12, w10, w11
+    eor w13, w12, #1
+    lsl w9, w13, #31
+    and w13, w10, w11
+    orr w9, w9, w13, lsl #30
+    orr w9, w9, w12, lsl #29
+    bic w13, w10, w11
+    orr w9, w9, w13, lsl #28
+    msr nzcv, x9
+    NEXT
+
+Laxflag:
+    mrs x9, nzcv
+    ubfx w10, w9, #28, #1
+    orr w9, w9, w10, lsl #30
+    bic w9, w9, w10, lsl #29
+    and w9, w9, #0x60000000
+    msr nzcv, x9
+    NEXT
+
+.macro SETF name, msb
+L\name:
+    READ_X x10, IR_RN
+    mrs x9, nzcv
+    and w9, w9, #(1 << 29)
+    ubfx w11, w10, #\msb, #1
+    orr w9, w9, w11, lsl #31
+    tst w10, #((2 << \msb) - 1)
+    cset w11, eq
+    orr w9, w9, w11, lsl #30
+    eor w11, w10, w10, lsr #1
+    ubfx w11, w11, #\msb, #1
+    orr w9, w9, w11, lsl #28
+    msr nzcv, x9
+    NEXT
+.endmacro
+
+SETF setf8, 7
+SETF setf16, 15
+
+Lrmif:
+    READ_X x10, IR_RN
+    ldrb w11, [x20, #IR_RA]
+    ror x10, x10, x11
+    ldrb w12, [x20, #IR_RM]
+    lsl w12, w12, #28
+    lsl w10, w10, #28
+    mrs x9, nzcv
+    bic w9, w9, w12
+    and w10, w10, w12
+    orr w9, w9, w10
+    msr nzcv, x9
+    NEXT
+
+.macro CSSC_CTZ name, r
+L\name:
+    READ_X x10, IR_RN
+    rbit \r\()10, \r\()10
+    clz \r\()10, \r\()10
+    WRITE_X x10
+    NEXT
+.endmacro
+
+.macro CSSC_CNT name, r, f
+L\name:
+    READ_X x10, IR_RN
+    fmov \f\()0, \r\()10
+    cnt v0.8b, v0.8b
+    addv b0, v0.8b
+    fmov w10, s0
+    WRITE_X x10
+    NEXT
+.endmacro
+
+.macro CSSC_ABS name, r, top
+L\name:
+    READ_X x10, IR_RN
+    asr \r\()11, \r\()10, #\top
+    eor \r\()10, \r\()10, \r\()11
+    sub \r\()10, \r\()10, \r\()11
+    WRITE_X x10
+    NEXT
+.endmacro
+
+.macro CSSC_MINMAX name, r, cond, operand
+L\name:
+    READ_X x10, IR_RN
+.ifc \operand, reg
+    READ_X x11, IR_RM
+.else
+    ldrsw x11, [x20, #IR_IMM_HI]
+.endif
+    mrs x9, nzcv
+    cmp \r\()10, \r\()11
+    csel \r\()10, \r\()10, \r\()11, \cond
+    msr nzcv, x9
+    WRITE_X x10
+    NEXT
+.endmacro
+
+CSSC_CTZ ctz32, w
+CSSC_CTZ ctz64, x
+CSSC_CNT cnt32, w, s
+CSSC_CNT cnt64, x, d
+CSSC_ABS abs32, w, 31
+CSSC_ABS abs64, x, 63
+.irp operand, reg, imm
+CSSC_MINMAX smax_\operand\()32, w, gt, \operand
+CSSC_MINMAX smax_\operand\()64, x, gt, \operand
+CSSC_MINMAX umax_\operand\()32, w, hi, \operand
+CSSC_MINMAX umax_\operand\()64, x, hi, \operand
+CSSC_MINMAX smin_\operand\()32, w, lt, \operand
+CSSC_MINMAX smin_\operand\()64, x, lt, \operand
+CSSC_MINMAX umin_\operand\()32, w, lo, \operand
+CSSC_MINMAX umin_\operand\()64, x, lo, \operand
+.endr
 
 Lstlr_wake:
     mrs x9, nzcv
@@ -716,6 +876,16 @@ Lmrs_tpidr_el1:
     cbz w9, Lcold
     ldr x14, [x19, #CPU_TPIDR_EL1]
     WRITE_X x14
+    NEXT
+
+Lmrs_tpidr_el2:
+    ldr x14, [x19, #CPU_TPIDR_EL2]
+    WRITE_X x14
+    NEXT
+
+Lmsr_tpidr_el2:
+    READ_X x14, IR_RD
+    str x14, [x19, #CPU_TPIDR_EL2]
     NEXT
 
 Lmrs_sp_el0:
@@ -1792,101 +1962,36 @@ VFMOV_FROM_GPR fmov_sw, s
 VFMOV_FROM_GPR fmov_dx, d
 VFMOV_FROM_GPR fmov_d1x, d1
 
-.macro CRYPTO name, insn:vararg
-L\name:
-    VFP_CHECK
-    ldrb w9, [x20, #IR_RN]
-    ldrb w10, [x20, #IR_RM]
-    ldrb w11, [x20, #IR_RD]
-    ldr q1, [x19, x9, lsl #4]
-    ldr q2, [x19, x10, lsl #4]
-    ldr q0, [x19, x11, lsl #4]
-    \insn
-    str q0, [x19, x11, lsl #4]
-    NEXT
-.endmacro
+Lnative_entry:
+    stp x29, x30, [sp, #-160]!
+    mov x29, sp
+    stp x19, x20, [sp, #16]
+    stp x21, x22, [sp, #32]
+    stp x23, x24, [sp, #48]
+    stp x25, x26, [sp, #64]
+    stp x27, x28, [sp, #80]
+    stp d8, d9, [sp, #96]
+    stp d10, d11, [sp, #112]
+    stp d12, d13, [sp, #128]
+    stp d14, d15, [sp, #144]
+    mov x19, x0
+    mov x20, x1
+    mov x23, xzr
+    adr x24, Lcpu_fast_base
+    DISPATCH
 
-CRYPTO aese, aese v0.16b, v1.16b
-CRYPTO aesd, aesd v0.16b, v1.16b
-CRYPTO aesmc, aesmc v0.16b, v1.16b
-CRYPTO aesimc, aesimc v0.16b, v1.16b
-CRYPTO sha1h, sha1h s0, s1
-CRYPTO sha1su1, sha1su1 v0.4s, v1.4s
-CRYPTO sha256su0, sha256su0 v0.4s, v1.4s
-CRYPTO sha1c, sha1c q0, s1, v2.4s
-CRYPTO sha1p, sha1p q0, s1, v2.4s
-CRYPTO sha1m, sha1m q0, s1, v2.4s
-CRYPTO sha1su0, sha1su0 v0.4s, v1.4s, v2.4s
-CRYPTO sha256h, sha256h q0, q1, v2.4s
-CRYPTO sha256h2, sha256h2 q0, q1, v2.4s
-CRYPTO sha256su1, sha256su1 v0.4s, v1.4s, v2.4s
-CRYPTO sha512h, sha512h q0, q1, v2.2d
-CRYPTO sha512h2, sha512h2 q0, q1, v2.2d
-CRYPTO sha512su1, sha512su1 v0.2d, v1.2d, v2.2d
-CRYPTO sha512su0, sha512su0 v0.2d, v1.2d
-
-Lrax1:
-    VFP_CHECK
-    ldrb w9, [x20, #IR_RN]
-    ldrb w10, [x20, #IR_RM]
-    ldrb w11, [x20, #IR_RD]
-    ldr q1, [x19, x9, lsl #4]
-    ldr q2, [x19, x10, lsl #4]
-    shl v3.2d, v2.2d, #1
-    sri v3.2d, v2.2d, #63
-    eor v0.16b, v1.16b, v3.16b
-    str q0, [x19, x11, lsl #4]
-    NEXT
-
-.macro CRYPTO4 name, kind
-L\name:
-    VFP_CHECK
-    ldrb w9, [x20, #IR_RN]
-    ldrb w10, [x20, #IR_RM]
-    ldrb w12, [x20, #IR_RA]
-    ldrb w11, [x20, #IR_RD]
-    ldr q1, [x19, x9, lsl #4]
-    ldr q2, [x19, x10, lsl #4]
-    ldr q3, [x19, x12, lsl #4]
-.ifc \kind, eor3
-    eor v0.16b, v1.16b, v2.16b
-    eor v0.16b, v0.16b, v3.16b
-.else
-    bic v3.16b, v2.16b, v3.16b
-    eor v0.16b, v1.16b, v3.16b
-.endif
-    str q0, [x19, x11, lsl #4]
-    NEXT
-.endmacro
-
-CRYPTO4 eor3, eor3
-CRYPTO4 bcax, bcax
-
-Lxar:
-    VFP_CHECK
-    ldrb w9, [x20, #IR_RN]
-    ldrb w10, [x20, #IR_RM]
-    ldrb w11, [x20, #IR_RD]
-    ldrb w15, [x20, #IR_RA]
-    add x9, x19, x9, lsl #4
-    add x10, x19, x10, lsl #4
-    ldp x12, x13, [x9]
-    ldp x9, x10, [x10]
-    eor x12, x12, x9
-    eor x13, x13, x10
-    ror x12, x12, x15
-    ror x13, x13, x15
-    add x11, x19, x11, lsl #4
-    stp x12, x13, [x11]
-    NEXT
-
+Lnative_return:
 Lexit:
     ldp x19, x20, [sp, #16]
     ldp x21, x22, [sp, #32]
     ldp x23, x24, [sp, #48]
     ldp x25, x26, [sp, #64]
     ldp x27, x28, [sp, #80]
-    ldp x29, x30, [sp], #96
+    ldp d8, d9, [sp, #96]
+    ldp d10, d11, [sp, #112]
+    ldp d12, d13, [sp, #128]
+    ldp d14, d15, [sp, #144]
+    ldp x29, x30, [sp], #160
     .cfi_def_cfa sp, 0
     ret
 
@@ -1948,6 +2053,8 @@ Lmsr_daifclr:
     cbz w9, Lpt_cold
     add x9, x19, #CPU_IRQ
     ldar w9, [x9]
+    ldrb w10, [x19, #CPU_IRQ_MASK]
+    and w9, w9, w10
     cbnz w9, Lpt_cold
     ldrb w10, [x20, #IR_RA]
     ldr w11, [x19, #CPU_DAIF]
@@ -1971,6 +2078,8 @@ Lmsr_daif:
     tbnz w14, #7, 1f
     add x9, x19, #CPU_IRQ
     ldar w9, [x9]
+    ldrb w10, [x19, #CPU_IRQ_MASK]
+    and w9, w9, w10
     cbnz w9, Lpt_cold
 1:
     str w14, [x19, #CPU_DAIF]
@@ -2020,12 +2129,48 @@ Lmrs_cntvct:
 1:
     mrs x9, nzcv
     str w9, [x19, #CPU_NZCV]
-    ldr x0, [x19, #CPU_VM]
-    bl _vmm_timer_cntvct
+    bl _vmm_timer_ticks
+    ldr x9, [x19, #CPU_CNTV_BASE]
+    sub x0, x0, x9
     ldr w9, [x19, #CPU_NZCV]
     msr nzcv, x9
     WRITE_X x0
     NEXT
+
+// Darwin's mach_absolute_time adds the commpage timebase offset to the counter that the commpage
+// user timebase byte selects: 1 is CNTVCT_EL0 after an ISB, 2 is CNTVCTSS_EL0 and 3 is ACNTVCT_EL0.
+Lcntvct_read:
+    mov x16, #(COMMPAGE_TIMEBASE_OFFSET & 0xffff)
+    movk x16, #((COMMPAGE_TIMEBASE_OFFSET >> 16) & 0xffff), lsl #16
+    movk x16, #((COMMPAGE_TIMEBASE_OFFSET >> 32) & 0xffff), lsl #32
+    ldrb w9, [x16, #(COMMPAGE_USER_TIMEBASE - COMMPAGE_TIMEBASE_OFFSET)]
+    tbz w9, #1, 3f
+    tbz w9, #0, 2f
+1:
+    ldr x9, [x16]
+    mrs x17, S3_4_C15_C10_6
+    ldr x10, [x16]
+    eor x10, x10, x9
+    cbnz x10, 1b
+    b 5f
+2:
+    ldr x9, [x16]
+    mrs x17, S3_3_C14_C0_6
+    ldr x10, [x16]
+    eor x10, x10, x9
+    cbnz x10, 2b
+    b 5f
+3:
+    isb
+4:
+    ldr x9, [x16]
+    mrs x17, cntvct_el0
+    ldr x10, [x16]
+    eor x10, x10, x9
+    cbnz x10, 4b
+5:
+    add x17, x17, x9
+    ret
 
 Lmrs_nzcv:
     mrs x14, nzcv
@@ -2046,7 +2191,7 @@ Lmrs_fpcr:
 Lmsr_fpcr:
     tbnz x23, #SALT_FP_TRAP, Lpt_cold
     ldrb w9, [x19, #CPU_FP_ACTIVE]
-    cbz w9, Lpt_cold
+    cbz w9, Lpt_fp
     READ_X x14, IR_RD
     mov w10, #0x07c80000
     and w14, w14, w10
@@ -2057,7 +2202,7 @@ Lmsr_fpcr:
 Lmrs_fpsr:
     tbnz x23, #SALT_FP_TRAP, Lpt_cold
     ldrb w9, [x19, #CPU_FP_ACTIVE]
-    cbz w9, Lpt_cold
+    cbz w9, Lpt_fp
     mrs x14, fpsr
     ldr w10, [x19, #CPU_FPSR]
     orr w14, w14, w10
@@ -2071,7 +2216,7 @@ Lmrs_fpsr:
 Lmsr_fpsr:
     tbnz x23, #SALT_FP_TRAP, Lpt_cold
     ldrb w9, [x19, #CPU_FP_ACTIVE]
-    cbz w9, Lpt_cold
+    cbz w9, Lpt_fp
     READ_X x14, IR_RD
     mov w10, #0x009f
     movk w10, #0x0800, lsl #16

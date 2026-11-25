@@ -24,7 +24,7 @@ static bool unpriv_read_bytes(vcpu_t *cpu, uint64_t va, uint8_t *dst, uint32_t s
         }
         mmu_translation_t tr;
         if (!mmu_translate_and_fill(cpu, cur, MMU_ACCESS_READ, 0, &tr, NULL)) {
-            vcpu_raise_data_abort(cpu, cur, tr.fault_fsc, false, elr);
+            vcpu_raise_data_abort(cpu, cur, &tr, false, elr);
             return false;
         }
         if (tr.is_mmio) {
@@ -55,7 +55,7 @@ static bool unpriv_write_bytes(vcpu_t *cpu, uint64_t va, const uint8_t *src, uin
         }
         mmu_translation_t tr;
         if (!mmu_translate_and_fill(cpu, cur, MMU_ACCESS_WRITE, 0, &tr, NULL)) {
-            vcpu_raise_data_abort(cpu, cur, tr.fault_fsc, true, elr);
+            vcpu_raise_data_abort(cpu, cur, &tr, true, elr);
             return false;
         }
         if (tr.is_mmio) {
@@ -105,33 +105,32 @@ static bool resolve_atomic_addr(vcpu_t *cpu, uint64_t va, uint32_t align,
                                 mmu_access_t acc, bool is_write_abort,
                                 uint64_t elr, mmu_translation_t *tr_out) {
     if ((va & (align - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, 0x21U, is_write_abort, elr);
+        vcpu_raise_data_abort(cpu, va, NULL, is_write_abort, elr);
         return false;
     }
     if (!mmu_translate_and_fill(cpu, va, acc, cpu->el, tr_out, NULL)) {
-        vcpu_raise_data_abort(cpu, va, tr_out->fault_fsc, is_write_abort, elr);
+        vcpu_raise_data_abort(cpu, va, tr_out, is_write_abort, elr);
         return false;
     }
     return true;
 }
 
-void cpu_op_ldst_ord(vcpu_t *cpu, const ir_insn_t *ir,
-                     softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
-    uint32_t word = (uint32_t)ir->target_or_imm;
+static bool ordered_access(vcpu_t *cpu, const ir_insn_t *ir, const softtlb_entry_t *tlb_r,
+                           const softtlb_entry_t *tlb_w, uint32_t word, int64_t offset, uint32_t opc) {
     uint32_t size = (word >> 30) & 3U;
-    bool is_load = ((word >> 22) & 1U) != 0;
+    bool is_load = opc != 0U;
     uint32_t rn = (word >> 5) & 31U;
     uint32_t rt = word & 31U;
     uint64_t elr = cpu_ir_pc(cpu, ir);
     if (!cpu_check_sp_align(cpu, rn, elr)) {
-        return;
+        return false;
     }
-    uint64_t va = cpu_get_xsp(cpu, rn);
+    uint64_t va = cpu_get_xsp(cpu, rn) + (uint64_t)offset;
     uint32_t bytes = 1U << size;
 
     if ((va & (bytes - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, 0x21U, !is_load, elr);
-        return;
+        vcpu_raise_data_abort(cpu, va, NULL, !is_load, elr);
+        return false;
     }
 
     uintptr_t hva = 0;
@@ -142,7 +141,7 @@ void cpu_op_ldst_ord(vcpu_t *cpu, const ir_insn_t *ir,
         mmu_translation_t tr;
         if (!resolve_atomic_addr(cpu, va, bytes, is_load ? MMU_ACCESS_READ : MMU_ACCESS_WRITE,
                                  !is_load, elr, &tr)) {
-            return;
+            return false;
         }
         hva = tr.hva;
         pa = tr.pa;
@@ -164,6 +163,11 @@ void cpu_op_ldst_ord(vcpu_t *cpu, const ir_insn_t *ir,
         } else {
             val = __atomic_load_n((const uint64_t *)hva, __ATOMIC_SEQ_CST);
         }
+        if (opc == 2U) {
+            val = (uint64_t)cpu_sext(val, 8U << size);
+        } else if (opc == 3U) {
+            val = (uint32_t)cpu_sext(val, 8U << size);
+        }
         cpu_set_x(cpu, rt, val);
     } else {
         uint64_t val = cpu_get_x(cpu, rt);
@@ -184,7 +188,23 @@ void cpu_op_ldst_ord(vcpu_t *cpu, const ir_insn_t *ir,
             cpu_notify_wfe_write(cpu, hva);
         }
     }
-    CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
+    return true;
+}
+
+void cpu_op_ldst_ord(vcpu_t *cpu, const ir_insn_t *ir,
+                     softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
+    uint32_t word = (uint32_t)ir->target_or_imm;
+    if (ordered_access(cpu, ir, tlb_r, tlb_w, word, 0, (word >> 22) & 1U)) {
+        CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
+    }
+}
+
+void cpu_op_ldapstl_unscaled(vcpu_t *cpu, const ir_insn_t *ir,
+                             softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
+    uint32_t word = (uint32_t)ir->target_or_imm;
+    if (ordered_access(cpu, ir, tlb_r, tlb_w, word, cpu_sext((word >> 12) & 0x1FFU, 9), (word >> 22) & 3U)) {
+        CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
+    }
 }
 
 void cpu_op_ldst_exclr(vcpu_t *cpu, const ir_insn_t *ir,
@@ -358,7 +378,7 @@ void cpu_op_lse_cas(vcpu_t *cpu, const ir_insn_t *ir,
     bool is_mmio = false;
     uint64_t pa = 0;
     if ((va & (bytes - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, 0x21U, true, elr);
+        vcpu_raise_data_abort(cpu, va, NULL, true, elr);
         return;
     }
     if (!mmu_tlb_lookup(tlb_w, cpu->tlb_asid_salt, va, bytes, &hva)) {
@@ -430,7 +450,7 @@ void cpu_op_lse_casp(vcpu_t *cpu, const ir_insn_t *ir,
     uint32_t bytes = is_64 ? 16U : 8U;
     uintptr_t hva = 0;
     if ((va & (bytes - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, 0x21U, true, elr);
+        vcpu_raise_data_abort(cpu, va, NULL, true, elr);
         return;
     }
     if (!mmu_tlb_lookup(tlb_w, cpu->tlb_asid_salt, va, bytes, &hva)) {
@@ -491,6 +511,46 @@ static uint64_t lse_alu(uint32_t opc, uint32_t bits, uint64_t old_val, uint64_t 
     }
 }
 
+#define LSE_MINMAX_ORDERED(mnemonic, size, reg, type)                                                     \
+    do {                                                                                                  \
+        type operand = (type)op_val, result;                                                              \
+        if (acq && rel) {                                                                                 \
+            __asm__ volatile(mnemonic "al" size " %" reg "1, %" reg "0, [%2]"                               \
+                             : "=r"(result) : "r"(operand), "r"(hva) : "memory");                          \
+        } else if (acq) {                                                                                 \
+            __asm__ volatile(mnemonic "a" size " %" reg "1, %" reg "0, [%2]"                                \
+                             : "=r"(result) : "r"(operand), "r"(hva) : "memory");                          \
+        } else if (rel) {                                                                                 \
+            __asm__ volatile(mnemonic "l" size " %" reg "1, %" reg "0, [%2]"                                \
+                             : "=r"(result) : "r"(operand), "r"(hva) : "memory");                          \
+        } else {                                                                                          \
+            __asm__ volatile(mnemonic size " %" reg "1, %" reg "0, [%2]"                                    \
+                             : "=r"(result) : "r"(operand), "r"(hva) : "memory");                          \
+        }                                                                                                 \
+        old = result;                                                                                     \
+    } while (0)
+
+#define LSE_MINMAX(mnemonic)                                                                              \
+    do {                                                                                                  \
+        if (size == 0U) LSE_MINMAX_ORDERED(mnemonic, "b", "w", uint8_t);                                   \
+        else if (size == 1U) LSE_MINMAX_ORDERED(mnemonic, "h", "w", uint16_t);                             \
+        else if (size == 2U) LSE_MINMAX_ORDERED(mnemonic, "", "w", uint32_t);                              \
+        else LSE_MINMAX_ORDERED(mnemonic, "", "x", uint64_t);                                              \
+    } while (0)
+
+__attribute__((target("lse"), noinline))
+static uint64_t lse_minmax_hw(uint32_t opc, uint32_t size, bool acq, bool rel,
+                              uintptr_t hva, uint64_t op_val) {
+    uint64_t old = 0;
+    switch (opc) {
+    case 4U: LSE_MINMAX("ldsmax"); break;
+    case 5U: LSE_MINMAX("ldsmin"); break;
+    case 6U: LSE_MINMAX("ldumax"); break;
+    default: LSE_MINMAX("ldumin"); break;
+    }
+    return old;
+}
+
 void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
                       softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
     uint32_t word = (uint32_t)ir->target_or_imm;
@@ -506,7 +566,7 @@ void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
 
     if ((word & 0x00FFFC00U) == 0x00BFC000U) {
         if ((va & (bytes - 1U)) != 0) {
-            vcpu_raise_data_abort(cpu, va, 0x21U, false, elr);
+            vcpu_raise_data_abort(cpu, va, NULL, false, elr);
             return;
         }
         uintptr_t hva = 0;
@@ -549,7 +609,7 @@ void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
     bool is_mmio = false;
     uint64_t pa = 0;
     if ((va & (bytes - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, 0x21U, true, elr);
+        vcpu_raise_data_abort(cpu, va, NULL, true, elr);
         return;
     }
     if (!mmu_tlb_lookup(tlb_w, cpu->tlb_asid_salt, va, bytes, &hva)) {
@@ -603,34 +663,28 @@ void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
             else old = __atomic_fetch_or((uint64_t *)hva, op_val, mo);
             break;
         }
+    } else if (cpu_host_features() & CPU_HOST_FEAT_LSE) {
+        old = lse_minmax_hw(opc, size, acq, rel, hva, op_val);
     } else {
         if (size == 0U) {
             uint8_t cur = __atomic_load_n((uint8_t *)hva, __ATOMIC_RELAXED);
-            for (;;) {
-                uint8_t nv = (uint8_t)lse_alu(opc, 8U, cur, op_val);
-                if (__atomic_compare_exchange_n((uint8_t *)hva, &cur, nv, true, mo, __ATOMIC_RELAXED)) break;
-            }
+            while (!__atomic_compare_exchange_n((uint8_t *)hva, &cur, (uint8_t)lse_alu(opc, 8U, cur, op_val),
+                                                false, mo, __ATOMIC_RELAXED)) {}
             old = cur;
         } else if (size == 1U) {
             uint16_t cur = __atomic_load_n((uint16_t *)hva, __ATOMIC_RELAXED);
-            for (;;) {
-                uint16_t nv = (uint16_t)lse_alu(opc, 16U, cur, op_val);
-                if (__atomic_compare_exchange_n((uint16_t *)hva, &cur, nv, true, mo, __ATOMIC_RELAXED)) break;
-            }
+            while (!__atomic_compare_exchange_n((uint16_t *)hva, &cur, (uint16_t)lse_alu(opc, 16U, cur, op_val),
+                                                false, mo, __ATOMIC_RELAXED)) {}
             old = cur;
         } else if (size == 2U) {
             uint32_t cur = __atomic_load_n((uint32_t *)hva, __ATOMIC_RELAXED);
-            for (;;) {
-                uint32_t nv = (uint32_t)lse_alu(opc, 32U, cur, op_val);
-                if (__atomic_compare_exchange_n((uint32_t *)hva, &cur, nv, true, mo, __ATOMIC_RELAXED)) break;
-            }
+            while (!__atomic_compare_exchange_n((uint32_t *)hva, &cur, (uint32_t)lse_alu(opc, 32U, cur, op_val),
+                                                false, mo, __ATOMIC_RELAXED)) {}
             old = cur;
         } else {
             uint64_t cur = __atomic_load_n((uint64_t *)hva, __ATOMIC_RELAXED);
-            for (;;) {
-                uint64_t nv = lse_alu(opc, 64U, cur, op_val);
-                if (__atomic_compare_exchange_n((uint64_t *)hva, &cur, nv, true, mo, __ATOMIC_RELAXED)) break;
-            }
+            while (!__atomic_compare_exchange_n((uint64_t *)hva, &cur, lse_alu(opc, 64U, cur, op_val),
+                                                false, mo, __ATOMIC_RELAXED)) {}
             old = cur;
         }
     }
@@ -737,7 +791,7 @@ void cpu_op_mops_set(vcpu_t *cpu, const ir_insn_t *ir,
             } else {
                 cpu->x[rn] = (uint64_t)(-(int64_t)rem);
             }
-            vcpu_raise_data_abort(cpu, dst, tr.fault_fsc, true, elr);
+            vcpu_raise_data_abort(cpu, dst, &tr, true, elr);
             return;
         }
         if (__builtin_expect(tr.is_mmio, 0)) {
@@ -852,7 +906,7 @@ void cpu_op_mops_cpy(vcpu_t *cpu, const ir_insn_t *ir,
                 } else {
                     cpu->x[rn] = (uint64_t)(-(int64_t)rem);
                 }
-                vcpu_raise_data_abort(cpu, src, trs.fault_fsc, false, elr);
+                vcpu_raise_data_abort(cpu, src, &trs, false, elr);
                 return;
             }
             if (__builtin_expect(!mops_resolve_page(cpu, w_bank, dst, MMU_ACCESS_WRITE, w_el, &dst_hva, &trd), 0)) {
@@ -863,7 +917,7 @@ void cpu_op_mops_cpy(vcpu_t *cpu, const ir_insn_t *ir,
                 } else {
                     cpu->x[rn] = (uint64_t)(-(int64_t)rem);
                 }
-                vcpu_raise_data_abort(cpu, dst, trd.fault_fsc, true, elr);
+                vcpu_raise_data_abort(cpu, dst, &trd, true, elr);
                 return;
             }
             if (__builtin_expect(trs.is_mmio || trd.is_mmio, 0)) {
@@ -915,12 +969,12 @@ void cpu_op_mops_cpy(vcpu_t *cpu, const ir_insn_t *ir,
             mmu_translation_t trs, trd;
             if (__builtin_expect(!mops_resolve_page(cpu, r_bank, s_lo, MMU_ACCESS_READ, r_el, &src_hva, &trs), 0)) {
                 cpu->x[rn] = rem;
-                vcpu_raise_data_abort(cpu, src_end, trs.fault_fsc, false, elr);
+                vcpu_raise_data_abort(cpu, src_end, &trs, false, elr);
                 return;
             }
             if (__builtin_expect(!mops_resolve_page(cpu, w_bank, d_lo, MMU_ACCESS_WRITE, w_el, &dst_hva, &trd), 0)) {
                 cpu->x[rn] = rem;
-                vcpu_raise_data_abort(cpu, dst_end, trd.fault_fsc, true, elr);
+                vcpu_raise_data_abort(cpu, dst_end, &trd, true, elr);
                 return;
             }
             if (__builtin_expect(trs.is_mmio || trd.is_mmio, 0)) {

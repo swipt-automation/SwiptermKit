@@ -20,7 +20,11 @@ enum {
 #define VMM_GICD_BASE 0x08000000ULL
 #define VMM_GICD_SIZE 0x00010000ULL
 #define VMM_GICC_BASE 0x08010000ULL
-#define VMM_GICC_SIZE 0x00010000ULL
+#define VMM_GICC_SIZE 0x00002000ULL
+#define VMM_GICH_BASE 0x08030000ULL
+#define VMM_GICH_SIZE 0x00010000ULL
+#define VMM_GICV_BASE 0x08040000ULL
+#define VMM_GICV_SIZE 0x00010000ULL
 
 #define VMM_UART0_BASE 0x09000000ULL
 #define VMM_UART0_SIZE 0x00001000ULL
@@ -51,7 +55,11 @@ enum {
 
 enum {
     VMM_IRQ_PPI_BASE = 16,
+    VMM_IRQ_GIC_MAINT = 25,
+    VMM_IRQ_TIMER_HYP_PHYS = 26,
     VMM_IRQ_TIMER_VIRT = 27,
+    VMM_IRQ_TIMER_HYP_VIRT = 28,
+    VMM_IRQ_TIMER_SEC_PHYS = 29,
     VMM_IRQ_TIMER_PHYS = 30,
     VMM_IRQ_SPI_BASE = 32,
     VMM_IRQ_UART0_SPI = 1,
@@ -64,6 +72,29 @@ enum {
 
 #define SMCCC_VERSION 0x80000000U
 #define SMCCC_ARCH_FEATURES 0x80000001U
+#define SMCCC_ARCH_SOC_ID 0x80000002U
+#define SMCCC_ARCH_WORKAROUND_3 0x80003FFFU
+#define SMCCC_ARCH_WORKAROUND_2 0x80007FFFU
+#define SMCCC_ARCH_WORKAROUND_1 0x80008000U
+
+#define SMCCC_VERSION_1_2 0x00010002U
+#define SMCCC_ARCH_WORKAROUND_RET_UNAFFECTED 1
+#define JEP106_APPLE 0x48U
+
+#define SMCCC_TRNG_VERSION 0x84000050U
+#define SMCCC_TRNG_FEATURES 0x84000051U
+#define SMCCC_TRNG_GET_UUID 0x84000052U
+#define SMCCC_TRNG_RND32 0x84000053U
+#define SMCCC_TRNG_RND64 0xC4000053U
+#define SMCCC_TRNG_VERSION_1_0 0x00010000U
+
+#define SMCCC_KVM_FEATURES 0x86000000U
+#define SMCCC_KVM_PTP 0x86000001U
+#define SMCCC_VENDOR_HYP_CALL_UID 0x8600FF01U
+#define SMCCC_KVM_FUNC_FEATURES 0U
+#define SMCCC_KVM_FUNC_PTP 1U
+#define SMCCC_KVM_PTP_VIRT_COUNTER 0U
+#define SMCCC_KVM_PTP_PHYS_COUNTER 1U
 
 #define PSCI_VERSION_1_1 0x00010001U
 
@@ -96,6 +127,17 @@ enum : int64_t {
     PSCI_RET_INVALID_ADDRESS = -9,
 };
 
+enum : int64_t {
+    SMCCC_RET_SUCCESS = 0,
+    SMCCC_RET_NOT_SUPPORTED = -1,
+    SMCCC_RET_INVALID_PARAMETER = -3,
+};
+
+enum : int64_t {
+    TRNG_RET_NOT_SUPPORTED = -1,
+    TRNG_RET_INVALID_PARAMETERS = -2,
+};
+
 typedef enum softtlb_bank : uint8_t {
     SOFTTLB_EL0_R = 0,
     SOFTTLB_EL0_W = 1,
@@ -111,11 +153,19 @@ typedef struct softtlb_entry {
 
 static_assert(sizeof(softtlb_entry_t) == 16);
 
+typedef enum vmm_tlbi_target : uint8_t {
+    VMM_TLBI_HOST = 0,
+    VMM_TLBI_GUEST = 1,
+    VMM_TLBI_GUEST_ALL = 2,
+} vmm_tlbi_target_t;
+
 typedef struct vmm_tlbi {
     uint64_t va;
     uint64_t pages;
     uint16_t asid;
     bool all_asids;
+    vmm_tlbi_target_t target;
+    uint16_t vmid;
 } vmm_tlbi_t;
 
 typedef struct vmm_machine vmm_machine_t;

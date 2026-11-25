@@ -31,6 +31,8 @@ static_assert(CPU_FPSR_MASK == 0x0800009FU);
 CHECK_OFFSET(vcpu_t, backedge_budget, CPU_BUDGET);
 CHECK_OFFSET(vcpu_t, irq_pending, CPU_IRQ);
 CHECK_OFFSET(vcpu_t, stop_requested, CPU_STOP);
+CHECK_OFFSET(vcpu_t, irq_mask, CPU_IRQ_MASK);
+CHECK_OFFSET(vcpu_t, irq_force, CPU_IRQ_MASK + 1);
 CHECK_OFFSET(vcpu_t, tlb_asid_salt, CPU_SALT);
 CHECK_OFFSET(vcpu_t, tlb_epoch_local, CPU_TLB_EPOCH);
 CHECK_OFFSET(vcpu_t, icache_epoch_local, CPU_ICACHE_EPOCH);
@@ -44,6 +46,10 @@ CHECK_OFFSET(vcpu_t, sctlr_el1, CPU_SCTLR);
 CHECK_OFFSET(vcpu_t, tpidr_el0, CPU_TPIDR_EL0);
 CHECK_OFFSET(vcpu_t, tpidrro_el0, CPU_TPIDRRO_EL0);
 CHECK_OFFSET(vcpu_t, tpidr_el1, CPU_TPIDR_EL1);
+CHECK_OFFSET(vcpu_t, tpidr_el2, CPU_TPIDR_EL2);
+CHECK_OFFSET(vcpu_t, cntpct_base, CPU_CNTP_BASE);
+CHECK_OFFSET(vcpu_t, cntvct_base, CPU_CNTV_BASE);
+CHECK_OFFSET(vcpu_t, exec_cache, CPU_EXEC_CACHE);
 CHECK_OFFSET(vcpu_t, tlb, CPU_TLB);
 CHECK_OFFSET(vmm_machine_t, tlb_epoch, VM_TLB_EPOCH);
 CHECK_OFFSET(vmm_machine_t, icache_epoch, VM_ICACHE_EPOCH);
@@ -61,7 +67,6 @@ CHECK_OFFSET(cpu_icache_t, ras_sp, IC_RAS_SP);
 CHECK_OFFSET(cpu_icache_t, stat_dispatches, IC_STAT_DISPATCHES);
 #endif
 CHECK_OFFSET(cpu_icache_t, ras, IC_RAS);
-CHECK_OFFSET(cpu_icache_t, exec_cache, IC_EXEC_CACHE);
 CHECK_OFFSET(exec_cache_entry_t, tag, 0);
 CHECK_OFFSET(exec_cache_entry_t, pg, 8);
 CHECK_OFFSET(exec_cache_entry_t, exec_epoch, 16);
@@ -72,7 +77,8 @@ CHECK_OFFSET(ras_entry_t, pg, 16);
 CHECK_OFFSET(ras_entry_t, ras_epoch, 24);
 CHECK_OFFSET(ras_entry_t, pg_gen, 28);
 static_assert(sizeof(((vcpu_t *)0)->tlb[0]) == (1U << TLB_BANK_SHIFT));
-static_assert(sizeof(((cpu_icache_t *)0)->exec_cache[0]) == (1U << EXEC_BANK_SHIFT));
+static_assert(SOFTTLB_BANK_COUNT == SOFTTLB_BANKS && offsetof(vcpu_mmu_ctx_t, tlb) == 0);
+static_assert(sizeof(((vcpu_mmu_ctx_t *)0)->exec_cache[0]) == (1U << EXEC_BANK_SHIFT));
 static_assert(EXEC_CACHE_ENTRIES == (1U << (EXEC_BANK_SHIFT - 5)));
 static_assert(SOFTTLB_EL0_R == 0 && SOFTTLB_EL0_W == 1 && SOFTTLB_EL1_R == 2 && SOFTTLB_EL1_W == 3 &&
               SOFTTLB_BANK_COUNT == 4);
@@ -142,25 +148,6 @@ typedef struct cpu_pt_leaf {
 
 extern const uint32_t cpu_pt_offsets[CPU_PT_STUB_COUNT];
 
-static uint32_t cpu_pt_missing_features(void) {
-    static _Atomic uint32_t cached;
-    uint32_t missing = atomic_load_explicit(&cached, memory_order_relaxed);
-    if (missing == 0) {
-        missing = 1U << 31;
-        for (size_t i = 0; i < sizeof(cpu_pt_feature_names) / sizeof(cpu_pt_feature_names[0]); ++i) {
-            char name[64] = "hw.optional.arm.";
-            int present = 0;
-            size_t size = sizeof(present);
-            strlcat(name, cpu_pt_feature_names[i], sizeof(name));
-            if (sysctlbyname(name, &present, &size, nullptr, 0) != 0 || !present) {
-                missing |= 1U << i;
-            }
-        }
-        atomic_store_explicit(&cached, missing, memory_order_relaxed);
-    }
-    return missing;
-}
-
 static void cpu_fast_decode_passthrough(ir_insn_t *ir) {
     const uint32_t word = (uint32_t)ir->target_or_imm;
     const int32_t index = cpu_pt_find(word);
@@ -168,7 +155,7 @@ static void cpu_fast_decode_passthrough(ir_insn_t *ir) {
         return;
     }
     const cpu_pt_leaf_t *leaf = &cpu_pt_leaves[index];
-    if (leaf->features & cpu_pt_missing_features()) {
+    if (leaf->features & ~cpu_host_features()) {
         return;
     }
     uint32_t stub = leaf->base;
@@ -196,6 +183,37 @@ static void cpu_fast_decode_passthrough(ir_insn_t *ir) {
         }
     }
     ir->fast_offset = offset & ~(uint32_t)CPU_PT_WIDE_RM;
+}
+
+static bool predecode_native(uint32_t word, ir_insn_t *out) {
+    const int32_t index = cpu_pt_find(word);
+    if (index < 0 || (cpu_pt_leaves[index].features & CPU_HOST_NATIVE) == 0U) {
+        return false;
+    }
+    out->handler = (cpu_pt_leaves[index].features & ~cpu_host_features()) ? op_undef : cpu_op_native;
+    out->target_or_imm = word;
+    return true;
+}
+
+void cpu_op_native(vcpu_t *cpu, const ir_insn_t *ir,
+                   softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
+    if (!cpu_fp_enabled(cpu)) {
+        cpu->pc = cpu_ir_pc(cpu, ir);
+        vcpu_raise_fp_trap(cpu, cpu->pc);
+        return;
+    }
+    ir_insn_t native[2] = {
+        {.target_or_imm = ir->target_or_imm},
+        {.fast_offset = cpu_fast_offsets[FAST_native_return]},
+    };
+    cpu_fast_decode_passthrough(&native[0]);
+    if (native[0].fast_offset == 0U) {
+        vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+        return;
+    }
+    cpu_fp_ensure_guest(cpu);
+    ((void (*)(vcpu_t *, const ir_insn_t *))(cpu_fast_base() + cpu_fast_offsets[FAST_native_entry]))(cpu, native);
+    CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
 }
 
 #define WIDTH(op) {FAST_##op##32, FAST_##op##64}
@@ -313,6 +331,9 @@ typedef enum cpu_fast_kind : uint8_t {
     FAST_KIND_LDR_LIT,
     FAST_KIND_UNPRIV,
     FAST_KIND_ORDERED,
+    FAST_KIND_RCPC,
+    FAST_KIND_FLAGM,
+    FAST_KIND_CSSC,
     FAST_KIND_MRS,
     FAST_KIND_MSR,
     FAST_KIND_SYS,
@@ -418,6 +439,9 @@ static const cpu_fast_entry_t cpu_fast_entries[] = {
     {op_ldr_lit, FAST_KIND_LDR_LIT, FAST_COUNT},
     {cpu_op_ldst_unpriv, FAST_KIND_UNPRIV, FAST_COUNT},
     {cpu_op_ldst_ord, FAST_KIND_ORDERED, FAST_COUNT},
+    {cpu_op_ldapstl_unscaled, FAST_KIND_RCPC, FAST_COUNT},
+    {op_flagm, FAST_KIND_FLAGM, FAST_COUNT},
+    {op_cssc, FAST_KIND_CSSC, FAST_COUNT},
     {cpu_op_sysreg_mrs, FAST_KIND_MRS, FAST_COUNT},
     {cpu_op_sysreg_msr, FAST_KIND_MSR, FAST_COUNT},
     {cpu_op_sys_insn, FAST_KIND_SYS, FAST_COUNT},
@@ -430,7 +454,7 @@ static const cpu_fast_entry_t cpu_fast_entries[] = {
     {cpu_op_simd_ldst_single, FAST_KIND_VLDST_SINGLE, FAST_COUNT},
     {cpu_op_fp_scalar, FAST_KIND_FP_SCALAR, FAST_COUNT},
     {cpu_op_simd_dp, FAST_KIND_SIMD, FAST_COUNT},
-    {cpu_op_crypto, FAST_KIND_SIMD, FAST_COUNT},
+    {cpu_op_native, FAST_KIND_PASSTHROUGH, FAST_COUNT},
     {cpu_op_lse_memop, FAST_KIND_PASSTHROUGH, FAST_COUNT},
     {cpu_op_lse_cas, FAST_KIND_PASSTHROUGH, FAST_COUNT},
     {cpu_op_lse_casp, FAST_KIND_PASSTHROUGH, FAST_COUNT},
@@ -669,36 +693,12 @@ static cpu_fast_op_t cpu_fast_decode_simd(ir_insn_t *ir, cpu_fast_kind_t kind) {
     }
     case SUBOP_SIMD_ALL:
         return cpu_fast_arrangement(simd_across_ops[u][(word >> 12) & 31U], size, q);
-    case SUBOP_CRYPTO_AES: {
-        uint32_t opc = (word >> 12) & 31U;
-        return opc >= 4U && opc <= 7U ? FAST_aese + (opc - 4U) : FAST_COUNT;
-    }
-    case SUBOP_CRYPTO_SHA2: {
-        uint32_t opc = (word >> 12) & 31U;
-        return opc <= 2U ? FAST_sha1h + opc : FAST_COUNT;
-    }
-    case SUBOP_CRYPTO_SHA3: {
-        uint32_t opc = (word >> 12) & 7U;
-        return opc <= 6U ? FAST_sha1c + opc : FAST_COUNT;
-    }
-    case SUBOP_CRYPTO_IMM6:
-        ir->fast_ra = (uint8_t)((word >> 10) & 63U);
-        return FAST_xar;
-    case SUBOP_CRYPTO_4: {
-        uint32_t op0 = (word >> 21) & 3U;
-        ir->fast_ra = (uint8_t)(V_SLOT + ((word >> 10) & 31U));
-        return op0 <= 1U ? FAST_eor3 + op0 : FAST_COUNT;
-    }
-    case SUBOP_CRYPTO_SHA512_2:
-        return ((word >> 10) & 3U) == 0U ? FAST_sha512su0 : FAST_COUNT;
-    case SUBOP_CRYPTO_SHA512_3:
-        return ((word >> 14) & 1U) == 0U ? FAST_sha512h + ((word >> 10) & 3U) : FAST_COUNT;
     default:
         return FAST_COUNT;
     }
 }
 
-static void cpu_fast_decode(ir_insn_t *ir) {
+static void cpu_fast_decode(ir_insn_t *ir, const ir_page_t *pg) {
     const uint16_t flags = ir->flags;
     const bool wide = (flags & IR_FLAG_WIDE) != 0;
     const bool inv = (flags & IR_FLAG_INV) != 0;
@@ -932,9 +932,66 @@ static void cpu_fast_decode(ir_insn_t *ir) {
         op = (load ? FAST_ldar8 : FAST_stlr8) + (word >> 30);
         break;
     }
+    case FAST_KIND_FLAGM: {
+        const uint32_t word = (uint32_t)ir->target_or_imm;
+        ir->fast_rn = (uint8_t)((word >> 5) & 31U);
+        if (word == 0xD500401FU) {
+            op = FAST_cfinv;
+        } else if (word == 0xD500403FU) {
+            op = FAST_xaflag;
+        } else if (word == 0xD500405FU) {
+            op = FAST_axflag;
+        } else if ((word >> 31) != 0U) {
+            ir->fast_ra = (uint8_t)((word >> 15) & 63U);
+            ir->fast_rm = (uint8_t)(word & 15U);
+            op = FAST_rmif;
+        } else {
+            op = ((word >> 14) & 1U) ? FAST_setf16 : FAST_setf8;
+        }
+        break;
+    }
+    case FAST_KIND_CSSC: {
+        const uint32_t word = (uint32_t)ir->target_or_imm;
+        const uint32_t rd = word & 31U;
+        const uint32_t wide = word >> 31;
+        ir->fast_rd = (uint8_t)(rd == REG_ZR ? REG_SINK : rd);
+        ir->fast_rn = (uint8_t)((word >> 5) & 31U);
+        ir->fast_rm = (uint8_t)((word >> 16) & 31U);
+        if (((word >> 27) & 1U) == 0U) {
+            const uint32_t opc = (word >> 18) & 3U;
+            const uint32_t imm8 = (word >> 10) & 0xFFU;
+            const int32_t imm = (opc & 1U) ? (int32_t)imm8 : (int32_t)(int8_t)imm8;
+            ir->target_or_imm = word | ((uint64_t)(uint32_t)imm << 32);
+            op = FAST_smax_imm32 + opc * 2U + wide;
+        } else if (((word >> 30) & 1U) == 0U) {
+            op = FAST_smax_reg32 + ((word >> 10) & 3U) * 2U + wide;
+        } else {
+            op = FAST_ctz32 + (((word >> 10) & 0x3FU) - 6U) * 2U + wide;
+        }
+        break;
+    }
+    case FAST_KIND_RCPC: {
+        static const cpu_fast_op_t rcpc[4][4] = {
+            {FAST_stlur8, FAST_stlur16, FAST_stlur32, FAST_stlur64},
+            {FAST_ldapur8, FAST_ldapur16, FAST_ldapur32, FAST_ldapur64},
+            {FAST_ldapursb64, FAST_ldapursh64, FAST_ldapursw64, FAST_COUNT},
+            {FAST_ldapursb32, FAST_ldapursh32, FAST_COUNT, FAST_COUNT},
+        };
+        const uint32_t word = (uint32_t)ir->target_or_imm;
+        const uint32_t rt = word & 31U;
+        const uint32_t rn = (word >> 5) & 31U;
+        const uint32_t opc = (word >> 22) & 3U;
+        op = rcpc[opc][word >> 30];
+        if (op == FAST_COUNT) return;
+        ir->fast_rd = (uint8_t)(opc != 0U && rt == REG_ZR ? REG_SINK : rt);
+        ir->fast_rn = (uint8_t)(rn == REG_ZR ? REG_SP : rn);
+        ir->target_or_imm = word | ((uint64_t)(uint32_t)cpu_sext((word >> 12) & 0x1FFU, 9) << 32);
+        break;
+    }
     case FAST_KIND_MSR: {
         const uint32_t word = (uint32_t)ir->target_or_imm;
         size_t field = 0;
+        if (cpu_sysreg_trapped(pg->traps, word)) return;
         ir->fast_rd = (uint8_t)(word & 31U);
         switch ((uint16_t)(word >> 5)) {
         case A64_SYSREG_TPIDR_EL0: op = FAST_msr_tpidr_el0; break;
@@ -949,8 +1006,13 @@ static void cpu_fast_decode(ir_insn_t *ir) {
         case A64_SYSREG_FAR_EL1: op = FAST_msr_el1; field = offsetof(vcpu_t, far_el1); break;
         case A64_SYSREG_TPIDR_EL1: op = FAST_msr_el1; field = offsetof(vcpu_t, tpidr_el1); break;
         case A64_SYSREG_TPIDRRO_EL0: op = FAST_msr_el1; field = offsetof(vcpu_t, tpidrro_el0); break;
+        case A64_SYSREG_TPIDR_EL2:
+            if (pg->world == VCPU_WORLD_GUEST || pg->el == 0) return;
+            op = FAST_msr_tpidr_el2;
+            break;
         default: return;
         }
+        if (pg->world == VCPU_WORLD_HOST_NVHE && cpu_field_banked(field)) return;
         ir->fast_ra = (uint8_t)(field / 8U);
         break;
     }
@@ -958,6 +1020,7 @@ static void cpu_fast_decode(ir_insn_t *ir) {
         const uint32_t word = (uint32_t)ir->target_or_imm;
         const uint32_t rt = word & 31U;
         size_t field = 0;
+        if (cpu_sysreg_trapped(pg->traps, word)) return;
         switch ((uint16_t)(word >> 5)) {
         case A64_SYSREG_TPIDR_EL0: op = FAST_mrs_tpidr_el0; break;
         case A64_SYSREG_TPIDRRO_EL0: op = FAST_mrs_tpidrro_el0; break;
@@ -967,15 +1030,24 @@ static void cpu_fast_decode(ir_insn_t *ir) {
         case A64_SYSREG_NZCV: op = FAST_mrs_nzcv; break;
         case A64_SYSREG_FPCR: op = FAST_mrs_fpcr; break;
         case A64_SYSREG_FPSR: op = FAST_mrs_fpsr; break;
-        case A64_SYSREG_DCZID_EL0: op = FAST_mrs_dczid; break;
-        case A64_SYSREG_CNTVCT_EL0: op = FAST_mrs_cntvct; break;
+        case A64_SYSREG_DCZID_EL0:
+            if ((pg->traps & CPU_TRAP_TDZ) != 0) return;
+            op = FAST_mrs_dczid;
+            break;
+        case A64_SYSREG_CNTVCT_EL0:
+        case A64_SYSREG_CNTVCTSS_EL0: op = FAST_mrs_cntvct; break;
         case A64_SYSREG_ELR_EL1: op = FAST_mrs_el1; field = offsetof(vcpu_t, elr_el1); break;
         case A64_SYSREG_SPSR_EL1: op = FAST_mrs_el1; field = offsetof(vcpu_t, spsr_el1); break;
         case A64_SYSREG_ESR_EL1: op = FAST_mrs_el1; field = offsetof(vcpu_t, esr_el1); break;
         case A64_SYSREG_FAR_EL1: op = FAST_mrs_el1; field = offsetof(vcpu_t, far_el1); break;
         case A64_SYSREG_VBAR_EL1: op = FAST_mrs_el1; field = offsetof(vcpu_t, vbar_el1); break;
+        case A64_SYSREG_TPIDR_EL2:
+            if (pg->world == VCPU_WORLD_GUEST || pg->el == 0) return;
+            op = FAST_mrs_tpidr_el2;
+            break;
         default: return;
         }
+        if (pg->world == VCPU_WORLD_HOST_NVHE && cpu_field_banked(field)) return;
         ir->fast_rd = (uint8_t)(rt == REG_ZR ? REG_SINK : rt);
         ir->fast_ra = (uint8_t)(field / 8U);
         break;
@@ -983,6 +1055,7 @@ static void cpu_fast_decode(ir_insn_t *ir) {
     case FAST_KIND_SYS: {
         const uint32_t word = (uint32_t)ir->target_or_imm;
         const uint32_t rt = word & 31U;
+        if (cpu_sysop_trapped(pg->traps, word)) return;
         switch (A64_SYSOP_KEY((word >> 16) & 7U, (word >> 12) & 15U, (word >> 8) & 15U, (word >> 5) & 7U)) {
         case A64_SYSOP_DC_ZVA:
             ir->fast_rd = (uint8_t)rt;
@@ -997,6 +1070,7 @@ static void cpu_fast_decode(ir_insn_t *ir) {
         case A64_SYSOP_DC_CVAU:
         case A64_SYSOP_DC_CIVAC:
         case A64_SYSOP_DC_CVAP:
+        case A64_SYSOP_DC_CVADP:
             op = FAST_dc_uet;
             break;
         case A64_SYSOP_DC_IVAC:
@@ -1024,7 +1098,7 @@ static void cpu_fast_decode(ir_insn_t *ir) {
         const uint32_t rn = (word >> 5) & 31U;
         const uint32_t rs = (word >> 16) & 31U;
         const uint32_t form = ((word >> 15) & 1U) * 4U + (word >> 30);
-        if (cpu_pt_missing_features() & CPU_PT_FEAT_LSE) return;
+        if (!(cpu_host_features() & CPU_HOST_FEAT_LSE)) return;
         ir->fast_rn = (uint8_t)(rn == REG_ZR ? REG_SP : rn);
         if ((word >> 22) & 1U) {
             ir->fast_rd = (uint8_t)(rt == REG_ZR ? REG_SINK : rt);

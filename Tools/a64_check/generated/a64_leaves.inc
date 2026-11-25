@@ -1,98 +1,74 @@
 enum : uint32_t {
     A64_LEAF_FEAT_AES = 1u << 0,
     A64_LEAF_FEAT_AdvSIMD = 1u << 1,
-    A64_LEAF_FEAT_CRC32 = 1u << 2,
-    A64_LEAF_FEAT_DotProd = 1u << 3,
-    A64_LEAF_FEAT_FCMA = 1u << 4,
-    A64_LEAF_FEAT_FHM = 1u << 5,
-    A64_LEAF_FEAT_FP = 1u << 6,
-    A64_LEAF_FEAT_FP16 = 1u << 7,
-    A64_LEAF_FEAT_JSCVT = 1u << 8,
-    A64_LEAF_FEAT_LOR = 1u << 9,
-    A64_LEAF_FEAT_LRCPC = 1u << 10,
-    A64_LEAF_FEAT_LSE = 1u << 11,
-    A64_LEAF_FEAT_MOPS = 1u << 12,
-    A64_LEAF_FEAT_RAS = 1u << 13,
-    A64_LEAF_FEAT_RDM = 1u << 14,
-    A64_LEAF_FEAT_SHA1 = 1u << 15,
-    A64_LEAF_FEAT_SHA256 = 1u << 16,
-    A64_LEAF_FEAT_SHA3 = 1u << 17,
-    A64_LEAF_FEAT_SHA512 = 1u << 18,
+    A64_LEAF_FEAT_BF16 = 1u << 2,
+    A64_LEAF_FEAT_CRC32 = 1u << 3,
+    A64_LEAF_FEAT_CSSC = 1u << 4,
+    A64_LEAF_FEAT_DotProd = 1u << 5,
+    A64_LEAF_FEAT_FCMA = 1u << 6,
+    A64_LEAF_FEAT_FHM = 1u << 7,
+    A64_LEAF_FEAT_FP = 1u << 8,
+    A64_LEAF_FEAT_FP16 = 1u << 9,
+    A64_LEAF_FEAT_FRINTTS = 1u << 10,
+    A64_LEAF_FEAT_FlagM = 1u << 11,
+    A64_LEAF_FEAT_FlagM2 = 1u << 12,
+    A64_LEAF_FEAT_HBC = 1u << 13,
+    A64_LEAF_FEAT_I8MM = 1u << 14,
+    A64_LEAF_FEAT_JSCVT = 1u << 15,
+    A64_LEAF_FEAT_LOR = 1u << 16,
+    A64_LEAF_FEAT_LRCPC = 1u << 17,
+    A64_LEAF_FEAT_LRCPC2 = 1u << 18,
+    A64_LEAF_FEAT_LSE = 1u << 19,
+    A64_LEAF_FEAT_MOPS = 1u << 20,
+    A64_LEAF_FEAT_RAS = 1u << 21,
+    A64_LEAF_FEAT_RDM = 1u << 22,
+    A64_LEAF_FEAT_SB = 1u << 23,
+    A64_LEAF_FEAT_SHA1 = 1u << 24,
+    A64_LEAF_FEAT_SHA256 = 1u << 25,
+    A64_LEAF_FEAT_SHA3 = 1u << 26,
+    A64_LEAF_FEAT_SHA512 = 1u << 27,
 };
 
 static const char *const a64_leaf_feature_names[] = {
     "FEAT_AES",
     "FEAT_AdvSIMD",
+    "FEAT_BF16",
     "FEAT_CRC32",
+    "FEAT_CSSC",
     "FEAT_DotProd",
     "FEAT_FCMA",
     "FEAT_FHM",
     "FEAT_FP",
     "FEAT_FP16",
+    "FEAT_FRINTTS",
+    "FEAT_FlagM",
+    "FEAT_FlagM2",
+    "FEAT_HBC",
+    "FEAT_I8MM",
     "FEAT_JSCVT",
     "FEAT_LOR",
     "FEAT_LRCPC",
+    "FEAT_LRCPC2",
     "FEAT_LSE",
     "FEAT_MOPS",
     "FEAT_RAS",
     "FEAT_RDM",
+    "FEAT_SB",
     "FEAT_SHA1",
     "FEAT_SHA256",
     "FEAT_SHA3",
     "FEAT_SHA512",
 };
 
-static bool a64_leaf_guard_23(uint32_t word) { return !((((((word >> 16) & 7u) == 0x0u)) && ((((((word >> 5) & 7u) & 0x6u) == 0x0u) || (((word >> 5) & 7u) == 0x2u))))); }
-static bool a64_leaf_guard_761(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_762(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_763(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_764(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_765(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_766(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_767(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_768(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_878(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_879(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_880(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_881(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_882(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_883(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_884(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_885(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_886(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_887(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_888(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_889(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_890(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_891(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_892(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_893(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_894(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_895(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_896(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_897(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_898(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_899(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_900(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_901(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_902(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_903(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_904(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_905(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_906(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_907(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_908(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_909(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_910(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_911(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_912(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_913(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_914(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_915(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_916(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_917(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_918(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_919(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_29(uint32_t word) { return !((((((word >> 16) & 7u) == 0x0u)) && ((((((word >> 5) & 7u) & 0x6u) == 0x0u) || (((word >> 5) & 7u) == 0x2u))))); }
+static bool a64_leaf_guard_800(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_801(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_802(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_803(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_804(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_805(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_806(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_807(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
 static bool a64_leaf_guard_920(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_921(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_922(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
@@ -147,13 +123,13 @@ static bool a64_leaf_guard_970(uint32_t word) { return ((word >> 30) & 3u) == 0x
 static bool a64_leaf_guard_971(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_972(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_973(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_974(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_975(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_976(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_977(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_978(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_979(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_980(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_974(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_975(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_976(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_977(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_978(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_979(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_980(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_981(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_982(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_983(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
@@ -166,102 +142,148 @@ static bool a64_leaf_guard_989(uint32_t word) { return ((word >> 30) & 3u) == 0x
 static bool a64_leaf_guard_990(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_991(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
 static bool a64_leaf_guard_992(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
-static bool a64_leaf_guard_993(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_994(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_995(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_996(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_997(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_998(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_999(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1000(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1001(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1002(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1003(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_1004(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_1005(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_1006(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
-static bool a64_leaf_guard_1050(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1051(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1052(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1053(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1054(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1055(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1056(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1057(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1058(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1059(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1060(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1061(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1062(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1063(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1064(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1065(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1066(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1067(uint32_t word) { return !((((((word >> 0) & 31u) & 0x18u) == 0x18u))); }
-static bool a64_leaf_guard_1068(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1069(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1070(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1071(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1072(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1073(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1074(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1075(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1076(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1077(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1078(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1079(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1080(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1081(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1082(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1083(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1084(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1085(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1086(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1087(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1088(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1089(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1090(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1091(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1092(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1093(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_993(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_994(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_995(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_996(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_997(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_998(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_999(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1000(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1001(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1002(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1003(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1004(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1005(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1006(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1007(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1008(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1009(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1010(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1011(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1012(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1013(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1014(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1015(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1016(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1017(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1018(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1019(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1020(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1021(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1022(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1023(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1024(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1025(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1026(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1027(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1028(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1029(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1030(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1031(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1032(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1033(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1034(uint32_t word) { return ((word >> 30) & 3u) == 0x0u; }
+static bool a64_leaf_guard_1035(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1036(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1037(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1038(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1039(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1040(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1041(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1042(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1043(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1044(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1045(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1046(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1047(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1048(uint32_t word) { return (((word >> 19) & 15u) != 0x0u); }
+static bool a64_leaf_guard_1092(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1093(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
 static bool a64_leaf_guard_1094(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
 static bool a64_leaf_guard_1095(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1096(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1097(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1098(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1099(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1100(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1101(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1102(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1103(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1104(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
-static bool a64_leaf_guard_1212(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1213(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1214(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1215(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1216(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
-static bool a64_leaf_guard_1217(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
-static bool a64_leaf_guard_1218(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
-static bool a64_leaf_guard_1219(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
-static bool a64_leaf_guard_1220(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1221(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1222(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1223(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
-static bool a64_leaf_guard_1224(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
-static bool a64_leaf_guard_1225(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
-static bool a64_leaf_guard_1352(uint32_t word) { return (((word >> 29) & 3u) != 0x3u); }
-static bool a64_leaf_guard_1401(uint32_t word) { return (((word >> 29) & 3u) != 0x3u); }
+static bool a64_leaf_guard_1096(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1097(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1098(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1099(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1100(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1101(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1102(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1103(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1104(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1105(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1106(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1107(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1108(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1109(uint32_t word) { return !((((((word >> 0) & 31u) & 0x18u) == 0x18u))); }
+static bool a64_leaf_guard_1110(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1111(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1112(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1113(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1114(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1115(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1116(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1117(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1118(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1119(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1120(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1121(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1122(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1123(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1124(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1125(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1126(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1127(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1128(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1129(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1130(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1131(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1132(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1133(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1134(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1135(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1136(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1137(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1138(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1139(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1140(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1141(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1142(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1143(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1144(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1145(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1146(uint32_t word) { return (((word >> 19) & 15u) != 0x0u) && (((((word >> 19) & 15u) != 0x0u)) && ((((word >> 19) & 15u) != 0x0u))); }
+static bool a64_leaf_guard_1266(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1267(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1268(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1269(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1270(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
+static bool a64_leaf_guard_1271(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
+static bool a64_leaf_guard_1272(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
+static bool a64_leaf_guard_1273(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
+static bool a64_leaf_guard_1274(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1275(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1276(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1277(uint32_t word) { return (((word >> 16) & 31u) != 0x1fu); }
+static bool a64_leaf_guard_1278(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
+static bool a64_leaf_guard_1279(uint32_t word) { return (((word >> 13) & 7u) != 0x3u); }
+static bool a64_leaf_guard_1419(uint32_t word) { return (((word >> 29) & 3u) != 0x3u); }
+static bool a64_leaf_guard_1468(uint32_t word) { return (((word >> 29) & 3u) != 0x3u); }
 
 static const a64_leaf_t a64_leaves[] = {
+    {"AXFLAG_M_pstate", "control/pstate", 0xffffffffu, 0xd500405fu, nullptr, A64_LEAF_FEAT_FlagM2, 5, {{"op0", 29, 3}, {"op1", 16, 3}, {"CRm", 8, 4}, {"op2", 5, 3}, {"Rt", 0, 5}}},
+    {"CFINV_M_pstate", "control/pstate", 0xffffffffu, 0xd500401fu, nullptr, A64_LEAF_FEAT_FlagM, 5, {{"op0", 29, 3}, {"op1", 16, 3}, {"CRm", 8, 4}, {"op2", 5, 3}, {"Rt", 0, 5}}},
     {"CSDB_HI_hints", "control/hints", 0xffffffffu, 0xd503229fu, nullptr, 0, 4, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}}},
     {"DRPS_64E_branch_reg", "control/branch_reg", 0xffffffffu, 0xd6bf03e0u, nullptr, 0, 6, {{"op0", 29, 3}, {"opc", 21, 4}, {"op2", 16, 5}, {"op3", 10, 6}, {"Rn", 5, 5}, {"op4", 0, 5}}},
     {"ERET_64E_branch_reg", "control/branch_reg", 0xffffffffu, 0xd69f03e0u, nullptr, 0, 7, {{"op0", 29, 3}, {"opc", 21, 4}, {"op2", 16, 5}, {"A", 11, 1}, {"M", 10, 1}, {"Rn", 5, 5}, {"op4", 0, 5}}},
     {"ESB_HI_hints", "control/hints", 0xffffffffu, 0xd503221fu, nullptr, A64_LEAF_FEAT_RAS, 4, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}}},
     {"NOP_HI_hints", "control/hints", 0xffffffffu, 0xd503201fu, nullptr, 0, 4, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}}},
+    {"SB_only_barriers", "control/barriers", 0xffffffffu, 0xd50330ffu, nullptr, A64_LEAF_FEAT_SB, 5, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"opc", 5, 2}, {"Rt", 0, 5}}},
     {"SEVL_HI_hints", "control/hints", 0xffffffffu, 0xd50320bfu, nullptr, 0, 4, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}}},
     {"SEV_HI_hints", "control/hints", 0xffffffffu, 0xd503209fu, nullptr, 0, 4, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}}},
     {"WFE_HI_hints", "control/hints", 0xffffffffu, 0xd503205fu, nullptr, 0, 4, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}}},
     {"WFI_HI_hints", "control/hints", 0xffffffffu, 0xd503207fu, nullptr, 0, 4, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}}},
+    {"XAFLAG_M_pstate", "control/pstate", 0xffffffffu, 0xd500403fu, nullptr, A64_LEAF_FEAT_FlagM2, 5, {{"op0", 29, 3}, {"op1", 16, 3}, {"CRm", 8, 4}, {"op2", 5, 3}, {"Rt", 0, 5}}},
     {"YIELD_HI_hints", "control/hints", 0xffffffffu, 0xd503203fu, nullptr, 0, 4, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}}},
     {"CLREX_BN_barriers", "control/barriers", 0xfffff0ffu, 0xd503305fu, nullptr, 0, 5, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"op2", 5, 3}, {"Rt", 0, 5}}},
     {"DMB_BO_barriers", "control/barriers", 0xfffff0ffu, 0xd50330bfu, nullptr, 0, 5, {{"op0", 29, 3}, {"op1", 12, 14}, {"CRm", 8, 4}, {"opc", 5, 2}, {"Rt", 0, 5}}},
@@ -276,13 +298,18 @@ static const a64_leaf_t a64_leaves[] = {
     {"FCMP_HZ_floatcmp", "simd_dp/floatcmp", 0xfffffc1fu, 0x1ee02008u, nullptr, A64_LEAF_FEAT_FP16, 7, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"Rm", 16, 5}, {"op", 14, 2}, {"Rn", 5, 5}, {"opc", 3, 2}}},
     {"FCMP_SZ_floatcmp", "simd_dp/floatcmp", 0xfffffc1fu, 0x1e202008u, nullptr, A64_LEAF_FEAT_FP, 7, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"Rm", 16, 5}, {"op", 14, 2}, {"Rn", 5, 5}, {"opc", 3, 2}}},
     {"RET_64R_branch_reg", "control/branch_reg", 0xfffffc1fu, 0xd65f0000u, nullptr, 0, 8, {{"op0", 29, 3}, {"Z", 24, 1}, {"op", 21, 2}, {"op2", 16, 5}, {"A", 11, 1}, {"M", 10, 1}, {"Rn", 5, 5}, {"Rm", 0, 5}}},
-    {"MSR_SI_pstate", "control/pstate", 0xfff8f01fu, 0xd500401fu, a64_leaf_guard_23, 0, 5, {{"op0", 29, 3}, {"op1", 16, 3}, {"CRm", 8, 4}, {"op2", 5, 3}, {"Rt", 0, 5}}},
+    {"SETF16_only_setf", "dpreg/setf", 0xfffffc1fu, 0x3a00480du, nullptr, A64_LEAF_FEAT_FlagM, 10, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 15, 6}, {"sz", 14, 1}, {"Rn", 5, 5}, {"o3", 4, 1}, {"mask", 0, 4}}},
+    {"SETF8_only_setf", "dpreg/setf", 0xfffffc1fu, 0x3a00080du, nullptr, A64_LEAF_FEAT_FlagM, 10, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 15, 6}, {"sz", 14, 1}, {"Rn", 5, 5}, {"o3", 4, 1}, {"mask", 0, 4}}},
+    {"MSR_SI_pstate", "control/pstate", 0xfff8f01fu, 0xd500401fu, a64_leaf_guard_29, 0, 5, {{"op0", 29, 3}, {"op1", 16, 3}, {"CRm", 8, 4}, {"op2", 5, 3}, {"Rt", 0, 5}}},
+    {"ABS_32_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0x5ac02000u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"ABS_64_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0xdac02000u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ABS_asisdmisc_R", "simd_dp/asisdmisc", 0xfffffc00u, 0x5ee0b800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 5, {{"U", 29, 1}, {"size", 22, 2}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ADDP_asisdpair_only", "simd_dp/asisdpair", 0xfffffc00u, 0x5ef1b800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 5, {{"U", 29, 1}, {"size", 22, 2}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"AESD_B_cryptoaes", "simd_dp/cryptoaes", 0xfffffc00u, 0x4e285800u, nullptr, A64_LEAF_FEAT_AES, 5, {{"op0", 28, 4}, {"size", 22, 2}, {"D", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"AESE_B_cryptoaes", "simd_dp/cryptoaes", 0xfffffc00u, 0x4e284800u, nullptr, A64_LEAF_FEAT_AES, 5, {{"op0", 28, 4}, {"size", 22, 2}, {"D", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"AESIMC_B_cryptoaes", "simd_dp/cryptoaes", 0xfffffc00u, 0x4e287800u, nullptr, A64_LEAF_FEAT_AES, 5, {{"op0", 28, 4}, {"size", 22, 2}, {"D", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"AESMC_B_cryptoaes", "simd_dp/cryptoaes", 0xfffffc00u, 0x4e286800u, nullptr, A64_LEAF_FEAT_AES, 5, {{"op0", 28, 4}, {"size", 22, 2}, {"D", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"BFCVT_BS_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e634000u, nullptr, A64_LEAF_FEAT_BF16, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"opcode", 15, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CLS_32_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0x5ac01400u, nullptr, 0, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"op", 10, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CLS_64_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0xdac01400u, nullptr, 0, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"op", 10, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CLZ_32_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0x5ac01000u, nullptr, 0, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"op", 10, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -292,6 +319,10 @@ static const a64_leaf_t a64_leaves[] = {
     {"CMGT_asisdmisc_Z", "simd_dp/asisdmisc", 0xfffffc00u, 0x5ee08800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 5, {{"U", 29, 1}, {"size", 22, 2}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CMLE_asisdmisc_Z", "simd_dp/asisdmisc", 0xfffffc00u, 0x7ee09800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 5, {{"U", 29, 1}, {"size", 22, 2}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CMLT_asisdmisc_Z", "simd_dp/asisdmisc", 0xfffffc00u, 0x5ee0a800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 5, {{"U", 29, 1}, {"size", 22, 2}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CNT_32_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0x5ac01c00u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CNT_64_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0xdac01c00u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CTZ_32_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0x5ac01800u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CTZ_64_dp_1src", "dpreg/dp_1src", 0xfffffc00u, 0xdac01800u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"opcode2", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FABS_D_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e60c000u, nullptr, A64_LEAF_FEAT_FP, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"opc", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FABS_H_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1ee0c000u, nullptr, A64_LEAF_FEAT_FP16, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"opc", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FABS_S_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e20c000u, nullptr, A64_LEAF_FEAT_FP, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"opc", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -411,6 +442,14 @@ static const a64_leaf_t a64_leaves[] = {
     {"FNEG_S_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e214000u, nullptr, A64_LEAF_FEAT_FP, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"opc", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRECPE_asisdmiscfp16_R", "simd_dp/asisdmiscfp16", 0xfffffc00u, 0x5ef9d800u, nullptr, A64_LEAF_FEAT_AdvSIMD | A64_LEAF_FEAT_FP16, 6, {{"U", 29, 1}, {"a", 23, 1}, {"op2", 19, 4}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRECPX_asisdmiscfp16_R", "simd_dp/asisdmiscfp16", 0xfffffc00u, 0x5ef9f800u, nullptr, A64_LEAF_FEAT_AdvSIMD | A64_LEAF_FEAT_FP16, 6, {{"U", 29, 1}, {"a", 23, 1}, {"op2", 19, 4}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT32X_D_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e68c000u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"op", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT32X_S_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e28c000u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"op", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT32Z_D_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e684000u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"op", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT32Z_S_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e284000u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"op", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT64X_D_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e69c000u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"op", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT64X_S_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e29c000u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"op", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT64Z_D_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e694000u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"op", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT64Z_S_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e294000u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"op", 15, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRINTA_D_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e664000u, nullptr, A64_LEAF_FEAT_FP, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"rmode", 15, 3}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRINTA_H_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1ee64000u, nullptr, A64_LEAF_FEAT_FP16, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"rmode", 15, 3}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRINTA_S_floatdp1", "simd_dp/floatdp1", 0xfffffc00u, 0x1e264000u, nullptr, A64_LEAF_FEAT_FP, 6, {{"M", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"rmode", 15, 3}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -490,6 +529,7 @@ static const a64_leaf_t a64_leaves[] = {
     {"UCVTF_S32_float2int", "simd_dp/float2int", 0xfffffc00u, 0x1e230000u, nullptr, A64_LEAF_FEAT_FP, 7, {{"sf", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"rmode", 19, 2}, {"opcode", 16, 3}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UCVTF_S64_float2int", "simd_dp/float2int", 0xfffffc00u, 0x9e230000u, nullptr, A64_LEAF_FEAT_FP, 7, {{"sf", 31, 1}, {"S", 29, 1}, {"ftype", 22, 2}, {"rmode", 19, 2}, {"opcode", 16, 3}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UCVTF_asisdmiscfp16_R", "simd_dp/asisdmiscfp16", 0xfffffc00u, 0x7e79d800u, nullptr, A64_LEAF_FEAT_AdvSIMD | A64_LEAF_FEAT_FP16, 6, {{"U", 29, 1}, {"a", 23, 1}, {"op2", 19, 4}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"BFCVTN_asimdmisc_4S", "simd_dp/asimdmisc", 0xbffffc00u, 0x0ea16800u, nullptr, A64_LEAF_FEAT_BF16, 6, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FABS_asimdmiscfp16_R", "simd_dp/asimdmiscfp16", 0xbffffc00u, 0x0ef8f800u, nullptr, A64_LEAF_FEAT_AdvSIMD | A64_LEAF_FEAT_FP16, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"a", 23, 1}, {"op2", 19, 4}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FADDP_asisdpair_only_SD", "simd_dp/asisdpair", 0xffbffc00u, 0x7e30d800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 5, {{"U", 29, 1}, {"sz", 22, 1}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FCMEQ_asimdmiscfp16_FZ", "simd_dp/asimdmiscfp16", 0xbffffc00u, 0x0ef8d800u, nullptr, A64_LEAF_FEAT_AdvSIMD | A64_LEAF_FEAT_FP16, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"a", 23, 1}, {"op2", 19, 4}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -588,6 +628,10 @@ static const a64_leaf_t a64_leaves[] = {
     {"FCVTZU_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x2ea1b800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"o2", 23, 1}, {"sz", 22, 1}, {"o1", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FNEG_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x2ea0f800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRECPE_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x0ea1d800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"opcode", 12, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT32X_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x2e21e800u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT32Z_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x0e21e800u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT64X_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x2e21f800u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FRINT64Z_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x0e21f800u, nullptr, A64_LEAF_FEAT_FRINTTS, 6, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRINTA_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x2e218800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"o2", 23, 1}, {"sz", 22, 1}, {"o1", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRINTI_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x2ea19800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"o2", 23, 1}, {"sz", 22, 1}, {"o1", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FRINTM_asimdmisc_R", "simd_dp/asimdmisc", 0xbfbffc00u, 0x0e219800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"o2", 23, 1}, {"sz", 22, 1}, {"o1", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -741,31 +785,32 @@ static const a64_leaf_t a64_leaves[] = {
     {"ADD_asisdsame_only", "simd_dp/asisdsame", 0xffe0fc00u, 0x5ee08400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ASRV_32_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x1ac02800u, nullptr, 0, 8, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"Rm", 16, 5}, {"op2", 10, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ASRV_64_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x9ac02800u, nullptr, 0, 8, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"Rm", 16, 5}, {"op2", 10, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"BFMMLA_asimdsame2_E", "simd_dp/asimdsame2", 0xffe0fc00u, 0x6e40ec00u, nullptr, A64_LEAF_FEAT_BF16, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"BIC_asimdimm_L_hl", "simd_dp/asimdimm", 0xbff8dc00u, 0x2f009400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 15, {{"Q", 30, 1}, {"op", 29, 1}, {"op1", 23, 2}, {"op2", 19, 4}, {"a", 18, 1}, {"b", 17, 1}, {"c", 16, 1}, {"cmode", 12, 4}, {"o2", 11, 1}, {"d", 9, 1}, {"e", 8, 1}, {"f", 7, 1}, {"g", 6, 1}, {"h", 5, 1}, {"Rd", 0, 5}}},
-    {"CASAB_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x08e07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASAH_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x48e07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASALB_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x08e0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASALH_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x48e0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASAL_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x88e0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASAL_C64_comswap", "ldst/comswap", 0xffe0fc00u, 0xc8e0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASA_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x88e07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASA_C64_comswap", "ldst/comswap", 0xffe0fc00u, 0xc8e07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASB_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x08a07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASH_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x48a07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASLB_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x08a0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASLH_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x48a0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASL_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x88a0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASL_C64_comswap", "ldst/comswap", 0xffe0fc00u, 0xc8a0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASPAL_CP32_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x0860fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASPAL_CP64_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x4860fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASPA_CP32_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x08607c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASPA_CP64_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x48607c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASPL_CP32_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x0820fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASPL_CP64_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x4820fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASP_CP32_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x08207c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CASP_CP64_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x48207c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CAS_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x88a07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"CAS_C64_comswap", "ldst/comswap", 0xffe0fc00u, 0xc8a07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"A", 22, 1}, {"Rs", 16, 5}, {"R", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASAB_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x08e07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASAH_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x48e07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASALB_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x08e0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASALH_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x48e0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASAL_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x88e0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASAL_C64_comswap", "ldst/comswap", 0xffe0fc00u, 0xc8e0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASA_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x88e07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASA_C64_comswap", "ldst/comswap", 0xffe0fc00u, 0xc8e07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASB_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x08a07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASH_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x48a07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASLB_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x08a0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASLH_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x48a0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASL_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x88a0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASL_C64_comswap", "ldst/comswap", 0xffe0fc00u, 0xc8a0fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASPAL_CP32_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x0860fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASPAL_CP64_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x4860fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASPA_CP32_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x08607c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASPA_CP64_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x48607c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASPL_CP32_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x0820fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASPL_CP64_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x4820fc00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASP_CP32_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x08207c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CASP_CP64_comswappr", "ldst/comswappr", 0xffe0fc00u, 0x48207c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"sz", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CAS_C32_comswap", "ldst/comswap", 0xffe0fc00u, 0x88a07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"CAS_C64_comswap", "ldst/comswap", 0xffe0fc00u, 0xc8a07c00u, nullptr, A64_LEAF_FEAT_LSE, 8, {{"size", 30, 2}, {"op1", 26, 1}, {"L", 22, 1}, {"Rs", 16, 5}, {"o0", 15, 1}, {"Rt2", 10, 5}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"CMEQ_asisdsame_only", "simd_dp/asisdsame", 0xffe0fc00u, 0x7ee08c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CMGE_asisdsame_only", "simd_dp/asisdsame", 0xffe0fc00u, 0x5ee03c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"eq", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CMGT_asisdsame_only", "simd_dp/asisdsame", 0xffe0fc00u, 0x5ee03400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"eq", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -960,6 +1005,7 @@ static const a64_leaf_t a64_leaves[] = {
     {"MVNI_asimdimm_M_sm", "simd_dp/asimdimm", 0xbff8ec00u, 0x2f00c400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 15, {{"Q", 30, 1}, {"op", 29, 1}, {"op1", 23, 2}, {"op2", 19, 4}, {"a", 18, 1}, {"b", 17, 1}, {"c", 16, 1}, {"cmode", 12, 4}, {"o2", 11, 1}, {"d", 9, 1}, {"e", 8, 1}, {"f", 7, 1}, {"g", 6, 1}, {"h", 5, 1}, {"Rd", 0, 5}}},
     {"ORR_asimdimm_L_hl", "simd_dp/asimdimm", 0xbff8dc00u, 0x0f009400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 15, {{"Q", 30, 1}, {"op", 29, 1}, {"op1", 23, 2}, {"op2", 19, 4}, {"a", 18, 1}, {"b", 17, 1}, {"c", 16, 1}, {"cmode", 12, 4}, {"o2", 11, 1}, {"d", 9, 1}, {"e", 8, 1}, {"f", 7, 1}, {"g", 6, 1}, {"h", 5, 1}, {"Rd", 0, 5}}},
     {"RAX1_VVV2_cryptosha512_3", "simd_dp/cryptosha512_3", 0xffe0fc00u, 0xce608c00u, nullptr, A64_LEAF_FEAT_SHA3, 7, {{"op0", 28, 4}, {"op1", 23, 2}, {"Rm", 16, 5}, {"O", 14, 1}, {"opcode", 10, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"RMIF_only_rmif", "dpreg/rmif", 0xffe07c10u, 0xba000400u, nullptr, A64_LEAF_FEAT_FlagM, 9, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"imm6", 15, 6}, {"Rn", 5, 5}, {"o2", 4, 1}, {"mask", 0, 4}}},
     {"RORV_32_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x1ac02c00u, nullptr, 0, 8, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"Rm", 16, 5}, {"op2", 10, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"RORV_64_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x9ac02c00u, nullptr, 0, 8, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"Rm", 16, 5}, {"op2", 10, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SBCS_32_addsub_carry", "dpreg/addsub_carry", 0xffe0fc00u, 0x7a000000u, nullptr, 0, 9, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"op3", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -978,6 +1024,11 @@ static const a64_leaf_t a64_leaves[] = {
     {"SHA512H2_QQV_cryptosha512_3", "simd_dp/cryptosha512_3", 0xffe0fc00u, 0xce608400u, nullptr, A64_LEAF_FEAT_SHA512, 7, {{"op0", 28, 4}, {"op1", 23, 2}, {"Rm", 16, 5}, {"O", 14, 1}, {"opcode", 10, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SHA512H_QQV_cryptosha512_3", "simd_dp/cryptosha512_3", 0xffe0fc00u, 0xce608000u, nullptr, A64_LEAF_FEAT_SHA512, 7, {{"op0", 28, 4}, {"op1", 23, 2}, {"Rm", 16, 5}, {"O", 14, 1}, {"opcode", 10, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SHA512SU1_VVV2_cryptosha512_3", "simd_dp/cryptosha512_3", 0xffe0fc00u, 0xce608800u, nullptr, A64_LEAF_FEAT_SHA512, 7, {{"op0", 28, 4}, {"op1", 23, 2}, {"Rm", 16, 5}, {"O", 14, 1}, {"opcode", 10, 2}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMAX_32_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x1ac06000u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMAX_64_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x9ac06000u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMIN_32_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x1ac06800u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMIN_64_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x9ac06800u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMMLA_asimdsame2_G", "simd_dp/asimdsame2", 0xffe0fc00u, 0x4e80a400u, nullptr, A64_LEAF_FEAT_I8MM, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"B", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMOV_asimdins_W_w", "simd_dp/asimdins", 0xffe0fc00u, 0x0e002c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"op", 29, 1}, {"op1", 23, 2}, {"imm5", 16, 5}, {"imm4", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMOV_asimdins_X_x", "simd_dp/asimdins", 0xffe0fc00u, 0x4e002c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"op", 29, 1}, {"op1", 23, 2}, {"imm5", 16, 5}, {"imm4", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMULH_64_dp_3src", "dpreg/dp_3src", 0xffe0fc00u, 0x9b407c00u, nullptr, 0, 9, {{"sf", 31, 1}, {"op54", 29, 2}, {"op1", 28, 1}, {"U", 23, 1}, {"Rm", 16, 5}, {"o0", 15, 1}, {"Ra", 10, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1010,19 +1061,27 @@ static const a64_leaf_t a64_leaves[] = {
     {"SWP_64_memop", "ldst/memop", 0xffe0fc00u, 0xf8208000u, nullptr, A64_LEAF_FEAT_LSE, 9, {{"size", 30, 2}, {"VR", 26, 1}, {"A", 23, 1}, {"R", 22, 1}, {"Rs", 16, 5}, {"o3", 15, 1}, {"opc", 12, 3}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"UDIV_32_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x1ac00800u, nullptr, 0, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"o1", 10, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UDIV_64_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x9ac00800u, nullptr, 0, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"o1", 10, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMAX_32_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x1ac06400u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMAX_64_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x9ac06400u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMIN_32_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x1ac06c00u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMIN_64_dp_2src", "dpreg/dp_2src", 0xffe0fc00u, 0x9ac06c00u, nullptr, A64_LEAF_FEAT_CSSC, 9, {{"sf", 31, 1}, {"op0", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"opcode", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMMLA_asimdsame2_G", "simd_dp/asimdsame2", 0xffe0fc00u, 0x6e80a400u, nullptr, A64_LEAF_FEAT_I8MM, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"B", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMOV_asimdins_W_w", "simd_dp/asimdins", 0xffe0fc00u, 0x0e003c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"op", 29, 1}, {"op1", 23, 2}, {"imm5", 16, 5}, {"imm4", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMULH_64_dp_3src", "dpreg/dp_3src", 0xffe0fc00u, 0x9bc07c00u, nullptr, 0, 9, {{"sf", 31, 1}, {"op54", 29, 2}, {"op1", 28, 1}, {"U", 23, 1}, {"Rm", 16, 5}, {"o0", 15, 1}, {"Ra", 10, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"URSHL_asisdsame_only", "simd_dp/asisdsame", 0xffe0fc00u, 0x7ee05400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"R", 12, 1}, {"S", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"USHL_asisdsame_only", "simd_dp/asisdsame", 0xffe0fc00u, 0x7ee04400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"R", 12, 1}, {"S", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"LD1_asisdlsop_DX1_r1d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0dc08400u, a64_leaf_guard_761, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD2_asisdlsop_DX2_r2d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0de08400u, a64_leaf_guard_762, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD3_asisdlsop_DX3_r3d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0dc0a400u, a64_leaf_guard_763, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD4_asisdlsop_DX4_r4d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0de0a400u, a64_leaf_guard_764, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST1_asisdlsop_DX1_r1d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0d808400u, a64_leaf_guard_765, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST2_asisdlsop_DX2_r2d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0da08400u, a64_leaf_guard_766, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST3_asisdlsop_DX3_r3d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0d80a400u, a64_leaf_guard_767, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST4_asisdlsop_DX4_r4d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0da0a400u, a64_leaf_guard_768, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"USMMLA_asimdsame2_G", "simd_dp/asimdsame2", 0xffe0fc00u, 0x4e80ac00u, nullptr, A64_LEAF_FEAT_I8MM, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"B", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"LD1_asisdlsop_DX1_r1d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0dc08400u, a64_leaf_guard_800, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD2_asisdlsop_DX2_r2d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0de08400u, a64_leaf_guard_801, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD3_asisdlsop_DX3_r3d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0dc0a400u, a64_leaf_guard_802, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD4_asisdlsop_DX4_r4d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0de0a400u, a64_leaf_guard_803, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST1_asisdlsop_DX1_r1d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0d808400u, a64_leaf_guard_804, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST2_asisdlsop_DX2_r2d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0da08400u, a64_leaf_guard_805, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST3_asisdlsop_DX3_r3d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0d80a400u, a64_leaf_guard_806, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST4_asisdlsop_DX4_r4d", "ldst/asisdlsop", 0xbfe0fc00u, 0x0da0a400u, a64_leaf_guard_807, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"AND_asimdsame_only", "simd_dp/asimdsame", 0xbfe0fc00u, 0x0e201c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"BFDOT_asimdsame2_D", "simd_dp/asimdsame2", 0xbfe0fc00u, 0x2e40fc00u, nullptr, A64_LEAF_FEAT_BF16, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"BFMLAL_asimdsame2_F_", "simd_dp/asimdsame2", 0xbfe0fc00u, 0x2ec0fc00u, nullptr, A64_LEAF_FEAT_BF16, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"BIC_asimdimm_L_sl", "simd_dp/asimdimm", 0xbff89c00u, 0x2f001400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 15, {{"Q", 30, 1}, {"op", 29, 1}, {"op1", 23, 2}, {"op2", 19, 4}, {"a", 18, 1}, {"b", 17, 1}, {"c", 16, 1}, {"cmode", 12, 4}, {"o2", 11, 1}, {"d", 9, 1}, {"e", 8, 1}, {"f", 7, 1}, {"g", 6, 1}, {"h", 5, 1}, {"Rd", 0, 5}}},
     {"BIC_asimdsame_only", "simd_dp/asimdsame", 0xbfe0fc00u, 0x0e601c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"BIF_asimdsame_only", "simd_dp/asimdsame", 0xbfe0fc00u, 0x2ee01c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"opc2", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1129,137 +1188,138 @@ static const a64_leaf_t a64_leaves[] = {
     {"UDF_only_perm_undef", "reserved/perm_undef", 0xffff0000u, 0x00000000u, nullptr, 0, 3, {{"op0", 29, 2}, {"op1", 16, 9}, {"imm16", 0, 16}}},
     {"URSHR_asisdshf_R", "simd_dp/asisdshf", 0xffc0fc00u, 0x7f402400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 8, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"URSRA_asisdshf_R", "simd_dp/asisdshf", 0xffc0fc00u, 0x7f403400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 8, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"USDOT_asimdsame2_D", "simd_dp/asimdsame2", 0xbfe0fc00u, 0x0e809c00u, nullptr, A64_LEAF_FEAT_I8MM, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"USHR_asisdshf_R", "simd_dp/asisdshf", 0xffc0fc00u, 0x7f400400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 8, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"USRA_asisdshf_R", "simd_dp/asisdshf", 0xffc0fc00u, 0x7f401400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 8, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYEN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80c400u, a64_leaf_guard_878, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYERN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d808400u, a64_leaf_guard_879, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYERTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80e400u, a64_leaf_guard_880, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYERTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80a400u, a64_leaf_guard_881, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYERTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d806400u, a64_leaf_guard_882, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYERT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d802400u, a64_leaf_guard_883, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYETN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80f400u, a64_leaf_guard_884, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYETRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80b400u, a64_leaf_guard_885, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYETWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d807400u, a64_leaf_guard_886, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYET_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d803400u, a64_leaf_guard_887, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYEWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d804400u, a64_leaf_guard_888, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYEWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80d400u, a64_leaf_guard_889, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYEWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d809400u, a64_leaf_guard_890, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYEWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d805400u, a64_leaf_guard_891, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYEWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d801400u, a64_leaf_guard_892, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYE_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d800400u, a64_leaf_guard_893, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFEN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980c400u, a64_leaf_guard_894, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFERN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19808400u, a64_leaf_guard_895, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFERTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980e400u, a64_leaf_guard_896, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFERTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980a400u, a64_leaf_guard_897, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFERTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19806400u, a64_leaf_guard_898, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFERT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19802400u, a64_leaf_guard_899, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFETN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980f400u, a64_leaf_guard_900, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFETRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980b400u, a64_leaf_guard_901, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFETWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19807400u, a64_leaf_guard_902, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFET_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19803400u, a64_leaf_guard_903, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFEWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19804400u, a64_leaf_guard_904, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFEWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980d400u, a64_leaf_guard_905, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFEWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19809400u, a64_leaf_guard_906, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFEWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19805400u, a64_leaf_guard_907, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFEWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19801400u, a64_leaf_guard_908, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFE_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19800400u, a64_leaf_guard_909, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940c400u, a64_leaf_guard_910, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19408400u, a64_leaf_guard_911, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMRTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940e400u, a64_leaf_guard_912, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMRTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940a400u, a64_leaf_guard_913, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMRTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19406400u, a64_leaf_guard_914, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMRT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19402400u, a64_leaf_guard_915, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940f400u, a64_leaf_guard_916, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940b400u, a64_leaf_guard_917, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19407400u, a64_leaf_guard_918, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19403400u, a64_leaf_guard_919, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19404400u, a64_leaf_guard_920, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940d400u, a64_leaf_guard_921, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19409400u, a64_leaf_guard_922, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19405400u, a64_leaf_guard_923, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFMWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19401400u, a64_leaf_guard_924, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFM_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19400400u, a64_leaf_guard_925, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900c400u, a64_leaf_guard_926, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19008400u, a64_leaf_guard_927, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPRTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900e400u, a64_leaf_guard_928, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPRTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900a400u, a64_leaf_guard_929, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPRTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19006400u, a64_leaf_guard_930, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPRT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19002400u, a64_leaf_guard_931, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900f400u, a64_leaf_guard_932, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900b400u, a64_leaf_guard_933, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19007400u, a64_leaf_guard_934, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19003400u, a64_leaf_guard_935, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19004400u, a64_leaf_guard_936, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900d400u, a64_leaf_guard_937, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19009400u, a64_leaf_guard_938, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19005400u, a64_leaf_guard_939, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFPWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19001400u, a64_leaf_guard_940, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYFP_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19000400u, a64_leaf_guard_941, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40c400u, a64_leaf_guard_942, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d408400u, a64_leaf_guard_943, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMRTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40e400u, a64_leaf_guard_944, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMRTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40a400u, a64_leaf_guard_945, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMRTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d406400u, a64_leaf_guard_946, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMRT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d402400u, a64_leaf_guard_947, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40f400u, a64_leaf_guard_948, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40b400u, a64_leaf_guard_949, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d407400u, a64_leaf_guard_950, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d403400u, a64_leaf_guard_951, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d404400u, a64_leaf_guard_952, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40d400u, a64_leaf_guard_953, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d409400u, a64_leaf_guard_954, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d405400u, a64_leaf_guard_955, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYMWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d401400u, a64_leaf_guard_956, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYM_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d400400u, a64_leaf_guard_957, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00c400u, a64_leaf_guard_958, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d008400u, a64_leaf_guard_959, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPRTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00e400u, a64_leaf_guard_960, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPRTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00a400u, a64_leaf_guard_961, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPRTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d006400u, a64_leaf_guard_962, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPRT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d002400u, a64_leaf_guard_963, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00f400u, a64_leaf_guard_964, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00b400u, a64_leaf_guard_965, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d007400u, a64_leaf_guard_966, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d003400u, a64_leaf_guard_967, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d004400u, a64_leaf_guard_968, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00d400u, a64_leaf_guard_969, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d009400u, a64_leaf_guard_970, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d005400u, a64_leaf_guard_971, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYPWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d001400u, a64_leaf_guard_972, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"CPYP_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d000400u, a64_leaf_guard_973, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"FCVTZS_asisdshf_C", "simd_dp/asisdshf", 0xff80fc00u, 0x5f00fc00u, a64_leaf_guard_974, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"FCVTZU_asisdshf_C", "simd_dp/asisdshf", 0xff80fc00u, 0x7f00fc00u, a64_leaf_guard_975, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"LD1_asisdlsop_SX1_r1s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0dc08000u, a64_leaf_guard_976, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD2_asisdlsop_SX2_r2s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0de08000u, a64_leaf_guard_977, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD3_asisdlsop_SX3_r3s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0dc0a000u, a64_leaf_guard_978, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD4_asisdlsop_SX4_r4s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0de0a000u, a64_leaf_guard_979, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"SCVTF_asisdshf_C", "simd_dp/asisdshf", 0xff80fc00u, 0x5f00e400u, a64_leaf_guard_980, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETEN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c0a400u, a64_leaf_guard_981, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETETN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c0b400u, a64_leaf_guard_982, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETET_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c09400u, a64_leaf_guard_983, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETE_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c08400u, a64_leaf_guard_984, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETMN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c06400u, a64_leaf_guard_985, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETMTN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c07400u, a64_leaf_guard_986, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETMT_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c05400u, a64_leaf_guard_987, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETM_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c04400u, a64_leaf_guard_988, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETPN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c02400u, a64_leaf_guard_989, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETPTN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c03400u, a64_leaf_guard_990, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETPT_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c01400u, a64_leaf_guard_991, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SETP_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c00400u, a64_leaf_guard_992, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQRSHRN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x5f009c00u, a64_leaf_guard_993, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQRSHRUN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x7f008c00u, a64_leaf_guard_994, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQSHLU_asisdshf_R", "simd_dp/asisdshf", 0xff80fc00u, 0x7f006400u, a64_leaf_guard_995, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQSHL_asisdshf_R", "simd_dp/asisdshf", 0xff80fc00u, 0x5f007400u, a64_leaf_guard_996, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQSHRN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x5f009400u, a64_leaf_guard_997, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQSHRUN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x7f008400u, a64_leaf_guard_998, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"ST1_asisdlsop_SX1_r1s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0d808000u, a64_leaf_guard_999, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST2_asisdlsop_SX2_r2s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0da08000u, a64_leaf_guard_1000, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST3_asisdlsop_SX3_r3s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0d80a000u, a64_leaf_guard_1001, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST4_asisdlsop_SX4_r4s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0da0a000u, a64_leaf_guard_1002, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"UCVTF_asisdshf_C", "simd_dp/asisdshf", 0xff80fc00u, 0x7f00e400u, a64_leaf_guard_1003, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"UQRSHRN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x7f009c00u, a64_leaf_guard_1004, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"UQSHL_asisdshf_R", "simd_dp/asisdshf", 0xff80fc00u, 0x7f007400u, a64_leaf_guard_1005, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"UQSHRN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x7f009400u, a64_leaf_guard_1006, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYEN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80c400u, a64_leaf_guard_920, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYERN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d808400u, a64_leaf_guard_921, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYERTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80e400u, a64_leaf_guard_922, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYERTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80a400u, a64_leaf_guard_923, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYERTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d806400u, a64_leaf_guard_924, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYERT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d802400u, a64_leaf_guard_925, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYETN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80f400u, a64_leaf_guard_926, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYETRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80b400u, a64_leaf_guard_927, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYETWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d807400u, a64_leaf_guard_928, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYET_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d803400u, a64_leaf_guard_929, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYEWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d804400u, a64_leaf_guard_930, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYEWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d80d400u, a64_leaf_guard_931, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYEWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d809400u, a64_leaf_guard_932, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYEWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d805400u, a64_leaf_guard_933, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYEWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d801400u, a64_leaf_guard_934, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYE_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d800400u, a64_leaf_guard_935, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFEN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980c400u, a64_leaf_guard_936, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFERN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19808400u, a64_leaf_guard_937, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFERTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980e400u, a64_leaf_guard_938, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFERTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980a400u, a64_leaf_guard_939, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFERTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19806400u, a64_leaf_guard_940, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFERT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19802400u, a64_leaf_guard_941, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFETN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980f400u, a64_leaf_guard_942, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFETRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980b400u, a64_leaf_guard_943, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFETWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19807400u, a64_leaf_guard_944, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFET_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19803400u, a64_leaf_guard_945, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFEWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19804400u, a64_leaf_guard_946, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFEWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1980d400u, a64_leaf_guard_947, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFEWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19809400u, a64_leaf_guard_948, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFEWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19805400u, a64_leaf_guard_949, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFEWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19801400u, a64_leaf_guard_950, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFE_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19800400u, a64_leaf_guard_951, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940c400u, a64_leaf_guard_952, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19408400u, a64_leaf_guard_953, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMRTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940e400u, a64_leaf_guard_954, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMRTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940a400u, a64_leaf_guard_955, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMRTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19406400u, a64_leaf_guard_956, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMRT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19402400u, a64_leaf_guard_957, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940f400u, a64_leaf_guard_958, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940b400u, a64_leaf_guard_959, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19407400u, a64_leaf_guard_960, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19403400u, a64_leaf_guard_961, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19404400u, a64_leaf_guard_962, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1940d400u, a64_leaf_guard_963, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19409400u, a64_leaf_guard_964, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19405400u, a64_leaf_guard_965, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFMWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19401400u, a64_leaf_guard_966, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFM_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19400400u, a64_leaf_guard_967, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900c400u, a64_leaf_guard_968, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19008400u, a64_leaf_guard_969, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPRTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900e400u, a64_leaf_guard_970, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPRTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900a400u, a64_leaf_guard_971, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPRTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19006400u, a64_leaf_guard_972, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPRT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19002400u, a64_leaf_guard_973, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900f400u, a64_leaf_guard_974, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900b400u, a64_leaf_guard_975, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19007400u, a64_leaf_guard_976, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19003400u, a64_leaf_guard_977, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19004400u, a64_leaf_guard_978, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1900d400u, a64_leaf_guard_979, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19009400u, a64_leaf_guard_980, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19005400u, a64_leaf_guard_981, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFPWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19001400u, a64_leaf_guard_982, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYFP_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19000400u, a64_leaf_guard_983, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40c400u, a64_leaf_guard_984, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d408400u, a64_leaf_guard_985, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMRTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40e400u, a64_leaf_guard_986, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMRTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40a400u, a64_leaf_guard_987, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMRTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d406400u, a64_leaf_guard_988, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMRT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d402400u, a64_leaf_guard_989, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40f400u, a64_leaf_guard_990, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40b400u, a64_leaf_guard_991, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d407400u, a64_leaf_guard_992, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d403400u, a64_leaf_guard_993, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d404400u, a64_leaf_guard_994, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d40d400u, a64_leaf_guard_995, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d409400u, a64_leaf_guard_996, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d405400u, a64_leaf_guard_997, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYMWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d401400u, a64_leaf_guard_998, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYM_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d400400u, a64_leaf_guard_999, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00c400u, a64_leaf_guard_1000, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d008400u, a64_leaf_guard_1001, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPRTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00e400u, a64_leaf_guard_1002, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPRTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00a400u, a64_leaf_guard_1003, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPRTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d006400u, a64_leaf_guard_1004, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPRT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d002400u, a64_leaf_guard_1005, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00f400u, a64_leaf_guard_1006, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00b400u, a64_leaf_guard_1007, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d007400u, a64_leaf_guard_1008, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d003400u, a64_leaf_guard_1009, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d004400u, a64_leaf_guard_1010, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPWTN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d00d400u, a64_leaf_guard_1011, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPWTRN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d009400u, a64_leaf_guard_1012, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPWTWN_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d005400u, a64_leaf_guard_1013, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYPWT_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d001400u, a64_leaf_guard_1014, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"CPYP_CPY_memcms", "ldst/memcms", 0x3fe0fc00u, 0x1d000400u, a64_leaf_guard_1015, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FCVTZS_asisdshf_C", "simd_dp/asisdshf", 0xff80fc00u, 0x5f00fc00u, a64_leaf_guard_1016, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FCVTZU_asisdshf_C", "simd_dp/asisdshf", 0xff80fc00u, 0x7f00fc00u, a64_leaf_guard_1017, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"LD1_asisdlsop_SX1_r1s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0dc08000u, a64_leaf_guard_1018, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD2_asisdlsop_SX2_r2s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0de08000u, a64_leaf_guard_1019, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD3_asisdlsop_SX3_r3s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0dc0a000u, a64_leaf_guard_1020, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD4_asisdlsop_SX4_r4s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0de0a000u, a64_leaf_guard_1021, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"SCVTF_asisdshf_C", "simd_dp/asisdshf", 0xff80fc00u, 0x5f00e400u, a64_leaf_guard_1022, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETEN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c0a400u, a64_leaf_guard_1023, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETETN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c0b400u, a64_leaf_guard_1024, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETET_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c09400u, a64_leaf_guard_1025, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETE_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c08400u, a64_leaf_guard_1026, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETMN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c06400u, a64_leaf_guard_1027, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETMTN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c07400u, a64_leaf_guard_1028, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETMT_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c05400u, a64_leaf_guard_1029, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETM_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c04400u, a64_leaf_guard_1030, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETPN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c02400u, a64_leaf_guard_1031, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETPTN_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c03400u, a64_leaf_guard_1032, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETPT_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c01400u, a64_leaf_guard_1033, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SETP_SET_memcms", "ldst/memcms", 0x3fe0fc00u, 0x19c00400u, a64_leaf_guard_1034, A64_LEAF_FEAT_MOPS, 7, {{"sz", 30, 2}, {"o0", 26, 1}, {"op1", 22, 2}, {"Rs", 16, 5}, {"op2", 12, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQRSHRN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x5f009c00u, a64_leaf_guard_1035, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQRSHRUN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x7f008c00u, a64_leaf_guard_1036, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQSHLU_asisdshf_R", "simd_dp/asisdshf", 0xff80fc00u, 0x7f006400u, a64_leaf_guard_1037, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQSHL_asisdshf_R", "simd_dp/asisdshf", 0xff80fc00u, 0x5f007400u, a64_leaf_guard_1038, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQSHRN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x5f009400u, a64_leaf_guard_1039, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQSHRUN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x7f008400u, a64_leaf_guard_1040, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"ST1_asisdlsop_SX1_r1s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0d808000u, a64_leaf_guard_1041, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST2_asisdlsop_SX2_r2s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0da08000u, a64_leaf_guard_1042, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST3_asisdlsop_SX3_r3s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0d80a000u, a64_leaf_guard_1043, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST4_asisdlsop_SX4_r4s", "ldst/asisdlsop", 0xbfe0ec00u, 0x0da0a000u, a64_leaf_guard_1044, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"UCVTF_asisdshf_C", "simd_dp/asisdshf", 0xff80fc00u, 0x7f00e400u, a64_leaf_guard_1045, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UQRSHRN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x7f009c00u, a64_leaf_guard_1046, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UQSHL_asisdshf_R", "simd_dp/asisdshf", 0xff80fc00u, 0x7f007400u, a64_leaf_guard_1047, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UQSHRN_asisdshf_N", "simd_dp/asisdshf", 0xff80fc00u, 0x7f009400u, a64_leaf_guard_1048, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FABD_asimdsame_only", "simd_dp/asimdsame", 0xbfa0fc00u, 0x2ea0d400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FACGE_asimdsame_only", "simd_dp/asimdsame", 0xbfa0fc00u, 0x2e20ec00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"E", 23, 1}, {"sz", 22, 1}, {"Rm", 16, 5}, {"ac", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FACGT_asimdsame_only", "simd_dp/asimdsame", 0xbfa0fc00u, 0x2ea0ec00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"E", 23, 1}, {"sz", 22, 1}, {"Rm", 16, 5}, {"ac", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1303,64 +1363,66 @@ static const a64_leaf_t a64_leaves[] = {
     {"UQRSHL_asisdsame_only", "simd_dp/asisdsame", 0xff20fc00u, 0x7e205c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"R", 12, 1}, {"S", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UQSHL_asisdsame_only", "simd_dp/asisdsame", 0xff20fc00u, 0x7e204c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"R", 12, 1}, {"S", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UQSUB_asisdsame_only", "simd_dp/asisdsame", 0xff20fc00u, 0x7e202c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"FCVTZS_asimdshf_C", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f00fc00u, a64_leaf_guard_1050, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"FCVTZU_asimdshf_C", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f00fc00u, a64_leaf_guard_1051, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"LD1R_asisdlsop_RX1_r", "ldst/asisdlsop", 0xbfe0f000u, 0x0dc0c000u, a64_leaf_guard_1052, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD1_asisdlsep_R1_r1", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc07000u, a64_leaf_guard_1053, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD1_asisdlsep_R2_r2", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc0a000u, a64_leaf_guard_1054, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD1_asisdlsep_R3_r3", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc06000u, a64_leaf_guard_1055, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD1_asisdlsep_R4_r4", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc02000u, a64_leaf_guard_1056, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD1_asisdlsop_HX1_r1h", "ldst/asisdlsop", 0xbfe0e400u, 0x0dc04000u, a64_leaf_guard_1057, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD2R_asisdlsop_RX2_r", "ldst/asisdlsop", 0xbfe0f000u, 0x0de0c000u, a64_leaf_guard_1058, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD2_asisdlsep_R2_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc08000u, a64_leaf_guard_1059, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD2_asisdlsop_HX2_r2h", "ldst/asisdlsop", 0xbfe0e400u, 0x0de04000u, a64_leaf_guard_1060, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD3R_asisdlsop_RX3_r", "ldst/asisdlsop", 0xbfe0f000u, 0x0dc0e000u, a64_leaf_guard_1061, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD3_asisdlsep_R3_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc04000u, a64_leaf_guard_1062, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD3_asisdlsop_HX3_r3h", "ldst/asisdlsop", 0xbfe0e400u, 0x0dc06000u, a64_leaf_guard_1063, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD4R_asisdlsop_RX4_r", "ldst/asisdlsop", 0xbfe0f000u, 0x0de0e000u, a64_leaf_guard_1064, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD4_asisdlsep_R4_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc00000u, a64_leaf_guard_1065, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD4_asisdlsop_HX4_r4h", "ldst/asisdlsop", 0xbfe0e400u, 0x0de06000u, a64_leaf_guard_1066, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"PRFM_P_ldst_regoff", "ldst/ldst_regoff", 0xffe04c00u, 0xf8a04800u, a64_leaf_guard_1067, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"RSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f008c00u, a64_leaf_guard_1068, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SCVTF_asimdshf_C", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f00e400u, a64_leaf_guard_1069, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SHL_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f005400u, a64_leaf_guard_1070, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f008400u, a64_leaf_guard_1071, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SLI_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f005400u, a64_leaf_guard_1072, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQRSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f009c00u, a64_leaf_guard_1073, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQRSHRUN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f008c00u, a64_leaf_guard_1074, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQSHLU_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f006400u, a64_leaf_guard_1075, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQSHL_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f007400u, a64_leaf_guard_1076, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f009400u, a64_leaf_guard_1077, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SQSHRUN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f008400u, a64_leaf_guard_1078, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SRI_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f004400u, a64_leaf_guard_1079, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SRSHR_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f002400u, a64_leaf_guard_1080, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SRSRA_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f003400u, a64_leaf_guard_1081, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SSHLL_asimdshf_L", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f00a400u, a64_leaf_guard_1082, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SSHR_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f000400u, a64_leaf_guard_1083, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"SSRA_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f001400u, a64_leaf_guard_1084, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"ST1_asisdlsep_R1_r1", "ldst/asisdlsep", 0xbfe0f000u, 0x0c807000u, a64_leaf_guard_1085, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST1_asisdlsep_R2_r2", "ldst/asisdlsep", 0xbfe0f000u, 0x0c80a000u, a64_leaf_guard_1086, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST1_asisdlsep_R3_r3", "ldst/asisdlsep", 0xbfe0f000u, 0x0c806000u, a64_leaf_guard_1087, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST1_asisdlsep_R4_r4", "ldst/asisdlsep", 0xbfe0f000u, 0x0c802000u, a64_leaf_guard_1088, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST1_asisdlsop_HX1_r1h", "ldst/asisdlsop", 0xbfe0e400u, 0x0d804000u, a64_leaf_guard_1089, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST2_asisdlsep_R2_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0c808000u, a64_leaf_guard_1090, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST2_asisdlsop_HX2_r2h", "ldst/asisdlsop", 0xbfe0e400u, 0x0da04000u, a64_leaf_guard_1091, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST3_asisdlsep_R3_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0c804000u, a64_leaf_guard_1092, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST3_asisdlsop_HX3_r3h", "ldst/asisdlsop", 0xbfe0e400u, 0x0d806000u, a64_leaf_guard_1093, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST4_asisdlsep_R4_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0c800000u, a64_leaf_guard_1094, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST4_asisdlsop_HX4_r4h", "ldst/asisdlsop", 0xbfe0e400u, 0x0da06000u, a64_leaf_guard_1095, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"UCVTF_asimdshf_C", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f00e400u, a64_leaf_guard_1096, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"UQRSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f009c00u, a64_leaf_guard_1097, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"UQSHL_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f007400u, a64_leaf_guard_1098, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"UQSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f009400u, a64_leaf_guard_1099, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"URSHR_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f002400u, a64_leaf_guard_1100, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"URSRA_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f003400u, a64_leaf_guard_1101, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"USHLL_asimdshf_L", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f00a400u, a64_leaf_guard_1102, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"USHR_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f000400u, a64_leaf_guard_1103, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"USRA_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f001400u, a64_leaf_guard_1104, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FCVTZS_asimdshf_C", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f00fc00u, a64_leaf_guard_1092, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"FCVTZU_asimdshf_C", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f00fc00u, a64_leaf_guard_1093, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"LD1R_asisdlsop_RX1_r", "ldst/asisdlsop", 0xbfe0f000u, 0x0dc0c000u, a64_leaf_guard_1094, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD1_asisdlsep_R1_r1", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc07000u, a64_leaf_guard_1095, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD1_asisdlsep_R2_r2", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc0a000u, a64_leaf_guard_1096, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD1_asisdlsep_R3_r3", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc06000u, a64_leaf_guard_1097, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD1_asisdlsep_R4_r4", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc02000u, a64_leaf_guard_1098, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD1_asisdlsop_HX1_r1h", "ldst/asisdlsop", 0xbfe0e400u, 0x0dc04000u, a64_leaf_guard_1099, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD2R_asisdlsop_RX2_r", "ldst/asisdlsop", 0xbfe0f000u, 0x0de0c000u, a64_leaf_guard_1100, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD2_asisdlsep_R2_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc08000u, a64_leaf_guard_1101, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD2_asisdlsop_HX2_r2h", "ldst/asisdlsop", 0xbfe0e400u, 0x0de04000u, a64_leaf_guard_1102, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD3R_asisdlsop_RX3_r", "ldst/asisdlsop", 0xbfe0f000u, 0x0dc0e000u, a64_leaf_guard_1103, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD3_asisdlsep_R3_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc04000u, a64_leaf_guard_1104, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD3_asisdlsop_HX3_r3h", "ldst/asisdlsop", 0xbfe0e400u, 0x0dc06000u, a64_leaf_guard_1105, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD4R_asisdlsop_RX4_r", "ldst/asisdlsop", 0xbfe0f000u, 0x0de0e000u, a64_leaf_guard_1106, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD4_asisdlsep_R4_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0cc00000u, a64_leaf_guard_1107, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD4_asisdlsop_HX4_r4h", "ldst/asisdlsop", 0xbfe0e400u, 0x0de06000u, a64_leaf_guard_1108, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"PRFM_P_ldst_regoff", "ldst/ldst_regoff", 0xffe04c00u, 0xf8a04800u, a64_leaf_guard_1109, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"RSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f008c00u, a64_leaf_guard_1110, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SCVTF_asimdshf_C", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f00e400u, a64_leaf_guard_1111, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SHL_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f005400u, a64_leaf_guard_1112, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f008400u, a64_leaf_guard_1113, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SLI_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f005400u, a64_leaf_guard_1114, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQRSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f009c00u, a64_leaf_guard_1115, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQRSHRUN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f008c00u, a64_leaf_guard_1116, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQSHLU_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f006400u, a64_leaf_guard_1117, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQSHL_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f007400u, a64_leaf_guard_1118, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f009400u, a64_leaf_guard_1119, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SQSHRUN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f008400u, a64_leaf_guard_1120, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SRI_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f004400u, a64_leaf_guard_1121, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SRSHR_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f002400u, a64_leaf_guard_1122, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SRSRA_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f003400u, a64_leaf_guard_1123, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SSHLL_asimdshf_L", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f00a400u, a64_leaf_guard_1124, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SSHR_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f000400u, a64_leaf_guard_1125, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SSRA_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x0f001400u, a64_leaf_guard_1126, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"ST1_asisdlsep_R1_r1", "ldst/asisdlsep", 0xbfe0f000u, 0x0c807000u, a64_leaf_guard_1127, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST1_asisdlsep_R2_r2", "ldst/asisdlsep", 0xbfe0f000u, 0x0c80a000u, a64_leaf_guard_1128, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST1_asisdlsep_R3_r3", "ldst/asisdlsep", 0xbfe0f000u, 0x0c806000u, a64_leaf_guard_1129, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST1_asisdlsep_R4_r4", "ldst/asisdlsep", 0xbfe0f000u, 0x0c802000u, a64_leaf_guard_1130, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST1_asisdlsop_HX1_r1h", "ldst/asisdlsop", 0xbfe0e400u, 0x0d804000u, a64_leaf_guard_1131, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST2_asisdlsep_R2_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0c808000u, a64_leaf_guard_1132, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST2_asisdlsop_HX2_r2h", "ldst/asisdlsop", 0xbfe0e400u, 0x0da04000u, a64_leaf_guard_1133, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST3_asisdlsep_R3_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0c804000u, a64_leaf_guard_1134, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST3_asisdlsop_HX3_r3h", "ldst/asisdlsop", 0xbfe0e400u, 0x0d806000u, a64_leaf_guard_1135, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST4_asisdlsep_R4_r", "ldst/asisdlsep", 0xbfe0f000u, 0x0c800000u, a64_leaf_guard_1136, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"Rm", 16, 5}, {"opcode", 12, 4}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST4_asisdlsop_HX4_r4h", "ldst/asisdlsop", 0xbfe0e400u, 0x0da06000u, a64_leaf_guard_1137, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"UCVTF_asimdshf_C", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f00e400u, a64_leaf_guard_1138, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UQRSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f009c00u, a64_leaf_guard_1139, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UQSHL_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f007400u, a64_leaf_guard_1140, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UQSHRN_asimdshf_N", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f009400u, a64_leaf_guard_1141, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"op", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"URSHR_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f002400u, a64_leaf_guard_1142, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"URSRA_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f003400u, a64_leaf_guard_1143, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"USHLL_asimdshf_L", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f00a400u, a64_leaf_guard_1144, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"USHR_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f000400u, a64_leaf_guard_1145, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"USRA_asimdshf_R", "simd_dp/asimdshf", 0xbf80fc00u, 0x2f001400u, a64_leaf_guard_1146, A64_LEAF_FEAT_AdvSIMD, 9, {{"Q", 30, 1}, {"U", 29, 1}, {"op1", 23, 2}, {"immh", 19, 4}, {"immb", 16, 3}, {"o1", 13, 1}, {"o0", 12, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ADDHN_asimddiff_N", "simd_dp/asimddiff", 0xbf20fc00u, 0x0e204000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ADDP_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x0e20bc00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ADD_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x0e208400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"BFDOT_asimdelem_E", "simd_dp/asimdelem", 0xbfc0f400u, 0x0f40f000u, nullptr, A64_LEAF_FEAT_BF16, 10, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"opcode", 12, 4}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"BFMLAL_asimdelem_F", "simd_dp/asimdelem", 0xbfc0f400u, 0x0fc0f000u, nullptr, A64_LEAF_FEAT_BF16, 10, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"opcode", 12, 4}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CCMN_32_condcmp_imm", "dpreg/condcmp_imm", 0xffe00c10u, 0x3a400800u, nullptr, 0, 11, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"imm5", 16, 5}, {"cond", 12, 4}, {"o2", 10, 1}, {"Rn", 5, 5}, {"o3", 4, 1}, {"nzcv", 0, 4}}},
     {"CCMN_32_condcmp_reg", "dpreg/condcmp_reg", 0xffe00c10u, 0x3a400000u, nullptr, 0, 11, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"Rm", 16, 5}, {"cond", 12, 4}, {"o2", 10, 1}, {"Rn", 5, 5}, {"o3", 4, 1}, {"nzcv", 0, 4}}},
     {"CCMN_64_condcmp_imm", "dpreg/condcmp_imm", 0xffe00c10u, 0xba400800u, nullptr, 0, 11, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"op2", 21, 4}, {"imm5", 16, 5}, {"cond", 12, 4}, {"o2", 10, 1}, {"Rn", 5, 5}, {"o3", 4, 1}, {"nzcv", 0, 4}}},
@@ -1410,8 +1472,12 @@ static const a64_leaf_t a64_leaves[] = {
     {"SHADD_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x0e200400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SHSUB_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x0e202400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMAXP_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x0e20a400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMAX_32_minmax_imm", "dpimm/minmax_imm", 0xfffc0000u, 0x11c00000u, nullptr, A64_LEAF_FEAT_CSSC, 8, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 22, 4}, {"opc", 18, 4}, {"imm8", 10, 8}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMAX_64_minmax_imm", "dpimm/minmax_imm", 0xfffc0000u, 0x91c00000u, nullptr, A64_LEAF_FEAT_CSSC, 8, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 22, 4}, {"opc", 18, 4}, {"imm8", 10, 8}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMAX_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x0e206400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMINP_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x0e20ac00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMIN_32_minmax_imm", "dpimm/minmax_imm", 0xfffc0000u, 0x11c80000u, nullptr, A64_LEAF_FEAT_CSSC, 8, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 22, 4}, {"opc", 18, 4}, {"imm8", 10, 8}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SMIN_64_minmax_imm", "dpimm/minmax_imm", 0xfffc0000u, 0x91c80000u, nullptr, A64_LEAF_FEAT_CSSC, 8, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 22, 4}, {"opc", 18, 4}, {"imm8", 10, 8}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMIN_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x0e206c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMLAL_asimddiff_L", "simd_dp/asimddiff", 0xbf20fc00u, 0x0e208000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SMLSL_asimddiff_L", "simd_dp/asimddiff", 0xbf20fc00u, 0x0e20a000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1434,6 +1500,7 @@ static const a64_leaf_t a64_leaves[] = {
     {"SSUBW_asimddiff_W", "simd_dp/asimddiff", 0xbf20fc00u, 0x0e203000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SUBHN_asimddiff_N", "simd_dp/asimddiff", 0xbf20fc00u, 0x0e206000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SUB_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e208400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"SUDOT_asimdelem_D", "simd_dp/asimdelem", 0xbfc0f400u, 0x0f00f000u, nullptr, A64_LEAF_FEAT_I8MM, 10, {{"Q", 30, 1}, {"U", 29, 1}, {"US", 23, 1}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"opcode", 12, 4}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"TRN1_asimdperm_only", "simd_dp/asimdperm", 0xbf20fc00u, 0x0e002800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"Q", 30, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"op", 14, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"TRN2_asimdperm_only", "simd_dp/asimdperm", 0xbf20fc00u, 0x0e006800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"Q", 30, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"op", 14, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UABAL_asimddiff_L", "simd_dp/asimddiff", 0xbf20fc00u, 0x2e205000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"op", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1446,8 +1513,12 @@ static const a64_leaf_t a64_leaves[] = {
     {"UHADD_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e200400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UHSUB_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e202400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMAXP_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e20a400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMAX_32U_minmax_imm", "dpimm/minmax_imm", 0xfffc0000u, 0x11c40000u, nullptr, A64_LEAF_FEAT_CSSC, 8, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 22, 4}, {"opc", 18, 4}, {"imm8", 10, 8}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMAX_64U_minmax_imm", "dpimm/minmax_imm", 0xfffc0000u, 0x91c40000u, nullptr, A64_LEAF_FEAT_CSSC, 8, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 22, 4}, {"opc", 18, 4}, {"imm8", 10, 8}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMAX_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e206400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMINP_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e20ac00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMIN_32U_minmax_imm", "dpimm/minmax_imm", 0xfffc0000u, 0x11cc0000u, nullptr, A64_LEAF_FEAT_CSSC, 8, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 22, 4}, {"opc", 18, 4}, {"imm8", 10, 8}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"UMIN_64U_minmax_imm", "dpimm/minmax_imm", 0xfffc0000u, 0x91cc0000u, nullptr, A64_LEAF_FEAT_CSSC, 8, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 22, 4}, {"opc", 18, 4}, {"imm8", 10, 8}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMIN_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e206c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMLAL_asimddiff_L", "simd_dp/asimddiff", 0xbf20fc00u, 0x2e208000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMLSL_asimddiff_L", "simd_dp/asimddiff", 0xbf20fc00u, 0x2e20a000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1458,6 +1529,7 @@ static const a64_leaf_t a64_leaves[] = {
     {"UQSUB_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e202c00u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"URHADD_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e201400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"opcode", 11, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"URSHL_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e205400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"R", 12, 1}, {"S", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"USDOT_asimdelem_D", "simd_dp/asimdelem", 0xbfc0f400u, 0x0f80f000u, nullptr, A64_LEAF_FEAT_I8MM, 10, {{"Q", 30, 1}, {"U", 29, 1}, {"US", 23, 1}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"opcode", 12, 4}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"USHL_asimdsame_only", "simd_dp/asimdsame", 0xbf20fc00u, 0x2e204400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 8, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"R", 12, 1}, {"S", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"USUBL_asimddiff_L", "simd_dp/asimddiff", 0xbf20fc00u, 0x2e202000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"USUBW_asimddiff_W", "simd_dp/asimddiff", 0xbf20fc00u, 0x2e203000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"o1", 13, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1465,20 +1537,20 @@ static const a64_leaf_t a64_leaves[] = {
     {"UZP2_asimdperm_only", "simd_dp/asimdperm", 0xbf20fc00u, 0x0e005800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"Q", 30, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"op", 14, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ZIP1_asimdperm_only", "simd_dp/asimdperm", 0xbf20fc00u, 0x0e003800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"Q", 30, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"op", 14, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ZIP2_asimdperm_only", "simd_dp/asimdperm", 0xbf20fc00u, 0x0e007800u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"Q", 30, 1}, {"size", 22, 2}, {"Rm", 16, 5}, {"op", 14, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"LD1_asisdlsop_BX1_r1b", "ldst/asisdlsop", 0xbfe0e000u, 0x0dc00000u, a64_leaf_guard_1212, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD2_asisdlsop_BX2_r2b", "ldst/asisdlsop", 0xbfe0e000u, 0x0de00000u, a64_leaf_guard_1213, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD3_asisdlsop_BX3_r3b", "ldst/asisdlsop", 0xbfe0e000u, 0x0dc02000u, a64_leaf_guard_1214, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LD4_asisdlsop_BX4_r4b", "ldst/asisdlsop", 0xbfe0e000u, 0x0de02000u, a64_leaf_guard_1215, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LDRB_32B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x38600800u, a64_leaf_guard_1216, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LDRSB_32B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x38e00800u, a64_leaf_guard_1217, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LDRSB_64B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x38a00800u, a64_leaf_guard_1218, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"LDR_B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x3c600800u, a64_leaf_guard_1219, A64_LEAF_FEAT_FP, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST1_asisdlsop_BX1_r1b", "ldst/asisdlsop", 0xbfe0e000u, 0x0d800000u, a64_leaf_guard_1220, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST2_asisdlsop_BX2_r2b", "ldst/asisdlsop", 0xbfe0e000u, 0x0da00000u, a64_leaf_guard_1221, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST3_asisdlsop_BX3_r3b", "ldst/asisdlsop", 0xbfe0e000u, 0x0d802000u, a64_leaf_guard_1222, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"ST4_asisdlsop_BX4_r4b", "ldst/asisdlsop", 0xbfe0e000u, 0x0da02000u, a64_leaf_guard_1223, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"STRB_32B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x38200800u, a64_leaf_guard_1224, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
-    {"STR_B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x3c200800u, a64_leaf_guard_1225, A64_LEAF_FEAT_FP, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD1_asisdlsop_BX1_r1b", "ldst/asisdlsop", 0xbfe0e000u, 0x0dc00000u, a64_leaf_guard_1266, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD2_asisdlsop_BX2_r2b", "ldst/asisdlsop", 0xbfe0e000u, 0x0de00000u, a64_leaf_guard_1267, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD3_asisdlsop_BX3_r3b", "ldst/asisdlsop", 0xbfe0e000u, 0x0dc02000u, a64_leaf_guard_1268, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LD4_asisdlsop_BX4_r4b", "ldst/asisdlsop", 0xbfe0e000u, 0x0de02000u, a64_leaf_guard_1269, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDRB_32B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x38600800u, a64_leaf_guard_1270, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDRSB_32B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x38e00800u, a64_leaf_guard_1271, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDRSB_64B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x38a00800u, a64_leaf_guard_1272, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDR_B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x3c600800u, a64_leaf_guard_1273, A64_LEAF_FEAT_FP, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST1_asisdlsop_BX1_r1b", "ldst/asisdlsop", 0xbfe0e000u, 0x0d800000u, a64_leaf_guard_1274, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST2_asisdlsop_BX2_r2b", "ldst/asisdlsop", 0xbfe0e000u, 0x0da00000u, a64_leaf_guard_1275, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST3_asisdlsop_BX3_r3b", "ldst/asisdlsop", 0xbfe0e000u, 0x0d802000u, a64_leaf_guard_1276, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"ST4_asisdlsop_BX4_r4b", "ldst/asisdlsop", 0xbfe0e000u, 0x0da02000u, a64_leaf_guard_1277, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"op1", 26, 1}, {"L", 22, 1}, {"R", 21, 1}, {"Rm", 16, 5}, {"opcode", 13, 3}, {"S", 12, 1}, {"size", 10, 2}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"STRB_32B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x38200800u, a64_leaf_guard_1278, 0, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"STR_B_ldst_regoff", "ldst/ldst_regoff", 0xffe00c00u, 0x3c200800u, a64_leaf_guard_1279, A64_LEAF_FEAT_FP, 8, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"S", 12, 1}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"CSEL_32_condsel", "dpreg/condsel", 0xffe00c00u, 0x1a800000u, nullptr, 0, 9, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"Rm", 16, 5}, {"cond", 12, 4}, {"o2", 10, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CSEL_64_condsel", "dpreg/condsel", 0xffe00c00u, 0x9a800000u, nullptr, 0, 9, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"Rm", 16, 5}, {"cond", 12, 4}, {"o2", 10, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"CSINC_32_condsel", "dpreg/condsel", 0xffe00c00u, 0x1a800400u, nullptr, 0, 9, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"Rm", 16, 5}, {"cond", 12, 4}, {"o2", 10, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1496,6 +1568,15 @@ static const a64_leaf_t a64_leaves[] = {
     {"FMULX_asimdelem_R_SD", "simd_dp/asimdelem", 0xbf80f400u, 0x2f809000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"opcode", 12, 4}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"FMUL_asimdelem_R_SD", "simd_dp/asimdelem", 0xbf80f400u, 0x0f809000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"U", 29, 1}, {"sz", 22, 1}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"opcode", 12, 4}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"INS_asimdins_IV_v", "simd_dp/asimdins", 0xffe08400u, 0x6e000400u, nullptr, A64_LEAF_FEAT_AdvSIMD, 7, {{"Q", 30, 1}, {"op", 29, 1}, {"op1", 23, 2}, {"imm5", 16, 5}, {"imm4", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"LDAPURB_32_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x19400000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDAPURH_32_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x59400000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDAPURSB_32_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x19c00000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDAPURSB_64_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x19800000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDAPURSH_32_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x59c00000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDAPURSH_64_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x59800000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDAPURSW_64_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x99800000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDAPUR_32_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x99400000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"LDAPUR_64_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0xd9400000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"LDRB_32_ldst_immpost", "ldst/ldst_immpost", 0xffe00c00u, 0x38400400u, nullptr, 0, 6, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"LDRB_32_ldst_immpre", "ldst/ldst_immpre", 0xffe00c00u, 0x38400c00u, nullptr, 0, 6, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"LDRH_32_ldst_immpost", "ldst/ldst_immpost", 0xffe00c00u, 0x78400400u, nullptr, 0, 6, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
@@ -1565,6 +1646,10 @@ static const a64_leaf_t a64_leaves[] = {
     {"SQRDMLAH_asisdelem_R", "simd_dp/asisdelem", 0xff00f400u, 0x7f00d000u, nullptr, A64_LEAF_FEAT_RDM, 9, {{"U", 29, 1}, {"size", 22, 2}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"S", 13, 1}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SQRDMLSH_asisdelem_R", "simd_dp/asisdelem", 0xff00f400u, 0x7f00f000u, nullptr, A64_LEAF_FEAT_RDM, 9, {{"U", 29, 1}, {"size", 22, 2}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"S", 13, 1}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"SQRDMULH_asisdelem_R", "simd_dp/asisdelem", 0xff00f400u, 0x5f00d000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 9, {{"U", 29, 1}, {"size", 22, 2}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"op", 12, 1}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"STLURB_32_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x19000000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"STLURH_32_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x59000000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"STLUR_32_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0x99000000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
+    {"STLUR_64_ldapstl_unscaled", "ldst/ldapstl_unscaled", 0xffe00c00u, 0xd9000000u, nullptr, A64_LEAF_FEAT_LRCPC2, 6, {{"size", 30, 2}, {"op1", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"STRB_32_ldst_immpost", "ldst/ldst_immpost", 0xffe00c00u, 0x38000400u, nullptr, 0, 6, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"STRB_32_ldst_immpre", "ldst/ldst_immpre", 0xffe00c00u, 0x38000c00u, nullptr, 0, 6, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"STRH_32_ldst_immpost", "ldst/ldst_immpost", 0xffe00c00u, 0x78000400u, nullptr, 0, 6, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
@@ -1605,7 +1690,7 @@ static const a64_leaf_t a64_leaves[] = {
     {"STUR_S_ldst_unscaled", "ldst/ldst_unscaled", 0xffe00c00u, 0xbc000000u, nullptr, A64_LEAF_FEAT_FP, 6, {{"size", 30, 2}, {"VR", 26, 1}, {"opc", 22, 2}, {"imm9", 12, 9}, {"Rn", 5, 5}, {"Rt", 0, 5}}},
     {"SYSL_RC_systeminstrs", "control/systeminstrs", 0xfff80000u, 0xd5280000u, nullptr, 0, 7, {{"op0", 29, 3}, {"L", 21, 1}, {"op1", 16, 3}, {"CRn", 12, 4}, {"CRm", 8, 4}, {"op2", 5, 3}, {"Rt", 0, 5}}},
     {"SYS_CR_systeminstrs", "control/systeminstrs", 0xfff80000u, 0xd5080000u, nullptr, 0, 7, {{"op0", 29, 3}, {"L", 21, 1}, {"op1", 16, 3}, {"CRn", 12, 4}, {"CRm", 8, 4}, {"op2", 5, 3}, {"Rt", 0, 5}}},
-    {"EXTR_32_extract", "dpimm/extract", 0xffe08000u, 0x13800000u, a64_leaf_guard_1352, 0, 8, {{"sf", 31, 1}, {"op21", 29, 2}, {"N", 22, 1}, {"o0", 21, 1}, {"Rm", 16, 5}, {"imms", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"EXTR_32_extract", "dpimm/extract", 0xffe08000u, 0x13800000u, a64_leaf_guard_1419, 0, 8, {{"sf", 31, 1}, {"op21", 29, 2}, {"N", 22, 1}, {"o0", 21, 1}, {"Rm", 16, 5}, {"imms", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"BCAX_VVV16_crypto4", "simd_dp/crypto4", 0xffe08000u, 0xce200000u, nullptr, A64_LEAF_FEAT_SHA3, 7, {{"op0", 28, 4}, {"op1", 23, 2}, {"Op0", 21, 2}, {"Rm", 16, 5}, {"Ra", 10, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"EOR3_VVV16_crypto4", "simd_dp/crypto4", 0xffe08000u, 0xce000000u, nullptr, A64_LEAF_FEAT_SHA3, 7, {{"op0", 28, 4}, {"op1", 23, 2}, {"Op0", 21, 2}, {"Rm", 16, 5}, {"Ra", 10, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"EXT_asimdext_only", "simd_dp/asimdext", 0xbfe08400u, 0x2e000000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 6, {{"Q", 30, 1}, {"op2", 22, 2}, {"Rm", 16, 5}, {"imm4", 11, 4}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1654,7 +1739,7 @@ static const a64_leaf_t a64_leaves[] = {
     {"UMLSL_asimdelem_L", "simd_dp/asimdelem", 0xbf00f400u, 0x2f006000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"o2", 14, 1}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMSUBL_64WA_dp_3src", "dpreg/dp_3src", 0xffe08000u, 0x9ba08000u, nullptr, 0, 9, {{"sf", 31, 1}, {"op54", 29, 2}, {"op1", 28, 1}, {"U", 23, 1}, {"Rm", 16, 5}, {"o0", 15, 1}, {"Ra", 10, 5}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"UMULL_asimdelem_L", "simd_dp/asimdelem", 0xbf00f400u, 0x2f00a000u, nullptr, A64_LEAF_FEAT_AdvSIMD, 10, {{"Q", 30, 1}, {"U", 29, 1}, {"size", 22, 2}, {"L", 21, 1}, {"M", 20, 1}, {"Rm", 16, 4}, {"opcode", 12, 4}, {"H", 11, 1}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
-    {"EXTR_64_extract", "dpimm/extract", 0xffe00000u, 0x93c00000u, a64_leaf_guard_1401, 0, 8, {{"sf", 31, 1}, {"op21", 29, 2}, {"N", 22, 1}, {"o0", 21, 1}, {"Rm", 16, 5}, {"imms", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"EXTR_64_extract", "dpimm/extract", 0xffe00000u, 0x93c00000u, a64_leaf_guard_1468, 0, 8, {{"sf", 31, 1}, {"op21", 29, 2}, {"N", 22, 1}, {"o0", 21, 1}, {"Rm", 16, 5}, {"imms", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ADDS_32S_addsub_ext", "dpreg/addsub_ext", 0xffe00000u, 0x2b200000u, nullptr, 0, 10, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"opt", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"imm3", 10, 3}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ADDS_64S_addsub_ext", "dpreg/addsub_ext", 0xffe00000u, 0xab200000u, nullptr, 0, 10, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"opt", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"imm3", 10, 3}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"ADD_32_addsub_ext", "dpreg/addsub_ext", 0xffe00000u, 0x0b200000u, nullptr, 0, 10, {{"sf", 31, 1}, {"op", 30, 1}, {"S", 29, 1}, {"op1", 28, 1}, {"opt", 22, 2}, {"Rm", 16, 5}, {"option", 13, 3}, {"imm3", 10, 3}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
@@ -1759,6 +1844,7 @@ static const a64_leaf_t a64_leaves[] = {
     {"AND_32_log_shift", "dpreg/log_shift", 0xff200000u, 0x0a000000u, nullptr, 0, 9, {{"sf", 31, 1}, {"opc", 29, 2}, {"op1", 28, 1}, {"shift", 22, 2}, {"N", 21, 1}, {"Rm", 16, 5}, {"imm6", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"AND_64_log_imm", "dpimm/log_imm", 0xff800000u, 0x92000000u, nullptr, 0, 7, {{"sf", 31, 1}, {"opc", 29, 2}, {"N", 22, 1}, {"immr", 16, 6}, {"imms", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"AND_64_log_shift", "dpreg/log_shift", 0xff200000u, 0x8a000000u, nullptr, 0, 9, {{"sf", 31, 1}, {"opc", 29, 2}, {"op1", 28, 1}, {"shift", 22, 2}, {"N", 21, 1}, {"Rm", 16, 5}, {"imm6", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
+    {"BC_only_condbranch", "control/condbranch", 0xff000010u, 0x54000010u, nullptr, A64_LEAF_FEAT_HBC, 4, {{"op0", 29, 3}, {"imm19", 5, 19}, {"o0", 4, 1}, {"cond", 0, 4}}},
     {"BICS_32_log_shift", "dpreg/log_shift", 0xff200000u, 0x6a200000u, nullptr, 0, 9, {{"sf", 31, 1}, {"opc", 29, 2}, {"op1", 28, 1}, {"shift", 22, 2}, {"N", 21, 1}, {"Rm", 16, 5}, {"imm6", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"BICS_64_log_shift", "dpreg/log_shift", 0xff200000u, 0xea200000u, nullptr, 0, 9, {{"sf", 31, 1}, {"opc", 29, 2}, {"op1", 28, 1}, {"shift", 22, 2}, {"N", 21, 1}, {"Rm", 16, 5}, {"imm6", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},
     {"BIC_32_log_shift", "dpreg/log_shift", 0xff200000u, 0x0a200000u, nullptr, 0, 9, {{"sf", 31, 1}, {"opc", 29, 2}, {"op1", 28, 1}, {"shift", 22, 2}, {"N", 21, 1}, {"Rm", 16, 5}, {"imm6", 10, 6}, {"Rn", 5, 5}, {"Rd", 0, 5}}},

@@ -1848,7 +1848,7 @@ static size_t default_ram_size(void) {
     // limit_bytes_remaining is 0 when the kernel enforces no footprint limit on this process.
     if (info.limit_bytes_remaining > 0) {
         uint64_t limit = (info.phys_footprint + info.limit_bytes_remaining + step / 2) & ~(step - 1);
-        target = limit - host_reserve;
+        target = limit > host_reserve ? limit - host_reserve : 0;
     } else {
         uint64_t memsize = 0;
         size_t len = sizeof(memsize);
@@ -1976,7 +1976,7 @@ static int initramfs_get(const char *path, uint8_t digest[CC_SHA256_DIGEST_LENGT
 
 static void compute_snapshot_key(const uint8_t initramfs_digest[CC_SHA256_DIGEST_LENGTH], const boot_plan_t *plan,
                                  const char *cmdline, uint8_t key[CC_SHA256_DIGEST_LENGTH]) {
-    static const char tag[] = "swipterm-boot-4";
+    static const char tag[] = "swipterm-boot-5";
     CC_SHA256_CTX ctx;
     CC_SHA256_Init(&ctx);
     CC_SHA256_Update(&ctx, tag, sizeof(tag));
@@ -2111,6 +2111,7 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
         .root_disk_path = disk_path,
         .preboot_checkpoint = true,
         .cmdline = cmdline,
+        .el2 = true,
         .network = rt->network,
         .callback_ctx = rt,
         .console_output = vmm_on_console,

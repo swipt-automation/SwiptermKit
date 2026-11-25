@@ -36,6 +36,7 @@ const (
 type platform struct {
 	sdk               string
 	target            string
+	cpu               string
 	slice             string
 	bundlePlatform    string
 	minimumVersionKey string
@@ -47,6 +48,7 @@ var platforms = []platform{
 	{
 		sdk:               "macosx",
 		target:            "arm64-apple-macos" + macOSVersion,
+		cpu:               "apple-m1",
 		slice:             "macos-arm64",
 		bundlePlatform:    "MacOSX",
 		minimumVersionKey: "LSMinimumSystemVersion",
@@ -56,6 +58,7 @@ var platforms = []platform{
 	{
 		sdk:               "iphoneos",
 		target:            "arm64-apple-ios" + iosVersion,
+		cpu:               "apple-a10",
 		slice:             "ios-arm64",
 		bundlePlatform:    "iPhoneOS",
 		minimumVersionKey: "MinimumOSVersion",
@@ -64,6 +67,7 @@ var platforms = []platform{
 	{
 		sdk:               "iphonesimulator",
 		target:            "arm64-apple-ios" + iosVersion + "-simulator",
+		cpu:               "apple-m1",
 		slice:             "ios-arm64-simulator",
 		bundlePlatform:    "iPhoneSimulator",
 		minimumVersionKey: "MinimumOSVersion",
@@ -186,7 +190,7 @@ func buildLibraries() error {
 			return err
 		}
 		base := []string{
-			"-target", platform.target, "-isysroot", sdkPath, "-O3", "-g", "-fno-common",
+			"-target", platform.target, "-mcpu=" + platform.cpu, "-isysroot", sdkPath, "-O3", "-g", "-fno-common",
 			"-IVMM/include/CSwiptermKit", "-IVMM/deps/zstd/lib", "-IVMM/deps/zstd/lib/common", "-IVMM/deps/xz/src/liblzma/api",
 			"-DZSTD_LEGACY_SUPPORT=0", "-DXXH_NAMESPACE=swipterm_zstd_", statistics,
 		}

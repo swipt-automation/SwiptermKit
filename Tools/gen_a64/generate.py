@@ -31,6 +31,15 @@ PROFILE_FEATURES = {
     "FEAT_SHA3",
     "FEAT_SHA512",
     "FEAT_MOPS",
+    "FEAT_FlagM",
+    "FEAT_FlagM2",
+    "FEAT_LRCPC2",
+    "FEAT_FRINTTS",
+    "FEAT_SB",
+    "FEAT_BF16",
+    "FEAT_I8MM",
+    "FEAT_HBC",
+    "FEAT_CSSC",
 }
 
 FAMILY_OPCODE_SUBGROUPS = {
@@ -40,6 +49,7 @@ FAMILY_OPCODE_SUBGROUPS = {
     "ldst/asisdlsop": "A64_DEC_ASISDLSOP",
     "ldst/comswap": "A64_DEC_LSE_CAS",
     "ldst/comswappr": "A64_DEC_LSE_CASP",
+    "ldst/ldapstl_unscaled": "A64_DEC_LDAPSTL_UNSCALED",
     "ldst/ldst_immpost": "A64_DEC_LDST_IMMPOST",
     "ldst/ldst_immpre": "A64_DEC_LDST_IMMPRE",
     "ldst/ldst_pos": "A64_DEC_LDST_POS",
@@ -113,6 +123,7 @@ PER_SUBGROUP_MNEMONIC = {
     "dpimm/bitfield",
     "dpimm/extract",
     "dpimm/log_imm",
+    "dpimm/minmax_imm",
     "dpimm/movewide",
     "dpimm/pcreladdr",
     "dpreg/addsub_carry",
@@ -125,6 +136,8 @@ PER_SUBGROUP_MNEMONIC = {
     "dpreg/dp_2src",
     "dpreg/dp_3src",
     "dpreg/log_shift",
+    "dpreg/rmif",
+    "dpreg/setf",
     "reserved/perm_undef",
 }
 
@@ -143,22 +156,37 @@ SYSREGS_WANTED = [
     "AFSR0_EL1", "AFSR1_EL1", "ESR_EL1", "FAR_EL1", "PAR_EL1", "MAIR_EL1",
     "AMAIR_EL1", "VBAR_EL1", "CONTEXTIDR_EL1",
     "TPIDR_EL0", "TPIDRRO_EL0", "TPIDR_EL1",
-    "CNTKCTL_EL1", "CNTFRQ_EL0", "CNTPCT_EL0", "CNTVCT_EL0",
+    "CNTKCTL_EL1", "CNTFRQ_EL0", "CNTPCT_EL0", "CNTVCT_EL0", "CNTPCTSS_EL0", "CNTVCTSS_EL0",
     "CNTP_TVAL_EL0", "CNTP_CTL_EL0", "CNTP_CVAL_EL0",
     "CNTV_TVAL_EL0", "CNTV_CTL_EL0", "CNTV_CVAL_EL0",
     "SPSR_EL1", "ELR_EL1", "SP_EL0", "SPSel", "CurrentEL", "PAN", "UAO",
     "DAIF", "NZCV", "FPCR", "FPSR",
-    "CTR_EL0", "DCZID_EL0", "CLIDR_EL1", "CCSIDR_EL1", "CSSELR_EL1",
-    "MDSCR_EL1", "MDCCSR_EL0", "OSDLR_EL1", "OSLAR_EL1", "OSLSR_EL1",
+    "CTR_EL0", "DCZID_EL0", "CLIDR_EL1", "CCSIDR_EL1", "CSSELR_EL1", "ISR_EL1",
+    "MDSCR_EL1", "MDCCINT_EL1", "MDCCSR_EL0", "OSDLR_EL1", "OSLAR_EL1", "OSLSR_EL1",
+    "OSECCR_EL1", "OSDTRRX_EL1", "OSDTRTX_EL1", "DBGPRCR_EL1",
+    "DBGCLAIMSET_EL1", "DBGCLAIMCLR_EL1", "DBGAUTHSTATUS_EL1",
+    "DBGDTR_EL0", "DBGDTRRX_EL0", "DBGDTRTX_EL0",
     "PMCR_EL0", "PMCNTENSET_EL0", "PMCNTENCLR_EL0", "PMOVSCLR_EL0", "PMSELR_EL0",
     "PMCEID0_EL0", "PMCEID1_EL0", "PMCCNTR_EL0", "PMXEVTYPER_EL0", "PMXEVCNTR_EL0",
     "PMUSERENR_EL0", "PMINTENSET_EL1", "PMINTENCLR_EL1", "PMOVSSET_EL0",
     "DBGBVR<n>_EL1", "DBGBCR<n>_EL1", "DBGWVR<n>_EL1", "DBGWCR<n>_EL1",
+    "VPIDR_EL2", "VMPIDR_EL2", "SCTLR_EL2", "ACTLR_EL2", "HCR_EL2", "MDCR_EL2", "CPTR_EL2",
+    "HSTR_EL2", "HACR_EL2", "TTBR0_EL2", "TTBR1_EL2", "TCR_EL2", "VTTBR_EL2", "VTCR_EL2",
+    "SPSR_EL2", "ELR_EL2", "SP_EL1", "AFSR0_EL2", "AFSR1_EL2", "ESR_EL2", "FAR_EL2", "HPFAR_EL2",
+    "MAIR_EL2", "AMAIR_EL2", "VBAR_EL2", "CONTEXTIDR_EL2", "TPIDR_EL2",
+    "CNTVOFF_EL2", "CNTHCTL_EL2",
+    "CNTHP_TVAL_EL2", "CNTHP_CTL_EL2", "CNTHP_CVAL_EL2",
+    "CNTHV_TVAL_EL2", "CNTHV_CTL_EL2", "CNTHV_CVAL_EL2",
+    "SCTLR_EL12", "CPACR_EL12", "TTBR0_EL12", "TTBR1_EL12", "TCR_EL12",
+    "SPSR_EL12", "ELR_EL12", "AFSR0_EL12", "AFSR1_EL12", "ESR_EL12", "FAR_EL12",
+    "MAIR_EL12", "AMAIR_EL12", "VBAR_EL12", "CONTEXTIDR_EL12", "CNTKCTL_EL12",
+    "CNTP_TVAL_EL02", "CNTP_CTL_EL02", "CNTP_CVAL_EL02",
+    "CNTV_TVAL_EL02", "CNTV_CTL_EL02", "CNTV_CVAL_EL02",
 ]
 
 SYSOPS_WANTED = [
     "DC ZVA", "DC IVAC", "DC ISW", "DC CSW", "DC CISW", "DC CVAC", "DC CVAU",
-    "DC CIVAC", "DC CVAP",
+    "DC CIVAC", "DC CVAP", "DC CVADP",
     "IC IALLUIS", "IC IALLU", "IC IVAU",
     "AT S1E1R", "AT S1E1W", "AT S1E0R", "AT S1E0W", "AT S1E1RP", "AT S1E1WP",
     "TLBI VMALLE1", "TLBI VMALLE1IS", "TLBI VMALLE1OS",
@@ -171,6 +199,18 @@ SYSOPS_WANTED = [
     "TLBI RVAAE1", "TLBI RVAAE1IS", "TLBI RVAAE1OS",
     "TLBI RVALE1", "TLBI RVALE1IS", "TLBI RVALE1OS",
     "TLBI RVAALE1", "TLBI RVAALE1IS", "TLBI RVAALE1OS",
+    "AT S1E2R", "AT S1E2W", "AT S12E1R", "AT S12E1W", "AT S12E0R", "AT S12E0W",
+    "TLBI ALLE2", "TLBI ALLE2IS", "TLBI ALLE2OS",
+    "TLBI VAE2", "TLBI VAE2IS", "TLBI VAE2OS",
+    "TLBI VALE2", "TLBI VALE2IS", "TLBI VALE2OS",
+    "TLBI RVAE2", "TLBI RVAE2IS", "TLBI RVAE2OS",
+    "TLBI RVALE2", "TLBI RVALE2IS", "TLBI RVALE2OS",
+    "TLBI ALLE1", "TLBI ALLE1IS", "TLBI ALLE1OS",
+    "TLBI VMALLS12E1", "TLBI VMALLS12E1IS", "TLBI VMALLS12E1OS",
+    "TLBI IPAS2E1", "TLBI IPAS2E1IS", "TLBI IPAS2E1OS",
+    "TLBI IPAS2LE1", "TLBI IPAS2LE1IS", "TLBI IPAS2LE1OS",
+    "TLBI RIPAS2E1", "TLBI RIPAS2E1IS", "TLBI RIPAS2E1OS",
+    "TLBI RIPAS2LE1", "TLBI RIPAS2LE1IS", "TLBI RIPAS2LE1OS",
 ]
 
 
@@ -564,19 +604,28 @@ def generate_sysreg_inc(aarchmrs_dir: pathlib.Path, out_path: pathlib.Path):
     regs = json.loads((aarchmrs_dir / "Registers.json").read_bytes())
     by_name = {r["name"]: r for r in regs if r.get("state") == "AArch64"}
 
+    aliases = {}
+    for r in by_name.values():
+        for acc in r.get("accessors") or []:
+            if acc["name"] in ("A64.MRS", "A64.MSRregister"):
+                for entry in acc.get("encoding") or []:
+                    aliases.setdefault(entry.get("asmvalue"), entry["encodings"])
+
     sysreg_defs = []
     seen_sysregs = set()
     for name in SYSREGS_WANTED:
-        if name not in by_name:
-            raise KeyError(f"Missing AARCHMRS register: {name}")
-        r = by_name[name]
         enc_map = None
-        for acc in r.get("accessors") or []:
-            if acc["name"] in ("A64.MRS", "A64.MSRregister"):
-                encs = acc.get("encoding") or []
-                if encs:
-                    enc_map = encs[0]["encodings"]
-                    break
+        if name in by_name:
+            for acc in by_name[name].get("accessors") or []:
+                if acc["name"] in ("A64.MRS", "A64.MSRregister"):
+                    encs = acc.get("encoding") or []
+                    if encs:
+                        enc_map = encs[0]["encodings"]
+                        break
+        elif name in aliases:
+            enc_map = aliases[name]
+        else:
+            raise KeyError(f"Missing AARCHMRS register: {name}")
         if enc_map is None:
             raise ValueError(f"No MRS/MSR encoding for {name}")
         if "<n>" in name:

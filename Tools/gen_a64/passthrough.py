@@ -7,17 +7,11 @@ from dataclasses import dataclass
 
 REGISTER_FIELDS = ("Rd", "Rn", "Rm", "Ra", "Rt", "Rs")
 BASELINE_FEATURES = {"FEAT_FP", "FEAT_AdvSIMD"}
-LLVM_ATTRIBUTES = "+v8.4a,+fullfp16,+aes,+sha2,+sha3,+dotprod,+fp16fml,+rdm,+lse,+crc,+jsconv,+complxnum,+rcpc"
+LLVM_ATTRIBUTES = ("+v8.4a,+fullfp16,+aes,+sha2,+sha3,+dotprod,+fp16fml,+rdm,+lse,+crc,+jsconv,+complxnum,+rcpc,"
+                   "+bf16,+i8mm,+fptoint")
 
 SIMD_EXCLUDED = {
     "simd_dp/asimdtbl",
-    "simd_dp/cryptoaes",
-    "simd_dp/cryptosha2",
-    "simd_dp/cryptosha3",
-    "simd_dp/crypto3_imm6",
-    "simd_dp/crypto4",
-    "simd_dp/cryptosha512_2",
-    "simd_dp/cryptosha512_3",
 }
 SIMD_IMMEDIATE_LEAVES = {
     "FMOV_asimdimm_D2_d",
@@ -122,7 +116,7 @@ def disassemble(words):
         subprocess.run(["xcrun", "clang", "-target", "arm64-apple-macos14", "-c", str(source), "-o", str(obj)],
                        check=True)
         text = subprocess.run(
-            ["xcrun", "llvm-objdump", "-d", "--no-show-raw-insn", "-M", "no-aliases",
+            ["xcrun", "llvm-objdump", "-d", "--no-show-raw-insn", "-M", "no-aliases", "--triple=aarch64",
              f"--mattr={LLVM_ATTRIBUTES}", str(obj)],
             check=True, capture_output=True, text=True).stdout
     lines = [m.group(1).strip() for m in re.finditer(r"^\s*[0-9a-f]+:\s+(.*)$", text, re.M)]
@@ -245,22 +239,15 @@ class Passthrough:
             self.leaves.append(entry)
 
     def emit_table(self, emit_tree):
-        self.features = sorted({f for e in self.leaves for f in e["leaf"].features} - BASELINE_FEATURES)
         lines = [
             f"enum : uint32_t {{ CPU_PT_STUB_COUNT = {len(self.stubs)} }};",
             "",
-            "static const char *const cpu_pt_feature_names[] = {",
+            "static const cpu_pt_leaf_t cpu_pt_leaves[] = {",
         ]
-        lines += [f'    "{f}",' for f in self.features]
-        lines += ["};", "", "enum : uint32_t {"]
-        lines += [f"    CPU_PT_{f} = 1u << {i}," for i, f in enumerate(self.features)]
-        lines += ["};", "", "static const cpu_pt_leaf_t cpu_pt_leaves[] = {"]
         entries = []
         for index, entry in enumerate(self.leaves):
             leaf = entry["leaf"]
-            features = 0
-            for f in leaf.features - BASELINE_FEATURES:
-                features |= 1 << self.features.index(f)
+            features = " | ".join(f"CPU_HOST_{f}" for f in sorted(leaf.features - BASELINE_FEATURES)) or "0"
             slots = []
             for slot in SLOT_FIELDS:
                 if slot in entry["slots"]:
@@ -269,7 +256,7 @@ class Passthrough:
                     slots.append(f"{{{start}, {width}, CPU_PT_{kind}}}")
                 else:
                     slots.append("{0, 0, CPU_PT_NONE}")
-            lines.append(f"    {{0x{entry['var_mask']:08x}u, {entry['base']}, 0x{features:x}u, "
+            lines.append(f"    {{0x{entry['var_mask']:08x}u, {entry['base']}, {features}, "
                          f"{{{', '.join(slots)}}}}},")
             entries.append(type(leaf)(leaf.name, leaf.subgroup, str(index), leaf.mask, leaf.value, leaf.guard,
                                       leaf.priority, leaf.fields, leaf.conds, leaf.features, leaf.scope))
@@ -279,14 +266,16 @@ class Passthrough:
         return "\n".join(lines)
 
     def emit_code(self):
-        lines = ["Lpt_cold:", "    b Lcold", "Lpt_wake:", "    b Lstlr_wake", ""]
+        lines = ["Lpt_cold:", "    b Lcold", "Lpt_wake:", "    b Lstlr_wake", "Lpt_fp:", "    mrs x9, nzcv",
+                 "    str w9, [x19, #CPU_NZCV]", "    mov x0, x19", "    bl _cpu_fp_enter_guest_slow",
+                 "    ldr w9, [x19, #CPU_NZCV]", "    msr nzcv, x9", "    DISPATCH", ""]
         prologues = sorted({s[3] for s in self.stubs if s})
         for prologue in prologues:
             lines.append(f"Lpt_in_{prologue}:")
             if prologue.startswith("simd_"):
                 lines += ["    tbnz x23, #SALT_FP_TRAP, Lpt_cold",
                           "    ldrb w9, [x19, #CPU_FP_ACTIVE]",
-                          "    cbz w9, Lpt_cold"]
+                          "    cbz w9, Lpt_fp"]
                 for host, (slot, kind) in enumerate(zip(SLOT_FIELDS, prologue[len("simd_"):])):
                     if kind == "_":
                         continue

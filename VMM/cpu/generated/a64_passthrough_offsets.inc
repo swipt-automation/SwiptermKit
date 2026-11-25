@@ -299,161 +299,161 @@
     .long Lpt_298 - Lcpu_fast_base
     .long Lpt_299 - Lcpu_fast_base
     .long Lpt_300 - Lcpu_fast_base
-    .long 0
+    .long Lpt_301 - Lcpu_fast_base
     .long Lpt_302 - Lcpu_fast_base
     .long Lpt_303 - Lcpu_fast_base
     .long Lpt_304 - Lcpu_fast_base
-    .long 0
+    .long Lpt_305 - Lcpu_fast_base
     .long Lpt_306 - Lcpu_fast_base
     .long Lpt_307 - Lcpu_fast_base
     .long Lpt_308 - Lcpu_fast_base
-    .long 0
+    .long Lpt_309 - Lcpu_fast_base
     .long Lpt_310 - Lcpu_fast_base
     .long Lpt_311 - Lcpu_fast_base
     .long Lpt_312 - Lcpu_fast_base
-    .long 0
+    .long Lpt_313 - Lcpu_fast_base
     .long Lpt_314 - Lcpu_fast_base
     .long Lpt_315 - Lcpu_fast_base
     .long Lpt_316 - Lcpu_fast_base
-    .long 0
+    .long Lpt_317 - Lcpu_fast_base
     .long Lpt_318 - Lcpu_fast_base
     .long Lpt_319 - Lcpu_fast_base
-    .long Lpt_320 - Lcpu_fast_base
     .long 0
+    .long Lpt_321 - Lcpu_fast_base
     .long Lpt_322 - Lcpu_fast_base
     .long Lpt_323 - Lcpu_fast_base
-    .long Lpt_324 - Lcpu_fast_base
     .long 0
+    .long Lpt_325 - Lcpu_fast_base
     .long Lpt_326 - Lcpu_fast_base
     .long Lpt_327 - Lcpu_fast_base
-    .long Lpt_328 - Lcpu_fast_base
     .long 0
+    .long Lpt_329 - Lcpu_fast_base
     .long Lpt_330 - Lcpu_fast_base
     .long Lpt_331 - Lcpu_fast_base
-    .long Lpt_332 - Lcpu_fast_base
+    .long 0
     .long Lpt_333 - Lcpu_fast_base
     .long Lpt_334 - Lcpu_fast_base
     .long Lpt_335 - Lcpu_fast_base
-    .long Lpt_336 - Lcpu_fast_base
     .long 0
+    .long Lpt_337 - Lcpu_fast_base
     .long Lpt_338 - Lcpu_fast_base
     .long Lpt_339 - Lcpu_fast_base
-    .long Lpt_340 - Lcpu_fast_base
     .long 0
+    .long Lpt_341 - Lcpu_fast_base
     .long Lpt_342 - Lcpu_fast_base
     .long Lpt_343 - Lcpu_fast_base
-    .long Lpt_344 - Lcpu_fast_base
     .long 0
+    .long Lpt_345 - Lcpu_fast_base
     .long Lpt_346 - Lcpu_fast_base
     .long Lpt_347 - Lcpu_fast_base
-    .long Lpt_348 - Lcpu_fast_base
     .long 0
+    .long Lpt_349 - Lcpu_fast_base
     .long Lpt_350 - Lcpu_fast_base
     .long Lpt_351 - Lcpu_fast_base
     .long Lpt_352 - Lcpu_fast_base
     .long Lpt_353 - Lcpu_fast_base
     .long Lpt_354 - Lcpu_fast_base
     .long Lpt_355 - Lcpu_fast_base
-    .long Lpt_356 - Lcpu_fast_base
     .long 0
+    .long Lpt_357 - Lcpu_fast_base
     .long Lpt_358 - Lcpu_fast_base
     .long Lpt_359 - Lcpu_fast_base
-    .long Lpt_360 - Lcpu_fast_base
     .long 0
+    .long Lpt_361 - Lcpu_fast_base
     .long Lpt_362 - Lcpu_fast_base
     .long Lpt_363 - Lcpu_fast_base
-    .long Lpt_364 - Lcpu_fast_base
     .long 0
+    .long Lpt_365 - Lcpu_fast_base
     .long Lpt_366 - Lcpu_fast_base
     .long Lpt_367 - Lcpu_fast_base
-    .long Lpt_368 - Lcpu_fast_base
     .long 0
+    .long Lpt_369 - Lcpu_fast_base
     .long Lpt_370 - Lcpu_fast_base
     .long Lpt_371 - Lcpu_fast_base
     .long Lpt_372 - Lcpu_fast_base
-    .long 0
+    .long Lpt_373 - Lcpu_fast_base
     .long Lpt_374 - Lcpu_fast_base
     .long Lpt_375 - Lcpu_fast_base
-    .long Lpt_376 - Lcpu_fast_base
     .long 0
+    .long Lpt_377 - Lcpu_fast_base
     .long Lpt_378 - Lcpu_fast_base
     .long Lpt_379 - Lcpu_fast_base
-    .long Lpt_380 - Lcpu_fast_base
     .long 0
+    .long Lpt_381 - Lcpu_fast_base
     .long Lpt_382 - Lcpu_fast_base
     .long Lpt_383 - Lcpu_fast_base
-    .long Lpt_384 - Lcpu_fast_base
     .long 0
+    .long Lpt_385 - Lcpu_fast_base
     .long Lpt_386 - Lcpu_fast_base
     .long Lpt_387 - Lcpu_fast_base
-    .long Lpt_388 - Lcpu_fast_base
     .long 0
+    .long Lpt_389 - Lcpu_fast_base
     .long Lpt_390 - Lcpu_fast_base
     .long Lpt_391 - Lcpu_fast_base
-    .long Lpt_392 - Lcpu_fast_base
     .long 0
+    .long Lpt_393 - Lcpu_fast_base
     .long Lpt_394 - Lcpu_fast_base
     .long Lpt_395 - Lcpu_fast_base
-    .long Lpt_396 - Lcpu_fast_base
     .long 0
+    .long Lpt_397 - Lcpu_fast_base
     .long Lpt_398 - Lcpu_fast_base
     .long Lpt_399 - Lcpu_fast_base
-    .long Lpt_400 - Lcpu_fast_base
     .long 0
+    .long Lpt_401 - Lcpu_fast_base
     .long Lpt_402 - Lcpu_fast_base
     .long Lpt_403 - Lcpu_fast_base
-    .long Lpt_404 - Lcpu_fast_base
     .long 0
+    .long Lpt_405 - Lcpu_fast_base
     .long Lpt_406 - Lcpu_fast_base
     .long Lpt_407 - Lcpu_fast_base
-    .long Lpt_408 - Lcpu_fast_base
     .long 0
+    .long Lpt_409 - Lcpu_fast_base
     .long Lpt_410 - Lcpu_fast_base
     .long Lpt_411 - Lcpu_fast_base
-    .long Lpt_412 - Lcpu_fast_base
     .long 0
+    .long Lpt_413 - Lcpu_fast_base
     .long Lpt_414 - Lcpu_fast_base
     .long Lpt_415 - Lcpu_fast_base
-    .long Lpt_416 - Lcpu_fast_base
     .long 0
+    .long Lpt_417 - Lcpu_fast_base
     .long Lpt_418 - Lcpu_fast_base
     .long Lpt_419 - Lcpu_fast_base
-    .long Lpt_420 - Lcpu_fast_base
+    .long 0
     .long Lpt_421 - Lcpu_fast_base
     .long Lpt_422 - Lcpu_fast_base
     .long Lpt_423 - Lcpu_fast_base
-    .long Lpt_424 - Lcpu_fast_base
+    .long 0
     .long Lpt_425 - Lcpu_fast_base
     .long Lpt_426 - Lcpu_fast_base
     .long Lpt_427 - Lcpu_fast_base
-    .long Lpt_428 - Lcpu_fast_base
+    .long 0
     .long Lpt_429 - Lcpu_fast_base
     .long Lpt_430 - Lcpu_fast_base
+    .long Lpt_431 - Lcpu_fast_base
     .long 0
-    .long Lpt_432 - Lcpu_fast_base
     .long Lpt_433 - Lcpu_fast_base
     .long Lpt_434 - Lcpu_fast_base
+    .long Lpt_435 - Lcpu_fast_base
     .long 0
-    .long Lpt_436 - Lcpu_fast_base
     .long Lpt_437 - Lcpu_fast_base
     .long Lpt_438 - Lcpu_fast_base
     .long Lpt_439 - Lcpu_fast_base
-    .long Lpt_440 - Lcpu_fast_base
     .long 0
+    .long Lpt_441 - Lcpu_fast_base
     .long Lpt_442 - Lcpu_fast_base
     .long Lpt_443 - Lcpu_fast_base
-    .long Lpt_444 - Lcpu_fast_base
+    .long 0
     .long Lpt_445 - Lcpu_fast_base
     .long Lpt_446 - Lcpu_fast_base
+    .long Lpt_447 - Lcpu_fast_base
     .long 0
-    .long Lpt_448 - Lcpu_fast_base
-    .long 0
+    .long Lpt_449 - Lcpu_fast_base
     .long Lpt_450 - Lcpu_fast_base
+    .long Lpt_451 - Lcpu_fast_base
     .long 0
-    .long Lpt_452 - Lcpu_fast_base
-    .long 0
+    .long Lpt_453 - Lcpu_fast_base
     .long Lpt_454 - Lcpu_fast_base
-    .long 0
+    .long Lpt_455 - Lcpu_fast_base
     .long Lpt_456 - Lcpu_fast_base
     .long Lpt_457 - Lcpu_fast_base
     .long Lpt_458 - Lcpu_fast_base
@@ -461,90 +461,90 @@
     .long Lpt_460 - Lcpu_fast_base
     .long Lpt_461 - Lcpu_fast_base
     .long Lpt_462 - Lcpu_fast_base
-    .long 0
+    .long Lpt_463 - Lcpu_fast_base
     .long Lpt_464 - Lcpu_fast_base
     .long Lpt_465 - Lcpu_fast_base
-    .long Lpt_466 - Lcpu_fast_base
+    .long 0
     .long Lpt_467 - Lcpu_fast_base
     .long Lpt_468 - Lcpu_fast_base
     .long Lpt_469 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_471 - Lcpu_fast_base
     .long Lpt_472 - Lcpu_fast_base
     .long Lpt_473 - Lcpu_fast_base
     .long Lpt_474 - Lcpu_fast_base
+    .long Lpt_475 - Lcpu_fast_base
     .long 0
-    .long Lpt_476 - Lcpu_fast_base
     .long Lpt_477 - Lcpu_fast_base
     .long Lpt_478 - Lcpu_fast_base
-    .long 0
+    .long Lpt_479 - Lcpu_fast_base
     .long Lpt_480 - Lcpu_fast_base
     .long Lpt_481 - Lcpu_fast_base
-    .long Lpt_482 - Lcpu_fast_base
     .long 0
-    .long Lpt_484 - Lcpu_fast_base
+    .long Lpt_483 - Lcpu_fast_base
+    .long 0
     .long Lpt_485 - Lcpu_fast_base
-    .long Lpt_486 - Lcpu_fast_base
     .long 0
-    .long Lpt_488 - Lcpu_fast_base
+    .long Lpt_487 - Lcpu_fast_base
+    .long 0
     .long Lpt_489 - Lcpu_fast_base
-    .long Lpt_490 - Lcpu_fast_base
     .long 0
+    .long Lpt_491 - Lcpu_fast_base
     .long Lpt_492 - Lcpu_fast_base
     .long Lpt_493 - Lcpu_fast_base
     .long Lpt_494 - Lcpu_fast_base
-    .long 0
+    .long Lpt_495 - Lcpu_fast_base
     .long Lpt_496 - Lcpu_fast_base
     .long Lpt_497 - Lcpu_fast_base
-    .long Lpt_498 - Lcpu_fast_base
+    .long 0
     .long Lpt_499 - Lcpu_fast_base
     .long Lpt_500 - Lcpu_fast_base
     .long Lpt_501 - Lcpu_fast_base
     .long Lpt_502 - Lcpu_fast_base
-    .long 0
+    .long Lpt_503 - Lcpu_fast_base
     .long Lpt_504 - Lcpu_fast_base
-    .long Lpt_505 - Lcpu_fast_base
-    .long Lpt_506 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_507 - Lcpu_fast_base
     .long Lpt_508 - Lcpu_fast_base
     .long Lpt_509 - Lcpu_fast_base
-    .long Lpt_510 - Lcpu_fast_base
     .long 0
+    .long Lpt_511 - Lcpu_fast_base
     .long Lpt_512 - Lcpu_fast_base
     .long Lpt_513 - Lcpu_fast_base
-    .long Lpt_514 - Lcpu_fast_base
+    .long 0
     .long Lpt_515 - Lcpu_fast_base
     .long Lpt_516 - Lcpu_fast_base
     .long Lpt_517 - Lcpu_fast_base
-    .long Lpt_518 - Lcpu_fast_base
     .long 0
+    .long Lpt_519 - Lcpu_fast_base
     .long Lpt_520 - Lcpu_fast_base
     .long Lpt_521 - Lcpu_fast_base
-    .long Lpt_522 - Lcpu_fast_base
+    .long 0
     .long Lpt_523 - Lcpu_fast_base
     .long Lpt_524 - Lcpu_fast_base
     .long Lpt_525 - Lcpu_fast_base
-    .long Lpt_526 - Lcpu_fast_base
     .long 0
+    .long Lpt_527 - Lcpu_fast_base
     .long Lpt_528 - Lcpu_fast_base
     .long Lpt_529 - Lcpu_fast_base
-    .long Lpt_530 - Lcpu_fast_base
+    .long 0
     .long Lpt_531 - Lcpu_fast_base
     .long Lpt_532 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_533 - Lcpu_fast_base
+    .long Lpt_534 - Lcpu_fast_base
+    .long Lpt_535 - Lcpu_fast_base
     .long Lpt_536 - Lcpu_fast_base
+    .long Lpt_537 - Lcpu_fast_base
     .long 0
-    .long 0
-    .long 0
+    .long Lpt_539 - Lcpu_fast_base
     .long Lpt_540 - Lcpu_fast_base
     .long Lpt_541 - Lcpu_fast_base
     .long Lpt_542 - Lcpu_fast_base
     .long Lpt_543 - Lcpu_fast_base
     .long Lpt_544 - Lcpu_fast_base
     .long Lpt_545 - Lcpu_fast_base
-    .long Lpt_546 - Lcpu_fast_base
+    .long 0
     .long Lpt_547 - Lcpu_fast_base
     .long Lpt_548 - Lcpu_fast_base
     .long Lpt_549 - Lcpu_fast_base
@@ -552,7 +552,7 @@
     .long Lpt_551 - Lcpu_fast_base
     .long Lpt_552 - Lcpu_fast_base
     .long Lpt_553 - Lcpu_fast_base
-    .long Lpt_554 - Lcpu_fast_base
+    .long 0
     .long Lpt_555 - Lcpu_fast_base
     .long Lpt_556 - Lcpu_fast_base
     .long Lpt_557 - Lcpu_fast_base
@@ -560,19 +560,19 @@
     .long Lpt_559 - Lcpu_fast_base
     .long Lpt_560 - Lcpu_fast_base
     .long Lpt_561 - Lcpu_fast_base
-    .long Lpt_562 - Lcpu_fast_base
+    .long 0
     .long Lpt_563 - Lcpu_fast_base
     .long Lpt_564 - Lcpu_fast_base
     .long Lpt_565 - Lcpu_fast_base
     .long Lpt_566 - Lcpu_fast_base
     .long Lpt_567 - Lcpu_fast_base
-    .long Lpt_568 - Lcpu_fast_base
-    .long Lpt_569 - Lcpu_fast_base
-    .long Lpt_570 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_571 - Lcpu_fast_base
-    .long Lpt_572 - Lcpu_fast_base
-    .long Lpt_573 - Lcpu_fast_base
-    .long Lpt_574 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_575 - Lcpu_fast_base
     .long Lpt_576 - Lcpu_fast_base
     .long Lpt_577 - Lcpu_fast_base
@@ -2077,210 +2077,210 @@
     .long Lpt_2076 - Lcpu_fast_base
     .long Lpt_2077 - Lcpu_fast_base
     .long Lpt_2078 - Lcpu_fast_base
-    .long 0
+    .long Lpt_2079 - Lcpu_fast_base
     .long Lpt_2080 - Lcpu_fast_base
     .long Lpt_2081 - Lcpu_fast_base
     .long Lpt_2082 - Lcpu_fast_base
     .long Lpt_2083 - Lcpu_fast_base
     .long Lpt_2084 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_2085 - Lcpu_fast_base
+    .long Lpt_2086 - Lcpu_fast_base
+    .long Lpt_2087 - Lcpu_fast_base
     .long Lpt_2088 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_2089 - Lcpu_fast_base
+    .long Lpt_2090 - Lcpu_fast_base
+    .long Lpt_2091 - Lcpu_fast_base
     .long Lpt_2092 - Lcpu_fast_base
     .long Lpt_2093 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_2094 - Lcpu_fast_base
+    .long Lpt_2095 - Lcpu_fast_base
     .long Lpt_2096 - Lcpu_fast_base
     .long Lpt_2097 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_2098 - Lcpu_fast_base
+    .long Lpt_2099 - Lcpu_fast_base
     .long Lpt_2100 - Lcpu_fast_base
     .long Lpt_2101 - Lcpu_fast_base
     .long Lpt_2102 - Lcpu_fast_base
-    .long 0
+    .long Lpt_2103 - Lcpu_fast_base
     .long Lpt_2104 - Lcpu_fast_base
     .long Lpt_2105 - Lcpu_fast_base
     .long Lpt_2106 - Lcpu_fast_base
-    .long 0
+    .long Lpt_2107 - Lcpu_fast_base
     .long Lpt_2108 - Lcpu_fast_base
     .long Lpt_2109 - Lcpu_fast_base
     .long Lpt_2110 - Lcpu_fast_base
-    .long 0
+    .long Lpt_2111 - Lcpu_fast_base
     .long Lpt_2112 - Lcpu_fast_base
     .long Lpt_2113 - Lcpu_fast_base
-    .long Lpt_2114 - Lcpu_fast_base
     .long 0
+    .long Lpt_2115 - Lcpu_fast_base
     .long Lpt_2116 - Lcpu_fast_base
     .long Lpt_2117 - Lcpu_fast_base
     .long Lpt_2118 - Lcpu_fast_base
-    .long 0
-    .long Lpt_2120 - Lcpu_fast_base
-    .long Lpt_2121 - Lcpu_fast_base
-    .long Lpt_2122 - Lcpu_fast_base
-    .long 0
-    .long Lpt_2124 - Lcpu_fast_base
-    .long Lpt_2125 - Lcpu_fast_base
+    .long Lpt_2119 - Lcpu_fast_base
     .long 0
     .long 0
+    .long 0
+    .long Lpt_2123 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_2127 - Lcpu_fast_base
     .long Lpt_2128 - Lcpu_fast_base
-    .long Lpt_2129 - Lcpu_fast_base
-    .long Lpt_2130 - Lcpu_fast_base
     .long 0
+    .long 0
+    .long Lpt_2131 - Lcpu_fast_base
     .long Lpt_2132 - Lcpu_fast_base
-    .long Lpt_2133 - Lcpu_fast_base
-    .long Lpt_2134 - Lcpu_fast_base
     .long 0
+    .long 0
+    .long Lpt_2135 - Lcpu_fast_base
     .long Lpt_2136 - Lcpu_fast_base
     .long Lpt_2137 - Lcpu_fast_base
-    .long Lpt_2138 - Lcpu_fast_base
     .long 0
+    .long Lpt_2139 - Lcpu_fast_base
     .long Lpt_2140 - Lcpu_fast_base
     .long Lpt_2141 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_2143 - Lcpu_fast_base
     .long Lpt_2144 - Lcpu_fast_base
     .long Lpt_2145 - Lcpu_fast_base
-    .long Lpt_2146 - Lcpu_fast_base
     .long 0
+    .long Lpt_2147 - Lcpu_fast_base
     .long Lpt_2148 - Lcpu_fast_base
     .long Lpt_2149 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_2151 - Lcpu_fast_base
     .long Lpt_2152 - Lcpu_fast_base
     .long Lpt_2153 - Lcpu_fast_base
-    .long Lpt_2154 - Lcpu_fast_base
     .long 0
+    .long Lpt_2155 - Lcpu_fast_base
     .long Lpt_2156 - Lcpu_fast_base
     .long Lpt_2157 - Lcpu_fast_base
-    .long Lpt_2158 - Lcpu_fast_base
     .long 0
+    .long Lpt_2159 - Lcpu_fast_base
     .long Lpt_2160 - Lcpu_fast_base
-    .long Lpt_2161 - Lcpu_fast_base
-    .long Lpt_2162 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_2163 - Lcpu_fast_base
     .long Lpt_2164 - Lcpu_fast_base
     .long Lpt_2165 - Lcpu_fast_base
-    .long Lpt_2166 - Lcpu_fast_base
     .long 0
+    .long Lpt_2167 - Lcpu_fast_base
     .long Lpt_2168 - Lcpu_fast_base
     .long Lpt_2169 - Lcpu_fast_base
-    .long Lpt_2170 - Lcpu_fast_base
+    .long 0
     .long Lpt_2171 - Lcpu_fast_base
     .long Lpt_2172 - Lcpu_fast_base
     .long Lpt_2173 - Lcpu_fast_base
-    .long Lpt_2174 - Lcpu_fast_base
     .long 0
+    .long Lpt_2175 - Lcpu_fast_base
     .long Lpt_2176 - Lcpu_fast_base
-    .long Lpt_2177 - Lcpu_fast_base
-    .long Lpt_2178 - Lcpu_fast_base
     .long 0
+    .long 0
+    .long Lpt_2179 - Lcpu_fast_base
     .long Lpt_2180 - Lcpu_fast_base
     .long Lpt_2181 - Lcpu_fast_base
-    .long Lpt_2182 - Lcpu_fast_base
     .long 0
+    .long Lpt_2183 - Lcpu_fast_base
     .long Lpt_2184 - Lcpu_fast_base
-    .long Lpt_2185 - Lcpu_fast_base
-    .long Lpt_2186 - Lcpu_fast_base
     .long 0
+    .long 0
+    .long Lpt_2187 - Lcpu_fast_base
     .long Lpt_2188 - Lcpu_fast_base
     .long Lpt_2189 - Lcpu_fast_base
-    .long Lpt_2190 - Lcpu_fast_base
     .long 0
+    .long Lpt_2191 - Lcpu_fast_base
     .long Lpt_2192 - Lcpu_fast_base
     .long Lpt_2193 - Lcpu_fast_base
-    .long Lpt_2194 - Lcpu_fast_base
+    .long 0
     .long Lpt_2195 - Lcpu_fast_base
     .long Lpt_2196 - Lcpu_fast_base
     .long Lpt_2197 - Lcpu_fast_base
     .long Lpt_2198 - Lcpu_fast_base
-    .long 0
+    .long Lpt_2199 - Lcpu_fast_base
     .long Lpt_2200 - Lcpu_fast_base
     .long Lpt_2201 - Lcpu_fast_base
-    .long Lpt_2202 - Lcpu_fast_base
     .long 0
+    .long Lpt_2203 - Lcpu_fast_base
     .long Lpt_2204 - Lcpu_fast_base
     .long Lpt_2205 - Lcpu_fast_base
     .long Lpt_2206 - Lcpu_fast_base
-    .long 0
+    .long Lpt_2207 - Lcpu_fast_base
     .long Lpt_2208 - Lcpu_fast_base
     .long Lpt_2209 - Lcpu_fast_base
-    .long Lpt_2210 - Lcpu_fast_base
     .long 0
+    .long Lpt_2211 - Lcpu_fast_base
     .long Lpt_2212 - Lcpu_fast_base
     .long Lpt_2213 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_2215 - Lcpu_fast_base
     .long Lpt_2216 - Lcpu_fast_base
     .long Lpt_2217 - Lcpu_fast_base
-    .long Lpt_2218 - Lcpu_fast_base
     .long 0
+    .long Lpt_2219 - Lcpu_fast_base
     .long Lpt_2220 - Lcpu_fast_base
     .long Lpt_2221 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_2223 - Lcpu_fast_base
     .long Lpt_2224 - Lcpu_fast_base
     .long Lpt_2225 - Lcpu_fast_base
-    .long Lpt_2226 - Lcpu_fast_base
     .long 0
+    .long Lpt_2227 - Lcpu_fast_base
     .long Lpt_2228 - Lcpu_fast_base
     .long Lpt_2229 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_2230 - Lcpu_fast_base
+    .long Lpt_2231 - Lcpu_fast_base
     .long Lpt_2232 - Lcpu_fast_base
     .long Lpt_2233 - Lcpu_fast_base
-    .long Lpt_2234 - Lcpu_fast_base
     .long 0
+    .long Lpt_2235 - Lcpu_fast_base
     .long Lpt_2236 - Lcpu_fast_base
     .long Lpt_2237 - Lcpu_fast_base
-    .long Lpt_2238 - Lcpu_fast_base
     .long 0
+    .long Lpt_2239 - Lcpu_fast_base
     .long Lpt_2240 - Lcpu_fast_base
     .long Lpt_2241 - Lcpu_fast_base
-    .long Lpt_2242 - Lcpu_fast_base
     .long 0
+    .long Lpt_2243 - Lcpu_fast_base
     .long Lpt_2244 - Lcpu_fast_base
     .long Lpt_2245 - Lcpu_fast_base
-    .long Lpt_2246 - Lcpu_fast_base
     .long 0
+    .long Lpt_2247 - Lcpu_fast_base
     .long Lpt_2248 - Lcpu_fast_base
-    .long Lpt_2249 - Lcpu_fast_base
-    .long Lpt_2250 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_2251 - Lcpu_fast_base
     .long Lpt_2252 - Lcpu_fast_base
     .long Lpt_2253 - Lcpu_fast_base
-    .long Lpt_2254 - Lcpu_fast_base
     .long 0
+    .long Lpt_2255 - Lcpu_fast_base
     .long Lpt_2256 - Lcpu_fast_base
-    .long Lpt_2257 - Lcpu_fast_base
-    .long Lpt_2258 - Lcpu_fast_base
     .long 0
+    .long 0
+    .long Lpt_2259 - Lcpu_fast_base
     .long Lpt_2260 - Lcpu_fast_base
     .long Lpt_2261 - Lcpu_fast_base
-    .long Lpt_2262 - Lcpu_fast_base
+    .long 0
     .long Lpt_2263 - Lcpu_fast_base
     .long Lpt_2264 - Lcpu_fast_base
-    .long Lpt_2265 - Lcpu_fast_base
-    .long Lpt_2266 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_2267 - Lcpu_fast_base
     .long Lpt_2268 - Lcpu_fast_base
     .long Lpt_2269 - Lcpu_fast_base
-    .long Lpt_2270 - Lcpu_fast_base
+    .long 0
     .long Lpt_2271 - Lcpu_fast_base
     .long Lpt_2272 - Lcpu_fast_base
     .long Lpt_2273 - Lcpu_fast_base
-    .long Lpt_2274 - Lcpu_fast_base
+    .long 0
     .long Lpt_2275 - Lcpu_fast_base
     .long Lpt_2276 - Lcpu_fast_base
     .long Lpt_2277 - Lcpu_fast_base
-    .long Lpt_2278 - Lcpu_fast_base
+    .long 0
     .long Lpt_2279 - Lcpu_fast_base
     .long Lpt_2280 - Lcpu_fast_base
     .long Lpt_2281 - Lcpu_fast_base
-    .long Lpt_2282 - Lcpu_fast_base
+    .long 0
     .long Lpt_2283 - Lcpu_fast_base
     .long Lpt_2284 - Lcpu_fast_base
     .long Lpt_2285 - Lcpu_fast_base
@@ -2288,11 +2288,11 @@
     .long Lpt_2287 - Lcpu_fast_base
     .long Lpt_2288 - Lcpu_fast_base
     .long Lpt_2289 - Lcpu_fast_base
-    .long Lpt_2290 - Lcpu_fast_base
+    .long 0
     .long Lpt_2291 - Lcpu_fast_base
     .long Lpt_2292 - Lcpu_fast_base
     .long Lpt_2293 - Lcpu_fast_base
-    .long Lpt_2294 - Lcpu_fast_base
+    .long 0
     .long Lpt_2295 - Lcpu_fast_base
     .long Lpt_2296 - Lcpu_fast_base
     .long Lpt_2297 - Lcpu_fast_base
@@ -3298,73 +3298,73 @@
     .long Lpt_3297 - Lcpu_fast_base
     .long Lpt_3298 - Lcpu_fast_base
     .long Lpt_3299 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3300 - Lcpu_fast_base
+    .long Lpt_3301 - Lcpu_fast_base
+    .long Lpt_3302 - Lcpu_fast_base
     .long Lpt_3303 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3304 - Lcpu_fast_base
+    .long Lpt_3305 - Lcpu_fast_base
+    .long Lpt_3306 - Lcpu_fast_base
     .long Lpt_3307 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3308 - Lcpu_fast_base
+    .long Lpt_3309 - Lcpu_fast_base
+    .long Lpt_3310 - Lcpu_fast_base
     .long Lpt_3311 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3312 - Lcpu_fast_base
+    .long Lpt_3313 - Lcpu_fast_base
+    .long Lpt_3314 - Lcpu_fast_base
     .long Lpt_3315 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3316 - Lcpu_fast_base
+    .long Lpt_3317 - Lcpu_fast_base
+    .long Lpt_3318 - Lcpu_fast_base
     .long Lpt_3319 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3320 - Lcpu_fast_base
+    .long Lpt_3321 - Lcpu_fast_base
+    .long Lpt_3322 - Lcpu_fast_base
     .long Lpt_3323 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3324 - Lcpu_fast_base
+    .long Lpt_3325 - Lcpu_fast_base
+    .long Lpt_3326 - Lcpu_fast_base
     .long Lpt_3327 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3328 - Lcpu_fast_base
+    .long Lpt_3329 - Lcpu_fast_base
+    .long Lpt_3330 - Lcpu_fast_base
     .long Lpt_3331 - Lcpu_fast_base
     .long Lpt_3332 - Lcpu_fast_base
     .long Lpt_3333 - Lcpu_fast_base
     .long Lpt_3334 - Lcpu_fast_base
     .long Lpt_3335 - Lcpu_fast_base
-    .long Lpt_3336 - Lcpu_fast_base
-    .long Lpt_3337 - Lcpu_fast_base
-    .long Lpt_3338 - Lcpu_fast_base
     .long 0
-    .long Lpt_3340 - Lcpu_fast_base
-    .long Lpt_3341 - Lcpu_fast_base
-    .long Lpt_3342 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long Lpt_3339 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_3343 - Lcpu_fast_base
-    .long Lpt_3344 - Lcpu_fast_base
-    .long Lpt_3345 - Lcpu_fast_base
-    .long Lpt_3346 - Lcpu_fast_base
-    .long Lpt_3347 - Lcpu_fast_base
-    .long Lpt_3348 - Lcpu_fast_base
-    .long Lpt_3349 - Lcpu_fast_base
-    .long Lpt_3350 - Lcpu_fast_base
-    .long Lpt_3351 - Lcpu_fast_base
-    .long Lpt_3352 - Lcpu_fast_base
-    .long Lpt_3353 - Lcpu_fast_base
-    .long Lpt_3354 - Lcpu_fast_base
     .long 0
-    .long Lpt_3356 - Lcpu_fast_base
-    .long Lpt_3357 - Lcpu_fast_base
-    .long Lpt_3358 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long Lpt_3347 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_3351 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_3355 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_3359 - Lcpu_fast_base
-    .long Lpt_3360 - Lcpu_fast_base
-    .long Lpt_3361 - Lcpu_fast_base
-    .long Lpt_3362 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_3363 - Lcpu_fast_base
-    .long Lpt_3364 - Lcpu_fast_base
-    .long Lpt_3365 - Lcpu_fast_base
-    .long Lpt_3366 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_3367 - Lcpu_fast_base
     .long Lpt_3368 - Lcpu_fast_base
     .long Lpt_3369 - Lcpu_fast_base
@@ -3373,7 +3373,7 @@
     .long Lpt_3372 - Lcpu_fast_base
     .long Lpt_3373 - Lcpu_fast_base
     .long Lpt_3374 - Lcpu_fast_base
-    .long Lpt_3375 - Lcpu_fast_base
+    .long 0
     .long Lpt_3376 - Lcpu_fast_base
     .long Lpt_3377 - Lcpu_fast_base
     .long Lpt_3378 - Lcpu_fast_base
@@ -3389,7 +3389,7 @@
     .long Lpt_3388 - Lcpu_fast_base
     .long Lpt_3389 - Lcpu_fast_base
     .long Lpt_3390 - Lcpu_fast_base
-    .long Lpt_3391 - Lcpu_fast_base
+    .long 0
     .long Lpt_3392 - Lcpu_fast_base
     .long Lpt_3393 - Lcpu_fast_base
     .long Lpt_3394 - Lcpu_fast_base
@@ -3405,7 +3405,7 @@
     .long Lpt_3404 - Lcpu_fast_base
     .long Lpt_3405 - Lcpu_fast_base
     .long Lpt_3406 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3407 - Lcpu_fast_base
     .long Lpt_3408 - Lcpu_fast_base
     .long Lpt_3409 - Lcpu_fast_base
     .long Lpt_3410 - Lcpu_fast_base
@@ -3421,7 +3421,7 @@
     .long Lpt_3420 - Lcpu_fast_base
     .long Lpt_3421 - Lcpu_fast_base
     .long Lpt_3422 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3423 - Lcpu_fast_base
     .long Lpt_3424 - Lcpu_fast_base
     .long Lpt_3425 - Lcpu_fast_base
     .long Lpt_3426 - Lcpu_fast_base
@@ -3441,7 +3441,7 @@
     .long Lpt_3440 - Lcpu_fast_base
     .long Lpt_3441 - Lcpu_fast_base
     .long Lpt_3442 - Lcpu_fast_base
-    .long Lpt_3443 - Lcpu_fast_base
+    .long 0
     .long Lpt_3444 - Lcpu_fast_base
     .long Lpt_3445 - Lcpu_fast_base
     .long Lpt_3446 - Lcpu_fast_base
@@ -3457,7 +3457,7 @@
     .long Lpt_3456 - Lcpu_fast_base
     .long Lpt_3457 - Lcpu_fast_base
     .long Lpt_3458 - Lcpu_fast_base
-    .long Lpt_3459 - Lcpu_fast_base
+    .long 0
     .long Lpt_3460 - Lcpu_fast_base
     .long Lpt_3461 - Lcpu_fast_base
     .long Lpt_3462 - Lcpu_fast_base
@@ -3565,39 +3565,39 @@
     .long Lpt_3564 - Lcpu_fast_base
     .long Lpt_3565 - Lcpu_fast_base
     .long Lpt_3566 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3567 - Lcpu_fast_base
     .long Lpt_3568 - Lcpu_fast_base
     .long Lpt_3569 - Lcpu_fast_base
     .long Lpt_3570 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3571 - Lcpu_fast_base
     .long Lpt_3572 - Lcpu_fast_base
     .long Lpt_3573 - Lcpu_fast_base
     .long Lpt_3574 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3575 - Lcpu_fast_base
     .long Lpt_3576 - Lcpu_fast_base
     .long Lpt_3577 - Lcpu_fast_base
     .long Lpt_3578 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3579 - Lcpu_fast_base
     .long Lpt_3580 - Lcpu_fast_base
     .long Lpt_3581 - Lcpu_fast_base
     .long Lpt_3582 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3583 - Lcpu_fast_base
     .long Lpt_3584 - Lcpu_fast_base
     .long Lpt_3585 - Lcpu_fast_base
     .long Lpt_3586 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3587 - Lcpu_fast_base
     .long Lpt_3588 - Lcpu_fast_base
     .long Lpt_3589 - Lcpu_fast_base
     .long Lpt_3590 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3591 - Lcpu_fast_base
     .long Lpt_3592 - Lcpu_fast_base
     .long Lpt_3593 - Lcpu_fast_base
     .long Lpt_3594 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3595 - Lcpu_fast_base
     .long Lpt_3596 - Lcpu_fast_base
     .long Lpt_3597 - Lcpu_fast_base
     .long Lpt_3598 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3599 - Lcpu_fast_base
     .long Lpt_3600 - Lcpu_fast_base
     .long Lpt_3601 - Lcpu_fast_base
     .long Lpt_3602 - Lcpu_fast_base
@@ -3605,7 +3605,7 @@
     .long Lpt_3604 - Lcpu_fast_base
     .long Lpt_3605 - Lcpu_fast_base
     .long Lpt_3606 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3607 - Lcpu_fast_base
     .long Lpt_3608 - Lcpu_fast_base
     .long Lpt_3609 - Lcpu_fast_base
     .long Lpt_3610 - Lcpu_fast_base
@@ -3617,7 +3617,7 @@
     .long Lpt_3616 - Lcpu_fast_base
     .long Lpt_3617 - Lcpu_fast_base
     .long Lpt_3618 - Lcpu_fast_base
-    .long Lpt_3619 - Lcpu_fast_base
+    .long 0
     .long Lpt_3620 - Lcpu_fast_base
     .long Lpt_3621 - Lcpu_fast_base
     .long Lpt_3622 - Lcpu_fast_base
@@ -3625,54 +3625,54 @@
     .long Lpt_3624 - Lcpu_fast_base
     .long Lpt_3625 - Lcpu_fast_base
     .long Lpt_3626 - Lcpu_fast_base
-    .long Lpt_3627 - Lcpu_fast_base
+    .long 0
     .long Lpt_3628 - Lcpu_fast_base
     .long Lpt_3629 - Lcpu_fast_base
     .long Lpt_3630 - Lcpu_fast_base
-    .long Lpt_3631 - Lcpu_fast_base
+    .long 0
     .long Lpt_3632 - Lcpu_fast_base
     .long Lpt_3633 - Lcpu_fast_base
     .long Lpt_3634 - Lcpu_fast_base
-    .long Lpt_3635 - Lcpu_fast_base
+    .long 0
     .long Lpt_3636 - Lcpu_fast_base
     .long Lpt_3637 - Lcpu_fast_base
     .long Lpt_3638 - Lcpu_fast_base
-    .long Lpt_3639 - Lcpu_fast_base
+    .long 0
     .long Lpt_3640 - Lcpu_fast_base
     .long Lpt_3641 - Lcpu_fast_base
     .long Lpt_3642 - Lcpu_fast_base
-    .long Lpt_3643 - Lcpu_fast_base
+    .long 0
     .long Lpt_3644 - Lcpu_fast_base
     .long Lpt_3645 - Lcpu_fast_base
     .long Lpt_3646 - Lcpu_fast_base
-    .long Lpt_3647 - Lcpu_fast_base
+    .long 0
     .long Lpt_3648 - Lcpu_fast_base
     .long Lpt_3649 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3650 - Lcpu_fast_base
     .long Lpt_3651 - Lcpu_fast_base
     .long Lpt_3652 - Lcpu_fast_base
     .long Lpt_3653 - Lcpu_fast_base
     .long Lpt_3654 - Lcpu_fast_base
-    .long Lpt_3655 - Lcpu_fast_base
+    .long 0
     .long Lpt_3656 - Lcpu_fast_base
     .long Lpt_3657 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3658 - Lcpu_fast_base
     .long Lpt_3659 - Lcpu_fast_base
     .long Lpt_3660 - Lcpu_fast_base
     .long Lpt_3661 - Lcpu_fast_base
     .long Lpt_3662 - Lcpu_fast_base
-    .long Lpt_3663 - Lcpu_fast_base
+    .long 0
     .long Lpt_3664 - Lcpu_fast_base
     .long Lpt_3665 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3666 - Lcpu_fast_base
     .long Lpt_3667 - Lcpu_fast_base
     .long Lpt_3668 - Lcpu_fast_base
     .long Lpt_3669 - Lcpu_fast_base
     .long Lpt_3670 - Lcpu_fast_base
-    .long Lpt_3671 - Lcpu_fast_base
+    .long 0
     .long Lpt_3672 - Lcpu_fast_base
     .long Lpt_3673 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3674 - Lcpu_fast_base
     .long Lpt_3675 - Lcpu_fast_base
     .long Lpt_3676 - Lcpu_fast_base
     .long Lpt_3677 - Lcpu_fast_base
@@ -3692,39 +3692,39 @@
     .long Lpt_3691 - Lcpu_fast_base
     .long Lpt_3692 - Lcpu_fast_base
     .long Lpt_3693 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3694 - Lcpu_fast_base
     .long Lpt_3695 - Lcpu_fast_base
     .long Lpt_3696 - Lcpu_fast_base
     .long Lpt_3697 - Lcpu_fast_base
     .long Lpt_3698 - Lcpu_fast_base
-    .long Lpt_3699 - Lcpu_fast_base
+    .long 0
     .long Lpt_3700 - Lcpu_fast_base
     .long Lpt_3701 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3702 - Lcpu_fast_base
     .long Lpt_3703 - Lcpu_fast_base
     .long Lpt_3704 - Lcpu_fast_base
     .long Lpt_3705 - Lcpu_fast_base
     .long Lpt_3706 - Lcpu_fast_base
-    .long Lpt_3707 - Lcpu_fast_base
+    .long 0
     .long Lpt_3708 - Lcpu_fast_base
     .long Lpt_3709 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3710 - Lcpu_fast_base
     .long Lpt_3711 - Lcpu_fast_base
     .long Lpt_3712 - Lcpu_fast_base
     .long Lpt_3713 - Lcpu_fast_base
     .long Lpt_3714 - Lcpu_fast_base
-    .long Lpt_3715 - Lcpu_fast_base
+    .long 0
     .long Lpt_3716 - Lcpu_fast_base
     .long Lpt_3717 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3718 - Lcpu_fast_base
     .long Lpt_3719 - Lcpu_fast_base
     .long Lpt_3720 - Lcpu_fast_base
     .long Lpt_3721 - Lcpu_fast_base
     .long Lpt_3722 - Lcpu_fast_base
-    .long Lpt_3723 - Lcpu_fast_base
+    .long 0
     .long Lpt_3724 - Lcpu_fast_base
     .long Lpt_3725 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3726 - Lcpu_fast_base
     .long Lpt_3727 - Lcpu_fast_base
     .long Lpt_3728 - Lcpu_fast_base
     .long Lpt_3729 - Lcpu_fast_base
@@ -3740,13 +3740,13 @@
     .long Lpt_3739 - Lcpu_fast_base
     .long Lpt_3740 - Lcpu_fast_base
     .long Lpt_3741 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3742 - Lcpu_fast_base
     .long Lpt_3743 - Lcpu_fast_base
     .long Lpt_3744 - Lcpu_fast_base
     .long Lpt_3745 - Lcpu_fast_base
     .long Lpt_3746 - Lcpu_fast_base
     .long Lpt_3747 - Lcpu_fast_base
-    .long Lpt_3748 - Lcpu_fast_base
+    .long 0
     .long Lpt_3749 - Lcpu_fast_base
     .long Lpt_3750 - Lcpu_fast_base
     .long Lpt_3751 - Lcpu_fast_base
@@ -3754,33 +3754,33 @@
     .long Lpt_3753 - Lcpu_fast_base
     .long Lpt_3754 - Lcpu_fast_base
     .long Lpt_3755 - Lcpu_fast_base
-    .long Lpt_3756 - Lcpu_fast_base
-    .long Lpt_3757 - Lcpu_fast_base
     .long 0
+    .long Lpt_3757 - Lcpu_fast_base
+    .long Lpt_3758 - Lcpu_fast_base
     .long Lpt_3759 - Lcpu_fast_base
     .long Lpt_3760 - Lcpu_fast_base
     .long Lpt_3761 - Lcpu_fast_base
     .long Lpt_3762 - Lcpu_fast_base
     .long Lpt_3763 - Lcpu_fast_base
-    .long Lpt_3764 - Lcpu_fast_base
-    .long Lpt_3765 - Lcpu_fast_base
     .long 0
+    .long Lpt_3765 - Lcpu_fast_base
+    .long Lpt_3766 - Lcpu_fast_base
     .long Lpt_3767 - Lcpu_fast_base
     .long Lpt_3768 - Lcpu_fast_base
     .long Lpt_3769 - Lcpu_fast_base
     .long Lpt_3770 - Lcpu_fast_base
     .long Lpt_3771 - Lcpu_fast_base
-    .long Lpt_3772 - Lcpu_fast_base
-    .long Lpt_3773 - Lcpu_fast_base
     .long 0
+    .long Lpt_3773 - Lcpu_fast_base
+    .long Lpt_3774 - Lcpu_fast_base
     .long Lpt_3775 - Lcpu_fast_base
     .long Lpt_3776 - Lcpu_fast_base
     .long Lpt_3777 - Lcpu_fast_base
     .long Lpt_3778 - Lcpu_fast_base
     .long Lpt_3779 - Lcpu_fast_base
-    .long Lpt_3780 - Lcpu_fast_base
-    .long Lpt_3781 - Lcpu_fast_base
     .long 0
+    .long Lpt_3781 - Lcpu_fast_base
+    .long Lpt_3782 - Lcpu_fast_base
     .long Lpt_3783 - Lcpu_fast_base
     .long Lpt_3784 - Lcpu_fast_base
     .long Lpt_3785 - Lcpu_fast_base
@@ -3788,13 +3788,13 @@
     .long Lpt_3787 - Lcpu_fast_base
     .long Lpt_3788 - Lcpu_fast_base
     .long Lpt_3789 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3790 - Lcpu_fast_base
     .long Lpt_3791 - Lcpu_fast_base
     .long Lpt_3792 - Lcpu_fast_base
     .long Lpt_3793 - Lcpu_fast_base
     .long Lpt_3794 - Lcpu_fast_base
     .long Lpt_3795 - Lcpu_fast_base
-    .long Lpt_3796 - Lcpu_fast_base
+    .long 0
     .long Lpt_3797 - Lcpu_fast_base
     .long Lpt_3798 - Lcpu_fast_base
     .long Lpt_3799 - Lcpu_fast_base
@@ -3804,13 +3804,13 @@
     .long Lpt_3803 - Lcpu_fast_base
     .long Lpt_3804 - Lcpu_fast_base
     .long Lpt_3805 - Lcpu_fast_base
-    .long 0
+    .long Lpt_3806 - Lcpu_fast_base
     .long Lpt_3807 - Lcpu_fast_base
     .long Lpt_3808 - Lcpu_fast_base
     .long Lpt_3809 - Lcpu_fast_base
     .long Lpt_3810 - Lcpu_fast_base
     .long Lpt_3811 - Lcpu_fast_base
-    .long Lpt_3812 - Lcpu_fast_base
+    .long 0
     .long Lpt_3813 - Lcpu_fast_base
     .long Lpt_3814 - Lcpu_fast_base
     .long Lpt_3815 - Lcpu_fast_base
@@ -3818,7 +3818,7 @@
     .long Lpt_3817 - Lcpu_fast_base
     .long Lpt_3818 - Lcpu_fast_base
     .long Lpt_3819 - Lcpu_fast_base
-    .long Lpt_3820 - Lcpu_fast_base
+    .long 0
     .long Lpt_3821 - Lcpu_fast_base
     .long Lpt_3822 - Lcpu_fast_base
     .long Lpt_3823 - Lcpu_fast_base
@@ -3826,7 +3826,7 @@
     .long Lpt_3825 - Lcpu_fast_base
     .long Lpt_3826 - Lcpu_fast_base
     .long Lpt_3827 - Lcpu_fast_base
-    .long Lpt_3828 - Lcpu_fast_base
+    .long 0
     .long Lpt_3829 - Lcpu_fast_base
     .long Lpt_3830 - Lcpu_fast_base
     .long Lpt_3831 - Lcpu_fast_base
@@ -3834,7 +3834,7 @@
     .long Lpt_3833 - Lcpu_fast_base
     .long Lpt_3834 - Lcpu_fast_base
     .long Lpt_3835 - Lcpu_fast_base
-    .long Lpt_3836 - Lcpu_fast_base
+    .long 0
     .long Lpt_3837 - Lcpu_fast_base
     .long Lpt_3838 - Lcpu_fast_base
     .long Lpt_3839 - Lcpu_fast_base
@@ -3842,7 +3842,7 @@
     .long Lpt_3841 - Lcpu_fast_base
     .long Lpt_3842 - Lcpu_fast_base
     .long Lpt_3843 - Lcpu_fast_base
-    .long Lpt_3844 - Lcpu_fast_base
+    .long 0
     .long Lpt_3845 - Lcpu_fast_base
     .long Lpt_3846 - Lcpu_fast_base
     .long Lpt_3847 - Lcpu_fast_base
@@ -3850,38 +3850,38 @@
     .long Lpt_3849 - Lcpu_fast_base
     .long Lpt_3850 - Lcpu_fast_base
     .long Lpt_3851 - Lcpu_fast_base
+    .long Lpt_3852 - Lcpu_fast_base
+    .long Lpt_3853 - Lcpu_fast_base
+    .long Lpt_3854 - Lcpu_fast_base
+    .long Lpt_3855 - Lcpu_fast_base
+    .long Lpt_3856 - Lcpu_fast_base
+    .long Lpt_3857 - Lcpu_fast_base
+    .long Lpt_3858 - Lcpu_fast_base
+    .long Lpt_3859 - Lcpu_fast_base
     .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_3861 - Lcpu_fast_base
+    .long Lpt_3862 - Lcpu_fast_base
+    .long Lpt_3863 - Lcpu_fast_base
+    .long Lpt_3864 - Lcpu_fast_base
+    .long Lpt_3865 - Lcpu_fast_base
+    .long Lpt_3866 - Lcpu_fast_base
+    .long Lpt_3867 - Lcpu_fast_base
+    .long Lpt_3868 - Lcpu_fast_base
+    .long Lpt_3869 - Lcpu_fast_base
+    .long Lpt_3870 - Lcpu_fast_base
+    .long Lpt_3871 - Lcpu_fast_base
+    .long Lpt_3872 - Lcpu_fast_base
+    .long Lpt_3873 - Lcpu_fast_base
+    .long Lpt_3874 - Lcpu_fast_base
+    .long Lpt_3875 - Lcpu_fast_base
+    .long Lpt_3876 - Lcpu_fast_base
+    .long Lpt_3877 - Lcpu_fast_base
+    .long Lpt_3878 - Lcpu_fast_base
+    .long Lpt_3879 - Lcpu_fast_base
+    .long Lpt_3880 - Lcpu_fast_base
+    .long Lpt_3881 - Lcpu_fast_base
+    .long Lpt_3882 - Lcpu_fast_base
+    .long Lpt_3883 - Lcpu_fast_base
     .long Lpt_3884 - Lcpu_fast_base
     .long Lpt_3885 - Lcpu_fast_base
     .long Lpt_3886 - Lcpu_fast_base
@@ -3904,16 +3904,6 @@
     .long Lpt_3903 - Lcpu_fast_base
     .long Lpt_3904 - Lcpu_fast_base
     .long Lpt_3905 - Lcpu_fast_base
-    .long Lpt_3906 - Lcpu_fast_base
-    .long Lpt_3907 - Lcpu_fast_base
-    .long Lpt_3908 - Lcpu_fast_base
-    .long Lpt_3909 - Lcpu_fast_base
-    .long Lpt_3910 - Lcpu_fast_base
-    .long Lpt_3911 - Lcpu_fast_base
-    .long Lpt_3912 - Lcpu_fast_base
-    .long Lpt_3913 - Lcpu_fast_base
-    .long Lpt_3914 - Lcpu_fast_base
-    .long Lpt_3915 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -3946,6 +3936,16 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_3938 - Lcpu_fast_base
+    .long Lpt_3939 - Lcpu_fast_base
+    .long Lpt_3940 - Lcpu_fast_base
+    .long Lpt_3941 - Lcpu_fast_base
+    .long Lpt_3942 - Lcpu_fast_base
+    .long Lpt_3943 - Lcpu_fast_base
+    .long Lpt_3944 - Lcpu_fast_base
+    .long Lpt_3945 - Lcpu_fast_base
+    .long Lpt_3946 - Lcpu_fast_base
+    .long Lpt_3947 - Lcpu_fast_base
     .long Lpt_3948 - Lcpu_fast_base
     .long Lpt_3949 - Lcpu_fast_base
     .long Lpt_3950 - Lcpu_fast_base
@@ -3968,16 +3968,6 @@
     .long Lpt_3967 - Lcpu_fast_base
     .long Lpt_3968 - Lcpu_fast_base
     .long Lpt_3969 - Lcpu_fast_base
-    .long Lpt_3970 - Lcpu_fast_base
-    .long Lpt_3971 - Lcpu_fast_base
-    .long Lpt_3972 - Lcpu_fast_base
-    .long Lpt_3973 - Lcpu_fast_base
-    .long Lpt_3974 - Lcpu_fast_base
-    .long Lpt_3975 - Lcpu_fast_base
-    .long Lpt_3976 - Lcpu_fast_base
-    .long Lpt_3977 - Lcpu_fast_base
-    .long Lpt_3978 - Lcpu_fast_base
-    .long Lpt_3979 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -4010,6 +4000,16 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_4002 - Lcpu_fast_base
+    .long Lpt_4003 - Lcpu_fast_base
+    .long Lpt_4004 - Lcpu_fast_base
+    .long Lpt_4005 - Lcpu_fast_base
+    .long Lpt_4006 - Lcpu_fast_base
+    .long Lpt_4007 - Lcpu_fast_base
+    .long Lpt_4008 - Lcpu_fast_base
+    .long Lpt_4009 - Lcpu_fast_base
+    .long Lpt_4010 - Lcpu_fast_base
+    .long Lpt_4011 - Lcpu_fast_base
     .long Lpt_4012 - Lcpu_fast_base
     .long Lpt_4013 - Lcpu_fast_base
     .long Lpt_4014 - Lcpu_fast_base
@@ -4032,38 +4032,38 @@
     .long Lpt_4031 - Lcpu_fast_base
     .long Lpt_4032 - Lcpu_fast_base
     .long Lpt_4033 - Lcpu_fast_base
-    .long Lpt_4034 - Lcpu_fast_base
-    .long Lpt_4035 - Lcpu_fast_base
-    .long Lpt_4036 - Lcpu_fast_base
-    .long Lpt_4037 - Lcpu_fast_base
-    .long Lpt_4038 - Lcpu_fast_base
-    .long Lpt_4039 - Lcpu_fast_base
-    .long Lpt_4040 - Lcpu_fast_base
-    .long Lpt_4041 - Lcpu_fast_base
-    .long Lpt_4042 - Lcpu_fast_base
-    .long Lpt_4043 - Lcpu_fast_base
-    .long Lpt_4044 - Lcpu_fast_base
-    .long Lpt_4045 - Lcpu_fast_base
-    .long Lpt_4046 - Lcpu_fast_base
-    .long Lpt_4047 - Lcpu_fast_base
-    .long Lpt_4048 - Lcpu_fast_base
-    .long Lpt_4049 - Lcpu_fast_base
-    .long Lpt_4050 - Lcpu_fast_base
-    .long Lpt_4051 - Lcpu_fast_base
-    .long Lpt_4052 - Lcpu_fast_base
-    .long Lpt_4053 - Lcpu_fast_base
-    .long Lpt_4054 - Lcpu_fast_base
-    .long Lpt_4055 - Lcpu_fast_base
-    .long Lpt_4056 - Lcpu_fast_base
-    .long Lpt_4057 - Lcpu_fast_base
-    .long Lpt_4058 - Lcpu_fast_base
-    .long Lpt_4059 - Lcpu_fast_base
-    .long Lpt_4060 - Lcpu_fast_base
-    .long Lpt_4061 - Lcpu_fast_base
-    .long Lpt_4062 - Lcpu_fast_base
-    .long Lpt_4063 - Lcpu_fast_base
-    .long Lpt_4064 - Lcpu_fast_base
-    .long Lpt_4065 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_4066 - Lcpu_fast_base
     .long Lpt_4067 - Lcpu_fast_base
     .long Lpt_4068 - Lcpu_fast_base
@@ -4234,38 +4234,38 @@
     .long Lpt_4233 - Lcpu_fast_base
     .long Lpt_4234 - Lcpu_fast_base
     .long Lpt_4235 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_4236 - Lcpu_fast_base
+    .long Lpt_4237 - Lcpu_fast_base
+    .long Lpt_4238 - Lcpu_fast_base
+    .long Lpt_4239 - Lcpu_fast_base
+    .long Lpt_4240 - Lcpu_fast_base
+    .long Lpt_4241 - Lcpu_fast_base
+    .long Lpt_4242 - Lcpu_fast_base
+    .long Lpt_4243 - Lcpu_fast_base
+    .long Lpt_4244 - Lcpu_fast_base
+    .long Lpt_4245 - Lcpu_fast_base
+    .long Lpt_4246 - Lcpu_fast_base
+    .long Lpt_4247 - Lcpu_fast_base
+    .long Lpt_4248 - Lcpu_fast_base
+    .long Lpt_4249 - Lcpu_fast_base
+    .long Lpt_4250 - Lcpu_fast_base
+    .long Lpt_4251 - Lcpu_fast_base
+    .long Lpt_4252 - Lcpu_fast_base
+    .long Lpt_4253 - Lcpu_fast_base
+    .long Lpt_4254 - Lcpu_fast_base
+    .long Lpt_4255 - Lcpu_fast_base
+    .long Lpt_4256 - Lcpu_fast_base
+    .long Lpt_4257 - Lcpu_fast_base
+    .long Lpt_4258 - Lcpu_fast_base
+    .long Lpt_4259 - Lcpu_fast_base
+    .long Lpt_4260 - Lcpu_fast_base
+    .long Lpt_4261 - Lcpu_fast_base
+    .long Lpt_4262 - Lcpu_fast_base
+    .long Lpt_4263 - Lcpu_fast_base
+    .long Lpt_4264 - Lcpu_fast_base
+    .long Lpt_4265 - Lcpu_fast_base
+    .long Lpt_4266 - Lcpu_fast_base
+    .long Lpt_4267 - Lcpu_fast_base
     .long Lpt_4268 - Lcpu_fast_base
     .long Lpt_4269 - Lcpu_fast_base
     .long Lpt_4270 - Lcpu_fast_base
@@ -4288,16 +4288,6 @@
     .long Lpt_4287 - Lcpu_fast_base
     .long Lpt_4288 - Lcpu_fast_base
     .long Lpt_4289 - Lcpu_fast_base
-    .long Lpt_4290 - Lcpu_fast_base
-    .long Lpt_4291 - Lcpu_fast_base
-    .long Lpt_4292 - Lcpu_fast_base
-    .long Lpt_4293 - Lcpu_fast_base
-    .long Lpt_4294 - Lcpu_fast_base
-    .long Lpt_4295 - Lcpu_fast_base
-    .long Lpt_4296 - Lcpu_fast_base
-    .long Lpt_4297 - Lcpu_fast_base
-    .long Lpt_4298 - Lcpu_fast_base
-    .long Lpt_4299 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -4330,6 +4320,16 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_4322 - Lcpu_fast_base
+    .long Lpt_4323 - Lcpu_fast_base
+    .long Lpt_4324 - Lcpu_fast_base
+    .long Lpt_4325 - Lcpu_fast_base
+    .long Lpt_4326 - Lcpu_fast_base
+    .long Lpt_4327 - Lcpu_fast_base
+    .long Lpt_4328 - Lcpu_fast_base
+    .long Lpt_4329 - Lcpu_fast_base
+    .long Lpt_4330 - Lcpu_fast_base
+    .long Lpt_4331 - Lcpu_fast_base
     .long Lpt_4332 - Lcpu_fast_base
     .long Lpt_4333 - Lcpu_fast_base
     .long Lpt_4334 - Lcpu_fast_base
@@ -4352,16 +4352,6 @@
     .long Lpt_4351 - Lcpu_fast_base
     .long Lpt_4352 - Lcpu_fast_base
     .long Lpt_4353 - Lcpu_fast_base
-    .long Lpt_4354 - Lcpu_fast_base
-    .long Lpt_4355 - Lcpu_fast_base
-    .long Lpt_4356 - Lcpu_fast_base
-    .long Lpt_4357 - Lcpu_fast_base
-    .long Lpt_4358 - Lcpu_fast_base
-    .long Lpt_4359 - Lcpu_fast_base
-    .long Lpt_4360 - Lcpu_fast_base
-    .long Lpt_4361 - Lcpu_fast_base
-    .long Lpt_4362 - Lcpu_fast_base
-    .long Lpt_4363 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -4394,6 +4384,16 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_4386 - Lcpu_fast_base
+    .long Lpt_4387 - Lcpu_fast_base
+    .long Lpt_4388 - Lcpu_fast_base
+    .long Lpt_4389 - Lcpu_fast_base
+    .long Lpt_4390 - Lcpu_fast_base
+    .long Lpt_4391 - Lcpu_fast_base
+    .long Lpt_4392 - Lcpu_fast_base
+    .long Lpt_4393 - Lcpu_fast_base
+    .long Lpt_4394 - Lcpu_fast_base
+    .long Lpt_4395 - Lcpu_fast_base
     .long Lpt_4396 - Lcpu_fast_base
     .long Lpt_4397 - Lcpu_fast_base
     .long Lpt_4398 - Lcpu_fast_base
@@ -4416,38 +4416,38 @@
     .long Lpt_4415 - Lcpu_fast_base
     .long Lpt_4416 - Lcpu_fast_base
     .long Lpt_4417 - Lcpu_fast_base
-    .long Lpt_4418 - Lcpu_fast_base
-    .long Lpt_4419 - Lcpu_fast_base
-    .long Lpt_4420 - Lcpu_fast_base
-    .long Lpt_4421 - Lcpu_fast_base
-    .long Lpt_4422 - Lcpu_fast_base
-    .long Lpt_4423 - Lcpu_fast_base
-    .long Lpt_4424 - Lcpu_fast_base
-    .long Lpt_4425 - Lcpu_fast_base
-    .long Lpt_4426 - Lcpu_fast_base
-    .long Lpt_4427 - Lcpu_fast_base
-    .long Lpt_4428 - Lcpu_fast_base
-    .long Lpt_4429 - Lcpu_fast_base
-    .long Lpt_4430 - Lcpu_fast_base
-    .long Lpt_4431 - Lcpu_fast_base
-    .long Lpt_4432 - Lcpu_fast_base
-    .long Lpt_4433 - Lcpu_fast_base
-    .long Lpt_4434 - Lcpu_fast_base
-    .long Lpt_4435 - Lcpu_fast_base
-    .long Lpt_4436 - Lcpu_fast_base
-    .long Lpt_4437 - Lcpu_fast_base
-    .long Lpt_4438 - Lcpu_fast_base
-    .long Lpt_4439 - Lcpu_fast_base
-    .long Lpt_4440 - Lcpu_fast_base
-    .long Lpt_4441 - Lcpu_fast_base
-    .long Lpt_4442 - Lcpu_fast_base
-    .long Lpt_4443 - Lcpu_fast_base
-    .long Lpt_4444 - Lcpu_fast_base
-    .long Lpt_4445 - Lcpu_fast_base
-    .long Lpt_4446 - Lcpu_fast_base
-    .long Lpt_4447 - Lcpu_fast_base
-    .long Lpt_4448 - Lcpu_fast_base
-    .long Lpt_4449 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_4450 - Lcpu_fast_base
     .long Lpt_4451 - Lcpu_fast_base
     .long Lpt_4452 - Lcpu_fast_base
@@ -4668,38 +4668,38 @@
     .long Lpt_4667 - Lcpu_fast_base
     .long Lpt_4668 - Lcpu_fast_base
     .long Lpt_4669 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_4670 - Lcpu_fast_base
+    .long Lpt_4671 - Lcpu_fast_base
+    .long Lpt_4672 - Lcpu_fast_base
+    .long Lpt_4673 - Lcpu_fast_base
+    .long Lpt_4674 - Lcpu_fast_base
+    .long Lpt_4675 - Lcpu_fast_base
+    .long Lpt_4676 - Lcpu_fast_base
+    .long Lpt_4677 - Lcpu_fast_base
+    .long Lpt_4678 - Lcpu_fast_base
+    .long Lpt_4679 - Lcpu_fast_base
+    .long Lpt_4680 - Lcpu_fast_base
+    .long Lpt_4681 - Lcpu_fast_base
+    .long Lpt_4682 - Lcpu_fast_base
+    .long Lpt_4683 - Lcpu_fast_base
+    .long Lpt_4684 - Lcpu_fast_base
+    .long Lpt_4685 - Lcpu_fast_base
+    .long Lpt_4686 - Lcpu_fast_base
+    .long Lpt_4687 - Lcpu_fast_base
+    .long Lpt_4688 - Lcpu_fast_base
+    .long Lpt_4689 - Lcpu_fast_base
+    .long Lpt_4690 - Lcpu_fast_base
+    .long Lpt_4691 - Lcpu_fast_base
+    .long Lpt_4692 - Lcpu_fast_base
+    .long Lpt_4693 - Lcpu_fast_base
+    .long Lpt_4694 - Lcpu_fast_base
+    .long Lpt_4695 - Lcpu_fast_base
+    .long Lpt_4696 - Lcpu_fast_base
+    .long Lpt_4697 - Lcpu_fast_base
+    .long Lpt_4698 - Lcpu_fast_base
+    .long Lpt_4699 - Lcpu_fast_base
+    .long Lpt_4700 - Lcpu_fast_base
+    .long Lpt_4701 - Lcpu_fast_base
     .long Lpt_4702 - Lcpu_fast_base
     .long Lpt_4703 - Lcpu_fast_base
     .long Lpt_4704 - Lcpu_fast_base
@@ -4722,38 +4722,38 @@
     .long Lpt_4721 - Lcpu_fast_base
     .long Lpt_4722 - Lcpu_fast_base
     .long Lpt_4723 - Lcpu_fast_base
-    .long Lpt_4724 - Lcpu_fast_base
-    .long Lpt_4725 - Lcpu_fast_base
-    .long Lpt_4726 - Lcpu_fast_base
-    .long Lpt_4727 - Lcpu_fast_base
-    .long Lpt_4728 - Lcpu_fast_base
-    .long Lpt_4729 - Lcpu_fast_base
-    .long Lpt_4730 - Lcpu_fast_base
-    .long Lpt_4731 - Lcpu_fast_base
-    .long Lpt_4732 - Lcpu_fast_base
-    .long Lpt_4733 - Lcpu_fast_base
-    .long Lpt_4734 - Lcpu_fast_base
-    .long Lpt_4735 - Lcpu_fast_base
-    .long Lpt_4736 - Lcpu_fast_base
-    .long Lpt_4737 - Lcpu_fast_base
-    .long Lpt_4738 - Lcpu_fast_base
-    .long Lpt_4739 - Lcpu_fast_base
-    .long Lpt_4740 - Lcpu_fast_base
-    .long Lpt_4741 - Lcpu_fast_base
-    .long Lpt_4742 - Lcpu_fast_base
-    .long Lpt_4743 - Lcpu_fast_base
-    .long Lpt_4744 - Lcpu_fast_base
-    .long Lpt_4745 - Lcpu_fast_base
-    .long Lpt_4746 - Lcpu_fast_base
-    .long Lpt_4747 - Lcpu_fast_base
-    .long Lpt_4748 - Lcpu_fast_base
-    .long Lpt_4749 - Lcpu_fast_base
-    .long Lpt_4750 - Lcpu_fast_base
-    .long Lpt_4751 - Lcpu_fast_base
-    .long Lpt_4752 - Lcpu_fast_base
-    .long Lpt_4753 - Lcpu_fast_base
-    .long Lpt_4754 - Lcpu_fast_base
-    .long Lpt_4755 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_4756 - Lcpu_fast_base
     .long Lpt_4757 - Lcpu_fast_base
     .long Lpt_4758 - Lcpu_fast_base
@@ -4796,38 +4796,38 @@
     .long Lpt_4795 - Lcpu_fast_base
     .long Lpt_4796 - Lcpu_fast_base
     .long Lpt_4797 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_4798 - Lcpu_fast_base
+    .long Lpt_4799 - Lcpu_fast_base
+    .long Lpt_4800 - Lcpu_fast_base
+    .long Lpt_4801 - Lcpu_fast_base
+    .long Lpt_4802 - Lcpu_fast_base
+    .long Lpt_4803 - Lcpu_fast_base
+    .long Lpt_4804 - Lcpu_fast_base
+    .long Lpt_4805 - Lcpu_fast_base
+    .long Lpt_4806 - Lcpu_fast_base
+    .long Lpt_4807 - Lcpu_fast_base
+    .long Lpt_4808 - Lcpu_fast_base
+    .long Lpt_4809 - Lcpu_fast_base
+    .long Lpt_4810 - Lcpu_fast_base
+    .long Lpt_4811 - Lcpu_fast_base
+    .long Lpt_4812 - Lcpu_fast_base
+    .long Lpt_4813 - Lcpu_fast_base
+    .long Lpt_4814 - Lcpu_fast_base
+    .long Lpt_4815 - Lcpu_fast_base
+    .long Lpt_4816 - Lcpu_fast_base
+    .long Lpt_4817 - Lcpu_fast_base
+    .long Lpt_4818 - Lcpu_fast_base
+    .long Lpt_4819 - Lcpu_fast_base
+    .long Lpt_4820 - Lcpu_fast_base
+    .long Lpt_4821 - Lcpu_fast_base
+    .long Lpt_4822 - Lcpu_fast_base
+    .long Lpt_4823 - Lcpu_fast_base
+    .long Lpt_4824 - Lcpu_fast_base
+    .long Lpt_4825 - Lcpu_fast_base
+    .long Lpt_4826 - Lcpu_fast_base
+    .long Lpt_4827 - Lcpu_fast_base
+    .long Lpt_4828 - Lcpu_fast_base
+    .long Lpt_4829 - Lcpu_fast_base
     .long Lpt_4830 - Lcpu_fast_base
     .long Lpt_4831 - Lcpu_fast_base
     .long Lpt_4832 - Lcpu_fast_base
@@ -4850,38 +4850,38 @@
     .long Lpt_4849 - Lcpu_fast_base
     .long Lpt_4850 - Lcpu_fast_base
     .long Lpt_4851 - Lcpu_fast_base
-    .long Lpt_4852 - Lcpu_fast_base
-    .long Lpt_4853 - Lcpu_fast_base
-    .long Lpt_4854 - Lcpu_fast_base
-    .long Lpt_4855 - Lcpu_fast_base
-    .long Lpt_4856 - Lcpu_fast_base
-    .long Lpt_4857 - Lcpu_fast_base
-    .long Lpt_4858 - Lcpu_fast_base
-    .long Lpt_4859 - Lcpu_fast_base
-    .long Lpt_4860 - Lcpu_fast_base
-    .long Lpt_4861 - Lcpu_fast_base
-    .long Lpt_4862 - Lcpu_fast_base
-    .long Lpt_4863 - Lcpu_fast_base
-    .long Lpt_4864 - Lcpu_fast_base
-    .long Lpt_4865 - Lcpu_fast_base
-    .long Lpt_4866 - Lcpu_fast_base
-    .long Lpt_4867 - Lcpu_fast_base
-    .long Lpt_4868 - Lcpu_fast_base
-    .long Lpt_4869 - Lcpu_fast_base
-    .long Lpt_4870 - Lcpu_fast_base
-    .long Lpt_4871 - Lcpu_fast_base
-    .long Lpt_4872 - Lcpu_fast_base
-    .long Lpt_4873 - Lcpu_fast_base
-    .long Lpt_4874 - Lcpu_fast_base
-    .long Lpt_4875 - Lcpu_fast_base
-    .long Lpt_4876 - Lcpu_fast_base
-    .long Lpt_4877 - Lcpu_fast_base
-    .long Lpt_4878 - Lcpu_fast_base
-    .long Lpt_4879 - Lcpu_fast_base
-    .long Lpt_4880 - Lcpu_fast_base
-    .long Lpt_4881 - Lcpu_fast_base
-    .long Lpt_4882 - Lcpu_fast_base
-    .long Lpt_4883 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_4884 - Lcpu_fast_base
     .long Lpt_4885 - Lcpu_fast_base
     .long Lpt_4886 - Lcpu_fast_base
@@ -4924,38 +4924,38 @@
     .long Lpt_4923 - Lcpu_fast_base
     .long Lpt_4924 - Lcpu_fast_base
     .long Lpt_4925 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_4926 - Lcpu_fast_base
+    .long Lpt_4927 - Lcpu_fast_base
+    .long Lpt_4928 - Lcpu_fast_base
+    .long Lpt_4929 - Lcpu_fast_base
+    .long Lpt_4930 - Lcpu_fast_base
+    .long Lpt_4931 - Lcpu_fast_base
+    .long Lpt_4932 - Lcpu_fast_base
+    .long Lpt_4933 - Lcpu_fast_base
+    .long Lpt_4934 - Lcpu_fast_base
+    .long Lpt_4935 - Lcpu_fast_base
+    .long Lpt_4936 - Lcpu_fast_base
+    .long Lpt_4937 - Lcpu_fast_base
+    .long Lpt_4938 - Lcpu_fast_base
+    .long Lpt_4939 - Lcpu_fast_base
+    .long Lpt_4940 - Lcpu_fast_base
+    .long Lpt_4941 - Lcpu_fast_base
+    .long Lpt_4942 - Lcpu_fast_base
+    .long Lpt_4943 - Lcpu_fast_base
+    .long Lpt_4944 - Lcpu_fast_base
+    .long Lpt_4945 - Lcpu_fast_base
+    .long Lpt_4946 - Lcpu_fast_base
+    .long Lpt_4947 - Lcpu_fast_base
+    .long Lpt_4948 - Lcpu_fast_base
+    .long Lpt_4949 - Lcpu_fast_base
+    .long Lpt_4950 - Lcpu_fast_base
+    .long Lpt_4951 - Lcpu_fast_base
+    .long Lpt_4952 - Lcpu_fast_base
+    .long Lpt_4953 - Lcpu_fast_base
+    .long Lpt_4954 - Lcpu_fast_base
+    .long Lpt_4955 - Lcpu_fast_base
+    .long Lpt_4956 - Lcpu_fast_base
+    .long Lpt_4957 - Lcpu_fast_base
     .long Lpt_4958 - Lcpu_fast_base
     .long Lpt_4959 - Lcpu_fast_base
     .long Lpt_4960 - Lcpu_fast_base
@@ -4978,38 +4978,38 @@
     .long Lpt_4977 - Lcpu_fast_base
     .long Lpt_4978 - Lcpu_fast_base
     .long Lpt_4979 - Lcpu_fast_base
-    .long Lpt_4980 - Lcpu_fast_base
-    .long Lpt_4981 - Lcpu_fast_base
-    .long Lpt_4982 - Lcpu_fast_base
-    .long Lpt_4983 - Lcpu_fast_base
-    .long Lpt_4984 - Lcpu_fast_base
-    .long Lpt_4985 - Lcpu_fast_base
-    .long Lpt_4986 - Lcpu_fast_base
-    .long Lpt_4987 - Lcpu_fast_base
-    .long Lpt_4988 - Lcpu_fast_base
-    .long Lpt_4989 - Lcpu_fast_base
-    .long Lpt_4990 - Lcpu_fast_base
-    .long Lpt_4991 - Lcpu_fast_base
-    .long Lpt_4992 - Lcpu_fast_base
-    .long Lpt_4993 - Lcpu_fast_base
-    .long Lpt_4994 - Lcpu_fast_base
-    .long Lpt_4995 - Lcpu_fast_base
-    .long Lpt_4996 - Lcpu_fast_base
-    .long Lpt_4997 - Lcpu_fast_base
-    .long Lpt_4998 - Lcpu_fast_base
-    .long Lpt_4999 - Lcpu_fast_base
-    .long Lpt_5000 - Lcpu_fast_base
-    .long Lpt_5001 - Lcpu_fast_base
-    .long Lpt_5002 - Lcpu_fast_base
-    .long Lpt_5003 - Lcpu_fast_base
-    .long Lpt_5004 - Lcpu_fast_base
-    .long Lpt_5005 - Lcpu_fast_base
-    .long Lpt_5006 - Lcpu_fast_base
-    .long Lpt_5007 - Lcpu_fast_base
-    .long Lpt_5008 - Lcpu_fast_base
-    .long Lpt_5009 - Lcpu_fast_base
-    .long Lpt_5010 - Lcpu_fast_base
-    .long Lpt_5011 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_5012 - Lcpu_fast_base
     .long Lpt_5013 - Lcpu_fast_base
     .long Lpt_5014 - Lcpu_fast_base
@@ -5500,38 +5500,38 @@
     .long Lpt_5499 - Lcpu_fast_base
     .long Lpt_5500 - Lcpu_fast_base
     .long Lpt_5501 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_5502 - Lcpu_fast_base
+    .long Lpt_5503 - Lcpu_fast_base
+    .long Lpt_5504 - Lcpu_fast_base
+    .long Lpt_5505 - Lcpu_fast_base
+    .long Lpt_5506 - Lcpu_fast_base
+    .long Lpt_5507 - Lcpu_fast_base
+    .long Lpt_5508 - Lcpu_fast_base
+    .long Lpt_5509 - Lcpu_fast_base
+    .long Lpt_5510 - Lcpu_fast_base
+    .long Lpt_5511 - Lcpu_fast_base
+    .long Lpt_5512 - Lcpu_fast_base
+    .long Lpt_5513 - Lcpu_fast_base
+    .long Lpt_5514 - Lcpu_fast_base
+    .long Lpt_5515 - Lcpu_fast_base
+    .long Lpt_5516 - Lcpu_fast_base
+    .long Lpt_5517 - Lcpu_fast_base
+    .long Lpt_5518 - Lcpu_fast_base
+    .long Lpt_5519 - Lcpu_fast_base
+    .long Lpt_5520 - Lcpu_fast_base
+    .long Lpt_5521 - Lcpu_fast_base
+    .long Lpt_5522 - Lcpu_fast_base
+    .long Lpt_5523 - Lcpu_fast_base
+    .long Lpt_5524 - Lcpu_fast_base
+    .long Lpt_5525 - Lcpu_fast_base
+    .long Lpt_5526 - Lcpu_fast_base
+    .long Lpt_5527 - Lcpu_fast_base
+    .long Lpt_5528 - Lcpu_fast_base
+    .long Lpt_5529 - Lcpu_fast_base
+    .long Lpt_5530 - Lcpu_fast_base
+    .long Lpt_5531 - Lcpu_fast_base
+    .long Lpt_5532 - Lcpu_fast_base
+    .long Lpt_5533 - Lcpu_fast_base
     .long Lpt_5534 - Lcpu_fast_base
     .long Lpt_5535 - Lcpu_fast_base
     .long Lpt_5536 - Lcpu_fast_base
@@ -5554,38 +5554,38 @@
     .long Lpt_5553 - Lcpu_fast_base
     .long Lpt_5554 - Lcpu_fast_base
     .long Lpt_5555 - Lcpu_fast_base
-    .long Lpt_5556 - Lcpu_fast_base
-    .long Lpt_5557 - Lcpu_fast_base
-    .long Lpt_5558 - Lcpu_fast_base
-    .long Lpt_5559 - Lcpu_fast_base
-    .long Lpt_5560 - Lcpu_fast_base
-    .long Lpt_5561 - Lcpu_fast_base
-    .long Lpt_5562 - Lcpu_fast_base
-    .long Lpt_5563 - Lcpu_fast_base
-    .long Lpt_5564 - Lcpu_fast_base
-    .long Lpt_5565 - Lcpu_fast_base
-    .long Lpt_5566 - Lcpu_fast_base
-    .long Lpt_5567 - Lcpu_fast_base
-    .long Lpt_5568 - Lcpu_fast_base
-    .long Lpt_5569 - Lcpu_fast_base
-    .long Lpt_5570 - Lcpu_fast_base
-    .long Lpt_5571 - Lcpu_fast_base
-    .long Lpt_5572 - Lcpu_fast_base
-    .long Lpt_5573 - Lcpu_fast_base
-    .long Lpt_5574 - Lcpu_fast_base
-    .long Lpt_5575 - Lcpu_fast_base
-    .long Lpt_5576 - Lcpu_fast_base
-    .long Lpt_5577 - Lcpu_fast_base
-    .long Lpt_5578 - Lcpu_fast_base
-    .long Lpt_5579 - Lcpu_fast_base
-    .long Lpt_5580 - Lcpu_fast_base
-    .long Lpt_5581 - Lcpu_fast_base
-    .long Lpt_5582 - Lcpu_fast_base
-    .long Lpt_5583 - Lcpu_fast_base
-    .long Lpt_5584 - Lcpu_fast_base
-    .long Lpt_5585 - Lcpu_fast_base
-    .long Lpt_5586 - Lcpu_fast_base
-    .long Lpt_5587 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_5588 - Lcpu_fast_base
     .long Lpt_5589 - Lcpu_fast_base
     .long Lpt_5590 - Lcpu_fast_base
@@ -5628,38 +5628,38 @@
     .long Lpt_5627 - Lcpu_fast_base
     .long Lpt_5628 - Lcpu_fast_base
     .long Lpt_5629 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_5630 - Lcpu_fast_base
+    .long Lpt_5631 - Lcpu_fast_base
+    .long Lpt_5632 - Lcpu_fast_base
+    .long Lpt_5633 - Lcpu_fast_base
+    .long Lpt_5634 - Lcpu_fast_base
+    .long Lpt_5635 - Lcpu_fast_base
+    .long Lpt_5636 - Lcpu_fast_base
+    .long Lpt_5637 - Lcpu_fast_base
+    .long Lpt_5638 - Lcpu_fast_base
+    .long Lpt_5639 - Lcpu_fast_base
+    .long Lpt_5640 - Lcpu_fast_base
+    .long Lpt_5641 - Lcpu_fast_base
+    .long Lpt_5642 - Lcpu_fast_base
+    .long Lpt_5643 - Lcpu_fast_base
+    .long Lpt_5644 - Lcpu_fast_base
+    .long Lpt_5645 - Lcpu_fast_base
+    .long Lpt_5646 - Lcpu_fast_base
+    .long Lpt_5647 - Lcpu_fast_base
+    .long Lpt_5648 - Lcpu_fast_base
+    .long Lpt_5649 - Lcpu_fast_base
+    .long Lpt_5650 - Lcpu_fast_base
+    .long Lpt_5651 - Lcpu_fast_base
+    .long Lpt_5652 - Lcpu_fast_base
+    .long Lpt_5653 - Lcpu_fast_base
+    .long Lpt_5654 - Lcpu_fast_base
+    .long Lpt_5655 - Lcpu_fast_base
+    .long Lpt_5656 - Lcpu_fast_base
+    .long Lpt_5657 - Lcpu_fast_base
+    .long Lpt_5658 - Lcpu_fast_base
+    .long Lpt_5659 - Lcpu_fast_base
+    .long Lpt_5660 - Lcpu_fast_base
+    .long Lpt_5661 - Lcpu_fast_base
     .long Lpt_5662 - Lcpu_fast_base
     .long Lpt_5663 - Lcpu_fast_base
     .long Lpt_5664 - Lcpu_fast_base
@@ -5682,38 +5682,38 @@
     .long Lpt_5681 - Lcpu_fast_base
     .long Lpt_5682 - Lcpu_fast_base
     .long Lpt_5683 - Lcpu_fast_base
-    .long Lpt_5684 - Lcpu_fast_base
-    .long Lpt_5685 - Lcpu_fast_base
-    .long Lpt_5686 - Lcpu_fast_base
-    .long Lpt_5687 - Lcpu_fast_base
-    .long Lpt_5688 - Lcpu_fast_base
-    .long Lpt_5689 - Lcpu_fast_base
-    .long Lpt_5690 - Lcpu_fast_base
-    .long Lpt_5691 - Lcpu_fast_base
-    .long Lpt_5692 - Lcpu_fast_base
-    .long Lpt_5693 - Lcpu_fast_base
-    .long Lpt_5694 - Lcpu_fast_base
-    .long Lpt_5695 - Lcpu_fast_base
-    .long Lpt_5696 - Lcpu_fast_base
-    .long Lpt_5697 - Lcpu_fast_base
-    .long Lpt_5698 - Lcpu_fast_base
-    .long Lpt_5699 - Lcpu_fast_base
-    .long Lpt_5700 - Lcpu_fast_base
-    .long Lpt_5701 - Lcpu_fast_base
-    .long Lpt_5702 - Lcpu_fast_base
-    .long Lpt_5703 - Lcpu_fast_base
-    .long Lpt_5704 - Lcpu_fast_base
-    .long Lpt_5705 - Lcpu_fast_base
-    .long Lpt_5706 - Lcpu_fast_base
-    .long Lpt_5707 - Lcpu_fast_base
-    .long Lpt_5708 - Lcpu_fast_base
-    .long Lpt_5709 - Lcpu_fast_base
-    .long Lpt_5710 - Lcpu_fast_base
-    .long Lpt_5711 - Lcpu_fast_base
-    .long Lpt_5712 - Lcpu_fast_base
-    .long Lpt_5713 - Lcpu_fast_base
-    .long Lpt_5714 - Lcpu_fast_base
-    .long Lpt_5715 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_5716 - Lcpu_fast_base
     .long Lpt_5717 - Lcpu_fast_base
     .long Lpt_5718 - Lcpu_fast_base
@@ -5756,38 +5756,38 @@
     .long Lpt_5755 - Lcpu_fast_base
     .long Lpt_5756 - Lcpu_fast_base
     .long Lpt_5757 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_5758 - Lcpu_fast_base
+    .long Lpt_5759 - Lcpu_fast_base
+    .long Lpt_5760 - Lcpu_fast_base
+    .long Lpt_5761 - Lcpu_fast_base
+    .long Lpt_5762 - Lcpu_fast_base
+    .long Lpt_5763 - Lcpu_fast_base
+    .long Lpt_5764 - Lcpu_fast_base
+    .long Lpt_5765 - Lcpu_fast_base
+    .long Lpt_5766 - Lcpu_fast_base
+    .long Lpt_5767 - Lcpu_fast_base
+    .long Lpt_5768 - Lcpu_fast_base
+    .long Lpt_5769 - Lcpu_fast_base
+    .long Lpt_5770 - Lcpu_fast_base
+    .long Lpt_5771 - Lcpu_fast_base
+    .long Lpt_5772 - Lcpu_fast_base
+    .long Lpt_5773 - Lcpu_fast_base
+    .long Lpt_5774 - Lcpu_fast_base
+    .long Lpt_5775 - Lcpu_fast_base
+    .long Lpt_5776 - Lcpu_fast_base
+    .long Lpt_5777 - Lcpu_fast_base
+    .long Lpt_5778 - Lcpu_fast_base
+    .long Lpt_5779 - Lcpu_fast_base
+    .long Lpt_5780 - Lcpu_fast_base
+    .long Lpt_5781 - Lcpu_fast_base
+    .long Lpt_5782 - Lcpu_fast_base
+    .long Lpt_5783 - Lcpu_fast_base
+    .long Lpt_5784 - Lcpu_fast_base
+    .long Lpt_5785 - Lcpu_fast_base
+    .long Lpt_5786 - Lcpu_fast_base
+    .long Lpt_5787 - Lcpu_fast_base
+    .long Lpt_5788 - Lcpu_fast_base
+    .long Lpt_5789 - Lcpu_fast_base
     .long Lpt_5790 - Lcpu_fast_base
     .long Lpt_5791 - Lcpu_fast_base
     .long Lpt_5792 - Lcpu_fast_base
@@ -5810,38 +5810,38 @@
     .long Lpt_5809 - Lcpu_fast_base
     .long Lpt_5810 - Lcpu_fast_base
     .long Lpt_5811 - Lcpu_fast_base
-    .long Lpt_5812 - Lcpu_fast_base
-    .long Lpt_5813 - Lcpu_fast_base
-    .long Lpt_5814 - Lcpu_fast_base
-    .long Lpt_5815 - Lcpu_fast_base
-    .long Lpt_5816 - Lcpu_fast_base
-    .long Lpt_5817 - Lcpu_fast_base
-    .long Lpt_5818 - Lcpu_fast_base
-    .long Lpt_5819 - Lcpu_fast_base
-    .long Lpt_5820 - Lcpu_fast_base
-    .long Lpt_5821 - Lcpu_fast_base
-    .long Lpt_5822 - Lcpu_fast_base
-    .long Lpt_5823 - Lcpu_fast_base
-    .long Lpt_5824 - Lcpu_fast_base
-    .long Lpt_5825 - Lcpu_fast_base
-    .long Lpt_5826 - Lcpu_fast_base
-    .long Lpt_5827 - Lcpu_fast_base
-    .long Lpt_5828 - Lcpu_fast_base
-    .long Lpt_5829 - Lcpu_fast_base
-    .long Lpt_5830 - Lcpu_fast_base
-    .long Lpt_5831 - Lcpu_fast_base
-    .long Lpt_5832 - Lcpu_fast_base
-    .long Lpt_5833 - Lcpu_fast_base
-    .long Lpt_5834 - Lcpu_fast_base
-    .long Lpt_5835 - Lcpu_fast_base
-    .long Lpt_5836 - Lcpu_fast_base
-    .long Lpt_5837 - Lcpu_fast_base
-    .long Lpt_5838 - Lcpu_fast_base
-    .long Lpt_5839 - Lcpu_fast_base
-    .long Lpt_5840 - Lcpu_fast_base
-    .long Lpt_5841 - Lcpu_fast_base
-    .long Lpt_5842 - Lcpu_fast_base
-    .long Lpt_5843 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_5844 - Lcpu_fast_base
     .long Lpt_5845 - Lcpu_fast_base
     .long Lpt_5846 - Lcpu_fast_base
@@ -6140,22 +6140,22 @@
     .long Lpt_6139 - Lcpu_fast_base
     .long Lpt_6140 - Lcpu_fast_base
     .long Lpt_6141 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_6142 - Lcpu_fast_base
+    .long Lpt_6143 - Lcpu_fast_base
+    .long Lpt_6144 - Lcpu_fast_base
+    .long Lpt_6145 - Lcpu_fast_base
+    .long Lpt_6146 - Lcpu_fast_base
+    .long Lpt_6147 - Lcpu_fast_base
+    .long Lpt_6148 - Lcpu_fast_base
+    .long Lpt_6149 - Lcpu_fast_base
+    .long Lpt_6150 - Lcpu_fast_base
+    .long Lpt_6151 - Lcpu_fast_base
+    .long Lpt_6152 - Lcpu_fast_base
+    .long Lpt_6153 - Lcpu_fast_base
+    .long Lpt_6154 - Lcpu_fast_base
+    .long Lpt_6155 - Lcpu_fast_base
+    .long Lpt_6156 - Lcpu_fast_base
+    .long Lpt_6157 - Lcpu_fast_base
     .long Lpt_6158 - Lcpu_fast_base
     .long Lpt_6159 - Lcpu_fast_base
     .long Lpt_6160 - Lcpu_fast_base
@@ -6196,22 +6196,22 @@
     .long Lpt_6195 - Lcpu_fast_base
     .long Lpt_6196 - Lcpu_fast_base
     .long Lpt_6197 - Lcpu_fast_base
-    .long Lpt_6198 - Lcpu_fast_base
-    .long Lpt_6199 - Lcpu_fast_base
-    .long Lpt_6200 - Lcpu_fast_base
-    .long Lpt_6201 - Lcpu_fast_base
-    .long Lpt_6202 - Lcpu_fast_base
-    .long Lpt_6203 - Lcpu_fast_base
-    .long Lpt_6204 - Lcpu_fast_base
-    .long Lpt_6205 - Lcpu_fast_base
-    .long Lpt_6206 - Lcpu_fast_base
-    .long Lpt_6207 - Lcpu_fast_base
-    .long Lpt_6208 - Lcpu_fast_base
-    .long Lpt_6209 - Lcpu_fast_base
-    .long Lpt_6210 - Lcpu_fast_base
-    .long Lpt_6211 - Lcpu_fast_base
-    .long Lpt_6212 - Lcpu_fast_base
-    .long Lpt_6213 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_6214 - Lcpu_fast_base
     .long Lpt_6215 - Lcpu_fast_base
     .long Lpt_6216 - Lcpu_fast_base
@@ -6268,22 +6268,22 @@
     .long Lpt_6267 - Lcpu_fast_base
     .long Lpt_6268 - Lcpu_fast_base
     .long Lpt_6269 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_6270 - Lcpu_fast_base
+    .long Lpt_6271 - Lcpu_fast_base
+    .long Lpt_6272 - Lcpu_fast_base
+    .long Lpt_6273 - Lcpu_fast_base
+    .long Lpt_6274 - Lcpu_fast_base
+    .long Lpt_6275 - Lcpu_fast_base
+    .long Lpt_6276 - Lcpu_fast_base
+    .long Lpt_6277 - Lcpu_fast_base
+    .long Lpt_6278 - Lcpu_fast_base
+    .long Lpt_6279 - Lcpu_fast_base
+    .long Lpt_6280 - Lcpu_fast_base
+    .long Lpt_6281 - Lcpu_fast_base
+    .long Lpt_6282 - Lcpu_fast_base
+    .long Lpt_6283 - Lcpu_fast_base
+    .long Lpt_6284 - Lcpu_fast_base
+    .long Lpt_6285 - Lcpu_fast_base
     .long Lpt_6286 - Lcpu_fast_base
     .long Lpt_6287 - Lcpu_fast_base
     .long Lpt_6288 - Lcpu_fast_base
@@ -6324,22 +6324,22 @@
     .long Lpt_6323 - Lcpu_fast_base
     .long Lpt_6324 - Lcpu_fast_base
     .long Lpt_6325 - Lcpu_fast_base
-    .long Lpt_6326 - Lcpu_fast_base
-    .long Lpt_6327 - Lcpu_fast_base
-    .long Lpt_6328 - Lcpu_fast_base
-    .long Lpt_6329 - Lcpu_fast_base
-    .long Lpt_6330 - Lcpu_fast_base
-    .long Lpt_6331 - Lcpu_fast_base
-    .long Lpt_6332 - Lcpu_fast_base
-    .long Lpt_6333 - Lcpu_fast_base
-    .long Lpt_6334 - Lcpu_fast_base
-    .long Lpt_6335 - Lcpu_fast_base
-    .long Lpt_6336 - Lcpu_fast_base
-    .long Lpt_6337 - Lcpu_fast_base
-    .long Lpt_6338 - Lcpu_fast_base
-    .long Lpt_6339 - Lcpu_fast_base
-    .long Lpt_6340 - Lcpu_fast_base
-    .long Lpt_6341 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_6342 - Lcpu_fast_base
     .long Lpt_6343 - Lcpu_fast_base
     .long Lpt_6344 - Lcpu_fast_base
@@ -6396,22 +6396,22 @@
     .long Lpt_6395 - Lcpu_fast_base
     .long Lpt_6396 - Lcpu_fast_base
     .long Lpt_6397 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_6398 - Lcpu_fast_base
+    .long Lpt_6399 - Lcpu_fast_base
+    .long Lpt_6400 - Lcpu_fast_base
+    .long Lpt_6401 - Lcpu_fast_base
+    .long Lpt_6402 - Lcpu_fast_base
+    .long Lpt_6403 - Lcpu_fast_base
+    .long Lpt_6404 - Lcpu_fast_base
+    .long Lpt_6405 - Lcpu_fast_base
+    .long Lpt_6406 - Lcpu_fast_base
+    .long Lpt_6407 - Lcpu_fast_base
+    .long Lpt_6408 - Lcpu_fast_base
+    .long Lpt_6409 - Lcpu_fast_base
+    .long Lpt_6410 - Lcpu_fast_base
+    .long Lpt_6411 - Lcpu_fast_base
+    .long Lpt_6412 - Lcpu_fast_base
+    .long Lpt_6413 - Lcpu_fast_base
     .long Lpt_6414 - Lcpu_fast_base
     .long Lpt_6415 - Lcpu_fast_base
     .long Lpt_6416 - Lcpu_fast_base
@@ -6452,22 +6452,22 @@
     .long Lpt_6451 - Lcpu_fast_base
     .long Lpt_6452 - Lcpu_fast_base
     .long Lpt_6453 - Lcpu_fast_base
-    .long Lpt_6454 - Lcpu_fast_base
-    .long Lpt_6455 - Lcpu_fast_base
-    .long Lpt_6456 - Lcpu_fast_base
-    .long Lpt_6457 - Lcpu_fast_base
-    .long Lpt_6458 - Lcpu_fast_base
-    .long Lpt_6459 - Lcpu_fast_base
-    .long Lpt_6460 - Lcpu_fast_base
-    .long Lpt_6461 - Lcpu_fast_base
-    .long Lpt_6462 - Lcpu_fast_base
-    .long Lpt_6463 - Lcpu_fast_base
-    .long Lpt_6464 - Lcpu_fast_base
-    .long Lpt_6465 - Lcpu_fast_base
-    .long Lpt_6466 - Lcpu_fast_base
-    .long Lpt_6467 - Lcpu_fast_base
-    .long Lpt_6468 - Lcpu_fast_base
-    .long Lpt_6469 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_6470 - Lcpu_fast_base
     .long Lpt_6471 - Lcpu_fast_base
     .long Lpt_6472 - Lcpu_fast_base
@@ -6524,14 +6524,14 @@
     .long Lpt_6523 - Lcpu_fast_base
     .long Lpt_6524 - Lcpu_fast_base
     .long Lpt_6525 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_6526 - Lcpu_fast_base
+    .long Lpt_6527 - Lcpu_fast_base
+    .long Lpt_6528 - Lcpu_fast_base
+    .long Lpt_6529 - Lcpu_fast_base
+    .long Lpt_6530 - Lcpu_fast_base
+    .long Lpt_6531 - Lcpu_fast_base
+    .long Lpt_6532 - Lcpu_fast_base
+    .long Lpt_6533 - Lcpu_fast_base
     .long Lpt_6534 - Lcpu_fast_base
     .long Lpt_6535 - Lcpu_fast_base
     .long Lpt_6536 - Lcpu_fast_base
@@ -6580,14 +6580,6 @@
     .long Lpt_6579 - Lcpu_fast_base
     .long Lpt_6580 - Lcpu_fast_base
     .long Lpt_6581 - Lcpu_fast_base
-    .long Lpt_6582 - Lcpu_fast_base
-    .long Lpt_6583 - Lcpu_fast_base
-    .long Lpt_6584 - Lcpu_fast_base
-    .long Lpt_6585 - Lcpu_fast_base
-    .long Lpt_6586 - Lcpu_fast_base
-    .long Lpt_6587 - Lcpu_fast_base
-    .long Lpt_6588 - Lcpu_fast_base
-    .long Lpt_6589 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -6596,6 +6588,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_6590 - Lcpu_fast_base
+    .long Lpt_6591 - Lcpu_fast_base
+    .long Lpt_6592 - Lcpu_fast_base
+    .long Lpt_6593 - Lcpu_fast_base
+    .long Lpt_6594 - Lcpu_fast_base
+    .long Lpt_6595 - Lcpu_fast_base
+    .long Lpt_6596 - Lcpu_fast_base
+    .long Lpt_6597 - Lcpu_fast_base
+    .long Lpt_6598 - Lcpu_fast_base
+    .long Lpt_6599 - Lcpu_fast_base
+    .long Lpt_6600 - Lcpu_fast_base
+    .long Lpt_6601 - Lcpu_fast_base
+    .long Lpt_6602 - Lcpu_fast_base
+    .long Lpt_6603 - Lcpu_fast_base
+    .long Lpt_6604 - Lcpu_fast_base
+    .long Lpt_6605 - Lcpu_fast_base
+    .long Lpt_6606 - Lcpu_fast_base
+    .long Lpt_6607 - Lcpu_fast_base
+    .long Lpt_6608 - Lcpu_fast_base
+    .long Lpt_6609 - Lcpu_fast_base
+    .long Lpt_6610 - Lcpu_fast_base
+    .long Lpt_6611 - Lcpu_fast_base
+    .long Lpt_6612 - Lcpu_fast_base
+    .long Lpt_6613 - Lcpu_fast_base
+    .long Lpt_6614 - Lcpu_fast_base
+    .long Lpt_6615 - Lcpu_fast_base
+    .long Lpt_6616 - Lcpu_fast_base
+    .long Lpt_6617 - Lcpu_fast_base
+    .long Lpt_6618 - Lcpu_fast_base
+    .long Lpt_6619 - Lcpu_fast_base
+    .long Lpt_6620 - Lcpu_fast_base
+    .long Lpt_6621 - Lcpu_fast_base
+    .long Lpt_6622 - Lcpu_fast_base
+    .long Lpt_6623 - Lcpu_fast_base
+    .long Lpt_6624 - Lcpu_fast_base
+    .long Lpt_6625 - Lcpu_fast_base
+    .long Lpt_6626 - Lcpu_fast_base
+    .long Lpt_6627 - Lcpu_fast_base
+    .long Lpt_6628 - Lcpu_fast_base
+    .long Lpt_6629 - Lcpu_fast_base
+    .long Lpt_6630 - Lcpu_fast_base
+    .long Lpt_6631 - Lcpu_fast_base
+    .long Lpt_6632 - Lcpu_fast_base
+    .long Lpt_6633 - Lcpu_fast_base
+    .long Lpt_6634 - Lcpu_fast_base
+    .long Lpt_6635 - Lcpu_fast_base
+    .long Lpt_6636 - Lcpu_fast_base
+    .long Lpt_6637 - Lcpu_fast_base
+    .long Lpt_6638 - Lcpu_fast_base
+    .long Lpt_6639 - Lcpu_fast_base
+    .long Lpt_6640 - Lcpu_fast_base
+    .long Lpt_6641 - Lcpu_fast_base
+    .long Lpt_6642 - Lcpu_fast_base
+    .long Lpt_6643 - Lcpu_fast_base
+    .long Lpt_6644 - Lcpu_fast_base
+    .long Lpt_6645 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -6660,62 +6708,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_6662 - Lcpu_fast_base
-    .long Lpt_6663 - Lcpu_fast_base
-    .long Lpt_6664 - Lcpu_fast_base
-    .long Lpt_6665 - Lcpu_fast_base
-    .long Lpt_6666 - Lcpu_fast_base
-    .long Lpt_6667 - Lcpu_fast_base
-    .long Lpt_6668 - Lcpu_fast_base
-    .long Lpt_6669 - Lcpu_fast_base
-    .long Lpt_6670 - Lcpu_fast_base
-    .long Lpt_6671 - Lcpu_fast_base
-    .long Lpt_6672 - Lcpu_fast_base
-    .long Lpt_6673 - Lcpu_fast_base
-    .long Lpt_6674 - Lcpu_fast_base
-    .long Lpt_6675 - Lcpu_fast_base
-    .long Lpt_6676 - Lcpu_fast_base
-    .long Lpt_6677 - Lcpu_fast_base
-    .long Lpt_6678 - Lcpu_fast_base
-    .long Lpt_6679 - Lcpu_fast_base
-    .long Lpt_6680 - Lcpu_fast_base
-    .long Lpt_6681 - Lcpu_fast_base
-    .long Lpt_6682 - Lcpu_fast_base
-    .long Lpt_6683 - Lcpu_fast_base
-    .long Lpt_6684 - Lcpu_fast_base
-    .long Lpt_6685 - Lcpu_fast_base
-    .long Lpt_6686 - Lcpu_fast_base
-    .long Lpt_6687 - Lcpu_fast_base
-    .long Lpt_6688 - Lcpu_fast_base
-    .long Lpt_6689 - Lcpu_fast_base
-    .long Lpt_6690 - Lcpu_fast_base
-    .long Lpt_6691 - Lcpu_fast_base
-    .long Lpt_6692 - Lcpu_fast_base
-    .long Lpt_6693 - Lcpu_fast_base
-    .long Lpt_6694 - Lcpu_fast_base
-    .long Lpt_6695 - Lcpu_fast_base
-    .long Lpt_6696 - Lcpu_fast_base
-    .long Lpt_6697 - Lcpu_fast_base
-    .long Lpt_6698 - Lcpu_fast_base
-    .long Lpt_6699 - Lcpu_fast_base
-    .long Lpt_6700 - Lcpu_fast_base
-    .long Lpt_6701 - Lcpu_fast_base
-    .long Lpt_6702 - Lcpu_fast_base
-    .long Lpt_6703 - Lcpu_fast_base
-    .long Lpt_6704 - Lcpu_fast_base
-    .long Lpt_6705 - Lcpu_fast_base
-    .long Lpt_6706 - Lcpu_fast_base
-    .long Lpt_6707 - Lcpu_fast_base
-    .long Lpt_6708 - Lcpu_fast_base
-    .long Lpt_6709 - Lcpu_fast_base
-    .long Lpt_6710 - Lcpu_fast_base
-    .long Lpt_6711 - Lcpu_fast_base
-    .long Lpt_6712 - Lcpu_fast_base
-    .long Lpt_6713 - Lcpu_fast_base
-    .long Lpt_6714 - Lcpu_fast_base
-    .long Lpt_6715 - Lcpu_fast_base
-    .long Lpt_6716 - Lcpu_fast_base
-    .long Lpt_6717 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -6724,6 +6716,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_6718 - Lcpu_fast_base
+    .long Lpt_6719 - Lcpu_fast_base
+    .long Lpt_6720 - Lcpu_fast_base
+    .long Lpt_6721 - Lcpu_fast_base
+    .long Lpt_6722 - Lcpu_fast_base
+    .long Lpt_6723 - Lcpu_fast_base
+    .long Lpt_6724 - Lcpu_fast_base
+    .long Lpt_6725 - Lcpu_fast_base
+    .long Lpt_6726 - Lcpu_fast_base
+    .long Lpt_6727 - Lcpu_fast_base
+    .long Lpt_6728 - Lcpu_fast_base
+    .long Lpt_6729 - Lcpu_fast_base
+    .long Lpt_6730 - Lcpu_fast_base
+    .long Lpt_6731 - Lcpu_fast_base
+    .long Lpt_6732 - Lcpu_fast_base
+    .long Lpt_6733 - Lcpu_fast_base
+    .long Lpt_6734 - Lcpu_fast_base
+    .long Lpt_6735 - Lcpu_fast_base
+    .long Lpt_6736 - Lcpu_fast_base
+    .long Lpt_6737 - Lcpu_fast_base
+    .long Lpt_6738 - Lcpu_fast_base
+    .long Lpt_6739 - Lcpu_fast_base
+    .long Lpt_6740 - Lcpu_fast_base
+    .long Lpt_6741 - Lcpu_fast_base
+    .long Lpt_6742 - Lcpu_fast_base
+    .long Lpt_6743 - Lcpu_fast_base
+    .long Lpt_6744 - Lcpu_fast_base
+    .long Lpt_6745 - Lcpu_fast_base
+    .long Lpt_6746 - Lcpu_fast_base
+    .long Lpt_6747 - Lcpu_fast_base
+    .long Lpt_6748 - Lcpu_fast_base
+    .long Lpt_6749 - Lcpu_fast_base
+    .long Lpt_6750 - Lcpu_fast_base
+    .long Lpt_6751 - Lcpu_fast_base
+    .long Lpt_6752 - Lcpu_fast_base
+    .long Lpt_6753 - Lcpu_fast_base
+    .long Lpt_6754 - Lcpu_fast_base
+    .long Lpt_6755 - Lcpu_fast_base
+    .long Lpt_6756 - Lcpu_fast_base
+    .long Lpt_6757 - Lcpu_fast_base
+    .long Lpt_6758 - Lcpu_fast_base
+    .long Lpt_6759 - Lcpu_fast_base
+    .long Lpt_6760 - Lcpu_fast_base
+    .long Lpt_6761 - Lcpu_fast_base
+    .long Lpt_6762 - Lcpu_fast_base
+    .long Lpt_6763 - Lcpu_fast_base
+    .long Lpt_6764 - Lcpu_fast_base
+    .long Lpt_6765 - Lcpu_fast_base
+    .long Lpt_6766 - Lcpu_fast_base
+    .long Lpt_6767 - Lcpu_fast_base
+    .long Lpt_6768 - Lcpu_fast_base
+    .long Lpt_6769 - Lcpu_fast_base
+    .long Lpt_6770 - Lcpu_fast_base
+    .long Lpt_6771 - Lcpu_fast_base
+    .long Lpt_6772 - Lcpu_fast_base
+    .long Lpt_6773 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -6788,62 +6836,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_6790 - Lcpu_fast_base
-    .long Lpt_6791 - Lcpu_fast_base
-    .long Lpt_6792 - Lcpu_fast_base
-    .long Lpt_6793 - Lcpu_fast_base
-    .long Lpt_6794 - Lcpu_fast_base
-    .long Lpt_6795 - Lcpu_fast_base
-    .long Lpt_6796 - Lcpu_fast_base
-    .long Lpt_6797 - Lcpu_fast_base
-    .long Lpt_6798 - Lcpu_fast_base
-    .long Lpt_6799 - Lcpu_fast_base
-    .long Lpt_6800 - Lcpu_fast_base
-    .long Lpt_6801 - Lcpu_fast_base
-    .long Lpt_6802 - Lcpu_fast_base
-    .long Lpt_6803 - Lcpu_fast_base
-    .long Lpt_6804 - Lcpu_fast_base
-    .long Lpt_6805 - Lcpu_fast_base
-    .long Lpt_6806 - Lcpu_fast_base
-    .long Lpt_6807 - Lcpu_fast_base
-    .long Lpt_6808 - Lcpu_fast_base
-    .long Lpt_6809 - Lcpu_fast_base
-    .long Lpt_6810 - Lcpu_fast_base
-    .long Lpt_6811 - Lcpu_fast_base
-    .long Lpt_6812 - Lcpu_fast_base
-    .long Lpt_6813 - Lcpu_fast_base
-    .long Lpt_6814 - Lcpu_fast_base
-    .long Lpt_6815 - Lcpu_fast_base
-    .long Lpt_6816 - Lcpu_fast_base
-    .long Lpt_6817 - Lcpu_fast_base
-    .long Lpt_6818 - Lcpu_fast_base
-    .long Lpt_6819 - Lcpu_fast_base
-    .long Lpt_6820 - Lcpu_fast_base
-    .long Lpt_6821 - Lcpu_fast_base
-    .long Lpt_6822 - Lcpu_fast_base
-    .long Lpt_6823 - Lcpu_fast_base
-    .long Lpt_6824 - Lcpu_fast_base
-    .long Lpt_6825 - Lcpu_fast_base
-    .long Lpt_6826 - Lcpu_fast_base
-    .long Lpt_6827 - Lcpu_fast_base
-    .long Lpt_6828 - Lcpu_fast_base
-    .long Lpt_6829 - Lcpu_fast_base
-    .long Lpt_6830 - Lcpu_fast_base
-    .long Lpt_6831 - Lcpu_fast_base
-    .long Lpt_6832 - Lcpu_fast_base
-    .long Lpt_6833 - Lcpu_fast_base
-    .long Lpt_6834 - Lcpu_fast_base
-    .long Lpt_6835 - Lcpu_fast_base
-    .long Lpt_6836 - Lcpu_fast_base
-    .long Lpt_6837 - Lcpu_fast_base
-    .long Lpt_6838 - Lcpu_fast_base
-    .long Lpt_6839 - Lcpu_fast_base
-    .long Lpt_6840 - Lcpu_fast_base
-    .long Lpt_6841 - Lcpu_fast_base
-    .long Lpt_6842 - Lcpu_fast_base
-    .long Lpt_6843 - Lcpu_fast_base
-    .long Lpt_6844 - Lcpu_fast_base
-    .long Lpt_6845 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_6846 - Lcpu_fast_base
     .long Lpt_6847 - Lcpu_fast_base
     .long Lpt_6848 - Lcpu_fast_base
@@ -6908,14 +6908,14 @@
     .long Lpt_6907 - Lcpu_fast_base
     .long Lpt_6908 - Lcpu_fast_base
     .long Lpt_6909 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_6910 - Lcpu_fast_base
+    .long Lpt_6911 - Lcpu_fast_base
+    .long Lpt_6912 - Lcpu_fast_base
+    .long Lpt_6913 - Lcpu_fast_base
+    .long Lpt_6914 - Lcpu_fast_base
+    .long Lpt_6915 - Lcpu_fast_base
+    .long Lpt_6916 - Lcpu_fast_base
+    .long Lpt_6917 - Lcpu_fast_base
     .long Lpt_6918 - Lcpu_fast_base
     .long Lpt_6919 - Lcpu_fast_base
     .long Lpt_6920 - Lcpu_fast_base
@@ -6964,14 +6964,14 @@
     .long Lpt_6963 - Lcpu_fast_base
     .long Lpt_6964 - Lcpu_fast_base
     .long Lpt_6965 - Lcpu_fast_base
-    .long Lpt_6966 - Lcpu_fast_base
-    .long Lpt_6967 - Lcpu_fast_base
-    .long Lpt_6968 - Lcpu_fast_base
-    .long Lpt_6969 - Lcpu_fast_base
-    .long Lpt_6970 - Lcpu_fast_base
-    .long Lpt_6971 - Lcpu_fast_base
-    .long Lpt_6972 - Lcpu_fast_base
-    .long Lpt_6973 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_6974 - Lcpu_fast_base
     .long Lpt_6975 - Lcpu_fast_base
     .long Lpt_6976 - Lcpu_fast_base
@@ -7036,14 +7036,14 @@
     .long Lpt_7035 - Lcpu_fast_base
     .long Lpt_7036 - Lcpu_fast_base
     .long Lpt_7037 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_7038 - Lcpu_fast_base
+    .long Lpt_7039 - Lcpu_fast_base
+    .long Lpt_7040 - Lcpu_fast_base
+    .long Lpt_7041 - Lcpu_fast_base
+    .long Lpt_7042 - Lcpu_fast_base
+    .long Lpt_7043 - Lcpu_fast_base
+    .long Lpt_7044 - Lcpu_fast_base
+    .long Lpt_7045 - Lcpu_fast_base
     .long Lpt_7046 - Lcpu_fast_base
     .long Lpt_7047 - Lcpu_fast_base
     .long Lpt_7048 - Lcpu_fast_base
@@ -7092,14 +7092,6 @@
     .long Lpt_7091 - Lcpu_fast_base
     .long Lpt_7092 - Lcpu_fast_base
     .long Lpt_7093 - Lcpu_fast_base
-    .long Lpt_7094 - Lcpu_fast_base
-    .long Lpt_7095 - Lcpu_fast_base
-    .long Lpt_7096 - Lcpu_fast_base
-    .long Lpt_7097 - Lcpu_fast_base
-    .long Lpt_7098 - Lcpu_fast_base
-    .long Lpt_7099 - Lcpu_fast_base
-    .long Lpt_7100 - Lcpu_fast_base
-    .long Lpt_7101 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -7108,6 +7100,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_7102 - Lcpu_fast_base
+    .long Lpt_7103 - Lcpu_fast_base
+    .long Lpt_7104 - Lcpu_fast_base
+    .long Lpt_7105 - Lcpu_fast_base
+    .long Lpt_7106 - Lcpu_fast_base
+    .long Lpt_7107 - Lcpu_fast_base
+    .long Lpt_7108 - Lcpu_fast_base
+    .long Lpt_7109 - Lcpu_fast_base
+    .long Lpt_7110 - Lcpu_fast_base
+    .long Lpt_7111 - Lcpu_fast_base
+    .long Lpt_7112 - Lcpu_fast_base
+    .long Lpt_7113 - Lcpu_fast_base
+    .long Lpt_7114 - Lcpu_fast_base
+    .long Lpt_7115 - Lcpu_fast_base
+    .long Lpt_7116 - Lcpu_fast_base
+    .long Lpt_7117 - Lcpu_fast_base
+    .long Lpt_7118 - Lcpu_fast_base
+    .long Lpt_7119 - Lcpu_fast_base
+    .long Lpt_7120 - Lcpu_fast_base
+    .long Lpt_7121 - Lcpu_fast_base
+    .long Lpt_7122 - Lcpu_fast_base
+    .long Lpt_7123 - Lcpu_fast_base
+    .long Lpt_7124 - Lcpu_fast_base
+    .long Lpt_7125 - Lcpu_fast_base
+    .long Lpt_7126 - Lcpu_fast_base
+    .long Lpt_7127 - Lcpu_fast_base
+    .long Lpt_7128 - Lcpu_fast_base
+    .long Lpt_7129 - Lcpu_fast_base
+    .long Lpt_7130 - Lcpu_fast_base
+    .long Lpt_7131 - Lcpu_fast_base
+    .long Lpt_7132 - Lcpu_fast_base
+    .long Lpt_7133 - Lcpu_fast_base
+    .long Lpt_7134 - Lcpu_fast_base
+    .long Lpt_7135 - Lcpu_fast_base
+    .long Lpt_7136 - Lcpu_fast_base
+    .long Lpt_7137 - Lcpu_fast_base
+    .long Lpt_7138 - Lcpu_fast_base
+    .long Lpt_7139 - Lcpu_fast_base
+    .long Lpt_7140 - Lcpu_fast_base
+    .long Lpt_7141 - Lcpu_fast_base
+    .long Lpt_7142 - Lcpu_fast_base
+    .long Lpt_7143 - Lcpu_fast_base
+    .long Lpt_7144 - Lcpu_fast_base
+    .long Lpt_7145 - Lcpu_fast_base
+    .long Lpt_7146 - Lcpu_fast_base
+    .long Lpt_7147 - Lcpu_fast_base
+    .long Lpt_7148 - Lcpu_fast_base
+    .long Lpt_7149 - Lcpu_fast_base
+    .long Lpt_7150 - Lcpu_fast_base
+    .long Lpt_7151 - Lcpu_fast_base
+    .long Lpt_7152 - Lcpu_fast_base
+    .long Lpt_7153 - Lcpu_fast_base
+    .long Lpt_7154 - Lcpu_fast_base
+    .long Lpt_7155 - Lcpu_fast_base
+    .long Lpt_7156 - Lcpu_fast_base
+    .long Lpt_7157 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -7172,62 +7220,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_7174 - Lcpu_fast_base
-    .long Lpt_7175 - Lcpu_fast_base
-    .long Lpt_7176 - Lcpu_fast_base
-    .long Lpt_7177 - Lcpu_fast_base
-    .long Lpt_7178 - Lcpu_fast_base
-    .long Lpt_7179 - Lcpu_fast_base
-    .long Lpt_7180 - Lcpu_fast_base
-    .long Lpt_7181 - Lcpu_fast_base
-    .long Lpt_7182 - Lcpu_fast_base
-    .long Lpt_7183 - Lcpu_fast_base
-    .long Lpt_7184 - Lcpu_fast_base
-    .long Lpt_7185 - Lcpu_fast_base
-    .long Lpt_7186 - Lcpu_fast_base
-    .long Lpt_7187 - Lcpu_fast_base
-    .long Lpt_7188 - Lcpu_fast_base
-    .long Lpt_7189 - Lcpu_fast_base
-    .long Lpt_7190 - Lcpu_fast_base
-    .long Lpt_7191 - Lcpu_fast_base
-    .long Lpt_7192 - Lcpu_fast_base
-    .long Lpt_7193 - Lcpu_fast_base
-    .long Lpt_7194 - Lcpu_fast_base
-    .long Lpt_7195 - Lcpu_fast_base
-    .long Lpt_7196 - Lcpu_fast_base
-    .long Lpt_7197 - Lcpu_fast_base
-    .long Lpt_7198 - Lcpu_fast_base
-    .long Lpt_7199 - Lcpu_fast_base
-    .long Lpt_7200 - Lcpu_fast_base
-    .long Lpt_7201 - Lcpu_fast_base
-    .long Lpt_7202 - Lcpu_fast_base
-    .long Lpt_7203 - Lcpu_fast_base
-    .long Lpt_7204 - Lcpu_fast_base
-    .long Lpt_7205 - Lcpu_fast_base
-    .long Lpt_7206 - Lcpu_fast_base
-    .long Lpt_7207 - Lcpu_fast_base
-    .long Lpt_7208 - Lcpu_fast_base
-    .long Lpt_7209 - Lcpu_fast_base
-    .long Lpt_7210 - Lcpu_fast_base
-    .long Lpt_7211 - Lcpu_fast_base
-    .long Lpt_7212 - Lcpu_fast_base
-    .long Lpt_7213 - Lcpu_fast_base
-    .long Lpt_7214 - Lcpu_fast_base
-    .long Lpt_7215 - Lcpu_fast_base
-    .long Lpt_7216 - Lcpu_fast_base
-    .long Lpt_7217 - Lcpu_fast_base
-    .long Lpt_7218 - Lcpu_fast_base
-    .long Lpt_7219 - Lcpu_fast_base
-    .long Lpt_7220 - Lcpu_fast_base
-    .long Lpt_7221 - Lcpu_fast_base
-    .long Lpt_7222 - Lcpu_fast_base
-    .long Lpt_7223 - Lcpu_fast_base
-    .long Lpt_7224 - Lcpu_fast_base
-    .long Lpt_7225 - Lcpu_fast_base
-    .long Lpt_7226 - Lcpu_fast_base
-    .long Lpt_7227 - Lcpu_fast_base
-    .long Lpt_7228 - Lcpu_fast_base
-    .long Lpt_7229 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -7236,6 +7228,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_7230 - Lcpu_fast_base
+    .long Lpt_7231 - Lcpu_fast_base
+    .long Lpt_7232 - Lcpu_fast_base
+    .long Lpt_7233 - Lcpu_fast_base
+    .long Lpt_7234 - Lcpu_fast_base
+    .long Lpt_7235 - Lcpu_fast_base
+    .long Lpt_7236 - Lcpu_fast_base
+    .long Lpt_7237 - Lcpu_fast_base
+    .long Lpt_7238 - Lcpu_fast_base
+    .long Lpt_7239 - Lcpu_fast_base
+    .long Lpt_7240 - Lcpu_fast_base
+    .long Lpt_7241 - Lcpu_fast_base
+    .long Lpt_7242 - Lcpu_fast_base
+    .long Lpt_7243 - Lcpu_fast_base
+    .long Lpt_7244 - Lcpu_fast_base
+    .long Lpt_7245 - Lcpu_fast_base
+    .long Lpt_7246 - Lcpu_fast_base
+    .long Lpt_7247 - Lcpu_fast_base
+    .long Lpt_7248 - Lcpu_fast_base
+    .long Lpt_7249 - Lcpu_fast_base
+    .long Lpt_7250 - Lcpu_fast_base
+    .long Lpt_7251 - Lcpu_fast_base
+    .long Lpt_7252 - Lcpu_fast_base
+    .long Lpt_7253 - Lcpu_fast_base
+    .long Lpt_7254 - Lcpu_fast_base
+    .long Lpt_7255 - Lcpu_fast_base
+    .long Lpt_7256 - Lcpu_fast_base
+    .long Lpt_7257 - Lcpu_fast_base
+    .long Lpt_7258 - Lcpu_fast_base
+    .long Lpt_7259 - Lcpu_fast_base
+    .long Lpt_7260 - Lcpu_fast_base
+    .long Lpt_7261 - Lcpu_fast_base
+    .long Lpt_7262 - Lcpu_fast_base
+    .long Lpt_7263 - Lcpu_fast_base
+    .long Lpt_7264 - Lcpu_fast_base
+    .long Lpt_7265 - Lcpu_fast_base
+    .long Lpt_7266 - Lcpu_fast_base
+    .long Lpt_7267 - Lcpu_fast_base
+    .long Lpt_7268 - Lcpu_fast_base
+    .long Lpt_7269 - Lcpu_fast_base
+    .long Lpt_7270 - Lcpu_fast_base
+    .long Lpt_7271 - Lcpu_fast_base
+    .long Lpt_7272 - Lcpu_fast_base
+    .long Lpt_7273 - Lcpu_fast_base
+    .long Lpt_7274 - Lcpu_fast_base
+    .long Lpt_7275 - Lcpu_fast_base
+    .long Lpt_7276 - Lcpu_fast_base
+    .long Lpt_7277 - Lcpu_fast_base
+    .long Lpt_7278 - Lcpu_fast_base
+    .long Lpt_7279 - Lcpu_fast_base
+    .long Lpt_7280 - Lcpu_fast_base
+    .long Lpt_7281 - Lcpu_fast_base
+    .long Lpt_7282 - Lcpu_fast_base
+    .long Lpt_7283 - Lcpu_fast_base
+    .long Lpt_7284 - Lcpu_fast_base
+    .long Lpt_7285 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -7308,62 +7356,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_7310 - Lcpu_fast_base
-    .long Lpt_7311 - Lcpu_fast_base
-    .long Lpt_7312 - Lcpu_fast_base
-    .long Lpt_7313 - Lcpu_fast_base
-    .long Lpt_7314 - Lcpu_fast_base
-    .long Lpt_7315 - Lcpu_fast_base
-    .long Lpt_7316 - Lcpu_fast_base
-    .long Lpt_7317 - Lcpu_fast_base
-    .long Lpt_7318 - Lcpu_fast_base
-    .long Lpt_7319 - Lcpu_fast_base
-    .long Lpt_7320 - Lcpu_fast_base
-    .long Lpt_7321 - Lcpu_fast_base
-    .long Lpt_7322 - Lcpu_fast_base
-    .long Lpt_7323 - Lcpu_fast_base
-    .long Lpt_7324 - Lcpu_fast_base
-    .long Lpt_7325 - Lcpu_fast_base
-    .long Lpt_7326 - Lcpu_fast_base
-    .long Lpt_7327 - Lcpu_fast_base
-    .long Lpt_7328 - Lcpu_fast_base
-    .long Lpt_7329 - Lcpu_fast_base
-    .long Lpt_7330 - Lcpu_fast_base
-    .long Lpt_7331 - Lcpu_fast_base
-    .long Lpt_7332 - Lcpu_fast_base
-    .long Lpt_7333 - Lcpu_fast_base
-    .long Lpt_7334 - Lcpu_fast_base
-    .long Lpt_7335 - Lcpu_fast_base
-    .long Lpt_7336 - Lcpu_fast_base
-    .long Lpt_7337 - Lcpu_fast_base
-    .long Lpt_7338 - Lcpu_fast_base
-    .long Lpt_7339 - Lcpu_fast_base
-    .long Lpt_7340 - Lcpu_fast_base
-    .long Lpt_7341 - Lcpu_fast_base
-    .long Lpt_7342 - Lcpu_fast_base
-    .long Lpt_7343 - Lcpu_fast_base
-    .long Lpt_7344 - Lcpu_fast_base
-    .long Lpt_7345 - Lcpu_fast_base
-    .long Lpt_7346 - Lcpu_fast_base
-    .long Lpt_7347 - Lcpu_fast_base
-    .long Lpt_7348 - Lcpu_fast_base
-    .long Lpt_7349 - Lcpu_fast_base
-    .long Lpt_7350 - Lcpu_fast_base
-    .long Lpt_7351 - Lcpu_fast_base
-    .long Lpt_7352 - Lcpu_fast_base
-    .long Lpt_7353 - Lcpu_fast_base
-    .long Lpt_7354 - Lcpu_fast_base
-    .long Lpt_7355 - Lcpu_fast_base
-    .long Lpt_7356 - Lcpu_fast_base
-    .long Lpt_7357 - Lcpu_fast_base
-    .long Lpt_7358 - Lcpu_fast_base
-    .long Lpt_7359 - Lcpu_fast_base
-    .long Lpt_7360 - Lcpu_fast_base
-    .long Lpt_7361 - Lcpu_fast_base
-    .long Lpt_7362 - Lcpu_fast_base
-    .long Lpt_7363 - Lcpu_fast_base
-    .long Lpt_7364 - Lcpu_fast_base
-    .long Lpt_7365 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_7366 - Lcpu_fast_base
     .long Lpt_7367 - Lcpu_fast_base
     .long Lpt_7368 - Lcpu_fast_base
@@ -7420,14 +7420,14 @@
     .long Lpt_7419 - Lcpu_fast_base
     .long Lpt_7420 - Lcpu_fast_base
     .long Lpt_7421 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_7422 - Lcpu_fast_base
+    .long Lpt_7423 - Lcpu_fast_base
+    .long Lpt_7424 - Lcpu_fast_base
+    .long Lpt_7425 - Lcpu_fast_base
+    .long Lpt_7426 - Lcpu_fast_base
+    .long Lpt_7427 - Lcpu_fast_base
+    .long Lpt_7428 - Lcpu_fast_base
+    .long Lpt_7429 - Lcpu_fast_base
     .long Lpt_7430 - Lcpu_fast_base
     .long Lpt_7431 - Lcpu_fast_base
     .long Lpt_7432 - Lcpu_fast_base
@@ -7476,14 +7476,6 @@
     .long Lpt_7475 - Lcpu_fast_base
     .long Lpt_7476 - Lcpu_fast_base
     .long Lpt_7477 - Lcpu_fast_base
-    .long Lpt_7478 - Lcpu_fast_base
-    .long Lpt_7479 - Lcpu_fast_base
-    .long Lpt_7480 - Lcpu_fast_base
-    .long Lpt_7481 - Lcpu_fast_base
-    .long Lpt_7482 - Lcpu_fast_base
-    .long Lpt_7483 - Lcpu_fast_base
-    .long Lpt_7484 - Lcpu_fast_base
-    .long Lpt_7485 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -7492,6 +7484,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_7486 - Lcpu_fast_base
+    .long Lpt_7487 - Lcpu_fast_base
+    .long Lpt_7488 - Lcpu_fast_base
+    .long Lpt_7489 - Lcpu_fast_base
+    .long Lpt_7490 - Lcpu_fast_base
+    .long Lpt_7491 - Lcpu_fast_base
+    .long Lpt_7492 - Lcpu_fast_base
+    .long Lpt_7493 - Lcpu_fast_base
+    .long Lpt_7494 - Lcpu_fast_base
+    .long Lpt_7495 - Lcpu_fast_base
+    .long Lpt_7496 - Lcpu_fast_base
+    .long Lpt_7497 - Lcpu_fast_base
+    .long Lpt_7498 - Lcpu_fast_base
+    .long Lpt_7499 - Lcpu_fast_base
+    .long Lpt_7500 - Lcpu_fast_base
+    .long Lpt_7501 - Lcpu_fast_base
+    .long Lpt_7502 - Lcpu_fast_base
+    .long Lpt_7503 - Lcpu_fast_base
+    .long Lpt_7504 - Lcpu_fast_base
+    .long Lpt_7505 - Lcpu_fast_base
+    .long Lpt_7506 - Lcpu_fast_base
+    .long Lpt_7507 - Lcpu_fast_base
+    .long Lpt_7508 - Lcpu_fast_base
+    .long Lpt_7509 - Lcpu_fast_base
+    .long Lpt_7510 - Lcpu_fast_base
+    .long Lpt_7511 - Lcpu_fast_base
+    .long Lpt_7512 - Lcpu_fast_base
+    .long Lpt_7513 - Lcpu_fast_base
+    .long Lpt_7514 - Lcpu_fast_base
+    .long Lpt_7515 - Lcpu_fast_base
+    .long Lpt_7516 - Lcpu_fast_base
+    .long Lpt_7517 - Lcpu_fast_base
+    .long Lpt_7518 - Lcpu_fast_base
+    .long Lpt_7519 - Lcpu_fast_base
+    .long Lpt_7520 - Lcpu_fast_base
+    .long Lpt_7521 - Lcpu_fast_base
+    .long Lpt_7522 - Lcpu_fast_base
+    .long Lpt_7523 - Lcpu_fast_base
+    .long Lpt_7524 - Lcpu_fast_base
+    .long Lpt_7525 - Lcpu_fast_base
+    .long Lpt_7526 - Lcpu_fast_base
+    .long Lpt_7527 - Lcpu_fast_base
+    .long Lpt_7528 - Lcpu_fast_base
+    .long Lpt_7529 - Lcpu_fast_base
+    .long Lpt_7530 - Lcpu_fast_base
+    .long Lpt_7531 - Lcpu_fast_base
+    .long Lpt_7532 - Lcpu_fast_base
+    .long Lpt_7533 - Lcpu_fast_base
+    .long Lpt_7534 - Lcpu_fast_base
+    .long Lpt_7535 - Lcpu_fast_base
+    .long Lpt_7536 - Lcpu_fast_base
+    .long Lpt_7537 - Lcpu_fast_base
+    .long Lpt_7538 - Lcpu_fast_base
+    .long Lpt_7539 - Lcpu_fast_base
+    .long Lpt_7540 - Lcpu_fast_base
+    .long Lpt_7541 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -7556,62 +7604,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_7558 - Lcpu_fast_base
-    .long Lpt_7559 - Lcpu_fast_base
-    .long Lpt_7560 - Lcpu_fast_base
-    .long Lpt_7561 - Lcpu_fast_base
-    .long Lpt_7562 - Lcpu_fast_base
-    .long Lpt_7563 - Lcpu_fast_base
-    .long Lpt_7564 - Lcpu_fast_base
-    .long Lpt_7565 - Lcpu_fast_base
-    .long Lpt_7566 - Lcpu_fast_base
-    .long Lpt_7567 - Lcpu_fast_base
-    .long Lpt_7568 - Lcpu_fast_base
-    .long Lpt_7569 - Lcpu_fast_base
-    .long Lpt_7570 - Lcpu_fast_base
-    .long Lpt_7571 - Lcpu_fast_base
-    .long Lpt_7572 - Lcpu_fast_base
-    .long Lpt_7573 - Lcpu_fast_base
-    .long Lpt_7574 - Lcpu_fast_base
-    .long Lpt_7575 - Lcpu_fast_base
-    .long Lpt_7576 - Lcpu_fast_base
-    .long Lpt_7577 - Lcpu_fast_base
-    .long Lpt_7578 - Lcpu_fast_base
-    .long Lpt_7579 - Lcpu_fast_base
-    .long Lpt_7580 - Lcpu_fast_base
-    .long Lpt_7581 - Lcpu_fast_base
-    .long Lpt_7582 - Lcpu_fast_base
-    .long Lpt_7583 - Lcpu_fast_base
-    .long Lpt_7584 - Lcpu_fast_base
-    .long Lpt_7585 - Lcpu_fast_base
-    .long Lpt_7586 - Lcpu_fast_base
-    .long Lpt_7587 - Lcpu_fast_base
-    .long Lpt_7588 - Lcpu_fast_base
-    .long Lpt_7589 - Lcpu_fast_base
-    .long Lpt_7590 - Lcpu_fast_base
-    .long Lpt_7591 - Lcpu_fast_base
-    .long Lpt_7592 - Lcpu_fast_base
-    .long Lpt_7593 - Lcpu_fast_base
-    .long Lpt_7594 - Lcpu_fast_base
-    .long Lpt_7595 - Lcpu_fast_base
-    .long Lpt_7596 - Lcpu_fast_base
-    .long Lpt_7597 - Lcpu_fast_base
-    .long Lpt_7598 - Lcpu_fast_base
-    .long Lpt_7599 - Lcpu_fast_base
-    .long Lpt_7600 - Lcpu_fast_base
-    .long Lpt_7601 - Lcpu_fast_base
-    .long Lpt_7602 - Lcpu_fast_base
-    .long Lpt_7603 - Lcpu_fast_base
-    .long Lpt_7604 - Lcpu_fast_base
-    .long Lpt_7605 - Lcpu_fast_base
-    .long Lpt_7606 - Lcpu_fast_base
-    .long Lpt_7607 - Lcpu_fast_base
-    .long Lpt_7608 - Lcpu_fast_base
-    .long Lpt_7609 - Lcpu_fast_base
-    .long Lpt_7610 - Lcpu_fast_base
-    .long Lpt_7611 - Lcpu_fast_base
-    .long Lpt_7612 - Lcpu_fast_base
-    .long Lpt_7613 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_7614 - Lcpu_fast_base
     .long Lpt_7615 - Lcpu_fast_base
     .long Lpt_7616 - Lcpu_fast_base
@@ -7676,14 +7676,14 @@
     .long Lpt_7675 - Lcpu_fast_base
     .long Lpt_7676 - Lcpu_fast_base
     .long Lpt_7677 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_7678 - Lcpu_fast_base
+    .long Lpt_7679 - Lcpu_fast_base
+    .long Lpt_7680 - Lcpu_fast_base
+    .long Lpt_7681 - Lcpu_fast_base
+    .long Lpt_7682 - Lcpu_fast_base
+    .long Lpt_7683 - Lcpu_fast_base
+    .long Lpt_7684 - Lcpu_fast_base
+    .long Lpt_7685 - Lcpu_fast_base
     .long Lpt_7686 - Lcpu_fast_base
     .long Lpt_7687 - Lcpu_fast_base
     .long Lpt_7688 - Lcpu_fast_base
@@ -7732,14 +7732,6 @@
     .long Lpt_7731 - Lcpu_fast_base
     .long Lpt_7732 - Lcpu_fast_base
     .long Lpt_7733 - Lcpu_fast_base
-    .long Lpt_7734 - Lcpu_fast_base
-    .long Lpt_7735 - Lcpu_fast_base
-    .long Lpt_7736 - Lcpu_fast_base
-    .long Lpt_7737 - Lcpu_fast_base
-    .long Lpt_7738 - Lcpu_fast_base
-    .long Lpt_7739 - Lcpu_fast_base
-    .long Lpt_7740 - Lcpu_fast_base
-    .long Lpt_7741 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -7748,6 +7740,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_7742 - Lcpu_fast_base
+    .long Lpt_7743 - Lcpu_fast_base
+    .long Lpt_7744 - Lcpu_fast_base
+    .long Lpt_7745 - Lcpu_fast_base
+    .long Lpt_7746 - Lcpu_fast_base
+    .long Lpt_7747 - Lcpu_fast_base
+    .long Lpt_7748 - Lcpu_fast_base
+    .long Lpt_7749 - Lcpu_fast_base
+    .long Lpt_7750 - Lcpu_fast_base
+    .long Lpt_7751 - Lcpu_fast_base
+    .long Lpt_7752 - Lcpu_fast_base
+    .long Lpt_7753 - Lcpu_fast_base
+    .long Lpt_7754 - Lcpu_fast_base
+    .long Lpt_7755 - Lcpu_fast_base
+    .long Lpt_7756 - Lcpu_fast_base
+    .long Lpt_7757 - Lcpu_fast_base
+    .long Lpt_7758 - Lcpu_fast_base
+    .long Lpt_7759 - Lcpu_fast_base
+    .long Lpt_7760 - Lcpu_fast_base
+    .long Lpt_7761 - Lcpu_fast_base
+    .long Lpt_7762 - Lcpu_fast_base
+    .long Lpt_7763 - Lcpu_fast_base
+    .long Lpt_7764 - Lcpu_fast_base
+    .long Lpt_7765 - Lcpu_fast_base
+    .long Lpt_7766 - Lcpu_fast_base
+    .long Lpt_7767 - Lcpu_fast_base
+    .long Lpt_7768 - Lcpu_fast_base
+    .long Lpt_7769 - Lcpu_fast_base
+    .long Lpt_7770 - Lcpu_fast_base
+    .long Lpt_7771 - Lcpu_fast_base
+    .long Lpt_7772 - Lcpu_fast_base
+    .long Lpt_7773 - Lcpu_fast_base
+    .long Lpt_7774 - Lcpu_fast_base
+    .long Lpt_7775 - Lcpu_fast_base
+    .long Lpt_7776 - Lcpu_fast_base
+    .long Lpt_7777 - Lcpu_fast_base
+    .long Lpt_7778 - Lcpu_fast_base
+    .long Lpt_7779 - Lcpu_fast_base
+    .long Lpt_7780 - Lcpu_fast_base
+    .long Lpt_7781 - Lcpu_fast_base
+    .long Lpt_7782 - Lcpu_fast_base
+    .long Lpt_7783 - Lcpu_fast_base
+    .long Lpt_7784 - Lcpu_fast_base
+    .long Lpt_7785 - Lcpu_fast_base
+    .long Lpt_7786 - Lcpu_fast_base
+    .long Lpt_7787 - Lcpu_fast_base
+    .long Lpt_7788 - Lcpu_fast_base
+    .long Lpt_7789 - Lcpu_fast_base
+    .long Lpt_7790 - Lcpu_fast_base
+    .long Lpt_7791 - Lcpu_fast_base
+    .long Lpt_7792 - Lcpu_fast_base
+    .long Lpt_7793 - Lcpu_fast_base
+    .long Lpt_7794 - Lcpu_fast_base
+    .long Lpt_7795 - Lcpu_fast_base
+    .long Lpt_7796 - Lcpu_fast_base
+    .long Lpt_7797 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -7804,62 +7852,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_7806 - Lcpu_fast_base
     .long 0
-    .long Lpt_7808 - Lcpu_fast_base
-    .long Lpt_7809 - Lcpu_fast_base
-    .long Lpt_7810 - Lcpu_fast_base
     .long 0
-    .long Lpt_7812 - Lcpu_fast_base
-    .long Lpt_7813 - Lcpu_fast_base
-    .long Lpt_7814 - Lcpu_fast_base
     .long 0
-    .long Lpt_7816 - Lcpu_fast_base
-    .long Lpt_7817 - Lcpu_fast_base
-    .long Lpt_7818 - Lcpu_fast_base
     .long 0
-    .long Lpt_7820 - Lcpu_fast_base
-    .long Lpt_7821 - Lcpu_fast_base
-    .long Lpt_7822 - Lcpu_fast_base
     .long 0
-    .long Lpt_7824 - Lcpu_fast_base
-    .long Lpt_7825 - Lcpu_fast_base
-    .long Lpt_7826 - Lcpu_fast_base
     .long 0
-    .long Lpt_7828 - Lcpu_fast_base
-    .long Lpt_7829 - Lcpu_fast_base
-    .long Lpt_7830 - Lcpu_fast_base
     .long 0
-    .long Lpt_7832 - Lcpu_fast_base
-    .long Lpt_7833 - Lcpu_fast_base
-    .long Lpt_7834 - Lcpu_fast_base
     .long 0
-    .long Lpt_7836 - Lcpu_fast_base
-    .long Lpt_7837 - Lcpu_fast_base
-    .long Lpt_7838 - Lcpu_fast_base
-    .long 0
-    .long Lpt_7840 - Lcpu_fast_base
-    .long Lpt_7841 - Lcpu_fast_base
-    .long Lpt_7842 - Lcpu_fast_base
-    .long 0
-    .long Lpt_7844 - Lcpu_fast_base
-    .long Lpt_7845 - Lcpu_fast_base
-    .long Lpt_7846 - Lcpu_fast_base
-    .long 0
-    .long Lpt_7848 - Lcpu_fast_base
-    .long Lpt_7849 - Lcpu_fast_base
-    .long Lpt_7850 - Lcpu_fast_base
-    .long 0
-    .long Lpt_7852 - Lcpu_fast_base
-    .long Lpt_7853 - Lcpu_fast_base
-    .long Lpt_7854 - Lcpu_fast_base
-    .long 0
-    .long Lpt_7856 - Lcpu_fast_base
-    .long Lpt_7857 - Lcpu_fast_base
-    .long Lpt_7858 - Lcpu_fast_base
-    .long 0
-    .long Lpt_7860 - Lcpu_fast_base
-    .long Lpt_7861 - Lcpu_fast_base
     .long Lpt_7862 - Lcpu_fast_base
     .long 0
     .long Lpt_7864 - Lcpu_fast_base
@@ -7877,11 +7877,11 @@
     .long Lpt_7876 - Lcpu_fast_base
     .long Lpt_7877 - Lcpu_fast_base
     .long Lpt_7878 - Lcpu_fast_base
-    .long Lpt_7879 - Lcpu_fast_base
+    .long 0
     .long Lpt_7880 - Lcpu_fast_base
     .long Lpt_7881 - Lcpu_fast_base
     .long Lpt_7882 - Lcpu_fast_base
-    .long Lpt_7883 - Lcpu_fast_base
+    .long 0
     .long Lpt_7884 - Lcpu_fast_base
     .long Lpt_7885 - Lcpu_fast_base
     .long Lpt_7886 - Lcpu_fast_base
@@ -7889,11 +7889,11 @@
     .long Lpt_7888 - Lcpu_fast_base
     .long Lpt_7889 - Lcpu_fast_base
     .long Lpt_7890 - Lcpu_fast_base
-    .long Lpt_7891 - Lcpu_fast_base
+    .long 0
     .long Lpt_7892 - Lcpu_fast_base
     .long Lpt_7893 - Lcpu_fast_base
     .long Lpt_7894 - Lcpu_fast_base
-    .long Lpt_7895 - Lcpu_fast_base
+    .long 0
     .long Lpt_7896 - Lcpu_fast_base
     .long Lpt_7897 - Lcpu_fast_base
     .long Lpt_7898 - Lcpu_fast_base
@@ -7901,11 +7901,11 @@
     .long Lpt_7900 - Lcpu_fast_base
     .long Lpt_7901 - Lcpu_fast_base
     .long Lpt_7902 - Lcpu_fast_base
-    .long Lpt_7903 - Lcpu_fast_base
+    .long 0
     .long Lpt_7904 - Lcpu_fast_base
     .long Lpt_7905 - Lcpu_fast_base
     .long Lpt_7906 - Lcpu_fast_base
-    .long Lpt_7907 - Lcpu_fast_base
+    .long 0
     .long Lpt_7908 - Lcpu_fast_base
     .long Lpt_7909 - Lcpu_fast_base
     .long Lpt_7910 - Lcpu_fast_base
@@ -7913,11 +7913,11 @@
     .long Lpt_7912 - Lcpu_fast_base
     .long Lpt_7913 - Lcpu_fast_base
     .long Lpt_7914 - Lcpu_fast_base
-    .long Lpt_7915 - Lcpu_fast_base
+    .long 0
     .long Lpt_7916 - Lcpu_fast_base
     .long Lpt_7917 - Lcpu_fast_base
     .long Lpt_7918 - Lcpu_fast_base
-    .long Lpt_7919 - Lcpu_fast_base
+    .long 0
     .long Lpt_7920 - Lcpu_fast_base
     .long Lpt_7921 - Lcpu_fast_base
     .long Lpt_7922 - Lcpu_fast_base
@@ -7936,36 +7936,36 @@
     .long Lpt_7935 - Lcpu_fast_base
     .long Lpt_7936 - Lcpu_fast_base
     .long Lpt_7937 - Lcpu_fast_base
-    .long 0
+    .long Lpt_7938 - Lcpu_fast_base
     .long Lpt_7939 - Lcpu_fast_base
     .long Lpt_7940 - Lcpu_fast_base
+    .long Lpt_7941 - Lcpu_fast_base
+    .long Lpt_7942 - Lcpu_fast_base
     .long 0
-    .long 0
-    .long Lpt_7943 - Lcpu_fast_base
     .long Lpt_7944 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_7945 - Lcpu_fast_base
+    .long Lpt_7946 - Lcpu_fast_base
     .long Lpt_7947 - Lcpu_fast_base
     .long Lpt_7948 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_7949 - Lcpu_fast_base
+    .long Lpt_7950 - Lcpu_fast_base
     .long Lpt_7951 - Lcpu_fast_base
     .long Lpt_7952 - Lcpu_fast_base
+    .long Lpt_7953 - Lcpu_fast_base
+    .long Lpt_7954 - Lcpu_fast_base
     .long 0
-    .long 0
-    .long Lpt_7955 - Lcpu_fast_base
     .long Lpt_7956 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_7957 - Lcpu_fast_base
+    .long Lpt_7958 - Lcpu_fast_base
     .long Lpt_7959 - Lcpu_fast_base
     .long Lpt_7960 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_7961 - Lcpu_fast_base
+    .long Lpt_7962 - Lcpu_fast_base
     .long Lpt_7963 - Lcpu_fast_base
     .long Lpt_7964 - Lcpu_fast_base
-    .long 0
+    .long Lpt_7965 - Lcpu_fast_base
     .long Lpt_7966 - Lcpu_fast_base
-    .long Lpt_7967 - Lcpu_fast_base
+    .long 0
     .long Lpt_7968 - Lcpu_fast_base
     .long Lpt_7969 - Lcpu_fast_base
     .long Lpt_7970 - Lcpu_fast_base
@@ -7977,15 +7977,15 @@
     .long Lpt_7976 - Lcpu_fast_base
     .long Lpt_7977 - Lcpu_fast_base
     .long Lpt_7978 - Lcpu_fast_base
-    .long Lpt_7979 - Lcpu_fast_base
+    .long 0
     .long Lpt_7980 - Lcpu_fast_base
     .long Lpt_7981 - Lcpu_fast_base
     .long Lpt_7982 - Lcpu_fast_base
-    .long Lpt_7983 - Lcpu_fast_base
+    .long 0
     .long Lpt_7984 - Lcpu_fast_base
     .long Lpt_7985 - Lcpu_fast_base
     .long Lpt_7986 - Lcpu_fast_base
-    .long Lpt_7987 - Lcpu_fast_base
+    .long 0
     .long Lpt_7988 - Lcpu_fast_base
     .long Lpt_7989 - Lcpu_fast_base
     .long Lpt_7990 - Lcpu_fast_base
@@ -7993,33 +7993,33 @@
     .long Lpt_7992 - Lcpu_fast_base
     .long Lpt_7993 - Lcpu_fast_base
     .long 0
+    .long Lpt_7995 - Lcpu_fast_base
+    .long Lpt_7996 - Lcpu_fast_base
     .long 0
     .long 0
+    .long Lpt_7999 - Lcpu_fast_base
+    .long Lpt_8000 - Lcpu_fast_base
     .long 0
     .long 0
+    .long Lpt_8003 - Lcpu_fast_base
+    .long Lpt_8004 - Lcpu_fast_base
     .long 0
     .long 0
+    .long Lpt_8007 - Lcpu_fast_base
+    .long Lpt_8008 - Lcpu_fast_base
     .long 0
     .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_8010 - Lcpu_fast_base
     .long Lpt_8011 - Lcpu_fast_base
     .long Lpt_8012 - Lcpu_fast_base
-    .long Lpt_8013 - Lcpu_fast_base
-    .long Lpt_8014 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_8015 - Lcpu_fast_base
     .long Lpt_8016 - Lcpu_fast_base
-    .long Lpt_8017 - Lcpu_fast_base
-    .long Lpt_8018 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_8019 - Lcpu_fast_base
     .long Lpt_8020 - Lcpu_fast_base
-    .long Lpt_8021 - Lcpu_fast_base
+    .long 0
     .long Lpt_8022 - Lcpu_fast_base
     .long Lpt_8023 - Lcpu_fast_base
     .long Lpt_8024 - Lcpu_fast_base
@@ -8048,14 +8048,6 @@
     .long Lpt_8047 - Lcpu_fast_base
     .long Lpt_8048 - Lcpu_fast_base
     .long Lpt_8049 - Lcpu_fast_base
-    .long Lpt_8050 - Lcpu_fast_base
-    .long Lpt_8051 - Lcpu_fast_base
-    .long Lpt_8052 - Lcpu_fast_base
-    .long Lpt_8053 - Lcpu_fast_base
-    .long Lpt_8054 - Lcpu_fast_base
-    .long Lpt_8055 - Lcpu_fast_base
-    .long Lpt_8056 - Lcpu_fast_base
-    .long Lpt_8057 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8072,6 +8064,54 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_8066 - Lcpu_fast_base
+    .long Lpt_8067 - Lcpu_fast_base
+    .long Lpt_8068 - Lcpu_fast_base
+    .long Lpt_8069 - Lcpu_fast_base
+    .long Lpt_8070 - Lcpu_fast_base
+    .long Lpt_8071 - Lcpu_fast_base
+    .long Lpt_8072 - Lcpu_fast_base
+    .long Lpt_8073 - Lcpu_fast_base
+    .long Lpt_8074 - Lcpu_fast_base
+    .long Lpt_8075 - Lcpu_fast_base
+    .long Lpt_8076 - Lcpu_fast_base
+    .long Lpt_8077 - Lcpu_fast_base
+    .long Lpt_8078 - Lcpu_fast_base
+    .long Lpt_8079 - Lcpu_fast_base
+    .long Lpt_8080 - Lcpu_fast_base
+    .long Lpt_8081 - Lcpu_fast_base
+    .long Lpt_8082 - Lcpu_fast_base
+    .long Lpt_8083 - Lcpu_fast_base
+    .long Lpt_8084 - Lcpu_fast_base
+    .long Lpt_8085 - Lcpu_fast_base
+    .long Lpt_8086 - Lcpu_fast_base
+    .long Lpt_8087 - Lcpu_fast_base
+    .long Lpt_8088 - Lcpu_fast_base
+    .long Lpt_8089 - Lcpu_fast_base
+    .long Lpt_8090 - Lcpu_fast_base
+    .long Lpt_8091 - Lcpu_fast_base
+    .long Lpt_8092 - Lcpu_fast_base
+    .long Lpt_8093 - Lcpu_fast_base
+    .long Lpt_8094 - Lcpu_fast_base
+    .long Lpt_8095 - Lcpu_fast_base
+    .long Lpt_8096 - Lcpu_fast_base
+    .long Lpt_8097 - Lcpu_fast_base
+    .long Lpt_8098 - Lcpu_fast_base
+    .long Lpt_8099 - Lcpu_fast_base
+    .long Lpt_8100 - Lcpu_fast_base
+    .long Lpt_8101 - Lcpu_fast_base
+    .long Lpt_8102 - Lcpu_fast_base
+    .long Lpt_8103 - Lcpu_fast_base
+    .long Lpt_8104 - Lcpu_fast_base
+    .long Lpt_8105 - Lcpu_fast_base
+    .long Lpt_8106 - Lcpu_fast_base
+    .long Lpt_8107 - Lcpu_fast_base
+    .long Lpt_8108 - Lcpu_fast_base
+    .long Lpt_8109 - Lcpu_fast_base
+    .long Lpt_8110 - Lcpu_fast_base
+    .long Lpt_8111 - Lcpu_fast_base
+    .long Lpt_8112 - Lcpu_fast_base
+    .long Lpt_8113 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8136,62 +8176,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_8138 - Lcpu_fast_base
-    .long Lpt_8139 - Lcpu_fast_base
-    .long Lpt_8140 - Lcpu_fast_base
-    .long Lpt_8141 - Lcpu_fast_base
-    .long Lpt_8142 - Lcpu_fast_base
-    .long Lpt_8143 - Lcpu_fast_base
-    .long Lpt_8144 - Lcpu_fast_base
-    .long Lpt_8145 - Lcpu_fast_base
-    .long Lpt_8146 - Lcpu_fast_base
-    .long Lpt_8147 - Lcpu_fast_base
-    .long Lpt_8148 - Lcpu_fast_base
-    .long Lpt_8149 - Lcpu_fast_base
-    .long Lpt_8150 - Lcpu_fast_base
-    .long Lpt_8151 - Lcpu_fast_base
-    .long Lpt_8152 - Lcpu_fast_base
-    .long Lpt_8153 - Lcpu_fast_base
-    .long Lpt_8154 - Lcpu_fast_base
-    .long Lpt_8155 - Lcpu_fast_base
-    .long Lpt_8156 - Lcpu_fast_base
-    .long Lpt_8157 - Lcpu_fast_base
-    .long Lpt_8158 - Lcpu_fast_base
-    .long Lpt_8159 - Lcpu_fast_base
-    .long Lpt_8160 - Lcpu_fast_base
-    .long Lpt_8161 - Lcpu_fast_base
-    .long Lpt_8162 - Lcpu_fast_base
-    .long Lpt_8163 - Lcpu_fast_base
-    .long Lpt_8164 - Lcpu_fast_base
-    .long Lpt_8165 - Lcpu_fast_base
-    .long Lpt_8166 - Lcpu_fast_base
-    .long Lpt_8167 - Lcpu_fast_base
-    .long Lpt_8168 - Lcpu_fast_base
-    .long Lpt_8169 - Lcpu_fast_base
-    .long Lpt_8170 - Lcpu_fast_base
-    .long Lpt_8171 - Lcpu_fast_base
-    .long Lpt_8172 - Lcpu_fast_base
-    .long Lpt_8173 - Lcpu_fast_base
-    .long Lpt_8174 - Lcpu_fast_base
-    .long Lpt_8175 - Lcpu_fast_base
-    .long Lpt_8176 - Lcpu_fast_base
-    .long Lpt_8177 - Lcpu_fast_base
-    .long Lpt_8178 - Lcpu_fast_base
-    .long Lpt_8179 - Lcpu_fast_base
-    .long Lpt_8180 - Lcpu_fast_base
-    .long Lpt_8181 - Lcpu_fast_base
-    .long Lpt_8182 - Lcpu_fast_base
-    .long Lpt_8183 - Lcpu_fast_base
-    .long Lpt_8184 - Lcpu_fast_base
-    .long Lpt_8185 - Lcpu_fast_base
-    .long Lpt_8186 - Lcpu_fast_base
-    .long Lpt_8187 - Lcpu_fast_base
-    .long Lpt_8188 - Lcpu_fast_base
-    .long Lpt_8189 - Lcpu_fast_base
-    .long Lpt_8190 - Lcpu_fast_base
-    .long Lpt_8191 - Lcpu_fast_base
-    .long Lpt_8192 - Lcpu_fast_base
-    .long Lpt_8193 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_8194 - Lcpu_fast_base
     .long Lpt_8195 - Lcpu_fast_base
     .long Lpt_8196 - Lcpu_fast_base
@@ -8248,22 +8248,22 @@
     .long Lpt_8247 - Lcpu_fast_base
     .long Lpt_8248 - Lcpu_fast_base
     .long Lpt_8249 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_8250 - Lcpu_fast_base
+    .long Lpt_8251 - Lcpu_fast_base
+    .long Lpt_8252 - Lcpu_fast_base
+    .long Lpt_8253 - Lcpu_fast_base
+    .long Lpt_8254 - Lcpu_fast_base
+    .long Lpt_8255 - Lcpu_fast_base
+    .long Lpt_8256 - Lcpu_fast_base
+    .long Lpt_8257 - Lcpu_fast_base
+    .long Lpt_8258 - Lcpu_fast_base
+    .long Lpt_8259 - Lcpu_fast_base
+    .long Lpt_8260 - Lcpu_fast_base
+    .long Lpt_8261 - Lcpu_fast_base
+    .long Lpt_8262 - Lcpu_fast_base
+    .long Lpt_8263 - Lcpu_fast_base
+    .long Lpt_8264 - Lcpu_fast_base
+    .long Lpt_8265 - Lcpu_fast_base
     .long Lpt_8266 - Lcpu_fast_base
     .long Lpt_8267 - Lcpu_fast_base
     .long Lpt_8268 - Lcpu_fast_base
@@ -8304,14 +8304,6 @@
     .long Lpt_8303 - Lcpu_fast_base
     .long Lpt_8304 - Lcpu_fast_base
     .long Lpt_8305 - Lcpu_fast_base
-    .long Lpt_8306 - Lcpu_fast_base
-    .long Lpt_8307 - Lcpu_fast_base
-    .long Lpt_8308 - Lcpu_fast_base
-    .long Lpt_8309 - Lcpu_fast_base
-    .long Lpt_8310 - Lcpu_fast_base
-    .long Lpt_8311 - Lcpu_fast_base
-    .long Lpt_8312 - Lcpu_fast_base
-    .long Lpt_8313 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8328,6 +8320,54 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_8322 - Lcpu_fast_base
+    .long Lpt_8323 - Lcpu_fast_base
+    .long Lpt_8324 - Lcpu_fast_base
+    .long Lpt_8325 - Lcpu_fast_base
+    .long Lpt_8326 - Lcpu_fast_base
+    .long Lpt_8327 - Lcpu_fast_base
+    .long Lpt_8328 - Lcpu_fast_base
+    .long Lpt_8329 - Lcpu_fast_base
+    .long Lpt_8330 - Lcpu_fast_base
+    .long Lpt_8331 - Lcpu_fast_base
+    .long Lpt_8332 - Lcpu_fast_base
+    .long Lpt_8333 - Lcpu_fast_base
+    .long Lpt_8334 - Lcpu_fast_base
+    .long Lpt_8335 - Lcpu_fast_base
+    .long Lpt_8336 - Lcpu_fast_base
+    .long Lpt_8337 - Lcpu_fast_base
+    .long Lpt_8338 - Lcpu_fast_base
+    .long Lpt_8339 - Lcpu_fast_base
+    .long Lpt_8340 - Lcpu_fast_base
+    .long Lpt_8341 - Lcpu_fast_base
+    .long Lpt_8342 - Lcpu_fast_base
+    .long Lpt_8343 - Lcpu_fast_base
+    .long Lpt_8344 - Lcpu_fast_base
+    .long Lpt_8345 - Lcpu_fast_base
+    .long Lpt_8346 - Lcpu_fast_base
+    .long Lpt_8347 - Lcpu_fast_base
+    .long Lpt_8348 - Lcpu_fast_base
+    .long Lpt_8349 - Lcpu_fast_base
+    .long Lpt_8350 - Lcpu_fast_base
+    .long Lpt_8351 - Lcpu_fast_base
+    .long Lpt_8352 - Lcpu_fast_base
+    .long Lpt_8353 - Lcpu_fast_base
+    .long Lpt_8354 - Lcpu_fast_base
+    .long Lpt_8355 - Lcpu_fast_base
+    .long Lpt_8356 - Lcpu_fast_base
+    .long Lpt_8357 - Lcpu_fast_base
+    .long Lpt_8358 - Lcpu_fast_base
+    .long Lpt_8359 - Lcpu_fast_base
+    .long Lpt_8360 - Lcpu_fast_base
+    .long Lpt_8361 - Lcpu_fast_base
+    .long Lpt_8362 - Lcpu_fast_base
+    .long Lpt_8363 - Lcpu_fast_base
+    .long Lpt_8364 - Lcpu_fast_base
+    .long Lpt_8365 - Lcpu_fast_base
+    .long Lpt_8366 - Lcpu_fast_base
+    .long Lpt_8367 - Lcpu_fast_base
+    .long Lpt_8368 - Lcpu_fast_base
+    .long Lpt_8369 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8392,62 +8432,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_8394 - Lcpu_fast_base
-    .long Lpt_8395 - Lcpu_fast_base
-    .long Lpt_8396 - Lcpu_fast_base
-    .long Lpt_8397 - Lcpu_fast_base
-    .long Lpt_8398 - Lcpu_fast_base
-    .long Lpt_8399 - Lcpu_fast_base
-    .long Lpt_8400 - Lcpu_fast_base
-    .long Lpt_8401 - Lcpu_fast_base
-    .long Lpt_8402 - Lcpu_fast_base
-    .long Lpt_8403 - Lcpu_fast_base
-    .long Lpt_8404 - Lcpu_fast_base
-    .long Lpt_8405 - Lcpu_fast_base
-    .long Lpt_8406 - Lcpu_fast_base
-    .long Lpt_8407 - Lcpu_fast_base
-    .long Lpt_8408 - Lcpu_fast_base
-    .long Lpt_8409 - Lcpu_fast_base
-    .long Lpt_8410 - Lcpu_fast_base
-    .long Lpt_8411 - Lcpu_fast_base
-    .long Lpt_8412 - Lcpu_fast_base
-    .long Lpt_8413 - Lcpu_fast_base
-    .long Lpt_8414 - Lcpu_fast_base
-    .long Lpt_8415 - Lcpu_fast_base
-    .long Lpt_8416 - Lcpu_fast_base
-    .long Lpt_8417 - Lcpu_fast_base
-    .long Lpt_8418 - Lcpu_fast_base
-    .long Lpt_8419 - Lcpu_fast_base
-    .long Lpt_8420 - Lcpu_fast_base
-    .long Lpt_8421 - Lcpu_fast_base
-    .long Lpt_8422 - Lcpu_fast_base
-    .long Lpt_8423 - Lcpu_fast_base
-    .long Lpt_8424 - Lcpu_fast_base
-    .long Lpt_8425 - Lcpu_fast_base
-    .long Lpt_8426 - Lcpu_fast_base
-    .long Lpt_8427 - Lcpu_fast_base
-    .long Lpt_8428 - Lcpu_fast_base
-    .long Lpt_8429 - Lcpu_fast_base
-    .long Lpt_8430 - Lcpu_fast_base
-    .long Lpt_8431 - Lcpu_fast_base
-    .long Lpt_8432 - Lcpu_fast_base
-    .long Lpt_8433 - Lcpu_fast_base
-    .long Lpt_8434 - Lcpu_fast_base
-    .long Lpt_8435 - Lcpu_fast_base
-    .long Lpt_8436 - Lcpu_fast_base
-    .long Lpt_8437 - Lcpu_fast_base
-    .long Lpt_8438 - Lcpu_fast_base
-    .long Lpt_8439 - Lcpu_fast_base
-    .long Lpt_8440 - Lcpu_fast_base
-    .long Lpt_8441 - Lcpu_fast_base
-    .long Lpt_8442 - Lcpu_fast_base
-    .long Lpt_8443 - Lcpu_fast_base
-    .long Lpt_8444 - Lcpu_fast_base
-    .long Lpt_8445 - Lcpu_fast_base
-    .long Lpt_8446 - Lcpu_fast_base
-    .long Lpt_8447 - Lcpu_fast_base
-    .long Lpt_8448 - Lcpu_fast_base
-    .long Lpt_8449 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_8450 - Lcpu_fast_base
     .long Lpt_8451 - Lcpu_fast_base
     .long Lpt_8452 - Lcpu_fast_base
@@ -8504,14 +8504,14 @@
     .long Lpt_8503 - Lcpu_fast_base
     .long Lpt_8504 - Lcpu_fast_base
     .long Lpt_8505 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_8506 - Lcpu_fast_base
+    .long Lpt_8507 - Lcpu_fast_base
+    .long Lpt_8508 - Lcpu_fast_base
+    .long Lpt_8509 - Lcpu_fast_base
+    .long Lpt_8510 - Lcpu_fast_base
+    .long Lpt_8511 - Lcpu_fast_base
+    .long Lpt_8512 - Lcpu_fast_base
+    .long Lpt_8513 - Lcpu_fast_base
     .long Lpt_8514 - Lcpu_fast_base
     .long Lpt_8515 - Lcpu_fast_base
     .long Lpt_8516 - Lcpu_fast_base
@@ -8560,14 +8560,6 @@
     .long Lpt_8559 - Lcpu_fast_base
     .long Lpt_8560 - Lcpu_fast_base
     .long Lpt_8561 - Lcpu_fast_base
-    .long Lpt_8562 - Lcpu_fast_base
-    .long Lpt_8563 - Lcpu_fast_base
-    .long Lpt_8564 - Lcpu_fast_base
-    .long Lpt_8565 - Lcpu_fast_base
-    .long Lpt_8566 - Lcpu_fast_base
-    .long Lpt_8567 - Lcpu_fast_base
-    .long Lpt_8568 - Lcpu_fast_base
-    .long Lpt_8569 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8576,6 +8568,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_8570 - Lcpu_fast_base
+    .long Lpt_8571 - Lcpu_fast_base
+    .long Lpt_8572 - Lcpu_fast_base
+    .long Lpt_8573 - Lcpu_fast_base
+    .long Lpt_8574 - Lcpu_fast_base
+    .long Lpt_8575 - Lcpu_fast_base
+    .long Lpt_8576 - Lcpu_fast_base
+    .long Lpt_8577 - Lcpu_fast_base
+    .long Lpt_8578 - Lcpu_fast_base
+    .long Lpt_8579 - Lcpu_fast_base
+    .long Lpt_8580 - Lcpu_fast_base
+    .long Lpt_8581 - Lcpu_fast_base
+    .long Lpt_8582 - Lcpu_fast_base
+    .long Lpt_8583 - Lcpu_fast_base
+    .long Lpt_8584 - Lcpu_fast_base
+    .long Lpt_8585 - Lcpu_fast_base
+    .long Lpt_8586 - Lcpu_fast_base
+    .long Lpt_8587 - Lcpu_fast_base
+    .long Lpt_8588 - Lcpu_fast_base
+    .long Lpt_8589 - Lcpu_fast_base
+    .long Lpt_8590 - Lcpu_fast_base
+    .long Lpt_8591 - Lcpu_fast_base
+    .long Lpt_8592 - Lcpu_fast_base
+    .long Lpt_8593 - Lcpu_fast_base
+    .long Lpt_8594 - Lcpu_fast_base
+    .long Lpt_8595 - Lcpu_fast_base
+    .long Lpt_8596 - Lcpu_fast_base
+    .long Lpt_8597 - Lcpu_fast_base
+    .long Lpt_8598 - Lcpu_fast_base
+    .long Lpt_8599 - Lcpu_fast_base
+    .long Lpt_8600 - Lcpu_fast_base
+    .long Lpt_8601 - Lcpu_fast_base
+    .long Lpt_8602 - Lcpu_fast_base
+    .long Lpt_8603 - Lcpu_fast_base
+    .long Lpt_8604 - Lcpu_fast_base
+    .long Lpt_8605 - Lcpu_fast_base
+    .long Lpt_8606 - Lcpu_fast_base
+    .long Lpt_8607 - Lcpu_fast_base
+    .long Lpt_8608 - Lcpu_fast_base
+    .long Lpt_8609 - Lcpu_fast_base
+    .long Lpt_8610 - Lcpu_fast_base
+    .long Lpt_8611 - Lcpu_fast_base
+    .long Lpt_8612 - Lcpu_fast_base
+    .long Lpt_8613 - Lcpu_fast_base
+    .long Lpt_8614 - Lcpu_fast_base
+    .long Lpt_8615 - Lcpu_fast_base
+    .long Lpt_8616 - Lcpu_fast_base
+    .long Lpt_8617 - Lcpu_fast_base
+    .long Lpt_8618 - Lcpu_fast_base
+    .long Lpt_8619 - Lcpu_fast_base
+    .long Lpt_8620 - Lcpu_fast_base
+    .long Lpt_8621 - Lcpu_fast_base
+    .long Lpt_8622 - Lcpu_fast_base
+    .long Lpt_8623 - Lcpu_fast_base
+    .long Lpt_8624 - Lcpu_fast_base
+    .long Lpt_8625 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8640,62 +8688,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_8642 - Lcpu_fast_base
-    .long Lpt_8643 - Lcpu_fast_base
-    .long Lpt_8644 - Lcpu_fast_base
-    .long Lpt_8645 - Lcpu_fast_base
-    .long Lpt_8646 - Lcpu_fast_base
-    .long Lpt_8647 - Lcpu_fast_base
-    .long Lpt_8648 - Lcpu_fast_base
-    .long Lpt_8649 - Lcpu_fast_base
-    .long Lpt_8650 - Lcpu_fast_base
-    .long Lpt_8651 - Lcpu_fast_base
-    .long Lpt_8652 - Lcpu_fast_base
-    .long Lpt_8653 - Lcpu_fast_base
-    .long Lpt_8654 - Lcpu_fast_base
-    .long Lpt_8655 - Lcpu_fast_base
-    .long Lpt_8656 - Lcpu_fast_base
-    .long Lpt_8657 - Lcpu_fast_base
-    .long Lpt_8658 - Lcpu_fast_base
-    .long Lpt_8659 - Lcpu_fast_base
-    .long Lpt_8660 - Lcpu_fast_base
-    .long Lpt_8661 - Lcpu_fast_base
-    .long Lpt_8662 - Lcpu_fast_base
-    .long Lpt_8663 - Lcpu_fast_base
-    .long Lpt_8664 - Lcpu_fast_base
-    .long Lpt_8665 - Lcpu_fast_base
-    .long Lpt_8666 - Lcpu_fast_base
-    .long Lpt_8667 - Lcpu_fast_base
-    .long Lpt_8668 - Lcpu_fast_base
-    .long Lpt_8669 - Lcpu_fast_base
-    .long Lpt_8670 - Lcpu_fast_base
-    .long Lpt_8671 - Lcpu_fast_base
-    .long Lpt_8672 - Lcpu_fast_base
-    .long Lpt_8673 - Lcpu_fast_base
-    .long Lpt_8674 - Lcpu_fast_base
-    .long Lpt_8675 - Lcpu_fast_base
-    .long Lpt_8676 - Lcpu_fast_base
-    .long Lpt_8677 - Lcpu_fast_base
-    .long Lpt_8678 - Lcpu_fast_base
-    .long Lpt_8679 - Lcpu_fast_base
-    .long Lpt_8680 - Lcpu_fast_base
-    .long Lpt_8681 - Lcpu_fast_base
-    .long Lpt_8682 - Lcpu_fast_base
-    .long Lpt_8683 - Lcpu_fast_base
-    .long Lpt_8684 - Lcpu_fast_base
-    .long Lpt_8685 - Lcpu_fast_base
-    .long Lpt_8686 - Lcpu_fast_base
-    .long Lpt_8687 - Lcpu_fast_base
-    .long Lpt_8688 - Lcpu_fast_base
-    .long Lpt_8689 - Lcpu_fast_base
-    .long Lpt_8690 - Lcpu_fast_base
-    .long Lpt_8691 - Lcpu_fast_base
-    .long Lpt_8692 - Lcpu_fast_base
-    .long Lpt_8693 - Lcpu_fast_base
-    .long Lpt_8694 - Lcpu_fast_base
-    .long Lpt_8695 - Lcpu_fast_base
-    .long Lpt_8696 - Lcpu_fast_base
-    .long Lpt_8697 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8704,6 +8696,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_8698 - Lcpu_fast_base
+    .long Lpt_8699 - Lcpu_fast_base
+    .long Lpt_8700 - Lcpu_fast_base
+    .long Lpt_8701 - Lcpu_fast_base
+    .long Lpt_8702 - Lcpu_fast_base
+    .long Lpt_8703 - Lcpu_fast_base
+    .long Lpt_8704 - Lcpu_fast_base
+    .long Lpt_8705 - Lcpu_fast_base
+    .long Lpt_8706 - Lcpu_fast_base
+    .long Lpt_8707 - Lcpu_fast_base
+    .long Lpt_8708 - Lcpu_fast_base
+    .long Lpt_8709 - Lcpu_fast_base
+    .long Lpt_8710 - Lcpu_fast_base
+    .long Lpt_8711 - Lcpu_fast_base
+    .long Lpt_8712 - Lcpu_fast_base
+    .long Lpt_8713 - Lcpu_fast_base
+    .long Lpt_8714 - Lcpu_fast_base
+    .long Lpt_8715 - Lcpu_fast_base
+    .long Lpt_8716 - Lcpu_fast_base
+    .long Lpt_8717 - Lcpu_fast_base
+    .long Lpt_8718 - Lcpu_fast_base
+    .long Lpt_8719 - Lcpu_fast_base
+    .long Lpt_8720 - Lcpu_fast_base
+    .long Lpt_8721 - Lcpu_fast_base
+    .long Lpt_8722 - Lcpu_fast_base
+    .long Lpt_8723 - Lcpu_fast_base
+    .long Lpt_8724 - Lcpu_fast_base
+    .long Lpt_8725 - Lcpu_fast_base
+    .long Lpt_8726 - Lcpu_fast_base
+    .long Lpt_8727 - Lcpu_fast_base
+    .long Lpt_8728 - Lcpu_fast_base
+    .long Lpt_8729 - Lcpu_fast_base
+    .long Lpt_8730 - Lcpu_fast_base
+    .long Lpt_8731 - Lcpu_fast_base
+    .long Lpt_8732 - Lcpu_fast_base
+    .long Lpt_8733 - Lcpu_fast_base
+    .long Lpt_8734 - Lcpu_fast_base
+    .long Lpt_8735 - Lcpu_fast_base
+    .long Lpt_8736 - Lcpu_fast_base
+    .long Lpt_8737 - Lcpu_fast_base
+    .long Lpt_8738 - Lcpu_fast_base
+    .long Lpt_8739 - Lcpu_fast_base
+    .long Lpt_8740 - Lcpu_fast_base
+    .long Lpt_8741 - Lcpu_fast_base
+    .long Lpt_8742 - Lcpu_fast_base
+    .long Lpt_8743 - Lcpu_fast_base
+    .long Lpt_8744 - Lcpu_fast_base
+    .long Lpt_8745 - Lcpu_fast_base
+    .long Lpt_8746 - Lcpu_fast_base
+    .long Lpt_8747 - Lcpu_fast_base
+    .long Lpt_8748 - Lcpu_fast_base
+    .long Lpt_8749 - Lcpu_fast_base
+    .long Lpt_8750 - Lcpu_fast_base
+    .long Lpt_8751 - Lcpu_fast_base
+    .long Lpt_8752 - Lcpu_fast_base
+    .long Lpt_8753 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8776,54 +8824,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_8778 - Lcpu_fast_base
-    .long Lpt_8779 - Lcpu_fast_base
-    .long Lpt_8780 - Lcpu_fast_base
-    .long Lpt_8781 - Lcpu_fast_base
-    .long Lpt_8782 - Lcpu_fast_base
-    .long Lpt_8783 - Lcpu_fast_base
-    .long Lpt_8784 - Lcpu_fast_base
-    .long Lpt_8785 - Lcpu_fast_base
-    .long Lpt_8786 - Lcpu_fast_base
-    .long Lpt_8787 - Lcpu_fast_base
-    .long Lpt_8788 - Lcpu_fast_base
-    .long Lpt_8789 - Lcpu_fast_base
-    .long Lpt_8790 - Lcpu_fast_base
-    .long Lpt_8791 - Lcpu_fast_base
-    .long Lpt_8792 - Lcpu_fast_base
-    .long Lpt_8793 - Lcpu_fast_base
-    .long Lpt_8794 - Lcpu_fast_base
-    .long Lpt_8795 - Lcpu_fast_base
-    .long Lpt_8796 - Lcpu_fast_base
-    .long Lpt_8797 - Lcpu_fast_base
-    .long Lpt_8798 - Lcpu_fast_base
-    .long Lpt_8799 - Lcpu_fast_base
-    .long Lpt_8800 - Lcpu_fast_base
-    .long Lpt_8801 - Lcpu_fast_base
-    .long Lpt_8802 - Lcpu_fast_base
-    .long Lpt_8803 - Lcpu_fast_base
-    .long Lpt_8804 - Lcpu_fast_base
-    .long Lpt_8805 - Lcpu_fast_base
-    .long Lpt_8806 - Lcpu_fast_base
-    .long Lpt_8807 - Lcpu_fast_base
-    .long Lpt_8808 - Lcpu_fast_base
-    .long Lpt_8809 - Lcpu_fast_base
-    .long Lpt_8810 - Lcpu_fast_base
-    .long Lpt_8811 - Lcpu_fast_base
-    .long Lpt_8812 - Lcpu_fast_base
-    .long Lpt_8813 - Lcpu_fast_base
-    .long Lpt_8814 - Lcpu_fast_base
-    .long Lpt_8815 - Lcpu_fast_base
-    .long Lpt_8816 - Lcpu_fast_base
-    .long Lpt_8817 - Lcpu_fast_base
-    .long Lpt_8818 - Lcpu_fast_base
-    .long Lpt_8819 - Lcpu_fast_base
-    .long Lpt_8820 - Lcpu_fast_base
-    .long Lpt_8821 - Lcpu_fast_base
-    .long Lpt_8822 - Lcpu_fast_base
-    .long Lpt_8823 - Lcpu_fast_base
-    .long Lpt_8824 - Lcpu_fast_base
-    .long Lpt_8825 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8832,6 +8832,54 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_8834 - Lcpu_fast_base
+    .long Lpt_8835 - Lcpu_fast_base
+    .long Lpt_8836 - Lcpu_fast_base
+    .long Lpt_8837 - Lcpu_fast_base
+    .long Lpt_8838 - Lcpu_fast_base
+    .long Lpt_8839 - Lcpu_fast_base
+    .long Lpt_8840 - Lcpu_fast_base
+    .long Lpt_8841 - Lcpu_fast_base
+    .long Lpt_8842 - Lcpu_fast_base
+    .long Lpt_8843 - Lcpu_fast_base
+    .long Lpt_8844 - Lcpu_fast_base
+    .long Lpt_8845 - Lcpu_fast_base
+    .long Lpt_8846 - Lcpu_fast_base
+    .long Lpt_8847 - Lcpu_fast_base
+    .long Lpt_8848 - Lcpu_fast_base
+    .long Lpt_8849 - Lcpu_fast_base
+    .long Lpt_8850 - Lcpu_fast_base
+    .long Lpt_8851 - Lcpu_fast_base
+    .long Lpt_8852 - Lcpu_fast_base
+    .long Lpt_8853 - Lcpu_fast_base
+    .long Lpt_8854 - Lcpu_fast_base
+    .long Lpt_8855 - Lcpu_fast_base
+    .long Lpt_8856 - Lcpu_fast_base
+    .long Lpt_8857 - Lcpu_fast_base
+    .long Lpt_8858 - Lcpu_fast_base
+    .long Lpt_8859 - Lcpu_fast_base
+    .long Lpt_8860 - Lcpu_fast_base
+    .long Lpt_8861 - Lcpu_fast_base
+    .long Lpt_8862 - Lcpu_fast_base
+    .long Lpt_8863 - Lcpu_fast_base
+    .long Lpt_8864 - Lcpu_fast_base
+    .long Lpt_8865 - Lcpu_fast_base
+    .long Lpt_8866 - Lcpu_fast_base
+    .long Lpt_8867 - Lcpu_fast_base
+    .long Lpt_8868 - Lcpu_fast_base
+    .long Lpt_8869 - Lcpu_fast_base
+    .long Lpt_8870 - Lcpu_fast_base
+    .long Lpt_8871 - Lcpu_fast_base
+    .long Lpt_8872 - Lcpu_fast_base
+    .long Lpt_8873 - Lcpu_fast_base
+    .long Lpt_8874 - Lcpu_fast_base
+    .long Lpt_8875 - Lcpu_fast_base
+    .long Lpt_8876 - Lcpu_fast_base
+    .long Lpt_8877 - Lcpu_fast_base
+    .long Lpt_8878 - Lcpu_fast_base
+    .long Lpt_8879 - Lcpu_fast_base
+    .long Lpt_8880 - Lcpu_fast_base
+    .long Lpt_8881 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -8904,62 +8952,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_8906 - Lcpu_fast_base
-    .long Lpt_8907 - Lcpu_fast_base
-    .long Lpt_8908 - Lcpu_fast_base
-    .long Lpt_8909 - Lcpu_fast_base
-    .long Lpt_8910 - Lcpu_fast_base
-    .long Lpt_8911 - Lcpu_fast_base
-    .long Lpt_8912 - Lcpu_fast_base
-    .long Lpt_8913 - Lcpu_fast_base
-    .long Lpt_8914 - Lcpu_fast_base
-    .long Lpt_8915 - Lcpu_fast_base
-    .long Lpt_8916 - Lcpu_fast_base
-    .long Lpt_8917 - Lcpu_fast_base
-    .long Lpt_8918 - Lcpu_fast_base
-    .long Lpt_8919 - Lcpu_fast_base
-    .long Lpt_8920 - Lcpu_fast_base
-    .long Lpt_8921 - Lcpu_fast_base
-    .long Lpt_8922 - Lcpu_fast_base
-    .long Lpt_8923 - Lcpu_fast_base
-    .long Lpt_8924 - Lcpu_fast_base
-    .long Lpt_8925 - Lcpu_fast_base
-    .long Lpt_8926 - Lcpu_fast_base
-    .long Lpt_8927 - Lcpu_fast_base
-    .long Lpt_8928 - Lcpu_fast_base
-    .long Lpt_8929 - Lcpu_fast_base
-    .long Lpt_8930 - Lcpu_fast_base
-    .long Lpt_8931 - Lcpu_fast_base
-    .long Lpt_8932 - Lcpu_fast_base
-    .long Lpt_8933 - Lcpu_fast_base
-    .long Lpt_8934 - Lcpu_fast_base
-    .long Lpt_8935 - Lcpu_fast_base
-    .long Lpt_8936 - Lcpu_fast_base
-    .long Lpt_8937 - Lcpu_fast_base
-    .long Lpt_8938 - Lcpu_fast_base
-    .long Lpt_8939 - Lcpu_fast_base
-    .long Lpt_8940 - Lcpu_fast_base
-    .long Lpt_8941 - Lcpu_fast_base
-    .long Lpt_8942 - Lcpu_fast_base
-    .long Lpt_8943 - Lcpu_fast_base
-    .long Lpt_8944 - Lcpu_fast_base
-    .long Lpt_8945 - Lcpu_fast_base
-    .long Lpt_8946 - Lcpu_fast_base
-    .long Lpt_8947 - Lcpu_fast_base
-    .long Lpt_8948 - Lcpu_fast_base
-    .long Lpt_8949 - Lcpu_fast_base
-    .long Lpt_8950 - Lcpu_fast_base
-    .long Lpt_8951 - Lcpu_fast_base
-    .long Lpt_8952 - Lcpu_fast_base
-    .long Lpt_8953 - Lcpu_fast_base
-    .long Lpt_8954 - Lcpu_fast_base
-    .long Lpt_8955 - Lcpu_fast_base
-    .long Lpt_8956 - Lcpu_fast_base
-    .long Lpt_8957 - Lcpu_fast_base
-    .long Lpt_8958 - Lcpu_fast_base
-    .long Lpt_8959 - Lcpu_fast_base
-    .long Lpt_8960 - Lcpu_fast_base
-    .long Lpt_8961 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_8962 - Lcpu_fast_base
     .long Lpt_8963 - Lcpu_fast_base
     .long Lpt_8964 - Lcpu_fast_base
@@ -9016,14 +9016,14 @@
     .long Lpt_9015 - Lcpu_fast_base
     .long Lpt_9016 - Lcpu_fast_base
     .long Lpt_9017 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_9018 - Lcpu_fast_base
+    .long Lpt_9019 - Lcpu_fast_base
+    .long Lpt_9020 - Lcpu_fast_base
+    .long Lpt_9021 - Lcpu_fast_base
+    .long Lpt_9022 - Lcpu_fast_base
+    .long Lpt_9023 - Lcpu_fast_base
+    .long Lpt_9024 - Lcpu_fast_base
+    .long Lpt_9025 - Lcpu_fast_base
     .long Lpt_9026 - Lcpu_fast_base
     .long Lpt_9027 - Lcpu_fast_base
     .long Lpt_9028 - Lcpu_fast_base
@@ -9072,14 +9072,6 @@
     .long Lpt_9071 - Lcpu_fast_base
     .long Lpt_9072 - Lcpu_fast_base
     .long Lpt_9073 - Lcpu_fast_base
-    .long Lpt_9074 - Lcpu_fast_base
-    .long Lpt_9075 - Lcpu_fast_base
-    .long Lpt_9076 - Lcpu_fast_base
-    .long Lpt_9077 - Lcpu_fast_base
-    .long Lpt_9078 - Lcpu_fast_base
-    .long Lpt_9079 - Lcpu_fast_base
-    .long Lpt_9080 - Lcpu_fast_base
-    .long Lpt_9081 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9088,6 +9080,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_9082 - Lcpu_fast_base
+    .long Lpt_9083 - Lcpu_fast_base
+    .long Lpt_9084 - Lcpu_fast_base
+    .long Lpt_9085 - Lcpu_fast_base
+    .long Lpt_9086 - Lcpu_fast_base
+    .long Lpt_9087 - Lcpu_fast_base
+    .long Lpt_9088 - Lcpu_fast_base
+    .long Lpt_9089 - Lcpu_fast_base
+    .long Lpt_9090 - Lcpu_fast_base
+    .long Lpt_9091 - Lcpu_fast_base
+    .long Lpt_9092 - Lcpu_fast_base
+    .long Lpt_9093 - Lcpu_fast_base
+    .long Lpt_9094 - Lcpu_fast_base
+    .long Lpt_9095 - Lcpu_fast_base
+    .long Lpt_9096 - Lcpu_fast_base
+    .long Lpt_9097 - Lcpu_fast_base
+    .long Lpt_9098 - Lcpu_fast_base
+    .long Lpt_9099 - Lcpu_fast_base
+    .long Lpt_9100 - Lcpu_fast_base
+    .long Lpt_9101 - Lcpu_fast_base
+    .long Lpt_9102 - Lcpu_fast_base
+    .long Lpt_9103 - Lcpu_fast_base
+    .long Lpt_9104 - Lcpu_fast_base
+    .long Lpt_9105 - Lcpu_fast_base
+    .long Lpt_9106 - Lcpu_fast_base
+    .long Lpt_9107 - Lcpu_fast_base
+    .long Lpt_9108 - Lcpu_fast_base
+    .long Lpt_9109 - Lcpu_fast_base
+    .long Lpt_9110 - Lcpu_fast_base
+    .long Lpt_9111 - Lcpu_fast_base
+    .long Lpt_9112 - Lcpu_fast_base
+    .long Lpt_9113 - Lcpu_fast_base
+    .long Lpt_9114 - Lcpu_fast_base
+    .long Lpt_9115 - Lcpu_fast_base
+    .long Lpt_9116 - Lcpu_fast_base
+    .long Lpt_9117 - Lcpu_fast_base
+    .long Lpt_9118 - Lcpu_fast_base
+    .long Lpt_9119 - Lcpu_fast_base
+    .long Lpt_9120 - Lcpu_fast_base
+    .long Lpt_9121 - Lcpu_fast_base
+    .long Lpt_9122 - Lcpu_fast_base
+    .long Lpt_9123 - Lcpu_fast_base
+    .long Lpt_9124 - Lcpu_fast_base
+    .long Lpt_9125 - Lcpu_fast_base
+    .long Lpt_9126 - Lcpu_fast_base
+    .long Lpt_9127 - Lcpu_fast_base
+    .long Lpt_9128 - Lcpu_fast_base
+    .long Lpt_9129 - Lcpu_fast_base
+    .long Lpt_9130 - Lcpu_fast_base
+    .long Lpt_9131 - Lcpu_fast_base
+    .long Lpt_9132 - Lcpu_fast_base
+    .long Lpt_9133 - Lcpu_fast_base
+    .long Lpt_9134 - Lcpu_fast_base
+    .long Lpt_9135 - Lcpu_fast_base
+    .long Lpt_9136 - Lcpu_fast_base
+    .long Lpt_9137 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9152,62 +9200,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_9154 - Lcpu_fast_base
-    .long Lpt_9155 - Lcpu_fast_base
-    .long Lpt_9156 - Lcpu_fast_base
-    .long Lpt_9157 - Lcpu_fast_base
-    .long Lpt_9158 - Lcpu_fast_base
-    .long Lpt_9159 - Lcpu_fast_base
-    .long Lpt_9160 - Lcpu_fast_base
-    .long Lpt_9161 - Lcpu_fast_base
-    .long Lpt_9162 - Lcpu_fast_base
-    .long Lpt_9163 - Lcpu_fast_base
-    .long Lpt_9164 - Lcpu_fast_base
-    .long Lpt_9165 - Lcpu_fast_base
-    .long Lpt_9166 - Lcpu_fast_base
-    .long Lpt_9167 - Lcpu_fast_base
-    .long Lpt_9168 - Lcpu_fast_base
-    .long Lpt_9169 - Lcpu_fast_base
-    .long Lpt_9170 - Lcpu_fast_base
-    .long Lpt_9171 - Lcpu_fast_base
-    .long Lpt_9172 - Lcpu_fast_base
-    .long Lpt_9173 - Lcpu_fast_base
-    .long Lpt_9174 - Lcpu_fast_base
-    .long Lpt_9175 - Lcpu_fast_base
-    .long Lpt_9176 - Lcpu_fast_base
-    .long Lpt_9177 - Lcpu_fast_base
-    .long Lpt_9178 - Lcpu_fast_base
-    .long Lpt_9179 - Lcpu_fast_base
-    .long Lpt_9180 - Lcpu_fast_base
-    .long Lpt_9181 - Lcpu_fast_base
-    .long Lpt_9182 - Lcpu_fast_base
-    .long Lpt_9183 - Lcpu_fast_base
-    .long Lpt_9184 - Lcpu_fast_base
-    .long Lpt_9185 - Lcpu_fast_base
-    .long Lpt_9186 - Lcpu_fast_base
-    .long Lpt_9187 - Lcpu_fast_base
-    .long Lpt_9188 - Lcpu_fast_base
-    .long Lpt_9189 - Lcpu_fast_base
-    .long Lpt_9190 - Lcpu_fast_base
-    .long Lpt_9191 - Lcpu_fast_base
-    .long Lpt_9192 - Lcpu_fast_base
-    .long Lpt_9193 - Lcpu_fast_base
-    .long Lpt_9194 - Lcpu_fast_base
-    .long Lpt_9195 - Lcpu_fast_base
-    .long Lpt_9196 - Lcpu_fast_base
-    .long Lpt_9197 - Lcpu_fast_base
-    .long Lpt_9198 - Lcpu_fast_base
-    .long Lpt_9199 - Lcpu_fast_base
-    .long Lpt_9200 - Lcpu_fast_base
-    .long Lpt_9201 - Lcpu_fast_base
-    .long Lpt_9202 - Lcpu_fast_base
-    .long Lpt_9203 - Lcpu_fast_base
-    .long Lpt_9204 - Lcpu_fast_base
-    .long Lpt_9205 - Lcpu_fast_base
-    .long Lpt_9206 - Lcpu_fast_base
-    .long Lpt_9207 - Lcpu_fast_base
-    .long Lpt_9208 - Lcpu_fast_base
-    .long Lpt_9209 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_9210 - Lcpu_fast_base
     .long Lpt_9211 - Lcpu_fast_base
     .long Lpt_9212 - Lcpu_fast_base
@@ -9272,14 +9272,14 @@
     .long Lpt_9271 - Lcpu_fast_base
     .long Lpt_9272 - Lcpu_fast_base
     .long Lpt_9273 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_9274 - Lcpu_fast_base
+    .long Lpt_9275 - Lcpu_fast_base
+    .long Lpt_9276 - Lcpu_fast_base
+    .long Lpt_9277 - Lcpu_fast_base
+    .long Lpt_9278 - Lcpu_fast_base
+    .long Lpt_9279 - Lcpu_fast_base
+    .long Lpt_9280 - Lcpu_fast_base
+    .long Lpt_9281 - Lcpu_fast_base
     .long Lpt_9282 - Lcpu_fast_base
     .long Lpt_9283 - Lcpu_fast_base
     .long Lpt_9284 - Lcpu_fast_base
@@ -9328,14 +9328,6 @@
     .long Lpt_9327 - Lcpu_fast_base
     .long Lpt_9328 - Lcpu_fast_base
     .long Lpt_9329 - Lcpu_fast_base
-    .long Lpt_9330 - Lcpu_fast_base
-    .long Lpt_9331 - Lcpu_fast_base
-    .long Lpt_9332 - Lcpu_fast_base
-    .long Lpt_9333 - Lcpu_fast_base
-    .long Lpt_9334 - Lcpu_fast_base
-    .long Lpt_9335 - Lcpu_fast_base
-    .long Lpt_9336 - Lcpu_fast_base
-    .long Lpt_9337 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9344,6 +9336,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_9338 - Lcpu_fast_base
+    .long Lpt_9339 - Lcpu_fast_base
+    .long Lpt_9340 - Lcpu_fast_base
+    .long Lpt_9341 - Lcpu_fast_base
+    .long Lpt_9342 - Lcpu_fast_base
+    .long Lpt_9343 - Lcpu_fast_base
+    .long Lpt_9344 - Lcpu_fast_base
+    .long Lpt_9345 - Lcpu_fast_base
+    .long Lpt_9346 - Lcpu_fast_base
+    .long Lpt_9347 - Lcpu_fast_base
+    .long Lpt_9348 - Lcpu_fast_base
+    .long Lpt_9349 - Lcpu_fast_base
+    .long Lpt_9350 - Lcpu_fast_base
+    .long Lpt_9351 - Lcpu_fast_base
+    .long Lpt_9352 - Lcpu_fast_base
+    .long Lpt_9353 - Lcpu_fast_base
+    .long Lpt_9354 - Lcpu_fast_base
+    .long Lpt_9355 - Lcpu_fast_base
+    .long Lpt_9356 - Lcpu_fast_base
+    .long Lpt_9357 - Lcpu_fast_base
+    .long Lpt_9358 - Lcpu_fast_base
+    .long Lpt_9359 - Lcpu_fast_base
+    .long Lpt_9360 - Lcpu_fast_base
+    .long Lpt_9361 - Lcpu_fast_base
+    .long Lpt_9362 - Lcpu_fast_base
+    .long Lpt_9363 - Lcpu_fast_base
+    .long Lpt_9364 - Lcpu_fast_base
+    .long Lpt_9365 - Lcpu_fast_base
+    .long Lpt_9366 - Lcpu_fast_base
+    .long Lpt_9367 - Lcpu_fast_base
+    .long Lpt_9368 - Lcpu_fast_base
+    .long Lpt_9369 - Lcpu_fast_base
+    .long Lpt_9370 - Lcpu_fast_base
+    .long Lpt_9371 - Lcpu_fast_base
+    .long Lpt_9372 - Lcpu_fast_base
+    .long Lpt_9373 - Lcpu_fast_base
+    .long Lpt_9374 - Lcpu_fast_base
+    .long Lpt_9375 - Lcpu_fast_base
+    .long Lpt_9376 - Lcpu_fast_base
+    .long Lpt_9377 - Lcpu_fast_base
+    .long Lpt_9378 - Lcpu_fast_base
+    .long Lpt_9379 - Lcpu_fast_base
+    .long Lpt_9380 - Lcpu_fast_base
+    .long Lpt_9381 - Lcpu_fast_base
+    .long Lpt_9382 - Lcpu_fast_base
+    .long Lpt_9383 - Lcpu_fast_base
+    .long Lpt_9384 - Lcpu_fast_base
+    .long Lpt_9385 - Lcpu_fast_base
+    .long Lpt_9386 - Lcpu_fast_base
+    .long Lpt_9387 - Lcpu_fast_base
+    .long Lpt_9388 - Lcpu_fast_base
+    .long Lpt_9389 - Lcpu_fast_base
+    .long Lpt_9390 - Lcpu_fast_base
+    .long Lpt_9391 - Lcpu_fast_base
+    .long Lpt_9392 - Lcpu_fast_base
+    .long Lpt_9393 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9408,62 +9456,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_9410 - Lcpu_fast_base
-    .long Lpt_9411 - Lcpu_fast_base
-    .long Lpt_9412 - Lcpu_fast_base
-    .long Lpt_9413 - Lcpu_fast_base
-    .long Lpt_9414 - Lcpu_fast_base
-    .long Lpt_9415 - Lcpu_fast_base
-    .long Lpt_9416 - Lcpu_fast_base
-    .long Lpt_9417 - Lcpu_fast_base
-    .long Lpt_9418 - Lcpu_fast_base
-    .long Lpt_9419 - Lcpu_fast_base
-    .long Lpt_9420 - Lcpu_fast_base
-    .long Lpt_9421 - Lcpu_fast_base
-    .long Lpt_9422 - Lcpu_fast_base
-    .long Lpt_9423 - Lcpu_fast_base
-    .long Lpt_9424 - Lcpu_fast_base
-    .long Lpt_9425 - Lcpu_fast_base
-    .long Lpt_9426 - Lcpu_fast_base
-    .long Lpt_9427 - Lcpu_fast_base
-    .long Lpt_9428 - Lcpu_fast_base
-    .long Lpt_9429 - Lcpu_fast_base
-    .long Lpt_9430 - Lcpu_fast_base
-    .long Lpt_9431 - Lcpu_fast_base
-    .long Lpt_9432 - Lcpu_fast_base
-    .long Lpt_9433 - Lcpu_fast_base
-    .long Lpt_9434 - Lcpu_fast_base
-    .long Lpt_9435 - Lcpu_fast_base
-    .long Lpt_9436 - Lcpu_fast_base
-    .long Lpt_9437 - Lcpu_fast_base
-    .long Lpt_9438 - Lcpu_fast_base
-    .long Lpt_9439 - Lcpu_fast_base
-    .long Lpt_9440 - Lcpu_fast_base
-    .long Lpt_9441 - Lcpu_fast_base
-    .long Lpt_9442 - Lcpu_fast_base
-    .long Lpt_9443 - Lcpu_fast_base
-    .long Lpt_9444 - Lcpu_fast_base
-    .long Lpt_9445 - Lcpu_fast_base
-    .long Lpt_9446 - Lcpu_fast_base
-    .long Lpt_9447 - Lcpu_fast_base
-    .long Lpt_9448 - Lcpu_fast_base
-    .long Lpt_9449 - Lcpu_fast_base
-    .long Lpt_9450 - Lcpu_fast_base
-    .long Lpt_9451 - Lcpu_fast_base
-    .long Lpt_9452 - Lcpu_fast_base
-    .long Lpt_9453 - Lcpu_fast_base
-    .long Lpt_9454 - Lcpu_fast_base
-    .long Lpt_9455 - Lcpu_fast_base
-    .long Lpt_9456 - Lcpu_fast_base
-    .long Lpt_9457 - Lcpu_fast_base
-    .long Lpt_9458 - Lcpu_fast_base
-    .long Lpt_9459 - Lcpu_fast_base
-    .long Lpt_9460 - Lcpu_fast_base
-    .long Lpt_9461 - Lcpu_fast_base
-    .long Lpt_9462 - Lcpu_fast_base
-    .long Lpt_9463 - Lcpu_fast_base
-    .long Lpt_9464 - Lcpu_fast_base
-    .long Lpt_9465 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9472,6 +9464,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_9466 - Lcpu_fast_base
+    .long Lpt_9467 - Lcpu_fast_base
+    .long Lpt_9468 - Lcpu_fast_base
+    .long Lpt_9469 - Lcpu_fast_base
+    .long Lpt_9470 - Lcpu_fast_base
+    .long Lpt_9471 - Lcpu_fast_base
+    .long Lpt_9472 - Lcpu_fast_base
+    .long Lpt_9473 - Lcpu_fast_base
+    .long Lpt_9474 - Lcpu_fast_base
+    .long Lpt_9475 - Lcpu_fast_base
+    .long Lpt_9476 - Lcpu_fast_base
+    .long Lpt_9477 - Lcpu_fast_base
+    .long Lpt_9478 - Lcpu_fast_base
+    .long Lpt_9479 - Lcpu_fast_base
+    .long Lpt_9480 - Lcpu_fast_base
+    .long Lpt_9481 - Lcpu_fast_base
+    .long Lpt_9482 - Lcpu_fast_base
+    .long Lpt_9483 - Lcpu_fast_base
+    .long Lpt_9484 - Lcpu_fast_base
+    .long Lpt_9485 - Lcpu_fast_base
+    .long Lpt_9486 - Lcpu_fast_base
+    .long Lpt_9487 - Lcpu_fast_base
+    .long Lpt_9488 - Lcpu_fast_base
+    .long Lpt_9489 - Lcpu_fast_base
+    .long Lpt_9490 - Lcpu_fast_base
+    .long Lpt_9491 - Lcpu_fast_base
+    .long Lpt_9492 - Lcpu_fast_base
+    .long Lpt_9493 - Lcpu_fast_base
+    .long Lpt_9494 - Lcpu_fast_base
+    .long Lpt_9495 - Lcpu_fast_base
+    .long Lpt_9496 - Lcpu_fast_base
+    .long Lpt_9497 - Lcpu_fast_base
+    .long Lpt_9498 - Lcpu_fast_base
+    .long Lpt_9499 - Lcpu_fast_base
+    .long Lpt_9500 - Lcpu_fast_base
+    .long Lpt_9501 - Lcpu_fast_base
+    .long Lpt_9502 - Lcpu_fast_base
+    .long Lpt_9503 - Lcpu_fast_base
+    .long Lpt_9504 - Lcpu_fast_base
+    .long Lpt_9505 - Lcpu_fast_base
+    .long Lpt_9506 - Lcpu_fast_base
+    .long Lpt_9507 - Lcpu_fast_base
+    .long Lpt_9508 - Lcpu_fast_base
+    .long Lpt_9509 - Lcpu_fast_base
+    .long Lpt_9510 - Lcpu_fast_base
+    .long Lpt_9511 - Lcpu_fast_base
+    .long Lpt_9512 - Lcpu_fast_base
+    .long Lpt_9513 - Lcpu_fast_base
+    .long Lpt_9514 - Lcpu_fast_base
+    .long Lpt_9515 - Lcpu_fast_base
+    .long Lpt_9516 - Lcpu_fast_base
+    .long Lpt_9517 - Lcpu_fast_base
+    .long Lpt_9518 - Lcpu_fast_base
+    .long Lpt_9519 - Lcpu_fast_base
+    .long Lpt_9520 - Lcpu_fast_base
+    .long Lpt_9521 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9536,62 +9584,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_9538 - Lcpu_fast_base
-    .long Lpt_9539 - Lcpu_fast_base
-    .long Lpt_9540 - Lcpu_fast_base
-    .long Lpt_9541 - Lcpu_fast_base
-    .long Lpt_9542 - Lcpu_fast_base
-    .long Lpt_9543 - Lcpu_fast_base
-    .long Lpt_9544 - Lcpu_fast_base
-    .long Lpt_9545 - Lcpu_fast_base
-    .long Lpt_9546 - Lcpu_fast_base
-    .long Lpt_9547 - Lcpu_fast_base
-    .long Lpt_9548 - Lcpu_fast_base
-    .long Lpt_9549 - Lcpu_fast_base
-    .long Lpt_9550 - Lcpu_fast_base
-    .long Lpt_9551 - Lcpu_fast_base
-    .long Lpt_9552 - Lcpu_fast_base
-    .long Lpt_9553 - Lcpu_fast_base
-    .long Lpt_9554 - Lcpu_fast_base
-    .long Lpt_9555 - Lcpu_fast_base
-    .long Lpt_9556 - Lcpu_fast_base
-    .long Lpt_9557 - Lcpu_fast_base
-    .long Lpt_9558 - Lcpu_fast_base
-    .long Lpt_9559 - Lcpu_fast_base
-    .long Lpt_9560 - Lcpu_fast_base
-    .long Lpt_9561 - Lcpu_fast_base
-    .long Lpt_9562 - Lcpu_fast_base
-    .long Lpt_9563 - Lcpu_fast_base
-    .long Lpt_9564 - Lcpu_fast_base
-    .long Lpt_9565 - Lcpu_fast_base
-    .long Lpt_9566 - Lcpu_fast_base
-    .long Lpt_9567 - Lcpu_fast_base
-    .long Lpt_9568 - Lcpu_fast_base
-    .long Lpt_9569 - Lcpu_fast_base
-    .long Lpt_9570 - Lcpu_fast_base
-    .long Lpt_9571 - Lcpu_fast_base
-    .long Lpt_9572 - Lcpu_fast_base
-    .long Lpt_9573 - Lcpu_fast_base
-    .long Lpt_9574 - Lcpu_fast_base
-    .long Lpt_9575 - Lcpu_fast_base
-    .long Lpt_9576 - Lcpu_fast_base
-    .long Lpt_9577 - Lcpu_fast_base
-    .long Lpt_9578 - Lcpu_fast_base
-    .long Lpt_9579 - Lcpu_fast_base
-    .long Lpt_9580 - Lcpu_fast_base
-    .long Lpt_9581 - Lcpu_fast_base
-    .long Lpt_9582 - Lcpu_fast_base
-    .long Lpt_9583 - Lcpu_fast_base
-    .long Lpt_9584 - Lcpu_fast_base
-    .long Lpt_9585 - Lcpu_fast_base
-    .long Lpt_9586 - Lcpu_fast_base
-    .long Lpt_9587 - Lcpu_fast_base
-    .long Lpt_9588 - Lcpu_fast_base
-    .long Lpt_9589 - Lcpu_fast_base
-    .long Lpt_9590 - Lcpu_fast_base
-    .long Lpt_9591 - Lcpu_fast_base
-    .long Lpt_9592 - Lcpu_fast_base
-    .long Lpt_9593 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9600,6 +9592,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_9594 - Lcpu_fast_base
+    .long Lpt_9595 - Lcpu_fast_base
+    .long Lpt_9596 - Lcpu_fast_base
+    .long Lpt_9597 - Lcpu_fast_base
+    .long Lpt_9598 - Lcpu_fast_base
+    .long Lpt_9599 - Lcpu_fast_base
+    .long Lpt_9600 - Lcpu_fast_base
+    .long Lpt_9601 - Lcpu_fast_base
+    .long Lpt_9602 - Lcpu_fast_base
+    .long Lpt_9603 - Lcpu_fast_base
+    .long Lpt_9604 - Lcpu_fast_base
+    .long Lpt_9605 - Lcpu_fast_base
+    .long Lpt_9606 - Lcpu_fast_base
+    .long Lpt_9607 - Lcpu_fast_base
+    .long Lpt_9608 - Lcpu_fast_base
+    .long Lpt_9609 - Lcpu_fast_base
+    .long Lpt_9610 - Lcpu_fast_base
+    .long Lpt_9611 - Lcpu_fast_base
+    .long Lpt_9612 - Lcpu_fast_base
+    .long Lpt_9613 - Lcpu_fast_base
+    .long Lpt_9614 - Lcpu_fast_base
+    .long Lpt_9615 - Lcpu_fast_base
+    .long Lpt_9616 - Lcpu_fast_base
+    .long Lpt_9617 - Lcpu_fast_base
+    .long Lpt_9618 - Lcpu_fast_base
+    .long Lpt_9619 - Lcpu_fast_base
+    .long Lpt_9620 - Lcpu_fast_base
+    .long Lpt_9621 - Lcpu_fast_base
+    .long Lpt_9622 - Lcpu_fast_base
+    .long Lpt_9623 - Lcpu_fast_base
+    .long Lpt_9624 - Lcpu_fast_base
+    .long Lpt_9625 - Lcpu_fast_base
+    .long Lpt_9626 - Lcpu_fast_base
+    .long Lpt_9627 - Lcpu_fast_base
+    .long Lpt_9628 - Lcpu_fast_base
+    .long Lpt_9629 - Lcpu_fast_base
+    .long Lpt_9630 - Lcpu_fast_base
+    .long Lpt_9631 - Lcpu_fast_base
+    .long Lpt_9632 - Lcpu_fast_base
+    .long Lpt_9633 - Lcpu_fast_base
+    .long Lpt_9634 - Lcpu_fast_base
+    .long Lpt_9635 - Lcpu_fast_base
+    .long Lpt_9636 - Lcpu_fast_base
+    .long Lpt_9637 - Lcpu_fast_base
+    .long Lpt_9638 - Lcpu_fast_base
+    .long Lpt_9639 - Lcpu_fast_base
+    .long Lpt_9640 - Lcpu_fast_base
+    .long Lpt_9641 - Lcpu_fast_base
+    .long Lpt_9642 - Lcpu_fast_base
+    .long Lpt_9643 - Lcpu_fast_base
+    .long Lpt_9644 - Lcpu_fast_base
+    .long Lpt_9645 - Lcpu_fast_base
+    .long Lpt_9646 - Lcpu_fast_base
+    .long Lpt_9647 - Lcpu_fast_base
+    .long Lpt_9648 - Lcpu_fast_base
+    .long Lpt_9649 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9664,62 +9712,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_9666 - Lcpu_fast_base
-    .long Lpt_9667 - Lcpu_fast_base
-    .long Lpt_9668 - Lcpu_fast_base
-    .long Lpt_9669 - Lcpu_fast_base
-    .long Lpt_9670 - Lcpu_fast_base
-    .long Lpt_9671 - Lcpu_fast_base
-    .long Lpt_9672 - Lcpu_fast_base
-    .long Lpt_9673 - Lcpu_fast_base
-    .long Lpt_9674 - Lcpu_fast_base
-    .long Lpt_9675 - Lcpu_fast_base
-    .long Lpt_9676 - Lcpu_fast_base
-    .long Lpt_9677 - Lcpu_fast_base
-    .long Lpt_9678 - Lcpu_fast_base
-    .long Lpt_9679 - Lcpu_fast_base
-    .long Lpt_9680 - Lcpu_fast_base
-    .long Lpt_9681 - Lcpu_fast_base
-    .long Lpt_9682 - Lcpu_fast_base
-    .long Lpt_9683 - Lcpu_fast_base
-    .long Lpt_9684 - Lcpu_fast_base
-    .long Lpt_9685 - Lcpu_fast_base
-    .long Lpt_9686 - Lcpu_fast_base
-    .long Lpt_9687 - Lcpu_fast_base
-    .long Lpt_9688 - Lcpu_fast_base
-    .long Lpt_9689 - Lcpu_fast_base
-    .long Lpt_9690 - Lcpu_fast_base
-    .long Lpt_9691 - Lcpu_fast_base
-    .long Lpt_9692 - Lcpu_fast_base
-    .long Lpt_9693 - Lcpu_fast_base
-    .long Lpt_9694 - Lcpu_fast_base
-    .long Lpt_9695 - Lcpu_fast_base
-    .long Lpt_9696 - Lcpu_fast_base
-    .long Lpt_9697 - Lcpu_fast_base
-    .long Lpt_9698 - Lcpu_fast_base
-    .long Lpt_9699 - Lcpu_fast_base
-    .long Lpt_9700 - Lcpu_fast_base
-    .long Lpt_9701 - Lcpu_fast_base
-    .long Lpt_9702 - Lcpu_fast_base
-    .long Lpt_9703 - Lcpu_fast_base
-    .long Lpt_9704 - Lcpu_fast_base
-    .long Lpt_9705 - Lcpu_fast_base
-    .long Lpt_9706 - Lcpu_fast_base
-    .long Lpt_9707 - Lcpu_fast_base
-    .long Lpt_9708 - Lcpu_fast_base
-    .long Lpt_9709 - Lcpu_fast_base
-    .long Lpt_9710 - Lcpu_fast_base
-    .long Lpt_9711 - Lcpu_fast_base
-    .long Lpt_9712 - Lcpu_fast_base
-    .long Lpt_9713 - Lcpu_fast_base
-    .long Lpt_9714 - Lcpu_fast_base
-    .long Lpt_9715 - Lcpu_fast_base
-    .long Lpt_9716 - Lcpu_fast_base
-    .long Lpt_9717 - Lcpu_fast_base
-    .long Lpt_9718 - Lcpu_fast_base
-    .long Lpt_9719 - Lcpu_fast_base
-    .long Lpt_9720 - Lcpu_fast_base
-    .long Lpt_9721 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_9722 - Lcpu_fast_base
     .long Lpt_9723 - Lcpu_fast_base
     .long Lpt_9724 - Lcpu_fast_base
@@ -9784,14 +9784,14 @@
     .long Lpt_9783 - Lcpu_fast_base
     .long Lpt_9784 - Lcpu_fast_base
     .long Lpt_9785 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_9786 - Lcpu_fast_base
+    .long Lpt_9787 - Lcpu_fast_base
+    .long Lpt_9788 - Lcpu_fast_base
+    .long Lpt_9789 - Lcpu_fast_base
+    .long Lpt_9790 - Lcpu_fast_base
+    .long Lpt_9791 - Lcpu_fast_base
+    .long Lpt_9792 - Lcpu_fast_base
+    .long Lpt_9793 - Lcpu_fast_base
     .long Lpt_9794 - Lcpu_fast_base
     .long Lpt_9795 - Lcpu_fast_base
     .long Lpt_9796 - Lcpu_fast_base
@@ -9840,14 +9840,6 @@
     .long Lpt_9839 - Lcpu_fast_base
     .long Lpt_9840 - Lcpu_fast_base
     .long Lpt_9841 - Lcpu_fast_base
-    .long Lpt_9842 - Lcpu_fast_base
-    .long Lpt_9843 - Lcpu_fast_base
-    .long Lpt_9844 - Lcpu_fast_base
-    .long Lpt_9845 - Lcpu_fast_base
-    .long Lpt_9846 - Lcpu_fast_base
-    .long Lpt_9847 - Lcpu_fast_base
-    .long Lpt_9848 - Lcpu_fast_base
-    .long Lpt_9849 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9856,6 +9848,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_9850 - Lcpu_fast_base
+    .long Lpt_9851 - Lcpu_fast_base
+    .long Lpt_9852 - Lcpu_fast_base
+    .long Lpt_9853 - Lcpu_fast_base
+    .long Lpt_9854 - Lcpu_fast_base
+    .long Lpt_9855 - Lcpu_fast_base
+    .long Lpt_9856 - Lcpu_fast_base
+    .long Lpt_9857 - Lcpu_fast_base
+    .long Lpt_9858 - Lcpu_fast_base
+    .long Lpt_9859 - Lcpu_fast_base
+    .long Lpt_9860 - Lcpu_fast_base
+    .long Lpt_9861 - Lcpu_fast_base
+    .long Lpt_9862 - Lcpu_fast_base
+    .long Lpt_9863 - Lcpu_fast_base
+    .long Lpt_9864 - Lcpu_fast_base
+    .long Lpt_9865 - Lcpu_fast_base
+    .long Lpt_9866 - Lcpu_fast_base
+    .long Lpt_9867 - Lcpu_fast_base
+    .long Lpt_9868 - Lcpu_fast_base
+    .long Lpt_9869 - Lcpu_fast_base
+    .long Lpt_9870 - Lcpu_fast_base
+    .long Lpt_9871 - Lcpu_fast_base
+    .long Lpt_9872 - Lcpu_fast_base
+    .long Lpt_9873 - Lcpu_fast_base
+    .long Lpt_9874 - Lcpu_fast_base
+    .long Lpt_9875 - Lcpu_fast_base
+    .long Lpt_9876 - Lcpu_fast_base
+    .long Lpt_9877 - Lcpu_fast_base
+    .long Lpt_9878 - Lcpu_fast_base
+    .long Lpt_9879 - Lcpu_fast_base
+    .long Lpt_9880 - Lcpu_fast_base
+    .long Lpt_9881 - Lcpu_fast_base
+    .long Lpt_9882 - Lcpu_fast_base
+    .long Lpt_9883 - Lcpu_fast_base
+    .long Lpt_9884 - Lcpu_fast_base
+    .long Lpt_9885 - Lcpu_fast_base
+    .long Lpt_9886 - Lcpu_fast_base
+    .long Lpt_9887 - Lcpu_fast_base
+    .long Lpt_9888 - Lcpu_fast_base
+    .long Lpt_9889 - Lcpu_fast_base
+    .long Lpt_9890 - Lcpu_fast_base
+    .long Lpt_9891 - Lcpu_fast_base
+    .long Lpt_9892 - Lcpu_fast_base
+    .long Lpt_9893 - Lcpu_fast_base
+    .long Lpt_9894 - Lcpu_fast_base
+    .long Lpt_9895 - Lcpu_fast_base
+    .long Lpt_9896 - Lcpu_fast_base
+    .long Lpt_9897 - Lcpu_fast_base
+    .long Lpt_9898 - Lcpu_fast_base
+    .long Lpt_9899 - Lcpu_fast_base
+    .long Lpt_9900 - Lcpu_fast_base
+    .long Lpt_9901 - Lcpu_fast_base
+    .long Lpt_9902 - Lcpu_fast_base
+    .long Lpt_9903 - Lcpu_fast_base
+    .long Lpt_9904 - Lcpu_fast_base
+    .long Lpt_9905 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9920,62 +9968,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_9922 - Lcpu_fast_base
-    .long Lpt_9923 - Lcpu_fast_base
-    .long Lpt_9924 - Lcpu_fast_base
-    .long Lpt_9925 - Lcpu_fast_base
-    .long Lpt_9926 - Lcpu_fast_base
-    .long Lpt_9927 - Lcpu_fast_base
-    .long Lpt_9928 - Lcpu_fast_base
-    .long Lpt_9929 - Lcpu_fast_base
-    .long Lpt_9930 - Lcpu_fast_base
-    .long Lpt_9931 - Lcpu_fast_base
-    .long Lpt_9932 - Lcpu_fast_base
-    .long Lpt_9933 - Lcpu_fast_base
-    .long Lpt_9934 - Lcpu_fast_base
-    .long Lpt_9935 - Lcpu_fast_base
-    .long Lpt_9936 - Lcpu_fast_base
-    .long Lpt_9937 - Lcpu_fast_base
-    .long Lpt_9938 - Lcpu_fast_base
-    .long Lpt_9939 - Lcpu_fast_base
-    .long Lpt_9940 - Lcpu_fast_base
-    .long Lpt_9941 - Lcpu_fast_base
-    .long Lpt_9942 - Lcpu_fast_base
-    .long Lpt_9943 - Lcpu_fast_base
-    .long Lpt_9944 - Lcpu_fast_base
-    .long Lpt_9945 - Lcpu_fast_base
-    .long Lpt_9946 - Lcpu_fast_base
-    .long Lpt_9947 - Lcpu_fast_base
-    .long Lpt_9948 - Lcpu_fast_base
-    .long Lpt_9949 - Lcpu_fast_base
-    .long Lpt_9950 - Lcpu_fast_base
-    .long Lpt_9951 - Lcpu_fast_base
-    .long Lpt_9952 - Lcpu_fast_base
-    .long Lpt_9953 - Lcpu_fast_base
-    .long Lpt_9954 - Lcpu_fast_base
-    .long Lpt_9955 - Lcpu_fast_base
-    .long Lpt_9956 - Lcpu_fast_base
-    .long Lpt_9957 - Lcpu_fast_base
-    .long Lpt_9958 - Lcpu_fast_base
-    .long Lpt_9959 - Lcpu_fast_base
-    .long Lpt_9960 - Lcpu_fast_base
-    .long Lpt_9961 - Lcpu_fast_base
-    .long Lpt_9962 - Lcpu_fast_base
-    .long Lpt_9963 - Lcpu_fast_base
-    .long Lpt_9964 - Lcpu_fast_base
-    .long Lpt_9965 - Lcpu_fast_base
-    .long Lpt_9966 - Lcpu_fast_base
-    .long Lpt_9967 - Lcpu_fast_base
-    .long Lpt_9968 - Lcpu_fast_base
-    .long Lpt_9969 - Lcpu_fast_base
-    .long Lpt_9970 - Lcpu_fast_base
-    .long Lpt_9971 - Lcpu_fast_base
-    .long Lpt_9972 - Lcpu_fast_base
-    .long Lpt_9973 - Lcpu_fast_base
-    .long Lpt_9974 - Lcpu_fast_base
-    .long Lpt_9975 - Lcpu_fast_base
-    .long Lpt_9976 - Lcpu_fast_base
-    .long Lpt_9977 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -9984,6 +9976,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_9978 - Lcpu_fast_base
+    .long Lpt_9979 - Lcpu_fast_base
+    .long Lpt_9980 - Lcpu_fast_base
+    .long Lpt_9981 - Lcpu_fast_base
+    .long Lpt_9982 - Lcpu_fast_base
+    .long Lpt_9983 - Lcpu_fast_base
+    .long Lpt_9984 - Lcpu_fast_base
+    .long Lpt_9985 - Lcpu_fast_base
+    .long Lpt_9986 - Lcpu_fast_base
+    .long Lpt_9987 - Lcpu_fast_base
+    .long Lpt_9988 - Lcpu_fast_base
+    .long Lpt_9989 - Lcpu_fast_base
+    .long Lpt_9990 - Lcpu_fast_base
+    .long Lpt_9991 - Lcpu_fast_base
+    .long Lpt_9992 - Lcpu_fast_base
+    .long Lpt_9993 - Lcpu_fast_base
+    .long Lpt_9994 - Lcpu_fast_base
+    .long Lpt_9995 - Lcpu_fast_base
+    .long Lpt_9996 - Lcpu_fast_base
+    .long Lpt_9997 - Lcpu_fast_base
+    .long Lpt_9998 - Lcpu_fast_base
+    .long Lpt_9999 - Lcpu_fast_base
+    .long Lpt_10000 - Lcpu_fast_base
+    .long Lpt_10001 - Lcpu_fast_base
+    .long Lpt_10002 - Lcpu_fast_base
+    .long Lpt_10003 - Lcpu_fast_base
+    .long Lpt_10004 - Lcpu_fast_base
+    .long Lpt_10005 - Lcpu_fast_base
+    .long Lpt_10006 - Lcpu_fast_base
+    .long Lpt_10007 - Lcpu_fast_base
+    .long Lpt_10008 - Lcpu_fast_base
+    .long Lpt_10009 - Lcpu_fast_base
+    .long Lpt_10010 - Lcpu_fast_base
+    .long Lpt_10011 - Lcpu_fast_base
+    .long Lpt_10012 - Lcpu_fast_base
+    .long Lpt_10013 - Lcpu_fast_base
+    .long Lpt_10014 - Lcpu_fast_base
+    .long Lpt_10015 - Lcpu_fast_base
+    .long Lpt_10016 - Lcpu_fast_base
+    .long Lpt_10017 - Lcpu_fast_base
+    .long Lpt_10018 - Lcpu_fast_base
+    .long Lpt_10019 - Lcpu_fast_base
+    .long Lpt_10020 - Lcpu_fast_base
+    .long Lpt_10021 - Lcpu_fast_base
+    .long Lpt_10022 - Lcpu_fast_base
+    .long Lpt_10023 - Lcpu_fast_base
+    .long Lpt_10024 - Lcpu_fast_base
+    .long Lpt_10025 - Lcpu_fast_base
+    .long Lpt_10026 - Lcpu_fast_base
+    .long Lpt_10027 - Lcpu_fast_base
+    .long Lpt_10028 - Lcpu_fast_base
+    .long Lpt_10029 - Lcpu_fast_base
+    .long Lpt_10030 - Lcpu_fast_base
+    .long Lpt_10031 - Lcpu_fast_base
+    .long Lpt_10032 - Lcpu_fast_base
+    .long Lpt_10033 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10048,62 +10096,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_10050 - Lcpu_fast_base
-    .long Lpt_10051 - Lcpu_fast_base
-    .long Lpt_10052 - Lcpu_fast_base
-    .long Lpt_10053 - Lcpu_fast_base
-    .long Lpt_10054 - Lcpu_fast_base
-    .long Lpt_10055 - Lcpu_fast_base
-    .long Lpt_10056 - Lcpu_fast_base
-    .long Lpt_10057 - Lcpu_fast_base
-    .long Lpt_10058 - Lcpu_fast_base
-    .long Lpt_10059 - Lcpu_fast_base
-    .long Lpt_10060 - Lcpu_fast_base
-    .long Lpt_10061 - Lcpu_fast_base
-    .long Lpt_10062 - Lcpu_fast_base
-    .long Lpt_10063 - Lcpu_fast_base
-    .long Lpt_10064 - Lcpu_fast_base
-    .long Lpt_10065 - Lcpu_fast_base
-    .long Lpt_10066 - Lcpu_fast_base
-    .long Lpt_10067 - Lcpu_fast_base
-    .long Lpt_10068 - Lcpu_fast_base
-    .long Lpt_10069 - Lcpu_fast_base
-    .long Lpt_10070 - Lcpu_fast_base
-    .long Lpt_10071 - Lcpu_fast_base
-    .long Lpt_10072 - Lcpu_fast_base
-    .long Lpt_10073 - Lcpu_fast_base
-    .long Lpt_10074 - Lcpu_fast_base
-    .long Lpt_10075 - Lcpu_fast_base
-    .long Lpt_10076 - Lcpu_fast_base
-    .long Lpt_10077 - Lcpu_fast_base
-    .long Lpt_10078 - Lcpu_fast_base
-    .long Lpt_10079 - Lcpu_fast_base
-    .long Lpt_10080 - Lcpu_fast_base
-    .long Lpt_10081 - Lcpu_fast_base
-    .long Lpt_10082 - Lcpu_fast_base
-    .long Lpt_10083 - Lcpu_fast_base
-    .long Lpt_10084 - Lcpu_fast_base
-    .long Lpt_10085 - Lcpu_fast_base
-    .long Lpt_10086 - Lcpu_fast_base
-    .long Lpt_10087 - Lcpu_fast_base
-    .long Lpt_10088 - Lcpu_fast_base
-    .long Lpt_10089 - Lcpu_fast_base
-    .long Lpt_10090 - Lcpu_fast_base
-    .long Lpt_10091 - Lcpu_fast_base
-    .long Lpt_10092 - Lcpu_fast_base
-    .long Lpt_10093 - Lcpu_fast_base
-    .long Lpt_10094 - Lcpu_fast_base
-    .long Lpt_10095 - Lcpu_fast_base
-    .long Lpt_10096 - Lcpu_fast_base
-    .long Lpt_10097 - Lcpu_fast_base
-    .long Lpt_10098 - Lcpu_fast_base
-    .long Lpt_10099 - Lcpu_fast_base
-    .long Lpt_10100 - Lcpu_fast_base
-    .long Lpt_10101 - Lcpu_fast_base
-    .long Lpt_10102 - Lcpu_fast_base
-    .long Lpt_10103 - Lcpu_fast_base
-    .long Lpt_10104 - Lcpu_fast_base
-    .long Lpt_10105 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10112,6 +10104,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_10106 - Lcpu_fast_base
+    .long Lpt_10107 - Lcpu_fast_base
+    .long Lpt_10108 - Lcpu_fast_base
+    .long Lpt_10109 - Lcpu_fast_base
+    .long Lpt_10110 - Lcpu_fast_base
+    .long Lpt_10111 - Lcpu_fast_base
+    .long Lpt_10112 - Lcpu_fast_base
+    .long Lpt_10113 - Lcpu_fast_base
+    .long Lpt_10114 - Lcpu_fast_base
+    .long Lpt_10115 - Lcpu_fast_base
+    .long Lpt_10116 - Lcpu_fast_base
+    .long Lpt_10117 - Lcpu_fast_base
+    .long Lpt_10118 - Lcpu_fast_base
+    .long Lpt_10119 - Lcpu_fast_base
+    .long Lpt_10120 - Lcpu_fast_base
+    .long Lpt_10121 - Lcpu_fast_base
+    .long Lpt_10122 - Lcpu_fast_base
+    .long Lpt_10123 - Lcpu_fast_base
+    .long Lpt_10124 - Lcpu_fast_base
+    .long Lpt_10125 - Lcpu_fast_base
+    .long Lpt_10126 - Lcpu_fast_base
+    .long Lpt_10127 - Lcpu_fast_base
+    .long Lpt_10128 - Lcpu_fast_base
+    .long Lpt_10129 - Lcpu_fast_base
+    .long Lpt_10130 - Lcpu_fast_base
+    .long Lpt_10131 - Lcpu_fast_base
+    .long Lpt_10132 - Lcpu_fast_base
+    .long Lpt_10133 - Lcpu_fast_base
+    .long Lpt_10134 - Lcpu_fast_base
+    .long Lpt_10135 - Lcpu_fast_base
+    .long Lpt_10136 - Lcpu_fast_base
+    .long Lpt_10137 - Lcpu_fast_base
+    .long Lpt_10138 - Lcpu_fast_base
+    .long Lpt_10139 - Lcpu_fast_base
+    .long Lpt_10140 - Lcpu_fast_base
+    .long Lpt_10141 - Lcpu_fast_base
+    .long Lpt_10142 - Lcpu_fast_base
+    .long Lpt_10143 - Lcpu_fast_base
+    .long Lpt_10144 - Lcpu_fast_base
+    .long Lpt_10145 - Lcpu_fast_base
+    .long Lpt_10146 - Lcpu_fast_base
+    .long Lpt_10147 - Lcpu_fast_base
+    .long Lpt_10148 - Lcpu_fast_base
+    .long Lpt_10149 - Lcpu_fast_base
+    .long Lpt_10150 - Lcpu_fast_base
+    .long Lpt_10151 - Lcpu_fast_base
+    .long Lpt_10152 - Lcpu_fast_base
+    .long Lpt_10153 - Lcpu_fast_base
+    .long Lpt_10154 - Lcpu_fast_base
+    .long Lpt_10155 - Lcpu_fast_base
+    .long Lpt_10156 - Lcpu_fast_base
+    .long Lpt_10157 - Lcpu_fast_base
+    .long Lpt_10158 - Lcpu_fast_base
+    .long Lpt_10159 - Lcpu_fast_base
+    .long Lpt_10160 - Lcpu_fast_base
+    .long Lpt_10161 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10176,62 +10224,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_10178 - Lcpu_fast_base
-    .long Lpt_10179 - Lcpu_fast_base
-    .long Lpt_10180 - Lcpu_fast_base
-    .long Lpt_10181 - Lcpu_fast_base
-    .long Lpt_10182 - Lcpu_fast_base
-    .long Lpt_10183 - Lcpu_fast_base
-    .long Lpt_10184 - Lcpu_fast_base
-    .long Lpt_10185 - Lcpu_fast_base
-    .long Lpt_10186 - Lcpu_fast_base
-    .long Lpt_10187 - Lcpu_fast_base
-    .long Lpt_10188 - Lcpu_fast_base
-    .long Lpt_10189 - Lcpu_fast_base
-    .long Lpt_10190 - Lcpu_fast_base
-    .long Lpt_10191 - Lcpu_fast_base
-    .long Lpt_10192 - Lcpu_fast_base
-    .long Lpt_10193 - Lcpu_fast_base
-    .long Lpt_10194 - Lcpu_fast_base
-    .long Lpt_10195 - Lcpu_fast_base
-    .long Lpt_10196 - Lcpu_fast_base
-    .long Lpt_10197 - Lcpu_fast_base
-    .long Lpt_10198 - Lcpu_fast_base
-    .long Lpt_10199 - Lcpu_fast_base
-    .long Lpt_10200 - Lcpu_fast_base
-    .long Lpt_10201 - Lcpu_fast_base
-    .long Lpt_10202 - Lcpu_fast_base
-    .long Lpt_10203 - Lcpu_fast_base
-    .long Lpt_10204 - Lcpu_fast_base
-    .long Lpt_10205 - Lcpu_fast_base
-    .long Lpt_10206 - Lcpu_fast_base
-    .long Lpt_10207 - Lcpu_fast_base
-    .long Lpt_10208 - Lcpu_fast_base
-    .long Lpt_10209 - Lcpu_fast_base
-    .long Lpt_10210 - Lcpu_fast_base
-    .long Lpt_10211 - Lcpu_fast_base
-    .long Lpt_10212 - Lcpu_fast_base
-    .long Lpt_10213 - Lcpu_fast_base
-    .long Lpt_10214 - Lcpu_fast_base
-    .long Lpt_10215 - Lcpu_fast_base
-    .long Lpt_10216 - Lcpu_fast_base
-    .long Lpt_10217 - Lcpu_fast_base
-    .long Lpt_10218 - Lcpu_fast_base
-    .long Lpt_10219 - Lcpu_fast_base
-    .long Lpt_10220 - Lcpu_fast_base
-    .long Lpt_10221 - Lcpu_fast_base
-    .long Lpt_10222 - Lcpu_fast_base
-    .long Lpt_10223 - Lcpu_fast_base
-    .long Lpt_10224 - Lcpu_fast_base
-    .long Lpt_10225 - Lcpu_fast_base
-    .long Lpt_10226 - Lcpu_fast_base
-    .long Lpt_10227 - Lcpu_fast_base
-    .long Lpt_10228 - Lcpu_fast_base
-    .long Lpt_10229 - Lcpu_fast_base
-    .long Lpt_10230 - Lcpu_fast_base
-    .long Lpt_10231 - Lcpu_fast_base
-    .long Lpt_10232 - Lcpu_fast_base
-    .long Lpt_10233 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10240,6 +10232,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_10234 - Lcpu_fast_base
+    .long Lpt_10235 - Lcpu_fast_base
+    .long Lpt_10236 - Lcpu_fast_base
+    .long Lpt_10237 - Lcpu_fast_base
+    .long Lpt_10238 - Lcpu_fast_base
+    .long Lpt_10239 - Lcpu_fast_base
+    .long Lpt_10240 - Lcpu_fast_base
+    .long Lpt_10241 - Lcpu_fast_base
+    .long Lpt_10242 - Lcpu_fast_base
+    .long Lpt_10243 - Lcpu_fast_base
+    .long Lpt_10244 - Lcpu_fast_base
+    .long Lpt_10245 - Lcpu_fast_base
+    .long Lpt_10246 - Lcpu_fast_base
+    .long Lpt_10247 - Lcpu_fast_base
+    .long Lpt_10248 - Lcpu_fast_base
+    .long Lpt_10249 - Lcpu_fast_base
+    .long Lpt_10250 - Lcpu_fast_base
+    .long Lpt_10251 - Lcpu_fast_base
+    .long Lpt_10252 - Lcpu_fast_base
+    .long Lpt_10253 - Lcpu_fast_base
+    .long Lpt_10254 - Lcpu_fast_base
+    .long Lpt_10255 - Lcpu_fast_base
+    .long Lpt_10256 - Lcpu_fast_base
+    .long Lpt_10257 - Lcpu_fast_base
+    .long Lpt_10258 - Lcpu_fast_base
+    .long Lpt_10259 - Lcpu_fast_base
+    .long Lpt_10260 - Lcpu_fast_base
+    .long Lpt_10261 - Lcpu_fast_base
+    .long Lpt_10262 - Lcpu_fast_base
+    .long Lpt_10263 - Lcpu_fast_base
+    .long Lpt_10264 - Lcpu_fast_base
+    .long Lpt_10265 - Lcpu_fast_base
+    .long Lpt_10266 - Lcpu_fast_base
+    .long Lpt_10267 - Lcpu_fast_base
+    .long Lpt_10268 - Lcpu_fast_base
+    .long Lpt_10269 - Lcpu_fast_base
+    .long Lpt_10270 - Lcpu_fast_base
+    .long Lpt_10271 - Lcpu_fast_base
+    .long Lpt_10272 - Lcpu_fast_base
+    .long Lpt_10273 - Lcpu_fast_base
+    .long Lpt_10274 - Lcpu_fast_base
+    .long Lpt_10275 - Lcpu_fast_base
+    .long Lpt_10276 - Lcpu_fast_base
+    .long Lpt_10277 - Lcpu_fast_base
+    .long Lpt_10278 - Lcpu_fast_base
+    .long Lpt_10279 - Lcpu_fast_base
+    .long Lpt_10280 - Lcpu_fast_base
+    .long Lpt_10281 - Lcpu_fast_base
+    .long Lpt_10282 - Lcpu_fast_base
+    .long Lpt_10283 - Lcpu_fast_base
+    .long Lpt_10284 - Lcpu_fast_base
+    .long Lpt_10285 - Lcpu_fast_base
+    .long Lpt_10286 - Lcpu_fast_base
+    .long Lpt_10287 - Lcpu_fast_base
+    .long Lpt_10288 - Lcpu_fast_base
+    .long Lpt_10289 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10304,62 +10352,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_10306 - Lcpu_fast_base
-    .long Lpt_10307 - Lcpu_fast_base
-    .long Lpt_10308 - Lcpu_fast_base
-    .long Lpt_10309 - Lcpu_fast_base
-    .long Lpt_10310 - Lcpu_fast_base
-    .long Lpt_10311 - Lcpu_fast_base
-    .long Lpt_10312 - Lcpu_fast_base
-    .long Lpt_10313 - Lcpu_fast_base
-    .long Lpt_10314 - Lcpu_fast_base
-    .long Lpt_10315 - Lcpu_fast_base
-    .long Lpt_10316 - Lcpu_fast_base
-    .long Lpt_10317 - Lcpu_fast_base
-    .long Lpt_10318 - Lcpu_fast_base
-    .long Lpt_10319 - Lcpu_fast_base
-    .long Lpt_10320 - Lcpu_fast_base
-    .long Lpt_10321 - Lcpu_fast_base
-    .long Lpt_10322 - Lcpu_fast_base
-    .long Lpt_10323 - Lcpu_fast_base
-    .long Lpt_10324 - Lcpu_fast_base
-    .long Lpt_10325 - Lcpu_fast_base
-    .long Lpt_10326 - Lcpu_fast_base
-    .long Lpt_10327 - Lcpu_fast_base
-    .long Lpt_10328 - Lcpu_fast_base
-    .long Lpt_10329 - Lcpu_fast_base
-    .long Lpt_10330 - Lcpu_fast_base
-    .long Lpt_10331 - Lcpu_fast_base
-    .long Lpt_10332 - Lcpu_fast_base
-    .long Lpt_10333 - Lcpu_fast_base
-    .long Lpt_10334 - Lcpu_fast_base
-    .long Lpt_10335 - Lcpu_fast_base
-    .long Lpt_10336 - Lcpu_fast_base
-    .long Lpt_10337 - Lcpu_fast_base
-    .long Lpt_10338 - Lcpu_fast_base
-    .long Lpt_10339 - Lcpu_fast_base
-    .long Lpt_10340 - Lcpu_fast_base
-    .long Lpt_10341 - Lcpu_fast_base
-    .long Lpt_10342 - Lcpu_fast_base
-    .long Lpt_10343 - Lcpu_fast_base
-    .long Lpt_10344 - Lcpu_fast_base
-    .long Lpt_10345 - Lcpu_fast_base
-    .long Lpt_10346 - Lcpu_fast_base
-    .long Lpt_10347 - Lcpu_fast_base
-    .long Lpt_10348 - Lcpu_fast_base
-    .long Lpt_10349 - Lcpu_fast_base
-    .long Lpt_10350 - Lcpu_fast_base
-    .long Lpt_10351 - Lcpu_fast_base
-    .long Lpt_10352 - Lcpu_fast_base
-    .long Lpt_10353 - Lcpu_fast_base
-    .long Lpt_10354 - Lcpu_fast_base
-    .long Lpt_10355 - Lcpu_fast_base
-    .long Lpt_10356 - Lcpu_fast_base
-    .long Lpt_10357 - Lcpu_fast_base
-    .long Lpt_10358 - Lcpu_fast_base
-    .long Lpt_10359 - Lcpu_fast_base
-    .long Lpt_10360 - Lcpu_fast_base
-    .long Lpt_10361 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10368,6 +10360,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_10362 - Lcpu_fast_base
+    .long Lpt_10363 - Lcpu_fast_base
+    .long Lpt_10364 - Lcpu_fast_base
+    .long Lpt_10365 - Lcpu_fast_base
+    .long Lpt_10366 - Lcpu_fast_base
+    .long Lpt_10367 - Lcpu_fast_base
+    .long Lpt_10368 - Lcpu_fast_base
+    .long Lpt_10369 - Lcpu_fast_base
+    .long Lpt_10370 - Lcpu_fast_base
+    .long Lpt_10371 - Lcpu_fast_base
+    .long Lpt_10372 - Lcpu_fast_base
+    .long Lpt_10373 - Lcpu_fast_base
+    .long Lpt_10374 - Lcpu_fast_base
+    .long Lpt_10375 - Lcpu_fast_base
+    .long Lpt_10376 - Lcpu_fast_base
+    .long Lpt_10377 - Lcpu_fast_base
+    .long Lpt_10378 - Lcpu_fast_base
+    .long Lpt_10379 - Lcpu_fast_base
+    .long Lpt_10380 - Lcpu_fast_base
+    .long Lpt_10381 - Lcpu_fast_base
+    .long Lpt_10382 - Lcpu_fast_base
+    .long Lpt_10383 - Lcpu_fast_base
+    .long Lpt_10384 - Lcpu_fast_base
+    .long Lpt_10385 - Lcpu_fast_base
+    .long Lpt_10386 - Lcpu_fast_base
+    .long Lpt_10387 - Lcpu_fast_base
+    .long Lpt_10388 - Lcpu_fast_base
+    .long Lpt_10389 - Lcpu_fast_base
+    .long Lpt_10390 - Lcpu_fast_base
+    .long Lpt_10391 - Lcpu_fast_base
+    .long Lpt_10392 - Lcpu_fast_base
+    .long Lpt_10393 - Lcpu_fast_base
+    .long Lpt_10394 - Lcpu_fast_base
+    .long Lpt_10395 - Lcpu_fast_base
+    .long Lpt_10396 - Lcpu_fast_base
+    .long Lpt_10397 - Lcpu_fast_base
+    .long Lpt_10398 - Lcpu_fast_base
+    .long Lpt_10399 - Lcpu_fast_base
+    .long Lpt_10400 - Lcpu_fast_base
+    .long Lpt_10401 - Lcpu_fast_base
+    .long Lpt_10402 - Lcpu_fast_base
+    .long Lpt_10403 - Lcpu_fast_base
+    .long Lpt_10404 - Lcpu_fast_base
+    .long Lpt_10405 - Lcpu_fast_base
+    .long Lpt_10406 - Lcpu_fast_base
+    .long Lpt_10407 - Lcpu_fast_base
+    .long Lpt_10408 - Lcpu_fast_base
+    .long Lpt_10409 - Lcpu_fast_base
+    .long Lpt_10410 - Lcpu_fast_base
+    .long Lpt_10411 - Lcpu_fast_base
+    .long Lpt_10412 - Lcpu_fast_base
+    .long Lpt_10413 - Lcpu_fast_base
+    .long Lpt_10414 - Lcpu_fast_base
+    .long Lpt_10415 - Lcpu_fast_base
+    .long Lpt_10416 - Lcpu_fast_base
+    .long Lpt_10417 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10432,62 +10480,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_10434 - Lcpu_fast_base
-    .long Lpt_10435 - Lcpu_fast_base
-    .long Lpt_10436 - Lcpu_fast_base
-    .long Lpt_10437 - Lcpu_fast_base
-    .long Lpt_10438 - Lcpu_fast_base
-    .long Lpt_10439 - Lcpu_fast_base
-    .long Lpt_10440 - Lcpu_fast_base
-    .long Lpt_10441 - Lcpu_fast_base
-    .long Lpt_10442 - Lcpu_fast_base
-    .long Lpt_10443 - Lcpu_fast_base
-    .long Lpt_10444 - Lcpu_fast_base
-    .long Lpt_10445 - Lcpu_fast_base
-    .long Lpt_10446 - Lcpu_fast_base
-    .long Lpt_10447 - Lcpu_fast_base
-    .long Lpt_10448 - Lcpu_fast_base
-    .long Lpt_10449 - Lcpu_fast_base
-    .long Lpt_10450 - Lcpu_fast_base
-    .long Lpt_10451 - Lcpu_fast_base
-    .long Lpt_10452 - Lcpu_fast_base
-    .long Lpt_10453 - Lcpu_fast_base
-    .long Lpt_10454 - Lcpu_fast_base
-    .long Lpt_10455 - Lcpu_fast_base
-    .long Lpt_10456 - Lcpu_fast_base
-    .long Lpt_10457 - Lcpu_fast_base
-    .long Lpt_10458 - Lcpu_fast_base
-    .long Lpt_10459 - Lcpu_fast_base
-    .long Lpt_10460 - Lcpu_fast_base
-    .long Lpt_10461 - Lcpu_fast_base
-    .long Lpt_10462 - Lcpu_fast_base
-    .long Lpt_10463 - Lcpu_fast_base
-    .long Lpt_10464 - Lcpu_fast_base
-    .long Lpt_10465 - Lcpu_fast_base
-    .long Lpt_10466 - Lcpu_fast_base
-    .long Lpt_10467 - Lcpu_fast_base
-    .long Lpt_10468 - Lcpu_fast_base
-    .long Lpt_10469 - Lcpu_fast_base
-    .long Lpt_10470 - Lcpu_fast_base
-    .long Lpt_10471 - Lcpu_fast_base
-    .long Lpt_10472 - Lcpu_fast_base
-    .long Lpt_10473 - Lcpu_fast_base
-    .long Lpt_10474 - Lcpu_fast_base
-    .long Lpt_10475 - Lcpu_fast_base
-    .long Lpt_10476 - Lcpu_fast_base
-    .long Lpt_10477 - Lcpu_fast_base
-    .long Lpt_10478 - Lcpu_fast_base
-    .long Lpt_10479 - Lcpu_fast_base
-    .long Lpt_10480 - Lcpu_fast_base
-    .long Lpt_10481 - Lcpu_fast_base
-    .long Lpt_10482 - Lcpu_fast_base
-    .long Lpt_10483 - Lcpu_fast_base
-    .long Lpt_10484 - Lcpu_fast_base
-    .long Lpt_10485 - Lcpu_fast_base
-    .long Lpt_10486 - Lcpu_fast_base
-    .long Lpt_10487 - Lcpu_fast_base
-    .long Lpt_10488 - Lcpu_fast_base
-    .long Lpt_10489 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_10490 - Lcpu_fast_base
     .long Lpt_10491 - Lcpu_fast_base
     .long Lpt_10492 - Lcpu_fast_base
@@ -10552,14 +10552,14 @@
     .long Lpt_10551 - Lcpu_fast_base
     .long Lpt_10552 - Lcpu_fast_base
     .long Lpt_10553 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_10554 - Lcpu_fast_base
+    .long Lpt_10555 - Lcpu_fast_base
+    .long Lpt_10556 - Lcpu_fast_base
+    .long Lpt_10557 - Lcpu_fast_base
+    .long Lpt_10558 - Lcpu_fast_base
+    .long Lpt_10559 - Lcpu_fast_base
+    .long Lpt_10560 - Lcpu_fast_base
+    .long Lpt_10561 - Lcpu_fast_base
     .long Lpt_10562 - Lcpu_fast_base
     .long Lpt_10563 - Lcpu_fast_base
     .long Lpt_10564 - Lcpu_fast_base
@@ -10608,14 +10608,6 @@
     .long Lpt_10607 - Lcpu_fast_base
     .long Lpt_10608 - Lcpu_fast_base
     .long Lpt_10609 - Lcpu_fast_base
-    .long Lpt_10610 - Lcpu_fast_base
-    .long Lpt_10611 - Lcpu_fast_base
-    .long Lpt_10612 - Lcpu_fast_base
-    .long Lpt_10613 - Lcpu_fast_base
-    .long Lpt_10614 - Lcpu_fast_base
-    .long Lpt_10615 - Lcpu_fast_base
-    .long Lpt_10616 - Lcpu_fast_base
-    .long Lpt_10617 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10624,6 +10616,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_10618 - Lcpu_fast_base
+    .long Lpt_10619 - Lcpu_fast_base
+    .long Lpt_10620 - Lcpu_fast_base
+    .long Lpt_10621 - Lcpu_fast_base
+    .long Lpt_10622 - Lcpu_fast_base
+    .long Lpt_10623 - Lcpu_fast_base
+    .long Lpt_10624 - Lcpu_fast_base
+    .long Lpt_10625 - Lcpu_fast_base
+    .long Lpt_10626 - Lcpu_fast_base
+    .long Lpt_10627 - Lcpu_fast_base
+    .long Lpt_10628 - Lcpu_fast_base
+    .long Lpt_10629 - Lcpu_fast_base
+    .long Lpt_10630 - Lcpu_fast_base
+    .long Lpt_10631 - Lcpu_fast_base
+    .long Lpt_10632 - Lcpu_fast_base
+    .long Lpt_10633 - Lcpu_fast_base
+    .long Lpt_10634 - Lcpu_fast_base
+    .long Lpt_10635 - Lcpu_fast_base
+    .long Lpt_10636 - Lcpu_fast_base
+    .long Lpt_10637 - Lcpu_fast_base
+    .long Lpt_10638 - Lcpu_fast_base
+    .long Lpt_10639 - Lcpu_fast_base
+    .long Lpt_10640 - Lcpu_fast_base
+    .long Lpt_10641 - Lcpu_fast_base
+    .long Lpt_10642 - Lcpu_fast_base
+    .long Lpt_10643 - Lcpu_fast_base
+    .long Lpt_10644 - Lcpu_fast_base
+    .long Lpt_10645 - Lcpu_fast_base
+    .long Lpt_10646 - Lcpu_fast_base
+    .long Lpt_10647 - Lcpu_fast_base
+    .long Lpt_10648 - Lcpu_fast_base
+    .long Lpt_10649 - Lcpu_fast_base
+    .long Lpt_10650 - Lcpu_fast_base
+    .long Lpt_10651 - Lcpu_fast_base
+    .long Lpt_10652 - Lcpu_fast_base
+    .long Lpt_10653 - Lcpu_fast_base
+    .long Lpt_10654 - Lcpu_fast_base
+    .long Lpt_10655 - Lcpu_fast_base
+    .long Lpt_10656 - Lcpu_fast_base
+    .long Lpt_10657 - Lcpu_fast_base
+    .long Lpt_10658 - Lcpu_fast_base
+    .long Lpt_10659 - Lcpu_fast_base
+    .long Lpt_10660 - Lcpu_fast_base
+    .long Lpt_10661 - Lcpu_fast_base
+    .long Lpt_10662 - Lcpu_fast_base
+    .long Lpt_10663 - Lcpu_fast_base
+    .long Lpt_10664 - Lcpu_fast_base
+    .long Lpt_10665 - Lcpu_fast_base
+    .long Lpt_10666 - Lcpu_fast_base
+    .long Lpt_10667 - Lcpu_fast_base
+    .long Lpt_10668 - Lcpu_fast_base
+    .long Lpt_10669 - Lcpu_fast_base
+    .long Lpt_10670 - Lcpu_fast_base
+    .long Lpt_10671 - Lcpu_fast_base
+    .long Lpt_10672 - Lcpu_fast_base
+    .long Lpt_10673 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10688,62 +10736,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_10690 - Lcpu_fast_base
-    .long Lpt_10691 - Lcpu_fast_base
-    .long Lpt_10692 - Lcpu_fast_base
-    .long Lpt_10693 - Lcpu_fast_base
-    .long Lpt_10694 - Lcpu_fast_base
-    .long Lpt_10695 - Lcpu_fast_base
-    .long Lpt_10696 - Lcpu_fast_base
-    .long Lpt_10697 - Lcpu_fast_base
-    .long Lpt_10698 - Lcpu_fast_base
-    .long Lpt_10699 - Lcpu_fast_base
-    .long Lpt_10700 - Lcpu_fast_base
-    .long Lpt_10701 - Lcpu_fast_base
-    .long Lpt_10702 - Lcpu_fast_base
-    .long Lpt_10703 - Lcpu_fast_base
-    .long Lpt_10704 - Lcpu_fast_base
-    .long Lpt_10705 - Lcpu_fast_base
-    .long Lpt_10706 - Lcpu_fast_base
-    .long Lpt_10707 - Lcpu_fast_base
-    .long Lpt_10708 - Lcpu_fast_base
-    .long Lpt_10709 - Lcpu_fast_base
-    .long Lpt_10710 - Lcpu_fast_base
-    .long Lpt_10711 - Lcpu_fast_base
-    .long Lpt_10712 - Lcpu_fast_base
-    .long Lpt_10713 - Lcpu_fast_base
-    .long Lpt_10714 - Lcpu_fast_base
-    .long Lpt_10715 - Lcpu_fast_base
-    .long Lpt_10716 - Lcpu_fast_base
-    .long Lpt_10717 - Lcpu_fast_base
-    .long Lpt_10718 - Lcpu_fast_base
-    .long Lpt_10719 - Lcpu_fast_base
-    .long Lpt_10720 - Lcpu_fast_base
-    .long Lpt_10721 - Lcpu_fast_base
-    .long Lpt_10722 - Lcpu_fast_base
-    .long Lpt_10723 - Lcpu_fast_base
-    .long Lpt_10724 - Lcpu_fast_base
-    .long Lpt_10725 - Lcpu_fast_base
-    .long Lpt_10726 - Lcpu_fast_base
-    .long Lpt_10727 - Lcpu_fast_base
-    .long Lpt_10728 - Lcpu_fast_base
-    .long Lpt_10729 - Lcpu_fast_base
-    .long Lpt_10730 - Lcpu_fast_base
-    .long Lpt_10731 - Lcpu_fast_base
-    .long Lpt_10732 - Lcpu_fast_base
-    .long Lpt_10733 - Lcpu_fast_base
-    .long Lpt_10734 - Lcpu_fast_base
-    .long Lpt_10735 - Lcpu_fast_base
-    .long Lpt_10736 - Lcpu_fast_base
-    .long Lpt_10737 - Lcpu_fast_base
-    .long Lpt_10738 - Lcpu_fast_base
-    .long Lpt_10739 - Lcpu_fast_base
-    .long Lpt_10740 - Lcpu_fast_base
-    .long Lpt_10741 - Lcpu_fast_base
-    .long Lpt_10742 - Lcpu_fast_base
-    .long Lpt_10743 - Lcpu_fast_base
-    .long Lpt_10744 - Lcpu_fast_base
-    .long Lpt_10745 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_10746 - Lcpu_fast_base
     .long Lpt_10747 - Lcpu_fast_base
     .long Lpt_10748 - Lcpu_fast_base
@@ -10808,14 +10808,14 @@
     .long Lpt_10807 - Lcpu_fast_base
     .long Lpt_10808 - Lcpu_fast_base
     .long Lpt_10809 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_10810 - Lcpu_fast_base
+    .long Lpt_10811 - Lcpu_fast_base
+    .long Lpt_10812 - Lcpu_fast_base
+    .long Lpt_10813 - Lcpu_fast_base
+    .long Lpt_10814 - Lcpu_fast_base
+    .long Lpt_10815 - Lcpu_fast_base
+    .long Lpt_10816 - Lcpu_fast_base
+    .long Lpt_10817 - Lcpu_fast_base
     .long Lpt_10818 - Lcpu_fast_base
     .long Lpt_10819 - Lcpu_fast_base
     .long Lpt_10820 - Lcpu_fast_base
@@ -10864,14 +10864,6 @@
     .long Lpt_10863 - Lcpu_fast_base
     .long Lpt_10864 - Lcpu_fast_base
     .long Lpt_10865 - Lcpu_fast_base
-    .long Lpt_10866 - Lcpu_fast_base
-    .long Lpt_10867 - Lcpu_fast_base
-    .long Lpt_10868 - Lcpu_fast_base
-    .long Lpt_10869 - Lcpu_fast_base
-    .long Lpt_10870 - Lcpu_fast_base
-    .long Lpt_10871 - Lcpu_fast_base
-    .long Lpt_10872 - Lcpu_fast_base
-    .long Lpt_10873 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10880,6 +10872,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_10874 - Lcpu_fast_base
+    .long Lpt_10875 - Lcpu_fast_base
+    .long Lpt_10876 - Lcpu_fast_base
+    .long Lpt_10877 - Lcpu_fast_base
+    .long Lpt_10878 - Lcpu_fast_base
+    .long Lpt_10879 - Lcpu_fast_base
+    .long Lpt_10880 - Lcpu_fast_base
+    .long Lpt_10881 - Lcpu_fast_base
+    .long Lpt_10882 - Lcpu_fast_base
+    .long Lpt_10883 - Lcpu_fast_base
+    .long Lpt_10884 - Lcpu_fast_base
+    .long Lpt_10885 - Lcpu_fast_base
+    .long Lpt_10886 - Lcpu_fast_base
+    .long Lpt_10887 - Lcpu_fast_base
+    .long Lpt_10888 - Lcpu_fast_base
+    .long Lpt_10889 - Lcpu_fast_base
+    .long Lpt_10890 - Lcpu_fast_base
+    .long Lpt_10891 - Lcpu_fast_base
+    .long Lpt_10892 - Lcpu_fast_base
+    .long Lpt_10893 - Lcpu_fast_base
+    .long Lpt_10894 - Lcpu_fast_base
+    .long Lpt_10895 - Lcpu_fast_base
+    .long Lpt_10896 - Lcpu_fast_base
+    .long Lpt_10897 - Lcpu_fast_base
+    .long Lpt_10898 - Lcpu_fast_base
+    .long Lpt_10899 - Lcpu_fast_base
+    .long Lpt_10900 - Lcpu_fast_base
+    .long Lpt_10901 - Lcpu_fast_base
+    .long Lpt_10902 - Lcpu_fast_base
+    .long Lpt_10903 - Lcpu_fast_base
+    .long Lpt_10904 - Lcpu_fast_base
+    .long Lpt_10905 - Lcpu_fast_base
+    .long Lpt_10906 - Lcpu_fast_base
+    .long Lpt_10907 - Lcpu_fast_base
+    .long Lpt_10908 - Lcpu_fast_base
+    .long Lpt_10909 - Lcpu_fast_base
+    .long Lpt_10910 - Lcpu_fast_base
+    .long Lpt_10911 - Lcpu_fast_base
+    .long Lpt_10912 - Lcpu_fast_base
+    .long Lpt_10913 - Lcpu_fast_base
+    .long Lpt_10914 - Lcpu_fast_base
+    .long Lpt_10915 - Lcpu_fast_base
+    .long Lpt_10916 - Lcpu_fast_base
+    .long Lpt_10917 - Lcpu_fast_base
+    .long Lpt_10918 - Lcpu_fast_base
+    .long Lpt_10919 - Lcpu_fast_base
+    .long Lpt_10920 - Lcpu_fast_base
+    .long Lpt_10921 - Lcpu_fast_base
+    .long Lpt_10922 - Lcpu_fast_base
+    .long Lpt_10923 - Lcpu_fast_base
+    .long Lpt_10924 - Lcpu_fast_base
+    .long Lpt_10925 - Lcpu_fast_base
+    .long Lpt_10926 - Lcpu_fast_base
+    .long Lpt_10927 - Lcpu_fast_base
+    .long Lpt_10928 - Lcpu_fast_base
+    .long Lpt_10929 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -10944,62 +10992,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_10946 - Lcpu_fast_base
-    .long Lpt_10947 - Lcpu_fast_base
-    .long Lpt_10948 - Lcpu_fast_base
-    .long Lpt_10949 - Lcpu_fast_base
-    .long Lpt_10950 - Lcpu_fast_base
-    .long Lpt_10951 - Lcpu_fast_base
-    .long Lpt_10952 - Lcpu_fast_base
-    .long Lpt_10953 - Lcpu_fast_base
-    .long Lpt_10954 - Lcpu_fast_base
-    .long Lpt_10955 - Lcpu_fast_base
-    .long Lpt_10956 - Lcpu_fast_base
-    .long Lpt_10957 - Lcpu_fast_base
-    .long Lpt_10958 - Lcpu_fast_base
-    .long Lpt_10959 - Lcpu_fast_base
-    .long Lpt_10960 - Lcpu_fast_base
-    .long Lpt_10961 - Lcpu_fast_base
-    .long Lpt_10962 - Lcpu_fast_base
-    .long Lpt_10963 - Lcpu_fast_base
-    .long Lpt_10964 - Lcpu_fast_base
-    .long Lpt_10965 - Lcpu_fast_base
-    .long Lpt_10966 - Lcpu_fast_base
-    .long Lpt_10967 - Lcpu_fast_base
-    .long Lpt_10968 - Lcpu_fast_base
-    .long Lpt_10969 - Lcpu_fast_base
-    .long Lpt_10970 - Lcpu_fast_base
-    .long Lpt_10971 - Lcpu_fast_base
-    .long Lpt_10972 - Lcpu_fast_base
-    .long Lpt_10973 - Lcpu_fast_base
-    .long Lpt_10974 - Lcpu_fast_base
-    .long Lpt_10975 - Lcpu_fast_base
-    .long Lpt_10976 - Lcpu_fast_base
-    .long Lpt_10977 - Lcpu_fast_base
-    .long Lpt_10978 - Lcpu_fast_base
-    .long Lpt_10979 - Lcpu_fast_base
-    .long Lpt_10980 - Lcpu_fast_base
-    .long Lpt_10981 - Lcpu_fast_base
-    .long Lpt_10982 - Lcpu_fast_base
-    .long Lpt_10983 - Lcpu_fast_base
-    .long Lpt_10984 - Lcpu_fast_base
-    .long Lpt_10985 - Lcpu_fast_base
-    .long Lpt_10986 - Lcpu_fast_base
-    .long Lpt_10987 - Lcpu_fast_base
-    .long Lpt_10988 - Lcpu_fast_base
-    .long Lpt_10989 - Lcpu_fast_base
-    .long Lpt_10990 - Lcpu_fast_base
-    .long Lpt_10991 - Lcpu_fast_base
-    .long Lpt_10992 - Lcpu_fast_base
-    .long Lpt_10993 - Lcpu_fast_base
-    .long Lpt_10994 - Lcpu_fast_base
-    .long Lpt_10995 - Lcpu_fast_base
-    .long Lpt_10996 - Lcpu_fast_base
-    .long Lpt_10997 - Lcpu_fast_base
-    .long Lpt_10998 - Lcpu_fast_base
-    .long Lpt_10999 - Lcpu_fast_base
-    .long Lpt_11000 - Lcpu_fast_base
-    .long Lpt_11001 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11008,6 +11000,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_11002 - Lcpu_fast_base
+    .long Lpt_11003 - Lcpu_fast_base
+    .long Lpt_11004 - Lcpu_fast_base
+    .long Lpt_11005 - Lcpu_fast_base
+    .long Lpt_11006 - Lcpu_fast_base
+    .long Lpt_11007 - Lcpu_fast_base
+    .long Lpt_11008 - Lcpu_fast_base
+    .long Lpt_11009 - Lcpu_fast_base
+    .long Lpt_11010 - Lcpu_fast_base
+    .long Lpt_11011 - Lcpu_fast_base
+    .long Lpt_11012 - Lcpu_fast_base
+    .long Lpt_11013 - Lcpu_fast_base
+    .long Lpt_11014 - Lcpu_fast_base
+    .long Lpt_11015 - Lcpu_fast_base
+    .long Lpt_11016 - Lcpu_fast_base
+    .long Lpt_11017 - Lcpu_fast_base
+    .long Lpt_11018 - Lcpu_fast_base
+    .long Lpt_11019 - Lcpu_fast_base
+    .long Lpt_11020 - Lcpu_fast_base
+    .long Lpt_11021 - Lcpu_fast_base
+    .long Lpt_11022 - Lcpu_fast_base
+    .long Lpt_11023 - Lcpu_fast_base
+    .long Lpt_11024 - Lcpu_fast_base
+    .long Lpt_11025 - Lcpu_fast_base
+    .long Lpt_11026 - Lcpu_fast_base
+    .long Lpt_11027 - Lcpu_fast_base
+    .long Lpt_11028 - Lcpu_fast_base
+    .long Lpt_11029 - Lcpu_fast_base
+    .long Lpt_11030 - Lcpu_fast_base
+    .long Lpt_11031 - Lcpu_fast_base
+    .long Lpt_11032 - Lcpu_fast_base
+    .long Lpt_11033 - Lcpu_fast_base
+    .long Lpt_11034 - Lcpu_fast_base
+    .long Lpt_11035 - Lcpu_fast_base
+    .long Lpt_11036 - Lcpu_fast_base
+    .long Lpt_11037 - Lcpu_fast_base
+    .long Lpt_11038 - Lcpu_fast_base
+    .long Lpt_11039 - Lcpu_fast_base
+    .long Lpt_11040 - Lcpu_fast_base
+    .long Lpt_11041 - Lcpu_fast_base
+    .long Lpt_11042 - Lcpu_fast_base
+    .long Lpt_11043 - Lcpu_fast_base
+    .long Lpt_11044 - Lcpu_fast_base
+    .long Lpt_11045 - Lcpu_fast_base
+    .long Lpt_11046 - Lcpu_fast_base
+    .long Lpt_11047 - Lcpu_fast_base
+    .long Lpt_11048 - Lcpu_fast_base
+    .long Lpt_11049 - Lcpu_fast_base
+    .long Lpt_11050 - Lcpu_fast_base
+    .long Lpt_11051 - Lcpu_fast_base
+    .long Lpt_11052 - Lcpu_fast_base
+    .long Lpt_11053 - Lcpu_fast_base
+    .long Lpt_11054 - Lcpu_fast_base
+    .long Lpt_11055 - Lcpu_fast_base
+    .long Lpt_11056 - Lcpu_fast_base
+    .long Lpt_11057 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11072,62 +11120,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_11074 - Lcpu_fast_base
-    .long Lpt_11075 - Lcpu_fast_base
-    .long Lpt_11076 - Lcpu_fast_base
-    .long Lpt_11077 - Lcpu_fast_base
-    .long Lpt_11078 - Lcpu_fast_base
-    .long Lpt_11079 - Lcpu_fast_base
-    .long Lpt_11080 - Lcpu_fast_base
-    .long Lpt_11081 - Lcpu_fast_base
-    .long Lpt_11082 - Lcpu_fast_base
-    .long Lpt_11083 - Lcpu_fast_base
-    .long Lpt_11084 - Lcpu_fast_base
-    .long Lpt_11085 - Lcpu_fast_base
-    .long Lpt_11086 - Lcpu_fast_base
-    .long Lpt_11087 - Lcpu_fast_base
-    .long Lpt_11088 - Lcpu_fast_base
-    .long Lpt_11089 - Lcpu_fast_base
-    .long Lpt_11090 - Lcpu_fast_base
-    .long Lpt_11091 - Lcpu_fast_base
-    .long Lpt_11092 - Lcpu_fast_base
-    .long Lpt_11093 - Lcpu_fast_base
-    .long Lpt_11094 - Lcpu_fast_base
-    .long Lpt_11095 - Lcpu_fast_base
-    .long Lpt_11096 - Lcpu_fast_base
-    .long Lpt_11097 - Lcpu_fast_base
-    .long Lpt_11098 - Lcpu_fast_base
-    .long Lpt_11099 - Lcpu_fast_base
-    .long Lpt_11100 - Lcpu_fast_base
-    .long Lpt_11101 - Lcpu_fast_base
-    .long Lpt_11102 - Lcpu_fast_base
-    .long Lpt_11103 - Lcpu_fast_base
-    .long Lpt_11104 - Lcpu_fast_base
-    .long Lpt_11105 - Lcpu_fast_base
-    .long Lpt_11106 - Lcpu_fast_base
-    .long Lpt_11107 - Lcpu_fast_base
-    .long Lpt_11108 - Lcpu_fast_base
-    .long Lpt_11109 - Lcpu_fast_base
-    .long Lpt_11110 - Lcpu_fast_base
-    .long Lpt_11111 - Lcpu_fast_base
-    .long Lpt_11112 - Lcpu_fast_base
-    .long Lpt_11113 - Lcpu_fast_base
-    .long Lpt_11114 - Lcpu_fast_base
-    .long Lpt_11115 - Lcpu_fast_base
-    .long Lpt_11116 - Lcpu_fast_base
-    .long Lpt_11117 - Lcpu_fast_base
-    .long Lpt_11118 - Lcpu_fast_base
-    .long Lpt_11119 - Lcpu_fast_base
-    .long Lpt_11120 - Lcpu_fast_base
-    .long Lpt_11121 - Lcpu_fast_base
-    .long Lpt_11122 - Lcpu_fast_base
-    .long Lpt_11123 - Lcpu_fast_base
-    .long Lpt_11124 - Lcpu_fast_base
-    .long Lpt_11125 - Lcpu_fast_base
-    .long Lpt_11126 - Lcpu_fast_base
-    .long Lpt_11127 - Lcpu_fast_base
-    .long Lpt_11128 - Lcpu_fast_base
-    .long Lpt_11129 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11136,6 +11128,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_11130 - Lcpu_fast_base
+    .long Lpt_11131 - Lcpu_fast_base
+    .long Lpt_11132 - Lcpu_fast_base
+    .long Lpt_11133 - Lcpu_fast_base
+    .long Lpt_11134 - Lcpu_fast_base
+    .long Lpt_11135 - Lcpu_fast_base
+    .long Lpt_11136 - Lcpu_fast_base
+    .long Lpt_11137 - Lcpu_fast_base
+    .long Lpt_11138 - Lcpu_fast_base
+    .long Lpt_11139 - Lcpu_fast_base
+    .long Lpt_11140 - Lcpu_fast_base
+    .long Lpt_11141 - Lcpu_fast_base
+    .long Lpt_11142 - Lcpu_fast_base
+    .long Lpt_11143 - Lcpu_fast_base
+    .long Lpt_11144 - Lcpu_fast_base
+    .long Lpt_11145 - Lcpu_fast_base
+    .long Lpt_11146 - Lcpu_fast_base
+    .long Lpt_11147 - Lcpu_fast_base
+    .long Lpt_11148 - Lcpu_fast_base
+    .long Lpt_11149 - Lcpu_fast_base
+    .long Lpt_11150 - Lcpu_fast_base
+    .long Lpt_11151 - Lcpu_fast_base
+    .long Lpt_11152 - Lcpu_fast_base
+    .long Lpt_11153 - Lcpu_fast_base
+    .long Lpt_11154 - Lcpu_fast_base
+    .long Lpt_11155 - Lcpu_fast_base
+    .long Lpt_11156 - Lcpu_fast_base
+    .long Lpt_11157 - Lcpu_fast_base
+    .long Lpt_11158 - Lcpu_fast_base
+    .long Lpt_11159 - Lcpu_fast_base
+    .long Lpt_11160 - Lcpu_fast_base
+    .long Lpt_11161 - Lcpu_fast_base
+    .long Lpt_11162 - Lcpu_fast_base
+    .long Lpt_11163 - Lcpu_fast_base
+    .long Lpt_11164 - Lcpu_fast_base
+    .long Lpt_11165 - Lcpu_fast_base
+    .long Lpt_11166 - Lcpu_fast_base
+    .long Lpt_11167 - Lcpu_fast_base
+    .long Lpt_11168 - Lcpu_fast_base
+    .long Lpt_11169 - Lcpu_fast_base
+    .long Lpt_11170 - Lcpu_fast_base
+    .long Lpt_11171 - Lcpu_fast_base
+    .long Lpt_11172 - Lcpu_fast_base
+    .long Lpt_11173 - Lcpu_fast_base
+    .long Lpt_11174 - Lcpu_fast_base
+    .long Lpt_11175 - Lcpu_fast_base
+    .long Lpt_11176 - Lcpu_fast_base
+    .long Lpt_11177 - Lcpu_fast_base
+    .long Lpt_11178 - Lcpu_fast_base
+    .long Lpt_11179 - Lcpu_fast_base
+    .long Lpt_11180 - Lcpu_fast_base
+    .long Lpt_11181 - Lcpu_fast_base
+    .long Lpt_11182 - Lcpu_fast_base
+    .long Lpt_11183 - Lcpu_fast_base
+    .long Lpt_11184 - Lcpu_fast_base
+    .long Lpt_11185 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11200,62 +11248,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_11202 - Lcpu_fast_base
-    .long Lpt_11203 - Lcpu_fast_base
-    .long Lpt_11204 - Lcpu_fast_base
-    .long Lpt_11205 - Lcpu_fast_base
-    .long Lpt_11206 - Lcpu_fast_base
-    .long Lpt_11207 - Lcpu_fast_base
-    .long Lpt_11208 - Lcpu_fast_base
-    .long Lpt_11209 - Lcpu_fast_base
-    .long Lpt_11210 - Lcpu_fast_base
-    .long Lpt_11211 - Lcpu_fast_base
-    .long Lpt_11212 - Lcpu_fast_base
-    .long Lpt_11213 - Lcpu_fast_base
-    .long Lpt_11214 - Lcpu_fast_base
-    .long Lpt_11215 - Lcpu_fast_base
-    .long Lpt_11216 - Lcpu_fast_base
-    .long Lpt_11217 - Lcpu_fast_base
-    .long Lpt_11218 - Lcpu_fast_base
-    .long Lpt_11219 - Lcpu_fast_base
-    .long Lpt_11220 - Lcpu_fast_base
-    .long Lpt_11221 - Lcpu_fast_base
-    .long Lpt_11222 - Lcpu_fast_base
-    .long Lpt_11223 - Lcpu_fast_base
-    .long Lpt_11224 - Lcpu_fast_base
-    .long Lpt_11225 - Lcpu_fast_base
-    .long Lpt_11226 - Lcpu_fast_base
-    .long Lpt_11227 - Lcpu_fast_base
-    .long Lpt_11228 - Lcpu_fast_base
-    .long Lpt_11229 - Lcpu_fast_base
-    .long Lpt_11230 - Lcpu_fast_base
-    .long Lpt_11231 - Lcpu_fast_base
-    .long Lpt_11232 - Lcpu_fast_base
-    .long Lpt_11233 - Lcpu_fast_base
-    .long Lpt_11234 - Lcpu_fast_base
-    .long Lpt_11235 - Lcpu_fast_base
-    .long Lpt_11236 - Lcpu_fast_base
-    .long Lpt_11237 - Lcpu_fast_base
-    .long Lpt_11238 - Lcpu_fast_base
-    .long Lpt_11239 - Lcpu_fast_base
-    .long Lpt_11240 - Lcpu_fast_base
-    .long Lpt_11241 - Lcpu_fast_base
-    .long Lpt_11242 - Lcpu_fast_base
-    .long Lpt_11243 - Lcpu_fast_base
-    .long Lpt_11244 - Lcpu_fast_base
-    .long Lpt_11245 - Lcpu_fast_base
-    .long Lpt_11246 - Lcpu_fast_base
-    .long Lpt_11247 - Lcpu_fast_base
-    .long Lpt_11248 - Lcpu_fast_base
-    .long Lpt_11249 - Lcpu_fast_base
-    .long Lpt_11250 - Lcpu_fast_base
-    .long Lpt_11251 - Lcpu_fast_base
-    .long Lpt_11252 - Lcpu_fast_base
-    .long Lpt_11253 - Lcpu_fast_base
-    .long Lpt_11254 - Lcpu_fast_base
-    .long Lpt_11255 - Lcpu_fast_base
-    .long Lpt_11256 - Lcpu_fast_base
-    .long Lpt_11257 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11264,6 +11256,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_11258 - Lcpu_fast_base
+    .long Lpt_11259 - Lcpu_fast_base
+    .long Lpt_11260 - Lcpu_fast_base
+    .long Lpt_11261 - Lcpu_fast_base
+    .long Lpt_11262 - Lcpu_fast_base
+    .long Lpt_11263 - Lcpu_fast_base
+    .long Lpt_11264 - Lcpu_fast_base
+    .long Lpt_11265 - Lcpu_fast_base
+    .long Lpt_11266 - Lcpu_fast_base
+    .long Lpt_11267 - Lcpu_fast_base
+    .long Lpt_11268 - Lcpu_fast_base
+    .long Lpt_11269 - Lcpu_fast_base
+    .long Lpt_11270 - Lcpu_fast_base
+    .long Lpt_11271 - Lcpu_fast_base
+    .long Lpt_11272 - Lcpu_fast_base
+    .long Lpt_11273 - Lcpu_fast_base
+    .long Lpt_11274 - Lcpu_fast_base
+    .long Lpt_11275 - Lcpu_fast_base
+    .long Lpt_11276 - Lcpu_fast_base
+    .long Lpt_11277 - Lcpu_fast_base
+    .long Lpt_11278 - Lcpu_fast_base
+    .long Lpt_11279 - Lcpu_fast_base
+    .long Lpt_11280 - Lcpu_fast_base
+    .long Lpt_11281 - Lcpu_fast_base
+    .long Lpt_11282 - Lcpu_fast_base
+    .long Lpt_11283 - Lcpu_fast_base
+    .long Lpt_11284 - Lcpu_fast_base
+    .long Lpt_11285 - Lcpu_fast_base
+    .long Lpt_11286 - Lcpu_fast_base
+    .long Lpt_11287 - Lcpu_fast_base
+    .long Lpt_11288 - Lcpu_fast_base
+    .long Lpt_11289 - Lcpu_fast_base
+    .long Lpt_11290 - Lcpu_fast_base
+    .long Lpt_11291 - Lcpu_fast_base
+    .long Lpt_11292 - Lcpu_fast_base
+    .long Lpt_11293 - Lcpu_fast_base
+    .long Lpt_11294 - Lcpu_fast_base
+    .long Lpt_11295 - Lcpu_fast_base
+    .long Lpt_11296 - Lcpu_fast_base
+    .long Lpt_11297 - Lcpu_fast_base
+    .long Lpt_11298 - Lcpu_fast_base
+    .long Lpt_11299 - Lcpu_fast_base
+    .long Lpt_11300 - Lcpu_fast_base
+    .long Lpt_11301 - Lcpu_fast_base
+    .long Lpt_11302 - Lcpu_fast_base
+    .long Lpt_11303 - Lcpu_fast_base
+    .long Lpt_11304 - Lcpu_fast_base
+    .long Lpt_11305 - Lcpu_fast_base
+    .long Lpt_11306 - Lcpu_fast_base
+    .long Lpt_11307 - Lcpu_fast_base
+    .long Lpt_11308 - Lcpu_fast_base
+    .long Lpt_11309 - Lcpu_fast_base
+    .long Lpt_11310 - Lcpu_fast_base
+    .long Lpt_11311 - Lcpu_fast_base
+    .long Lpt_11312 - Lcpu_fast_base
+    .long Lpt_11313 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11328,62 +11376,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_11330 - Lcpu_fast_base
-    .long Lpt_11331 - Lcpu_fast_base
-    .long Lpt_11332 - Lcpu_fast_base
-    .long Lpt_11333 - Lcpu_fast_base
-    .long Lpt_11334 - Lcpu_fast_base
-    .long Lpt_11335 - Lcpu_fast_base
-    .long Lpt_11336 - Lcpu_fast_base
-    .long Lpt_11337 - Lcpu_fast_base
-    .long Lpt_11338 - Lcpu_fast_base
-    .long Lpt_11339 - Lcpu_fast_base
-    .long Lpt_11340 - Lcpu_fast_base
-    .long Lpt_11341 - Lcpu_fast_base
-    .long Lpt_11342 - Lcpu_fast_base
-    .long Lpt_11343 - Lcpu_fast_base
-    .long Lpt_11344 - Lcpu_fast_base
-    .long Lpt_11345 - Lcpu_fast_base
-    .long Lpt_11346 - Lcpu_fast_base
-    .long Lpt_11347 - Lcpu_fast_base
-    .long Lpt_11348 - Lcpu_fast_base
-    .long Lpt_11349 - Lcpu_fast_base
-    .long Lpt_11350 - Lcpu_fast_base
-    .long Lpt_11351 - Lcpu_fast_base
-    .long Lpt_11352 - Lcpu_fast_base
-    .long Lpt_11353 - Lcpu_fast_base
-    .long Lpt_11354 - Lcpu_fast_base
-    .long Lpt_11355 - Lcpu_fast_base
-    .long Lpt_11356 - Lcpu_fast_base
-    .long Lpt_11357 - Lcpu_fast_base
-    .long Lpt_11358 - Lcpu_fast_base
-    .long Lpt_11359 - Lcpu_fast_base
-    .long Lpt_11360 - Lcpu_fast_base
-    .long Lpt_11361 - Lcpu_fast_base
-    .long Lpt_11362 - Lcpu_fast_base
-    .long Lpt_11363 - Lcpu_fast_base
-    .long Lpt_11364 - Lcpu_fast_base
-    .long Lpt_11365 - Lcpu_fast_base
-    .long Lpt_11366 - Lcpu_fast_base
-    .long Lpt_11367 - Lcpu_fast_base
-    .long Lpt_11368 - Lcpu_fast_base
-    .long Lpt_11369 - Lcpu_fast_base
-    .long Lpt_11370 - Lcpu_fast_base
-    .long Lpt_11371 - Lcpu_fast_base
-    .long Lpt_11372 - Lcpu_fast_base
-    .long Lpt_11373 - Lcpu_fast_base
-    .long Lpt_11374 - Lcpu_fast_base
-    .long Lpt_11375 - Lcpu_fast_base
-    .long Lpt_11376 - Lcpu_fast_base
-    .long Lpt_11377 - Lcpu_fast_base
-    .long Lpt_11378 - Lcpu_fast_base
-    .long Lpt_11379 - Lcpu_fast_base
-    .long Lpt_11380 - Lcpu_fast_base
-    .long Lpt_11381 - Lcpu_fast_base
-    .long Lpt_11382 - Lcpu_fast_base
-    .long Lpt_11383 - Lcpu_fast_base
-    .long Lpt_11384 - Lcpu_fast_base
-    .long Lpt_11385 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11392,6 +11384,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_11386 - Lcpu_fast_base
+    .long Lpt_11387 - Lcpu_fast_base
+    .long Lpt_11388 - Lcpu_fast_base
+    .long Lpt_11389 - Lcpu_fast_base
+    .long Lpt_11390 - Lcpu_fast_base
+    .long Lpt_11391 - Lcpu_fast_base
+    .long Lpt_11392 - Lcpu_fast_base
+    .long Lpt_11393 - Lcpu_fast_base
+    .long Lpt_11394 - Lcpu_fast_base
+    .long Lpt_11395 - Lcpu_fast_base
+    .long Lpt_11396 - Lcpu_fast_base
+    .long Lpt_11397 - Lcpu_fast_base
+    .long Lpt_11398 - Lcpu_fast_base
+    .long Lpt_11399 - Lcpu_fast_base
+    .long Lpt_11400 - Lcpu_fast_base
+    .long Lpt_11401 - Lcpu_fast_base
+    .long Lpt_11402 - Lcpu_fast_base
+    .long Lpt_11403 - Lcpu_fast_base
+    .long Lpt_11404 - Lcpu_fast_base
+    .long Lpt_11405 - Lcpu_fast_base
+    .long Lpt_11406 - Lcpu_fast_base
+    .long Lpt_11407 - Lcpu_fast_base
+    .long Lpt_11408 - Lcpu_fast_base
+    .long Lpt_11409 - Lcpu_fast_base
+    .long Lpt_11410 - Lcpu_fast_base
+    .long Lpt_11411 - Lcpu_fast_base
+    .long Lpt_11412 - Lcpu_fast_base
+    .long Lpt_11413 - Lcpu_fast_base
+    .long Lpt_11414 - Lcpu_fast_base
+    .long Lpt_11415 - Lcpu_fast_base
+    .long Lpt_11416 - Lcpu_fast_base
+    .long Lpt_11417 - Lcpu_fast_base
+    .long Lpt_11418 - Lcpu_fast_base
+    .long Lpt_11419 - Lcpu_fast_base
+    .long Lpt_11420 - Lcpu_fast_base
+    .long Lpt_11421 - Lcpu_fast_base
+    .long Lpt_11422 - Lcpu_fast_base
+    .long Lpt_11423 - Lcpu_fast_base
+    .long Lpt_11424 - Lcpu_fast_base
+    .long Lpt_11425 - Lcpu_fast_base
+    .long Lpt_11426 - Lcpu_fast_base
+    .long Lpt_11427 - Lcpu_fast_base
+    .long Lpt_11428 - Lcpu_fast_base
+    .long Lpt_11429 - Lcpu_fast_base
+    .long Lpt_11430 - Lcpu_fast_base
+    .long Lpt_11431 - Lcpu_fast_base
+    .long Lpt_11432 - Lcpu_fast_base
+    .long Lpt_11433 - Lcpu_fast_base
+    .long Lpt_11434 - Lcpu_fast_base
+    .long Lpt_11435 - Lcpu_fast_base
+    .long Lpt_11436 - Lcpu_fast_base
+    .long Lpt_11437 - Lcpu_fast_base
+    .long Lpt_11438 - Lcpu_fast_base
+    .long Lpt_11439 - Lcpu_fast_base
+    .long Lpt_11440 - Lcpu_fast_base
+    .long Lpt_11441 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11456,62 +11504,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_11458 - Lcpu_fast_base
-    .long Lpt_11459 - Lcpu_fast_base
-    .long Lpt_11460 - Lcpu_fast_base
-    .long Lpt_11461 - Lcpu_fast_base
-    .long Lpt_11462 - Lcpu_fast_base
-    .long Lpt_11463 - Lcpu_fast_base
-    .long Lpt_11464 - Lcpu_fast_base
-    .long Lpt_11465 - Lcpu_fast_base
-    .long Lpt_11466 - Lcpu_fast_base
-    .long Lpt_11467 - Lcpu_fast_base
-    .long Lpt_11468 - Lcpu_fast_base
-    .long Lpt_11469 - Lcpu_fast_base
-    .long Lpt_11470 - Lcpu_fast_base
-    .long Lpt_11471 - Lcpu_fast_base
-    .long Lpt_11472 - Lcpu_fast_base
-    .long Lpt_11473 - Lcpu_fast_base
-    .long Lpt_11474 - Lcpu_fast_base
-    .long Lpt_11475 - Lcpu_fast_base
-    .long Lpt_11476 - Lcpu_fast_base
-    .long Lpt_11477 - Lcpu_fast_base
-    .long Lpt_11478 - Lcpu_fast_base
-    .long Lpt_11479 - Lcpu_fast_base
-    .long Lpt_11480 - Lcpu_fast_base
-    .long Lpt_11481 - Lcpu_fast_base
-    .long Lpt_11482 - Lcpu_fast_base
-    .long Lpt_11483 - Lcpu_fast_base
-    .long Lpt_11484 - Lcpu_fast_base
-    .long Lpt_11485 - Lcpu_fast_base
-    .long Lpt_11486 - Lcpu_fast_base
-    .long Lpt_11487 - Lcpu_fast_base
-    .long Lpt_11488 - Lcpu_fast_base
-    .long Lpt_11489 - Lcpu_fast_base
-    .long Lpt_11490 - Lcpu_fast_base
-    .long Lpt_11491 - Lcpu_fast_base
-    .long Lpt_11492 - Lcpu_fast_base
-    .long Lpt_11493 - Lcpu_fast_base
-    .long Lpt_11494 - Lcpu_fast_base
-    .long Lpt_11495 - Lcpu_fast_base
-    .long Lpt_11496 - Lcpu_fast_base
-    .long Lpt_11497 - Lcpu_fast_base
-    .long Lpt_11498 - Lcpu_fast_base
-    .long Lpt_11499 - Lcpu_fast_base
-    .long Lpt_11500 - Lcpu_fast_base
-    .long Lpt_11501 - Lcpu_fast_base
-    .long Lpt_11502 - Lcpu_fast_base
-    .long Lpt_11503 - Lcpu_fast_base
-    .long Lpt_11504 - Lcpu_fast_base
-    .long Lpt_11505 - Lcpu_fast_base
-    .long Lpt_11506 - Lcpu_fast_base
-    .long Lpt_11507 - Lcpu_fast_base
-    .long Lpt_11508 - Lcpu_fast_base
-    .long Lpt_11509 - Lcpu_fast_base
-    .long Lpt_11510 - Lcpu_fast_base
-    .long Lpt_11511 - Lcpu_fast_base
-    .long Lpt_11512 - Lcpu_fast_base
-    .long Lpt_11513 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_11514 - Lcpu_fast_base
     .long Lpt_11515 - Lcpu_fast_base
     .long Lpt_11516 - Lcpu_fast_base
@@ -11576,14 +11576,14 @@
     .long Lpt_11575 - Lcpu_fast_base
     .long Lpt_11576 - Lcpu_fast_base
     .long Lpt_11577 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_11578 - Lcpu_fast_base
+    .long Lpt_11579 - Lcpu_fast_base
+    .long Lpt_11580 - Lcpu_fast_base
+    .long Lpt_11581 - Lcpu_fast_base
+    .long Lpt_11582 - Lcpu_fast_base
+    .long Lpt_11583 - Lcpu_fast_base
+    .long Lpt_11584 - Lcpu_fast_base
+    .long Lpt_11585 - Lcpu_fast_base
     .long Lpt_11586 - Lcpu_fast_base
     .long Lpt_11587 - Lcpu_fast_base
     .long Lpt_11588 - Lcpu_fast_base
@@ -11632,14 +11632,6 @@
     .long Lpt_11631 - Lcpu_fast_base
     .long Lpt_11632 - Lcpu_fast_base
     .long Lpt_11633 - Lcpu_fast_base
-    .long Lpt_11634 - Lcpu_fast_base
-    .long Lpt_11635 - Lcpu_fast_base
-    .long Lpt_11636 - Lcpu_fast_base
-    .long Lpt_11637 - Lcpu_fast_base
-    .long Lpt_11638 - Lcpu_fast_base
-    .long Lpt_11639 - Lcpu_fast_base
-    .long Lpt_11640 - Lcpu_fast_base
-    .long Lpt_11641 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11648,6 +11640,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_11642 - Lcpu_fast_base
+    .long Lpt_11643 - Lcpu_fast_base
+    .long Lpt_11644 - Lcpu_fast_base
+    .long Lpt_11645 - Lcpu_fast_base
+    .long Lpt_11646 - Lcpu_fast_base
+    .long Lpt_11647 - Lcpu_fast_base
+    .long Lpt_11648 - Lcpu_fast_base
+    .long Lpt_11649 - Lcpu_fast_base
+    .long Lpt_11650 - Lcpu_fast_base
+    .long Lpt_11651 - Lcpu_fast_base
+    .long Lpt_11652 - Lcpu_fast_base
+    .long Lpt_11653 - Lcpu_fast_base
+    .long Lpt_11654 - Lcpu_fast_base
+    .long Lpt_11655 - Lcpu_fast_base
+    .long Lpt_11656 - Lcpu_fast_base
+    .long Lpt_11657 - Lcpu_fast_base
+    .long Lpt_11658 - Lcpu_fast_base
+    .long Lpt_11659 - Lcpu_fast_base
+    .long Lpt_11660 - Lcpu_fast_base
+    .long Lpt_11661 - Lcpu_fast_base
+    .long Lpt_11662 - Lcpu_fast_base
+    .long Lpt_11663 - Lcpu_fast_base
+    .long Lpt_11664 - Lcpu_fast_base
+    .long Lpt_11665 - Lcpu_fast_base
+    .long Lpt_11666 - Lcpu_fast_base
+    .long Lpt_11667 - Lcpu_fast_base
+    .long Lpt_11668 - Lcpu_fast_base
+    .long Lpt_11669 - Lcpu_fast_base
+    .long Lpt_11670 - Lcpu_fast_base
+    .long Lpt_11671 - Lcpu_fast_base
+    .long Lpt_11672 - Lcpu_fast_base
+    .long Lpt_11673 - Lcpu_fast_base
+    .long Lpt_11674 - Lcpu_fast_base
+    .long Lpt_11675 - Lcpu_fast_base
+    .long Lpt_11676 - Lcpu_fast_base
+    .long Lpt_11677 - Lcpu_fast_base
+    .long Lpt_11678 - Lcpu_fast_base
+    .long Lpt_11679 - Lcpu_fast_base
+    .long Lpt_11680 - Lcpu_fast_base
+    .long Lpt_11681 - Lcpu_fast_base
+    .long Lpt_11682 - Lcpu_fast_base
+    .long Lpt_11683 - Lcpu_fast_base
+    .long Lpt_11684 - Lcpu_fast_base
+    .long Lpt_11685 - Lcpu_fast_base
+    .long Lpt_11686 - Lcpu_fast_base
+    .long Lpt_11687 - Lcpu_fast_base
+    .long Lpt_11688 - Lcpu_fast_base
+    .long Lpt_11689 - Lcpu_fast_base
+    .long Lpt_11690 - Lcpu_fast_base
+    .long Lpt_11691 - Lcpu_fast_base
+    .long Lpt_11692 - Lcpu_fast_base
+    .long Lpt_11693 - Lcpu_fast_base
+    .long Lpt_11694 - Lcpu_fast_base
+    .long Lpt_11695 - Lcpu_fast_base
+    .long Lpt_11696 - Lcpu_fast_base
+    .long Lpt_11697 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11712,62 +11760,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_11714 - Lcpu_fast_base
-    .long Lpt_11715 - Lcpu_fast_base
-    .long Lpt_11716 - Lcpu_fast_base
-    .long Lpt_11717 - Lcpu_fast_base
-    .long Lpt_11718 - Lcpu_fast_base
-    .long Lpt_11719 - Lcpu_fast_base
-    .long Lpt_11720 - Lcpu_fast_base
-    .long Lpt_11721 - Lcpu_fast_base
-    .long Lpt_11722 - Lcpu_fast_base
-    .long Lpt_11723 - Lcpu_fast_base
-    .long Lpt_11724 - Lcpu_fast_base
-    .long Lpt_11725 - Lcpu_fast_base
-    .long Lpt_11726 - Lcpu_fast_base
-    .long Lpt_11727 - Lcpu_fast_base
-    .long Lpt_11728 - Lcpu_fast_base
-    .long Lpt_11729 - Lcpu_fast_base
-    .long Lpt_11730 - Lcpu_fast_base
-    .long Lpt_11731 - Lcpu_fast_base
-    .long Lpt_11732 - Lcpu_fast_base
-    .long Lpt_11733 - Lcpu_fast_base
-    .long Lpt_11734 - Lcpu_fast_base
-    .long Lpt_11735 - Lcpu_fast_base
-    .long Lpt_11736 - Lcpu_fast_base
-    .long Lpt_11737 - Lcpu_fast_base
-    .long Lpt_11738 - Lcpu_fast_base
-    .long Lpt_11739 - Lcpu_fast_base
-    .long Lpt_11740 - Lcpu_fast_base
-    .long Lpt_11741 - Lcpu_fast_base
-    .long Lpt_11742 - Lcpu_fast_base
-    .long Lpt_11743 - Lcpu_fast_base
-    .long Lpt_11744 - Lcpu_fast_base
-    .long Lpt_11745 - Lcpu_fast_base
-    .long Lpt_11746 - Lcpu_fast_base
-    .long Lpt_11747 - Lcpu_fast_base
-    .long Lpt_11748 - Lcpu_fast_base
-    .long Lpt_11749 - Lcpu_fast_base
-    .long Lpt_11750 - Lcpu_fast_base
-    .long Lpt_11751 - Lcpu_fast_base
-    .long Lpt_11752 - Lcpu_fast_base
-    .long Lpt_11753 - Lcpu_fast_base
-    .long Lpt_11754 - Lcpu_fast_base
-    .long Lpt_11755 - Lcpu_fast_base
-    .long Lpt_11756 - Lcpu_fast_base
-    .long Lpt_11757 - Lcpu_fast_base
-    .long Lpt_11758 - Lcpu_fast_base
-    .long Lpt_11759 - Lcpu_fast_base
-    .long Lpt_11760 - Lcpu_fast_base
-    .long Lpt_11761 - Lcpu_fast_base
-    .long Lpt_11762 - Lcpu_fast_base
-    .long Lpt_11763 - Lcpu_fast_base
-    .long Lpt_11764 - Lcpu_fast_base
-    .long Lpt_11765 - Lcpu_fast_base
-    .long Lpt_11766 - Lcpu_fast_base
-    .long Lpt_11767 - Lcpu_fast_base
-    .long Lpt_11768 - Lcpu_fast_base
-    .long Lpt_11769 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_11770 - Lcpu_fast_base
     .long Lpt_11771 - Lcpu_fast_base
     .long Lpt_11772 - Lcpu_fast_base
@@ -11832,14 +11832,14 @@
     .long Lpt_11831 - Lcpu_fast_base
     .long Lpt_11832 - Lcpu_fast_base
     .long Lpt_11833 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_11834 - Lcpu_fast_base
+    .long Lpt_11835 - Lcpu_fast_base
+    .long Lpt_11836 - Lcpu_fast_base
+    .long Lpt_11837 - Lcpu_fast_base
+    .long Lpt_11838 - Lcpu_fast_base
+    .long Lpt_11839 - Lcpu_fast_base
+    .long Lpt_11840 - Lcpu_fast_base
+    .long Lpt_11841 - Lcpu_fast_base
     .long Lpt_11842 - Lcpu_fast_base
     .long Lpt_11843 - Lcpu_fast_base
     .long Lpt_11844 - Lcpu_fast_base
@@ -11888,14 +11888,6 @@
     .long Lpt_11887 - Lcpu_fast_base
     .long Lpt_11888 - Lcpu_fast_base
     .long Lpt_11889 - Lcpu_fast_base
-    .long Lpt_11890 - Lcpu_fast_base
-    .long Lpt_11891 - Lcpu_fast_base
-    .long Lpt_11892 - Lcpu_fast_base
-    .long Lpt_11893 - Lcpu_fast_base
-    .long Lpt_11894 - Lcpu_fast_base
-    .long Lpt_11895 - Lcpu_fast_base
-    .long Lpt_11896 - Lcpu_fast_base
-    .long Lpt_11897 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11904,6 +11896,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_11898 - Lcpu_fast_base
+    .long Lpt_11899 - Lcpu_fast_base
+    .long Lpt_11900 - Lcpu_fast_base
+    .long Lpt_11901 - Lcpu_fast_base
+    .long Lpt_11902 - Lcpu_fast_base
+    .long Lpt_11903 - Lcpu_fast_base
+    .long Lpt_11904 - Lcpu_fast_base
+    .long Lpt_11905 - Lcpu_fast_base
+    .long Lpt_11906 - Lcpu_fast_base
+    .long Lpt_11907 - Lcpu_fast_base
+    .long Lpt_11908 - Lcpu_fast_base
+    .long Lpt_11909 - Lcpu_fast_base
+    .long Lpt_11910 - Lcpu_fast_base
+    .long Lpt_11911 - Lcpu_fast_base
+    .long Lpt_11912 - Lcpu_fast_base
+    .long Lpt_11913 - Lcpu_fast_base
+    .long Lpt_11914 - Lcpu_fast_base
+    .long Lpt_11915 - Lcpu_fast_base
+    .long Lpt_11916 - Lcpu_fast_base
+    .long Lpt_11917 - Lcpu_fast_base
+    .long Lpt_11918 - Lcpu_fast_base
+    .long Lpt_11919 - Lcpu_fast_base
+    .long Lpt_11920 - Lcpu_fast_base
+    .long Lpt_11921 - Lcpu_fast_base
+    .long Lpt_11922 - Lcpu_fast_base
+    .long Lpt_11923 - Lcpu_fast_base
+    .long Lpt_11924 - Lcpu_fast_base
+    .long Lpt_11925 - Lcpu_fast_base
+    .long Lpt_11926 - Lcpu_fast_base
+    .long Lpt_11927 - Lcpu_fast_base
+    .long Lpt_11928 - Lcpu_fast_base
+    .long Lpt_11929 - Lcpu_fast_base
+    .long Lpt_11930 - Lcpu_fast_base
+    .long Lpt_11931 - Lcpu_fast_base
+    .long Lpt_11932 - Lcpu_fast_base
+    .long Lpt_11933 - Lcpu_fast_base
+    .long Lpt_11934 - Lcpu_fast_base
+    .long Lpt_11935 - Lcpu_fast_base
+    .long Lpt_11936 - Lcpu_fast_base
+    .long Lpt_11937 - Lcpu_fast_base
+    .long Lpt_11938 - Lcpu_fast_base
+    .long Lpt_11939 - Lcpu_fast_base
+    .long Lpt_11940 - Lcpu_fast_base
+    .long Lpt_11941 - Lcpu_fast_base
+    .long Lpt_11942 - Lcpu_fast_base
+    .long Lpt_11943 - Lcpu_fast_base
+    .long Lpt_11944 - Lcpu_fast_base
+    .long Lpt_11945 - Lcpu_fast_base
+    .long Lpt_11946 - Lcpu_fast_base
+    .long Lpt_11947 - Lcpu_fast_base
+    .long Lpt_11948 - Lcpu_fast_base
+    .long Lpt_11949 - Lcpu_fast_base
+    .long Lpt_11950 - Lcpu_fast_base
+    .long Lpt_11951 - Lcpu_fast_base
+    .long Lpt_11952 - Lcpu_fast_base
+    .long Lpt_11953 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -11968,62 +12016,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_11970 - Lcpu_fast_base
-    .long Lpt_11971 - Lcpu_fast_base
-    .long Lpt_11972 - Lcpu_fast_base
-    .long Lpt_11973 - Lcpu_fast_base
-    .long Lpt_11974 - Lcpu_fast_base
-    .long Lpt_11975 - Lcpu_fast_base
-    .long Lpt_11976 - Lcpu_fast_base
-    .long Lpt_11977 - Lcpu_fast_base
-    .long Lpt_11978 - Lcpu_fast_base
-    .long Lpt_11979 - Lcpu_fast_base
-    .long Lpt_11980 - Lcpu_fast_base
-    .long Lpt_11981 - Lcpu_fast_base
-    .long Lpt_11982 - Lcpu_fast_base
-    .long Lpt_11983 - Lcpu_fast_base
-    .long Lpt_11984 - Lcpu_fast_base
-    .long Lpt_11985 - Lcpu_fast_base
-    .long Lpt_11986 - Lcpu_fast_base
-    .long Lpt_11987 - Lcpu_fast_base
-    .long Lpt_11988 - Lcpu_fast_base
-    .long Lpt_11989 - Lcpu_fast_base
-    .long Lpt_11990 - Lcpu_fast_base
-    .long Lpt_11991 - Lcpu_fast_base
-    .long Lpt_11992 - Lcpu_fast_base
-    .long Lpt_11993 - Lcpu_fast_base
-    .long Lpt_11994 - Lcpu_fast_base
-    .long Lpt_11995 - Lcpu_fast_base
-    .long Lpt_11996 - Lcpu_fast_base
-    .long Lpt_11997 - Lcpu_fast_base
-    .long Lpt_11998 - Lcpu_fast_base
-    .long Lpt_11999 - Lcpu_fast_base
-    .long Lpt_12000 - Lcpu_fast_base
-    .long Lpt_12001 - Lcpu_fast_base
-    .long Lpt_12002 - Lcpu_fast_base
-    .long Lpt_12003 - Lcpu_fast_base
-    .long Lpt_12004 - Lcpu_fast_base
-    .long Lpt_12005 - Lcpu_fast_base
-    .long Lpt_12006 - Lcpu_fast_base
-    .long Lpt_12007 - Lcpu_fast_base
-    .long Lpt_12008 - Lcpu_fast_base
-    .long Lpt_12009 - Lcpu_fast_base
-    .long Lpt_12010 - Lcpu_fast_base
-    .long Lpt_12011 - Lcpu_fast_base
-    .long Lpt_12012 - Lcpu_fast_base
-    .long Lpt_12013 - Lcpu_fast_base
-    .long Lpt_12014 - Lcpu_fast_base
-    .long Lpt_12015 - Lcpu_fast_base
-    .long Lpt_12016 - Lcpu_fast_base
-    .long Lpt_12017 - Lcpu_fast_base
-    .long Lpt_12018 - Lcpu_fast_base
-    .long Lpt_12019 - Lcpu_fast_base
-    .long Lpt_12020 - Lcpu_fast_base
-    .long Lpt_12021 - Lcpu_fast_base
-    .long Lpt_12022 - Lcpu_fast_base
-    .long Lpt_12023 - Lcpu_fast_base
-    .long Lpt_12024 - Lcpu_fast_base
-    .long Lpt_12025 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_12026 - Lcpu_fast_base
     .long Lpt_12027 - Lcpu_fast_base
     .long Lpt_12028 - Lcpu_fast_base
@@ -12088,14 +12088,14 @@
     .long Lpt_12087 - Lcpu_fast_base
     .long Lpt_12088 - Lcpu_fast_base
     .long Lpt_12089 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_12090 - Lcpu_fast_base
+    .long Lpt_12091 - Lcpu_fast_base
+    .long Lpt_12092 - Lcpu_fast_base
+    .long Lpt_12093 - Lcpu_fast_base
+    .long Lpt_12094 - Lcpu_fast_base
+    .long Lpt_12095 - Lcpu_fast_base
+    .long Lpt_12096 - Lcpu_fast_base
+    .long Lpt_12097 - Lcpu_fast_base
     .long Lpt_12098 - Lcpu_fast_base
     .long Lpt_12099 - Lcpu_fast_base
     .long Lpt_12100 - Lcpu_fast_base
@@ -12144,14 +12144,6 @@
     .long Lpt_12143 - Lcpu_fast_base
     .long Lpt_12144 - Lcpu_fast_base
     .long Lpt_12145 - Lcpu_fast_base
-    .long Lpt_12146 - Lcpu_fast_base
-    .long Lpt_12147 - Lcpu_fast_base
-    .long Lpt_12148 - Lcpu_fast_base
-    .long Lpt_12149 - Lcpu_fast_base
-    .long Lpt_12150 - Lcpu_fast_base
-    .long Lpt_12151 - Lcpu_fast_base
-    .long Lpt_12152 - Lcpu_fast_base
-    .long Lpt_12153 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12160,6 +12152,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_12154 - Lcpu_fast_base
+    .long Lpt_12155 - Lcpu_fast_base
+    .long Lpt_12156 - Lcpu_fast_base
+    .long Lpt_12157 - Lcpu_fast_base
+    .long Lpt_12158 - Lcpu_fast_base
+    .long Lpt_12159 - Lcpu_fast_base
+    .long Lpt_12160 - Lcpu_fast_base
+    .long Lpt_12161 - Lcpu_fast_base
+    .long Lpt_12162 - Lcpu_fast_base
+    .long Lpt_12163 - Lcpu_fast_base
+    .long Lpt_12164 - Lcpu_fast_base
+    .long Lpt_12165 - Lcpu_fast_base
+    .long Lpt_12166 - Lcpu_fast_base
+    .long Lpt_12167 - Lcpu_fast_base
+    .long Lpt_12168 - Lcpu_fast_base
+    .long Lpt_12169 - Lcpu_fast_base
+    .long Lpt_12170 - Lcpu_fast_base
+    .long Lpt_12171 - Lcpu_fast_base
+    .long Lpt_12172 - Lcpu_fast_base
+    .long Lpt_12173 - Lcpu_fast_base
+    .long Lpt_12174 - Lcpu_fast_base
+    .long Lpt_12175 - Lcpu_fast_base
+    .long Lpt_12176 - Lcpu_fast_base
+    .long Lpt_12177 - Lcpu_fast_base
+    .long Lpt_12178 - Lcpu_fast_base
+    .long Lpt_12179 - Lcpu_fast_base
+    .long Lpt_12180 - Lcpu_fast_base
+    .long Lpt_12181 - Lcpu_fast_base
+    .long Lpt_12182 - Lcpu_fast_base
+    .long Lpt_12183 - Lcpu_fast_base
+    .long Lpt_12184 - Lcpu_fast_base
+    .long Lpt_12185 - Lcpu_fast_base
+    .long Lpt_12186 - Lcpu_fast_base
+    .long Lpt_12187 - Lcpu_fast_base
+    .long Lpt_12188 - Lcpu_fast_base
+    .long Lpt_12189 - Lcpu_fast_base
+    .long Lpt_12190 - Lcpu_fast_base
+    .long Lpt_12191 - Lcpu_fast_base
+    .long Lpt_12192 - Lcpu_fast_base
+    .long Lpt_12193 - Lcpu_fast_base
+    .long Lpt_12194 - Lcpu_fast_base
+    .long Lpt_12195 - Lcpu_fast_base
+    .long Lpt_12196 - Lcpu_fast_base
+    .long Lpt_12197 - Lcpu_fast_base
+    .long Lpt_12198 - Lcpu_fast_base
+    .long Lpt_12199 - Lcpu_fast_base
+    .long Lpt_12200 - Lcpu_fast_base
+    .long Lpt_12201 - Lcpu_fast_base
+    .long Lpt_12202 - Lcpu_fast_base
+    .long Lpt_12203 - Lcpu_fast_base
+    .long Lpt_12204 - Lcpu_fast_base
+    .long Lpt_12205 - Lcpu_fast_base
+    .long Lpt_12206 - Lcpu_fast_base
+    .long Lpt_12207 - Lcpu_fast_base
+    .long Lpt_12208 - Lcpu_fast_base
+    .long Lpt_12209 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12224,62 +12272,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_12226 - Lcpu_fast_base
-    .long Lpt_12227 - Lcpu_fast_base
-    .long Lpt_12228 - Lcpu_fast_base
-    .long Lpt_12229 - Lcpu_fast_base
-    .long Lpt_12230 - Lcpu_fast_base
-    .long Lpt_12231 - Lcpu_fast_base
-    .long Lpt_12232 - Lcpu_fast_base
-    .long Lpt_12233 - Lcpu_fast_base
-    .long Lpt_12234 - Lcpu_fast_base
-    .long Lpt_12235 - Lcpu_fast_base
-    .long Lpt_12236 - Lcpu_fast_base
-    .long Lpt_12237 - Lcpu_fast_base
-    .long Lpt_12238 - Lcpu_fast_base
-    .long Lpt_12239 - Lcpu_fast_base
-    .long Lpt_12240 - Lcpu_fast_base
-    .long Lpt_12241 - Lcpu_fast_base
-    .long Lpt_12242 - Lcpu_fast_base
-    .long Lpt_12243 - Lcpu_fast_base
-    .long Lpt_12244 - Lcpu_fast_base
-    .long Lpt_12245 - Lcpu_fast_base
-    .long Lpt_12246 - Lcpu_fast_base
-    .long Lpt_12247 - Lcpu_fast_base
-    .long Lpt_12248 - Lcpu_fast_base
-    .long Lpt_12249 - Lcpu_fast_base
-    .long Lpt_12250 - Lcpu_fast_base
-    .long Lpt_12251 - Lcpu_fast_base
-    .long Lpt_12252 - Lcpu_fast_base
-    .long Lpt_12253 - Lcpu_fast_base
-    .long Lpt_12254 - Lcpu_fast_base
-    .long Lpt_12255 - Lcpu_fast_base
-    .long Lpt_12256 - Lcpu_fast_base
-    .long Lpt_12257 - Lcpu_fast_base
-    .long Lpt_12258 - Lcpu_fast_base
-    .long Lpt_12259 - Lcpu_fast_base
-    .long Lpt_12260 - Lcpu_fast_base
-    .long Lpt_12261 - Lcpu_fast_base
-    .long Lpt_12262 - Lcpu_fast_base
-    .long Lpt_12263 - Lcpu_fast_base
-    .long Lpt_12264 - Lcpu_fast_base
-    .long Lpt_12265 - Lcpu_fast_base
-    .long Lpt_12266 - Lcpu_fast_base
-    .long Lpt_12267 - Lcpu_fast_base
-    .long Lpt_12268 - Lcpu_fast_base
-    .long Lpt_12269 - Lcpu_fast_base
-    .long Lpt_12270 - Lcpu_fast_base
-    .long Lpt_12271 - Lcpu_fast_base
-    .long Lpt_12272 - Lcpu_fast_base
-    .long Lpt_12273 - Lcpu_fast_base
-    .long Lpt_12274 - Lcpu_fast_base
-    .long Lpt_12275 - Lcpu_fast_base
-    .long Lpt_12276 - Lcpu_fast_base
-    .long Lpt_12277 - Lcpu_fast_base
-    .long Lpt_12278 - Lcpu_fast_base
-    .long Lpt_12279 - Lcpu_fast_base
-    .long Lpt_12280 - Lcpu_fast_base
-    .long Lpt_12281 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12288,6 +12280,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_12282 - Lcpu_fast_base
+    .long Lpt_12283 - Lcpu_fast_base
+    .long Lpt_12284 - Lcpu_fast_base
+    .long Lpt_12285 - Lcpu_fast_base
+    .long Lpt_12286 - Lcpu_fast_base
+    .long Lpt_12287 - Lcpu_fast_base
+    .long Lpt_12288 - Lcpu_fast_base
+    .long Lpt_12289 - Lcpu_fast_base
+    .long Lpt_12290 - Lcpu_fast_base
+    .long Lpt_12291 - Lcpu_fast_base
+    .long Lpt_12292 - Lcpu_fast_base
+    .long Lpt_12293 - Lcpu_fast_base
+    .long Lpt_12294 - Lcpu_fast_base
+    .long Lpt_12295 - Lcpu_fast_base
+    .long Lpt_12296 - Lcpu_fast_base
+    .long Lpt_12297 - Lcpu_fast_base
+    .long Lpt_12298 - Lcpu_fast_base
+    .long Lpt_12299 - Lcpu_fast_base
+    .long Lpt_12300 - Lcpu_fast_base
+    .long Lpt_12301 - Lcpu_fast_base
+    .long Lpt_12302 - Lcpu_fast_base
+    .long Lpt_12303 - Lcpu_fast_base
+    .long Lpt_12304 - Lcpu_fast_base
+    .long Lpt_12305 - Lcpu_fast_base
+    .long Lpt_12306 - Lcpu_fast_base
+    .long Lpt_12307 - Lcpu_fast_base
+    .long Lpt_12308 - Lcpu_fast_base
+    .long Lpt_12309 - Lcpu_fast_base
+    .long Lpt_12310 - Lcpu_fast_base
+    .long Lpt_12311 - Lcpu_fast_base
+    .long Lpt_12312 - Lcpu_fast_base
+    .long Lpt_12313 - Lcpu_fast_base
+    .long Lpt_12314 - Lcpu_fast_base
+    .long Lpt_12315 - Lcpu_fast_base
+    .long Lpt_12316 - Lcpu_fast_base
+    .long Lpt_12317 - Lcpu_fast_base
+    .long Lpt_12318 - Lcpu_fast_base
+    .long Lpt_12319 - Lcpu_fast_base
+    .long Lpt_12320 - Lcpu_fast_base
+    .long Lpt_12321 - Lcpu_fast_base
+    .long Lpt_12322 - Lcpu_fast_base
+    .long Lpt_12323 - Lcpu_fast_base
+    .long Lpt_12324 - Lcpu_fast_base
+    .long Lpt_12325 - Lcpu_fast_base
+    .long Lpt_12326 - Lcpu_fast_base
+    .long Lpt_12327 - Lcpu_fast_base
+    .long Lpt_12328 - Lcpu_fast_base
+    .long Lpt_12329 - Lcpu_fast_base
+    .long Lpt_12330 - Lcpu_fast_base
+    .long Lpt_12331 - Lcpu_fast_base
+    .long Lpt_12332 - Lcpu_fast_base
+    .long Lpt_12333 - Lcpu_fast_base
+    .long Lpt_12334 - Lcpu_fast_base
+    .long Lpt_12335 - Lcpu_fast_base
+    .long Lpt_12336 - Lcpu_fast_base
+    .long Lpt_12337 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12352,62 +12400,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_12354 - Lcpu_fast_base
-    .long Lpt_12355 - Lcpu_fast_base
-    .long Lpt_12356 - Lcpu_fast_base
-    .long Lpt_12357 - Lcpu_fast_base
-    .long Lpt_12358 - Lcpu_fast_base
-    .long Lpt_12359 - Lcpu_fast_base
-    .long Lpt_12360 - Lcpu_fast_base
-    .long Lpt_12361 - Lcpu_fast_base
-    .long Lpt_12362 - Lcpu_fast_base
-    .long Lpt_12363 - Lcpu_fast_base
-    .long Lpt_12364 - Lcpu_fast_base
-    .long Lpt_12365 - Lcpu_fast_base
-    .long Lpt_12366 - Lcpu_fast_base
-    .long Lpt_12367 - Lcpu_fast_base
-    .long Lpt_12368 - Lcpu_fast_base
-    .long Lpt_12369 - Lcpu_fast_base
-    .long Lpt_12370 - Lcpu_fast_base
-    .long Lpt_12371 - Lcpu_fast_base
-    .long Lpt_12372 - Lcpu_fast_base
-    .long Lpt_12373 - Lcpu_fast_base
-    .long Lpt_12374 - Lcpu_fast_base
-    .long Lpt_12375 - Lcpu_fast_base
-    .long Lpt_12376 - Lcpu_fast_base
-    .long Lpt_12377 - Lcpu_fast_base
-    .long Lpt_12378 - Lcpu_fast_base
-    .long Lpt_12379 - Lcpu_fast_base
-    .long Lpt_12380 - Lcpu_fast_base
-    .long Lpt_12381 - Lcpu_fast_base
-    .long Lpt_12382 - Lcpu_fast_base
-    .long Lpt_12383 - Lcpu_fast_base
-    .long Lpt_12384 - Lcpu_fast_base
-    .long Lpt_12385 - Lcpu_fast_base
-    .long Lpt_12386 - Lcpu_fast_base
-    .long Lpt_12387 - Lcpu_fast_base
-    .long Lpt_12388 - Lcpu_fast_base
-    .long Lpt_12389 - Lcpu_fast_base
-    .long Lpt_12390 - Lcpu_fast_base
-    .long Lpt_12391 - Lcpu_fast_base
-    .long Lpt_12392 - Lcpu_fast_base
-    .long Lpt_12393 - Lcpu_fast_base
-    .long Lpt_12394 - Lcpu_fast_base
-    .long Lpt_12395 - Lcpu_fast_base
-    .long Lpt_12396 - Lcpu_fast_base
-    .long Lpt_12397 - Lcpu_fast_base
-    .long Lpt_12398 - Lcpu_fast_base
-    .long Lpt_12399 - Lcpu_fast_base
-    .long Lpt_12400 - Lcpu_fast_base
-    .long Lpt_12401 - Lcpu_fast_base
-    .long Lpt_12402 - Lcpu_fast_base
-    .long Lpt_12403 - Lcpu_fast_base
-    .long Lpt_12404 - Lcpu_fast_base
-    .long Lpt_12405 - Lcpu_fast_base
-    .long Lpt_12406 - Lcpu_fast_base
-    .long Lpt_12407 - Lcpu_fast_base
-    .long Lpt_12408 - Lcpu_fast_base
-    .long Lpt_12409 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12416,6 +12408,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_12410 - Lcpu_fast_base
+    .long Lpt_12411 - Lcpu_fast_base
+    .long Lpt_12412 - Lcpu_fast_base
+    .long Lpt_12413 - Lcpu_fast_base
+    .long Lpt_12414 - Lcpu_fast_base
+    .long Lpt_12415 - Lcpu_fast_base
+    .long Lpt_12416 - Lcpu_fast_base
+    .long Lpt_12417 - Lcpu_fast_base
+    .long Lpt_12418 - Lcpu_fast_base
+    .long Lpt_12419 - Lcpu_fast_base
+    .long Lpt_12420 - Lcpu_fast_base
+    .long Lpt_12421 - Lcpu_fast_base
+    .long Lpt_12422 - Lcpu_fast_base
+    .long Lpt_12423 - Lcpu_fast_base
+    .long Lpt_12424 - Lcpu_fast_base
+    .long Lpt_12425 - Lcpu_fast_base
+    .long Lpt_12426 - Lcpu_fast_base
+    .long Lpt_12427 - Lcpu_fast_base
+    .long Lpt_12428 - Lcpu_fast_base
+    .long Lpt_12429 - Lcpu_fast_base
+    .long Lpt_12430 - Lcpu_fast_base
+    .long Lpt_12431 - Lcpu_fast_base
+    .long Lpt_12432 - Lcpu_fast_base
+    .long Lpt_12433 - Lcpu_fast_base
+    .long Lpt_12434 - Lcpu_fast_base
+    .long Lpt_12435 - Lcpu_fast_base
+    .long Lpt_12436 - Lcpu_fast_base
+    .long Lpt_12437 - Lcpu_fast_base
+    .long Lpt_12438 - Lcpu_fast_base
+    .long Lpt_12439 - Lcpu_fast_base
+    .long Lpt_12440 - Lcpu_fast_base
+    .long Lpt_12441 - Lcpu_fast_base
+    .long Lpt_12442 - Lcpu_fast_base
+    .long Lpt_12443 - Lcpu_fast_base
+    .long Lpt_12444 - Lcpu_fast_base
+    .long Lpt_12445 - Lcpu_fast_base
+    .long Lpt_12446 - Lcpu_fast_base
+    .long Lpt_12447 - Lcpu_fast_base
+    .long Lpt_12448 - Lcpu_fast_base
+    .long Lpt_12449 - Lcpu_fast_base
+    .long Lpt_12450 - Lcpu_fast_base
+    .long Lpt_12451 - Lcpu_fast_base
+    .long Lpt_12452 - Lcpu_fast_base
+    .long Lpt_12453 - Lcpu_fast_base
+    .long Lpt_12454 - Lcpu_fast_base
+    .long Lpt_12455 - Lcpu_fast_base
+    .long Lpt_12456 - Lcpu_fast_base
+    .long Lpt_12457 - Lcpu_fast_base
+    .long Lpt_12458 - Lcpu_fast_base
+    .long Lpt_12459 - Lcpu_fast_base
+    .long Lpt_12460 - Lcpu_fast_base
+    .long Lpt_12461 - Lcpu_fast_base
+    .long Lpt_12462 - Lcpu_fast_base
+    .long Lpt_12463 - Lcpu_fast_base
+    .long Lpt_12464 - Lcpu_fast_base
+    .long Lpt_12465 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12480,62 +12528,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_12482 - Lcpu_fast_base
-    .long Lpt_12483 - Lcpu_fast_base
-    .long Lpt_12484 - Lcpu_fast_base
-    .long Lpt_12485 - Lcpu_fast_base
-    .long Lpt_12486 - Lcpu_fast_base
-    .long Lpt_12487 - Lcpu_fast_base
-    .long Lpt_12488 - Lcpu_fast_base
-    .long Lpt_12489 - Lcpu_fast_base
-    .long Lpt_12490 - Lcpu_fast_base
-    .long Lpt_12491 - Lcpu_fast_base
-    .long Lpt_12492 - Lcpu_fast_base
-    .long Lpt_12493 - Lcpu_fast_base
-    .long Lpt_12494 - Lcpu_fast_base
-    .long Lpt_12495 - Lcpu_fast_base
-    .long Lpt_12496 - Lcpu_fast_base
-    .long Lpt_12497 - Lcpu_fast_base
-    .long Lpt_12498 - Lcpu_fast_base
-    .long Lpt_12499 - Lcpu_fast_base
-    .long Lpt_12500 - Lcpu_fast_base
-    .long Lpt_12501 - Lcpu_fast_base
-    .long Lpt_12502 - Lcpu_fast_base
-    .long Lpt_12503 - Lcpu_fast_base
-    .long Lpt_12504 - Lcpu_fast_base
-    .long Lpt_12505 - Lcpu_fast_base
-    .long Lpt_12506 - Lcpu_fast_base
-    .long Lpt_12507 - Lcpu_fast_base
-    .long Lpt_12508 - Lcpu_fast_base
-    .long Lpt_12509 - Lcpu_fast_base
-    .long Lpt_12510 - Lcpu_fast_base
-    .long Lpt_12511 - Lcpu_fast_base
-    .long Lpt_12512 - Lcpu_fast_base
-    .long Lpt_12513 - Lcpu_fast_base
-    .long Lpt_12514 - Lcpu_fast_base
-    .long Lpt_12515 - Lcpu_fast_base
-    .long Lpt_12516 - Lcpu_fast_base
-    .long Lpt_12517 - Lcpu_fast_base
-    .long Lpt_12518 - Lcpu_fast_base
-    .long Lpt_12519 - Lcpu_fast_base
-    .long Lpt_12520 - Lcpu_fast_base
-    .long Lpt_12521 - Lcpu_fast_base
-    .long Lpt_12522 - Lcpu_fast_base
-    .long Lpt_12523 - Lcpu_fast_base
-    .long Lpt_12524 - Lcpu_fast_base
-    .long Lpt_12525 - Lcpu_fast_base
-    .long Lpt_12526 - Lcpu_fast_base
-    .long Lpt_12527 - Lcpu_fast_base
-    .long Lpt_12528 - Lcpu_fast_base
-    .long Lpt_12529 - Lcpu_fast_base
-    .long Lpt_12530 - Lcpu_fast_base
-    .long Lpt_12531 - Lcpu_fast_base
-    .long Lpt_12532 - Lcpu_fast_base
-    .long Lpt_12533 - Lcpu_fast_base
-    .long Lpt_12534 - Lcpu_fast_base
-    .long Lpt_12535 - Lcpu_fast_base
-    .long Lpt_12536 - Lcpu_fast_base
-    .long Lpt_12537 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_12538 - Lcpu_fast_base
     .long Lpt_12539 - Lcpu_fast_base
     .long Lpt_12540 - Lcpu_fast_base
@@ -12600,14 +12600,14 @@
     .long Lpt_12599 - Lcpu_fast_base
     .long Lpt_12600 - Lcpu_fast_base
     .long Lpt_12601 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_12602 - Lcpu_fast_base
+    .long Lpt_12603 - Lcpu_fast_base
+    .long Lpt_12604 - Lcpu_fast_base
+    .long Lpt_12605 - Lcpu_fast_base
+    .long Lpt_12606 - Lcpu_fast_base
+    .long Lpt_12607 - Lcpu_fast_base
+    .long Lpt_12608 - Lcpu_fast_base
+    .long Lpt_12609 - Lcpu_fast_base
     .long Lpt_12610 - Lcpu_fast_base
     .long Lpt_12611 - Lcpu_fast_base
     .long Lpt_12612 - Lcpu_fast_base
@@ -12656,14 +12656,6 @@
     .long Lpt_12655 - Lcpu_fast_base
     .long Lpt_12656 - Lcpu_fast_base
     .long Lpt_12657 - Lcpu_fast_base
-    .long Lpt_12658 - Lcpu_fast_base
-    .long Lpt_12659 - Lcpu_fast_base
-    .long Lpt_12660 - Lcpu_fast_base
-    .long Lpt_12661 - Lcpu_fast_base
-    .long Lpt_12662 - Lcpu_fast_base
-    .long Lpt_12663 - Lcpu_fast_base
-    .long Lpt_12664 - Lcpu_fast_base
-    .long Lpt_12665 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12672,6 +12664,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_12666 - Lcpu_fast_base
+    .long Lpt_12667 - Lcpu_fast_base
+    .long Lpt_12668 - Lcpu_fast_base
+    .long Lpt_12669 - Lcpu_fast_base
+    .long Lpt_12670 - Lcpu_fast_base
+    .long Lpt_12671 - Lcpu_fast_base
+    .long Lpt_12672 - Lcpu_fast_base
+    .long Lpt_12673 - Lcpu_fast_base
+    .long Lpt_12674 - Lcpu_fast_base
+    .long Lpt_12675 - Lcpu_fast_base
+    .long Lpt_12676 - Lcpu_fast_base
+    .long Lpt_12677 - Lcpu_fast_base
+    .long Lpt_12678 - Lcpu_fast_base
+    .long Lpt_12679 - Lcpu_fast_base
+    .long Lpt_12680 - Lcpu_fast_base
+    .long Lpt_12681 - Lcpu_fast_base
+    .long Lpt_12682 - Lcpu_fast_base
+    .long Lpt_12683 - Lcpu_fast_base
+    .long Lpt_12684 - Lcpu_fast_base
+    .long Lpt_12685 - Lcpu_fast_base
+    .long Lpt_12686 - Lcpu_fast_base
+    .long Lpt_12687 - Lcpu_fast_base
+    .long Lpt_12688 - Lcpu_fast_base
+    .long Lpt_12689 - Lcpu_fast_base
+    .long Lpt_12690 - Lcpu_fast_base
+    .long Lpt_12691 - Lcpu_fast_base
+    .long Lpt_12692 - Lcpu_fast_base
+    .long Lpt_12693 - Lcpu_fast_base
+    .long Lpt_12694 - Lcpu_fast_base
+    .long Lpt_12695 - Lcpu_fast_base
+    .long Lpt_12696 - Lcpu_fast_base
+    .long Lpt_12697 - Lcpu_fast_base
+    .long Lpt_12698 - Lcpu_fast_base
+    .long Lpt_12699 - Lcpu_fast_base
+    .long Lpt_12700 - Lcpu_fast_base
+    .long Lpt_12701 - Lcpu_fast_base
+    .long Lpt_12702 - Lcpu_fast_base
+    .long Lpt_12703 - Lcpu_fast_base
+    .long Lpt_12704 - Lcpu_fast_base
+    .long Lpt_12705 - Lcpu_fast_base
+    .long Lpt_12706 - Lcpu_fast_base
+    .long Lpt_12707 - Lcpu_fast_base
+    .long Lpt_12708 - Lcpu_fast_base
+    .long Lpt_12709 - Lcpu_fast_base
+    .long Lpt_12710 - Lcpu_fast_base
+    .long Lpt_12711 - Lcpu_fast_base
+    .long Lpt_12712 - Lcpu_fast_base
+    .long Lpt_12713 - Lcpu_fast_base
+    .long Lpt_12714 - Lcpu_fast_base
+    .long Lpt_12715 - Lcpu_fast_base
+    .long Lpt_12716 - Lcpu_fast_base
+    .long Lpt_12717 - Lcpu_fast_base
+    .long Lpt_12718 - Lcpu_fast_base
+    .long Lpt_12719 - Lcpu_fast_base
+    .long Lpt_12720 - Lcpu_fast_base
+    .long Lpt_12721 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12736,62 +12784,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_12738 - Lcpu_fast_base
-    .long Lpt_12739 - Lcpu_fast_base
-    .long Lpt_12740 - Lcpu_fast_base
-    .long Lpt_12741 - Lcpu_fast_base
-    .long Lpt_12742 - Lcpu_fast_base
-    .long Lpt_12743 - Lcpu_fast_base
-    .long Lpt_12744 - Lcpu_fast_base
-    .long Lpt_12745 - Lcpu_fast_base
-    .long Lpt_12746 - Lcpu_fast_base
-    .long Lpt_12747 - Lcpu_fast_base
-    .long Lpt_12748 - Lcpu_fast_base
-    .long Lpt_12749 - Lcpu_fast_base
-    .long Lpt_12750 - Lcpu_fast_base
-    .long Lpt_12751 - Lcpu_fast_base
-    .long Lpt_12752 - Lcpu_fast_base
-    .long Lpt_12753 - Lcpu_fast_base
-    .long Lpt_12754 - Lcpu_fast_base
-    .long Lpt_12755 - Lcpu_fast_base
-    .long Lpt_12756 - Lcpu_fast_base
-    .long Lpt_12757 - Lcpu_fast_base
-    .long Lpt_12758 - Lcpu_fast_base
-    .long Lpt_12759 - Lcpu_fast_base
-    .long Lpt_12760 - Lcpu_fast_base
-    .long Lpt_12761 - Lcpu_fast_base
-    .long Lpt_12762 - Lcpu_fast_base
-    .long Lpt_12763 - Lcpu_fast_base
-    .long Lpt_12764 - Lcpu_fast_base
-    .long Lpt_12765 - Lcpu_fast_base
-    .long Lpt_12766 - Lcpu_fast_base
-    .long Lpt_12767 - Lcpu_fast_base
-    .long Lpt_12768 - Lcpu_fast_base
-    .long Lpt_12769 - Lcpu_fast_base
-    .long Lpt_12770 - Lcpu_fast_base
-    .long Lpt_12771 - Lcpu_fast_base
-    .long Lpt_12772 - Lcpu_fast_base
-    .long Lpt_12773 - Lcpu_fast_base
-    .long Lpt_12774 - Lcpu_fast_base
-    .long Lpt_12775 - Lcpu_fast_base
-    .long Lpt_12776 - Lcpu_fast_base
-    .long Lpt_12777 - Lcpu_fast_base
-    .long Lpt_12778 - Lcpu_fast_base
-    .long Lpt_12779 - Lcpu_fast_base
-    .long Lpt_12780 - Lcpu_fast_base
-    .long Lpt_12781 - Lcpu_fast_base
-    .long Lpt_12782 - Lcpu_fast_base
-    .long Lpt_12783 - Lcpu_fast_base
-    .long Lpt_12784 - Lcpu_fast_base
-    .long Lpt_12785 - Lcpu_fast_base
-    .long Lpt_12786 - Lcpu_fast_base
-    .long Lpt_12787 - Lcpu_fast_base
-    .long Lpt_12788 - Lcpu_fast_base
-    .long Lpt_12789 - Lcpu_fast_base
-    .long Lpt_12790 - Lcpu_fast_base
-    .long Lpt_12791 - Lcpu_fast_base
-    .long Lpt_12792 - Lcpu_fast_base
-    .long Lpt_12793 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_12794 - Lcpu_fast_base
     .long Lpt_12795 - Lcpu_fast_base
     .long Lpt_12796 - Lcpu_fast_base
@@ -12856,22 +12856,22 @@
     .long Lpt_12855 - Lcpu_fast_base
     .long Lpt_12856 - Lcpu_fast_base
     .long Lpt_12857 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_12858 - Lcpu_fast_base
+    .long Lpt_12859 - Lcpu_fast_base
+    .long Lpt_12860 - Lcpu_fast_base
+    .long Lpt_12861 - Lcpu_fast_base
+    .long Lpt_12862 - Lcpu_fast_base
+    .long Lpt_12863 - Lcpu_fast_base
+    .long Lpt_12864 - Lcpu_fast_base
+    .long Lpt_12865 - Lcpu_fast_base
+    .long Lpt_12866 - Lcpu_fast_base
+    .long Lpt_12867 - Lcpu_fast_base
+    .long Lpt_12868 - Lcpu_fast_base
+    .long Lpt_12869 - Lcpu_fast_base
+    .long Lpt_12870 - Lcpu_fast_base
+    .long Lpt_12871 - Lcpu_fast_base
+    .long Lpt_12872 - Lcpu_fast_base
+    .long Lpt_12873 - Lcpu_fast_base
     .long Lpt_12874 - Lcpu_fast_base
     .long Lpt_12875 - Lcpu_fast_base
     .long Lpt_12876 - Lcpu_fast_base
@@ -12912,14 +12912,6 @@
     .long Lpt_12911 - Lcpu_fast_base
     .long Lpt_12912 - Lcpu_fast_base
     .long Lpt_12913 - Lcpu_fast_base
-    .long Lpt_12914 - Lcpu_fast_base
-    .long Lpt_12915 - Lcpu_fast_base
-    .long Lpt_12916 - Lcpu_fast_base
-    .long Lpt_12917 - Lcpu_fast_base
-    .long Lpt_12918 - Lcpu_fast_base
-    .long Lpt_12919 - Lcpu_fast_base
-    .long Lpt_12920 - Lcpu_fast_base
-    .long Lpt_12921 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -12936,6 +12928,54 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_12930 - Lcpu_fast_base
+    .long Lpt_12931 - Lcpu_fast_base
+    .long Lpt_12932 - Lcpu_fast_base
+    .long Lpt_12933 - Lcpu_fast_base
+    .long Lpt_12934 - Lcpu_fast_base
+    .long Lpt_12935 - Lcpu_fast_base
+    .long Lpt_12936 - Lcpu_fast_base
+    .long Lpt_12937 - Lcpu_fast_base
+    .long Lpt_12938 - Lcpu_fast_base
+    .long Lpt_12939 - Lcpu_fast_base
+    .long Lpt_12940 - Lcpu_fast_base
+    .long Lpt_12941 - Lcpu_fast_base
+    .long Lpt_12942 - Lcpu_fast_base
+    .long Lpt_12943 - Lcpu_fast_base
+    .long Lpt_12944 - Lcpu_fast_base
+    .long Lpt_12945 - Lcpu_fast_base
+    .long Lpt_12946 - Lcpu_fast_base
+    .long Lpt_12947 - Lcpu_fast_base
+    .long Lpt_12948 - Lcpu_fast_base
+    .long Lpt_12949 - Lcpu_fast_base
+    .long Lpt_12950 - Lcpu_fast_base
+    .long Lpt_12951 - Lcpu_fast_base
+    .long Lpt_12952 - Lcpu_fast_base
+    .long Lpt_12953 - Lcpu_fast_base
+    .long Lpt_12954 - Lcpu_fast_base
+    .long Lpt_12955 - Lcpu_fast_base
+    .long Lpt_12956 - Lcpu_fast_base
+    .long Lpt_12957 - Lcpu_fast_base
+    .long Lpt_12958 - Lcpu_fast_base
+    .long Lpt_12959 - Lcpu_fast_base
+    .long Lpt_12960 - Lcpu_fast_base
+    .long Lpt_12961 - Lcpu_fast_base
+    .long Lpt_12962 - Lcpu_fast_base
+    .long Lpt_12963 - Lcpu_fast_base
+    .long Lpt_12964 - Lcpu_fast_base
+    .long Lpt_12965 - Lcpu_fast_base
+    .long Lpt_12966 - Lcpu_fast_base
+    .long Lpt_12967 - Lcpu_fast_base
+    .long Lpt_12968 - Lcpu_fast_base
+    .long Lpt_12969 - Lcpu_fast_base
+    .long Lpt_12970 - Lcpu_fast_base
+    .long Lpt_12971 - Lcpu_fast_base
+    .long Lpt_12972 - Lcpu_fast_base
+    .long Lpt_12973 - Lcpu_fast_base
+    .long Lpt_12974 - Lcpu_fast_base
+    .long Lpt_12975 - Lcpu_fast_base
+    .long Lpt_12976 - Lcpu_fast_base
+    .long Lpt_12977 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13000,62 +13040,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_13002 - Lcpu_fast_base
-    .long Lpt_13003 - Lcpu_fast_base
-    .long Lpt_13004 - Lcpu_fast_base
-    .long Lpt_13005 - Lcpu_fast_base
-    .long Lpt_13006 - Lcpu_fast_base
-    .long Lpt_13007 - Lcpu_fast_base
-    .long Lpt_13008 - Lcpu_fast_base
-    .long Lpt_13009 - Lcpu_fast_base
-    .long Lpt_13010 - Lcpu_fast_base
-    .long Lpt_13011 - Lcpu_fast_base
-    .long Lpt_13012 - Lcpu_fast_base
-    .long Lpt_13013 - Lcpu_fast_base
-    .long Lpt_13014 - Lcpu_fast_base
-    .long Lpt_13015 - Lcpu_fast_base
-    .long Lpt_13016 - Lcpu_fast_base
-    .long Lpt_13017 - Lcpu_fast_base
-    .long Lpt_13018 - Lcpu_fast_base
-    .long Lpt_13019 - Lcpu_fast_base
-    .long Lpt_13020 - Lcpu_fast_base
-    .long Lpt_13021 - Lcpu_fast_base
-    .long Lpt_13022 - Lcpu_fast_base
-    .long Lpt_13023 - Lcpu_fast_base
-    .long Lpt_13024 - Lcpu_fast_base
-    .long Lpt_13025 - Lcpu_fast_base
-    .long Lpt_13026 - Lcpu_fast_base
-    .long Lpt_13027 - Lcpu_fast_base
-    .long Lpt_13028 - Lcpu_fast_base
-    .long Lpt_13029 - Lcpu_fast_base
-    .long Lpt_13030 - Lcpu_fast_base
-    .long Lpt_13031 - Lcpu_fast_base
-    .long Lpt_13032 - Lcpu_fast_base
-    .long Lpt_13033 - Lcpu_fast_base
-    .long Lpt_13034 - Lcpu_fast_base
-    .long Lpt_13035 - Lcpu_fast_base
-    .long Lpt_13036 - Lcpu_fast_base
-    .long Lpt_13037 - Lcpu_fast_base
-    .long Lpt_13038 - Lcpu_fast_base
-    .long Lpt_13039 - Lcpu_fast_base
-    .long Lpt_13040 - Lcpu_fast_base
-    .long Lpt_13041 - Lcpu_fast_base
-    .long Lpt_13042 - Lcpu_fast_base
-    .long Lpt_13043 - Lcpu_fast_base
-    .long Lpt_13044 - Lcpu_fast_base
-    .long Lpt_13045 - Lcpu_fast_base
-    .long Lpt_13046 - Lcpu_fast_base
-    .long Lpt_13047 - Lcpu_fast_base
-    .long Lpt_13048 - Lcpu_fast_base
-    .long Lpt_13049 - Lcpu_fast_base
-    .long Lpt_13050 - Lcpu_fast_base
-    .long Lpt_13051 - Lcpu_fast_base
-    .long Lpt_13052 - Lcpu_fast_base
-    .long Lpt_13053 - Lcpu_fast_base
-    .long Lpt_13054 - Lcpu_fast_base
-    .long Lpt_13055 - Lcpu_fast_base
-    .long Lpt_13056 - Lcpu_fast_base
-    .long Lpt_13057 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_13058 - Lcpu_fast_base
     .long Lpt_13059 - Lcpu_fast_base
     .long Lpt_13060 - Lcpu_fast_base
@@ -13112,14 +13112,14 @@
     .long Lpt_13111 - Lcpu_fast_base
     .long Lpt_13112 - Lcpu_fast_base
     .long Lpt_13113 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_13114 - Lcpu_fast_base
+    .long Lpt_13115 - Lcpu_fast_base
+    .long Lpt_13116 - Lcpu_fast_base
+    .long Lpt_13117 - Lcpu_fast_base
+    .long Lpt_13118 - Lcpu_fast_base
+    .long Lpt_13119 - Lcpu_fast_base
+    .long Lpt_13120 - Lcpu_fast_base
+    .long Lpt_13121 - Lcpu_fast_base
     .long Lpt_13122 - Lcpu_fast_base
     .long Lpt_13123 - Lcpu_fast_base
     .long Lpt_13124 - Lcpu_fast_base
@@ -13168,14 +13168,6 @@
     .long Lpt_13167 - Lcpu_fast_base
     .long Lpt_13168 - Lcpu_fast_base
     .long Lpt_13169 - Lcpu_fast_base
-    .long Lpt_13170 - Lcpu_fast_base
-    .long Lpt_13171 - Lcpu_fast_base
-    .long Lpt_13172 - Lcpu_fast_base
-    .long Lpt_13173 - Lcpu_fast_base
-    .long Lpt_13174 - Lcpu_fast_base
-    .long Lpt_13175 - Lcpu_fast_base
-    .long Lpt_13176 - Lcpu_fast_base
-    .long Lpt_13177 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13184,6 +13176,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_13178 - Lcpu_fast_base
+    .long Lpt_13179 - Lcpu_fast_base
+    .long Lpt_13180 - Lcpu_fast_base
+    .long Lpt_13181 - Lcpu_fast_base
+    .long Lpt_13182 - Lcpu_fast_base
+    .long Lpt_13183 - Lcpu_fast_base
+    .long Lpt_13184 - Lcpu_fast_base
+    .long Lpt_13185 - Lcpu_fast_base
+    .long Lpt_13186 - Lcpu_fast_base
+    .long Lpt_13187 - Lcpu_fast_base
+    .long Lpt_13188 - Lcpu_fast_base
+    .long Lpt_13189 - Lcpu_fast_base
+    .long Lpt_13190 - Lcpu_fast_base
+    .long Lpt_13191 - Lcpu_fast_base
+    .long Lpt_13192 - Lcpu_fast_base
+    .long Lpt_13193 - Lcpu_fast_base
+    .long Lpt_13194 - Lcpu_fast_base
+    .long Lpt_13195 - Lcpu_fast_base
+    .long Lpt_13196 - Lcpu_fast_base
+    .long Lpt_13197 - Lcpu_fast_base
+    .long Lpt_13198 - Lcpu_fast_base
+    .long Lpt_13199 - Lcpu_fast_base
+    .long Lpt_13200 - Lcpu_fast_base
+    .long Lpt_13201 - Lcpu_fast_base
+    .long Lpt_13202 - Lcpu_fast_base
+    .long Lpt_13203 - Lcpu_fast_base
+    .long Lpt_13204 - Lcpu_fast_base
+    .long Lpt_13205 - Lcpu_fast_base
+    .long Lpt_13206 - Lcpu_fast_base
+    .long Lpt_13207 - Lcpu_fast_base
+    .long Lpt_13208 - Lcpu_fast_base
+    .long Lpt_13209 - Lcpu_fast_base
+    .long Lpt_13210 - Lcpu_fast_base
+    .long Lpt_13211 - Lcpu_fast_base
+    .long Lpt_13212 - Lcpu_fast_base
+    .long Lpt_13213 - Lcpu_fast_base
+    .long Lpt_13214 - Lcpu_fast_base
+    .long Lpt_13215 - Lcpu_fast_base
+    .long Lpt_13216 - Lcpu_fast_base
+    .long Lpt_13217 - Lcpu_fast_base
+    .long Lpt_13218 - Lcpu_fast_base
+    .long Lpt_13219 - Lcpu_fast_base
+    .long Lpt_13220 - Lcpu_fast_base
+    .long Lpt_13221 - Lcpu_fast_base
+    .long Lpt_13222 - Lcpu_fast_base
+    .long Lpt_13223 - Lcpu_fast_base
+    .long Lpt_13224 - Lcpu_fast_base
+    .long Lpt_13225 - Lcpu_fast_base
+    .long Lpt_13226 - Lcpu_fast_base
+    .long Lpt_13227 - Lcpu_fast_base
+    .long Lpt_13228 - Lcpu_fast_base
+    .long Lpt_13229 - Lcpu_fast_base
+    .long Lpt_13230 - Lcpu_fast_base
+    .long Lpt_13231 - Lcpu_fast_base
+    .long Lpt_13232 - Lcpu_fast_base
+    .long Lpt_13233 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13248,62 +13296,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_13250 - Lcpu_fast_base
-    .long Lpt_13251 - Lcpu_fast_base
-    .long Lpt_13252 - Lcpu_fast_base
-    .long Lpt_13253 - Lcpu_fast_base
-    .long Lpt_13254 - Lcpu_fast_base
-    .long Lpt_13255 - Lcpu_fast_base
-    .long Lpt_13256 - Lcpu_fast_base
-    .long Lpt_13257 - Lcpu_fast_base
-    .long Lpt_13258 - Lcpu_fast_base
-    .long Lpt_13259 - Lcpu_fast_base
-    .long Lpt_13260 - Lcpu_fast_base
-    .long Lpt_13261 - Lcpu_fast_base
-    .long Lpt_13262 - Lcpu_fast_base
-    .long Lpt_13263 - Lcpu_fast_base
-    .long Lpt_13264 - Lcpu_fast_base
-    .long Lpt_13265 - Lcpu_fast_base
-    .long Lpt_13266 - Lcpu_fast_base
-    .long Lpt_13267 - Lcpu_fast_base
-    .long Lpt_13268 - Lcpu_fast_base
-    .long Lpt_13269 - Lcpu_fast_base
-    .long Lpt_13270 - Lcpu_fast_base
-    .long Lpt_13271 - Lcpu_fast_base
-    .long Lpt_13272 - Lcpu_fast_base
-    .long Lpt_13273 - Lcpu_fast_base
-    .long Lpt_13274 - Lcpu_fast_base
-    .long Lpt_13275 - Lcpu_fast_base
-    .long Lpt_13276 - Lcpu_fast_base
-    .long Lpt_13277 - Lcpu_fast_base
-    .long Lpt_13278 - Lcpu_fast_base
-    .long Lpt_13279 - Lcpu_fast_base
-    .long Lpt_13280 - Lcpu_fast_base
-    .long Lpt_13281 - Lcpu_fast_base
-    .long Lpt_13282 - Lcpu_fast_base
-    .long Lpt_13283 - Lcpu_fast_base
-    .long Lpt_13284 - Lcpu_fast_base
-    .long Lpt_13285 - Lcpu_fast_base
-    .long Lpt_13286 - Lcpu_fast_base
-    .long Lpt_13287 - Lcpu_fast_base
-    .long Lpt_13288 - Lcpu_fast_base
-    .long Lpt_13289 - Lcpu_fast_base
-    .long Lpt_13290 - Lcpu_fast_base
-    .long Lpt_13291 - Lcpu_fast_base
-    .long Lpt_13292 - Lcpu_fast_base
-    .long Lpt_13293 - Lcpu_fast_base
-    .long Lpt_13294 - Lcpu_fast_base
-    .long Lpt_13295 - Lcpu_fast_base
-    .long Lpt_13296 - Lcpu_fast_base
-    .long Lpt_13297 - Lcpu_fast_base
-    .long Lpt_13298 - Lcpu_fast_base
-    .long Lpt_13299 - Lcpu_fast_base
-    .long Lpt_13300 - Lcpu_fast_base
-    .long Lpt_13301 - Lcpu_fast_base
-    .long Lpt_13302 - Lcpu_fast_base
-    .long Lpt_13303 - Lcpu_fast_base
-    .long Lpt_13304 - Lcpu_fast_base
-    .long Lpt_13305 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13312,6 +13304,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_13306 - Lcpu_fast_base
+    .long Lpt_13307 - Lcpu_fast_base
+    .long Lpt_13308 - Lcpu_fast_base
+    .long Lpt_13309 - Lcpu_fast_base
+    .long Lpt_13310 - Lcpu_fast_base
+    .long Lpt_13311 - Lcpu_fast_base
+    .long Lpt_13312 - Lcpu_fast_base
+    .long Lpt_13313 - Lcpu_fast_base
+    .long Lpt_13314 - Lcpu_fast_base
+    .long Lpt_13315 - Lcpu_fast_base
+    .long Lpt_13316 - Lcpu_fast_base
+    .long Lpt_13317 - Lcpu_fast_base
+    .long Lpt_13318 - Lcpu_fast_base
+    .long Lpt_13319 - Lcpu_fast_base
+    .long Lpt_13320 - Lcpu_fast_base
+    .long Lpt_13321 - Lcpu_fast_base
+    .long Lpt_13322 - Lcpu_fast_base
+    .long Lpt_13323 - Lcpu_fast_base
+    .long Lpt_13324 - Lcpu_fast_base
+    .long Lpt_13325 - Lcpu_fast_base
+    .long Lpt_13326 - Lcpu_fast_base
+    .long Lpt_13327 - Lcpu_fast_base
+    .long Lpt_13328 - Lcpu_fast_base
+    .long Lpt_13329 - Lcpu_fast_base
+    .long Lpt_13330 - Lcpu_fast_base
+    .long Lpt_13331 - Lcpu_fast_base
+    .long Lpt_13332 - Lcpu_fast_base
+    .long Lpt_13333 - Lcpu_fast_base
+    .long Lpt_13334 - Lcpu_fast_base
+    .long Lpt_13335 - Lcpu_fast_base
+    .long Lpt_13336 - Lcpu_fast_base
+    .long Lpt_13337 - Lcpu_fast_base
+    .long Lpt_13338 - Lcpu_fast_base
+    .long Lpt_13339 - Lcpu_fast_base
+    .long Lpt_13340 - Lcpu_fast_base
+    .long Lpt_13341 - Lcpu_fast_base
+    .long Lpt_13342 - Lcpu_fast_base
+    .long Lpt_13343 - Lcpu_fast_base
+    .long Lpt_13344 - Lcpu_fast_base
+    .long Lpt_13345 - Lcpu_fast_base
+    .long Lpt_13346 - Lcpu_fast_base
+    .long Lpt_13347 - Lcpu_fast_base
+    .long Lpt_13348 - Lcpu_fast_base
+    .long Lpt_13349 - Lcpu_fast_base
+    .long Lpt_13350 - Lcpu_fast_base
+    .long Lpt_13351 - Lcpu_fast_base
+    .long Lpt_13352 - Lcpu_fast_base
+    .long Lpt_13353 - Lcpu_fast_base
+    .long Lpt_13354 - Lcpu_fast_base
+    .long Lpt_13355 - Lcpu_fast_base
+    .long Lpt_13356 - Lcpu_fast_base
+    .long Lpt_13357 - Lcpu_fast_base
+    .long Lpt_13358 - Lcpu_fast_base
+    .long Lpt_13359 - Lcpu_fast_base
+    .long Lpt_13360 - Lcpu_fast_base
+    .long Lpt_13361 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13376,62 +13424,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_13378 - Lcpu_fast_base
-    .long Lpt_13379 - Lcpu_fast_base
-    .long Lpt_13380 - Lcpu_fast_base
-    .long Lpt_13381 - Lcpu_fast_base
-    .long Lpt_13382 - Lcpu_fast_base
-    .long Lpt_13383 - Lcpu_fast_base
-    .long Lpt_13384 - Lcpu_fast_base
-    .long Lpt_13385 - Lcpu_fast_base
-    .long Lpt_13386 - Lcpu_fast_base
-    .long Lpt_13387 - Lcpu_fast_base
-    .long Lpt_13388 - Lcpu_fast_base
-    .long Lpt_13389 - Lcpu_fast_base
-    .long Lpt_13390 - Lcpu_fast_base
-    .long Lpt_13391 - Lcpu_fast_base
-    .long Lpt_13392 - Lcpu_fast_base
-    .long Lpt_13393 - Lcpu_fast_base
-    .long Lpt_13394 - Lcpu_fast_base
-    .long Lpt_13395 - Lcpu_fast_base
-    .long Lpt_13396 - Lcpu_fast_base
-    .long Lpt_13397 - Lcpu_fast_base
-    .long Lpt_13398 - Lcpu_fast_base
-    .long Lpt_13399 - Lcpu_fast_base
-    .long Lpt_13400 - Lcpu_fast_base
-    .long Lpt_13401 - Lcpu_fast_base
-    .long Lpt_13402 - Lcpu_fast_base
-    .long Lpt_13403 - Lcpu_fast_base
-    .long Lpt_13404 - Lcpu_fast_base
-    .long Lpt_13405 - Lcpu_fast_base
-    .long Lpt_13406 - Lcpu_fast_base
-    .long Lpt_13407 - Lcpu_fast_base
-    .long Lpt_13408 - Lcpu_fast_base
-    .long Lpt_13409 - Lcpu_fast_base
-    .long Lpt_13410 - Lcpu_fast_base
-    .long Lpt_13411 - Lcpu_fast_base
-    .long Lpt_13412 - Lcpu_fast_base
-    .long Lpt_13413 - Lcpu_fast_base
-    .long Lpt_13414 - Lcpu_fast_base
-    .long Lpt_13415 - Lcpu_fast_base
-    .long Lpt_13416 - Lcpu_fast_base
-    .long Lpt_13417 - Lcpu_fast_base
-    .long Lpt_13418 - Lcpu_fast_base
-    .long Lpt_13419 - Lcpu_fast_base
-    .long Lpt_13420 - Lcpu_fast_base
-    .long Lpt_13421 - Lcpu_fast_base
-    .long Lpt_13422 - Lcpu_fast_base
-    .long Lpt_13423 - Lcpu_fast_base
-    .long Lpt_13424 - Lcpu_fast_base
-    .long Lpt_13425 - Lcpu_fast_base
-    .long Lpt_13426 - Lcpu_fast_base
-    .long Lpt_13427 - Lcpu_fast_base
-    .long Lpt_13428 - Lcpu_fast_base
-    .long Lpt_13429 - Lcpu_fast_base
-    .long Lpt_13430 - Lcpu_fast_base
-    .long Lpt_13431 - Lcpu_fast_base
-    .long Lpt_13432 - Lcpu_fast_base
-    .long Lpt_13433 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13440,6 +13432,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_13434 - Lcpu_fast_base
+    .long Lpt_13435 - Lcpu_fast_base
+    .long Lpt_13436 - Lcpu_fast_base
+    .long Lpt_13437 - Lcpu_fast_base
+    .long Lpt_13438 - Lcpu_fast_base
+    .long Lpt_13439 - Lcpu_fast_base
+    .long Lpt_13440 - Lcpu_fast_base
+    .long Lpt_13441 - Lcpu_fast_base
+    .long Lpt_13442 - Lcpu_fast_base
+    .long Lpt_13443 - Lcpu_fast_base
+    .long Lpt_13444 - Lcpu_fast_base
+    .long Lpt_13445 - Lcpu_fast_base
+    .long Lpt_13446 - Lcpu_fast_base
+    .long Lpt_13447 - Lcpu_fast_base
+    .long Lpt_13448 - Lcpu_fast_base
+    .long Lpt_13449 - Lcpu_fast_base
+    .long Lpt_13450 - Lcpu_fast_base
+    .long Lpt_13451 - Lcpu_fast_base
+    .long Lpt_13452 - Lcpu_fast_base
+    .long Lpt_13453 - Lcpu_fast_base
+    .long Lpt_13454 - Lcpu_fast_base
+    .long Lpt_13455 - Lcpu_fast_base
+    .long Lpt_13456 - Lcpu_fast_base
+    .long Lpt_13457 - Lcpu_fast_base
+    .long Lpt_13458 - Lcpu_fast_base
+    .long Lpt_13459 - Lcpu_fast_base
+    .long Lpt_13460 - Lcpu_fast_base
+    .long Lpt_13461 - Lcpu_fast_base
+    .long Lpt_13462 - Lcpu_fast_base
+    .long Lpt_13463 - Lcpu_fast_base
+    .long Lpt_13464 - Lcpu_fast_base
+    .long Lpt_13465 - Lcpu_fast_base
+    .long Lpt_13466 - Lcpu_fast_base
+    .long Lpt_13467 - Lcpu_fast_base
+    .long Lpt_13468 - Lcpu_fast_base
+    .long Lpt_13469 - Lcpu_fast_base
+    .long Lpt_13470 - Lcpu_fast_base
+    .long Lpt_13471 - Lcpu_fast_base
+    .long Lpt_13472 - Lcpu_fast_base
+    .long Lpt_13473 - Lcpu_fast_base
+    .long Lpt_13474 - Lcpu_fast_base
+    .long Lpt_13475 - Lcpu_fast_base
+    .long Lpt_13476 - Lcpu_fast_base
+    .long Lpt_13477 - Lcpu_fast_base
+    .long Lpt_13478 - Lcpu_fast_base
+    .long Lpt_13479 - Lcpu_fast_base
+    .long Lpt_13480 - Lcpu_fast_base
+    .long Lpt_13481 - Lcpu_fast_base
+    .long Lpt_13482 - Lcpu_fast_base
+    .long Lpt_13483 - Lcpu_fast_base
+    .long Lpt_13484 - Lcpu_fast_base
+    .long Lpt_13485 - Lcpu_fast_base
+    .long Lpt_13486 - Lcpu_fast_base
+    .long Lpt_13487 - Lcpu_fast_base
+    .long Lpt_13488 - Lcpu_fast_base
+    .long Lpt_13489 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13504,62 +13552,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_13506 - Lcpu_fast_base
-    .long Lpt_13507 - Lcpu_fast_base
-    .long Lpt_13508 - Lcpu_fast_base
-    .long Lpt_13509 - Lcpu_fast_base
-    .long Lpt_13510 - Lcpu_fast_base
-    .long Lpt_13511 - Lcpu_fast_base
-    .long Lpt_13512 - Lcpu_fast_base
-    .long Lpt_13513 - Lcpu_fast_base
-    .long Lpt_13514 - Lcpu_fast_base
-    .long Lpt_13515 - Lcpu_fast_base
-    .long Lpt_13516 - Lcpu_fast_base
-    .long Lpt_13517 - Lcpu_fast_base
-    .long Lpt_13518 - Lcpu_fast_base
-    .long Lpt_13519 - Lcpu_fast_base
-    .long Lpt_13520 - Lcpu_fast_base
-    .long Lpt_13521 - Lcpu_fast_base
-    .long Lpt_13522 - Lcpu_fast_base
-    .long Lpt_13523 - Lcpu_fast_base
-    .long Lpt_13524 - Lcpu_fast_base
-    .long Lpt_13525 - Lcpu_fast_base
-    .long Lpt_13526 - Lcpu_fast_base
-    .long Lpt_13527 - Lcpu_fast_base
-    .long Lpt_13528 - Lcpu_fast_base
-    .long Lpt_13529 - Lcpu_fast_base
-    .long Lpt_13530 - Lcpu_fast_base
-    .long Lpt_13531 - Lcpu_fast_base
-    .long Lpt_13532 - Lcpu_fast_base
-    .long Lpt_13533 - Lcpu_fast_base
-    .long Lpt_13534 - Lcpu_fast_base
-    .long Lpt_13535 - Lcpu_fast_base
-    .long Lpt_13536 - Lcpu_fast_base
-    .long Lpt_13537 - Lcpu_fast_base
-    .long Lpt_13538 - Lcpu_fast_base
-    .long Lpt_13539 - Lcpu_fast_base
-    .long Lpt_13540 - Lcpu_fast_base
-    .long Lpt_13541 - Lcpu_fast_base
-    .long Lpt_13542 - Lcpu_fast_base
-    .long Lpt_13543 - Lcpu_fast_base
-    .long Lpt_13544 - Lcpu_fast_base
-    .long Lpt_13545 - Lcpu_fast_base
-    .long Lpt_13546 - Lcpu_fast_base
-    .long Lpt_13547 - Lcpu_fast_base
-    .long Lpt_13548 - Lcpu_fast_base
-    .long Lpt_13549 - Lcpu_fast_base
-    .long Lpt_13550 - Lcpu_fast_base
-    .long Lpt_13551 - Lcpu_fast_base
-    .long Lpt_13552 - Lcpu_fast_base
-    .long Lpt_13553 - Lcpu_fast_base
-    .long Lpt_13554 - Lcpu_fast_base
-    .long Lpt_13555 - Lcpu_fast_base
-    .long Lpt_13556 - Lcpu_fast_base
-    .long Lpt_13557 - Lcpu_fast_base
-    .long Lpt_13558 - Lcpu_fast_base
-    .long Lpt_13559 - Lcpu_fast_base
-    .long Lpt_13560 - Lcpu_fast_base
-    .long Lpt_13561 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_13562 - Lcpu_fast_base
     .long Lpt_13563 - Lcpu_fast_base
     .long Lpt_13564 - Lcpu_fast_base
@@ -13624,14 +13624,14 @@
     .long Lpt_13623 - Lcpu_fast_base
     .long Lpt_13624 - Lcpu_fast_base
     .long Lpt_13625 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_13626 - Lcpu_fast_base
+    .long Lpt_13627 - Lcpu_fast_base
+    .long Lpt_13628 - Lcpu_fast_base
+    .long Lpt_13629 - Lcpu_fast_base
+    .long Lpt_13630 - Lcpu_fast_base
+    .long Lpt_13631 - Lcpu_fast_base
+    .long Lpt_13632 - Lcpu_fast_base
+    .long Lpt_13633 - Lcpu_fast_base
     .long Lpt_13634 - Lcpu_fast_base
     .long Lpt_13635 - Lcpu_fast_base
     .long Lpt_13636 - Lcpu_fast_base
@@ -13680,14 +13680,6 @@
     .long Lpt_13679 - Lcpu_fast_base
     .long Lpt_13680 - Lcpu_fast_base
     .long Lpt_13681 - Lcpu_fast_base
-    .long Lpt_13682 - Lcpu_fast_base
-    .long Lpt_13683 - Lcpu_fast_base
-    .long Lpt_13684 - Lcpu_fast_base
-    .long Lpt_13685 - Lcpu_fast_base
-    .long Lpt_13686 - Lcpu_fast_base
-    .long Lpt_13687 - Lcpu_fast_base
-    .long Lpt_13688 - Lcpu_fast_base
-    .long Lpt_13689 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13696,6 +13688,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_13690 - Lcpu_fast_base
+    .long Lpt_13691 - Lcpu_fast_base
+    .long Lpt_13692 - Lcpu_fast_base
+    .long Lpt_13693 - Lcpu_fast_base
+    .long Lpt_13694 - Lcpu_fast_base
+    .long Lpt_13695 - Lcpu_fast_base
+    .long Lpt_13696 - Lcpu_fast_base
+    .long Lpt_13697 - Lcpu_fast_base
+    .long Lpt_13698 - Lcpu_fast_base
+    .long Lpt_13699 - Lcpu_fast_base
+    .long Lpt_13700 - Lcpu_fast_base
+    .long Lpt_13701 - Lcpu_fast_base
+    .long Lpt_13702 - Lcpu_fast_base
+    .long Lpt_13703 - Lcpu_fast_base
+    .long Lpt_13704 - Lcpu_fast_base
+    .long Lpt_13705 - Lcpu_fast_base
+    .long Lpt_13706 - Lcpu_fast_base
+    .long Lpt_13707 - Lcpu_fast_base
+    .long Lpt_13708 - Lcpu_fast_base
+    .long Lpt_13709 - Lcpu_fast_base
+    .long Lpt_13710 - Lcpu_fast_base
+    .long Lpt_13711 - Lcpu_fast_base
+    .long Lpt_13712 - Lcpu_fast_base
+    .long Lpt_13713 - Lcpu_fast_base
+    .long Lpt_13714 - Lcpu_fast_base
+    .long Lpt_13715 - Lcpu_fast_base
+    .long Lpt_13716 - Lcpu_fast_base
+    .long Lpt_13717 - Lcpu_fast_base
+    .long Lpt_13718 - Lcpu_fast_base
+    .long Lpt_13719 - Lcpu_fast_base
+    .long Lpt_13720 - Lcpu_fast_base
+    .long Lpt_13721 - Lcpu_fast_base
+    .long Lpt_13722 - Lcpu_fast_base
+    .long Lpt_13723 - Lcpu_fast_base
+    .long Lpt_13724 - Lcpu_fast_base
+    .long Lpt_13725 - Lcpu_fast_base
+    .long Lpt_13726 - Lcpu_fast_base
+    .long Lpt_13727 - Lcpu_fast_base
+    .long Lpt_13728 - Lcpu_fast_base
+    .long Lpt_13729 - Lcpu_fast_base
+    .long Lpt_13730 - Lcpu_fast_base
+    .long Lpt_13731 - Lcpu_fast_base
+    .long Lpt_13732 - Lcpu_fast_base
+    .long Lpt_13733 - Lcpu_fast_base
+    .long Lpt_13734 - Lcpu_fast_base
+    .long Lpt_13735 - Lcpu_fast_base
+    .long Lpt_13736 - Lcpu_fast_base
+    .long Lpt_13737 - Lcpu_fast_base
+    .long Lpt_13738 - Lcpu_fast_base
+    .long Lpt_13739 - Lcpu_fast_base
+    .long Lpt_13740 - Lcpu_fast_base
+    .long Lpt_13741 - Lcpu_fast_base
+    .long Lpt_13742 - Lcpu_fast_base
+    .long Lpt_13743 - Lcpu_fast_base
+    .long Lpt_13744 - Lcpu_fast_base
+    .long Lpt_13745 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13760,62 +13808,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_13762 - Lcpu_fast_base
-    .long Lpt_13763 - Lcpu_fast_base
-    .long Lpt_13764 - Lcpu_fast_base
-    .long Lpt_13765 - Lcpu_fast_base
-    .long Lpt_13766 - Lcpu_fast_base
-    .long Lpt_13767 - Lcpu_fast_base
-    .long Lpt_13768 - Lcpu_fast_base
-    .long Lpt_13769 - Lcpu_fast_base
-    .long Lpt_13770 - Lcpu_fast_base
-    .long Lpt_13771 - Lcpu_fast_base
-    .long Lpt_13772 - Lcpu_fast_base
-    .long Lpt_13773 - Lcpu_fast_base
-    .long Lpt_13774 - Lcpu_fast_base
-    .long Lpt_13775 - Lcpu_fast_base
-    .long Lpt_13776 - Lcpu_fast_base
-    .long Lpt_13777 - Lcpu_fast_base
-    .long Lpt_13778 - Lcpu_fast_base
-    .long Lpt_13779 - Lcpu_fast_base
-    .long Lpt_13780 - Lcpu_fast_base
-    .long Lpt_13781 - Lcpu_fast_base
-    .long Lpt_13782 - Lcpu_fast_base
-    .long Lpt_13783 - Lcpu_fast_base
-    .long Lpt_13784 - Lcpu_fast_base
-    .long Lpt_13785 - Lcpu_fast_base
-    .long Lpt_13786 - Lcpu_fast_base
-    .long Lpt_13787 - Lcpu_fast_base
-    .long Lpt_13788 - Lcpu_fast_base
-    .long Lpt_13789 - Lcpu_fast_base
-    .long Lpt_13790 - Lcpu_fast_base
-    .long Lpt_13791 - Lcpu_fast_base
-    .long Lpt_13792 - Lcpu_fast_base
-    .long Lpt_13793 - Lcpu_fast_base
-    .long Lpt_13794 - Lcpu_fast_base
-    .long Lpt_13795 - Lcpu_fast_base
-    .long Lpt_13796 - Lcpu_fast_base
-    .long Lpt_13797 - Lcpu_fast_base
-    .long Lpt_13798 - Lcpu_fast_base
-    .long Lpt_13799 - Lcpu_fast_base
-    .long Lpt_13800 - Lcpu_fast_base
-    .long Lpt_13801 - Lcpu_fast_base
-    .long Lpt_13802 - Lcpu_fast_base
-    .long Lpt_13803 - Lcpu_fast_base
-    .long Lpt_13804 - Lcpu_fast_base
-    .long Lpt_13805 - Lcpu_fast_base
-    .long Lpt_13806 - Lcpu_fast_base
-    .long Lpt_13807 - Lcpu_fast_base
-    .long Lpt_13808 - Lcpu_fast_base
-    .long Lpt_13809 - Lcpu_fast_base
-    .long Lpt_13810 - Lcpu_fast_base
-    .long Lpt_13811 - Lcpu_fast_base
-    .long Lpt_13812 - Lcpu_fast_base
-    .long Lpt_13813 - Lcpu_fast_base
-    .long Lpt_13814 - Lcpu_fast_base
-    .long Lpt_13815 - Lcpu_fast_base
-    .long Lpt_13816 - Lcpu_fast_base
-    .long Lpt_13817 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13824,6 +13816,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_13818 - Lcpu_fast_base
+    .long Lpt_13819 - Lcpu_fast_base
+    .long Lpt_13820 - Lcpu_fast_base
+    .long Lpt_13821 - Lcpu_fast_base
+    .long Lpt_13822 - Lcpu_fast_base
+    .long Lpt_13823 - Lcpu_fast_base
+    .long Lpt_13824 - Lcpu_fast_base
+    .long Lpt_13825 - Lcpu_fast_base
+    .long Lpt_13826 - Lcpu_fast_base
+    .long Lpt_13827 - Lcpu_fast_base
+    .long Lpt_13828 - Lcpu_fast_base
+    .long Lpt_13829 - Lcpu_fast_base
+    .long Lpt_13830 - Lcpu_fast_base
+    .long Lpt_13831 - Lcpu_fast_base
+    .long Lpt_13832 - Lcpu_fast_base
+    .long Lpt_13833 - Lcpu_fast_base
+    .long Lpt_13834 - Lcpu_fast_base
+    .long Lpt_13835 - Lcpu_fast_base
+    .long Lpt_13836 - Lcpu_fast_base
+    .long Lpt_13837 - Lcpu_fast_base
+    .long Lpt_13838 - Lcpu_fast_base
+    .long Lpt_13839 - Lcpu_fast_base
+    .long Lpt_13840 - Lcpu_fast_base
+    .long Lpt_13841 - Lcpu_fast_base
+    .long Lpt_13842 - Lcpu_fast_base
+    .long Lpt_13843 - Lcpu_fast_base
+    .long Lpt_13844 - Lcpu_fast_base
+    .long Lpt_13845 - Lcpu_fast_base
+    .long Lpt_13846 - Lcpu_fast_base
+    .long Lpt_13847 - Lcpu_fast_base
+    .long Lpt_13848 - Lcpu_fast_base
+    .long Lpt_13849 - Lcpu_fast_base
+    .long Lpt_13850 - Lcpu_fast_base
+    .long Lpt_13851 - Lcpu_fast_base
+    .long Lpt_13852 - Lcpu_fast_base
+    .long Lpt_13853 - Lcpu_fast_base
+    .long Lpt_13854 - Lcpu_fast_base
+    .long Lpt_13855 - Lcpu_fast_base
+    .long Lpt_13856 - Lcpu_fast_base
+    .long Lpt_13857 - Lcpu_fast_base
+    .long Lpt_13858 - Lcpu_fast_base
+    .long Lpt_13859 - Lcpu_fast_base
+    .long Lpt_13860 - Lcpu_fast_base
+    .long Lpt_13861 - Lcpu_fast_base
+    .long Lpt_13862 - Lcpu_fast_base
+    .long Lpt_13863 - Lcpu_fast_base
+    .long Lpt_13864 - Lcpu_fast_base
+    .long Lpt_13865 - Lcpu_fast_base
+    .long Lpt_13866 - Lcpu_fast_base
+    .long Lpt_13867 - Lcpu_fast_base
+    .long Lpt_13868 - Lcpu_fast_base
+    .long Lpt_13869 - Lcpu_fast_base
+    .long Lpt_13870 - Lcpu_fast_base
+    .long Lpt_13871 - Lcpu_fast_base
+    .long Lpt_13872 - Lcpu_fast_base
+    .long Lpt_13873 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13888,62 +13936,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_13890 - Lcpu_fast_base
-    .long Lpt_13891 - Lcpu_fast_base
-    .long Lpt_13892 - Lcpu_fast_base
-    .long Lpt_13893 - Lcpu_fast_base
-    .long Lpt_13894 - Lcpu_fast_base
-    .long Lpt_13895 - Lcpu_fast_base
-    .long Lpt_13896 - Lcpu_fast_base
-    .long Lpt_13897 - Lcpu_fast_base
-    .long Lpt_13898 - Lcpu_fast_base
-    .long Lpt_13899 - Lcpu_fast_base
-    .long Lpt_13900 - Lcpu_fast_base
-    .long Lpt_13901 - Lcpu_fast_base
-    .long Lpt_13902 - Lcpu_fast_base
-    .long Lpt_13903 - Lcpu_fast_base
-    .long Lpt_13904 - Lcpu_fast_base
-    .long Lpt_13905 - Lcpu_fast_base
-    .long Lpt_13906 - Lcpu_fast_base
-    .long Lpt_13907 - Lcpu_fast_base
-    .long Lpt_13908 - Lcpu_fast_base
-    .long Lpt_13909 - Lcpu_fast_base
-    .long Lpt_13910 - Lcpu_fast_base
-    .long Lpt_13911 - Lcpu_fast_base
-    .long Lpt_13912 - Lcpu_fast_base
-    .long Lpt_13913 - Lcpu_fast_base
-    .long Lpt_13914 - Lcpu_fast_base
-    .long Lpt_13915 - Lcpu_fast_base
-    .long Lpt_13916 - Lcpu_fast_base
-    .long Lpt_13917 - Lcpu_fast_base
-    .long Lpt_13918 - Lcpu_fast_base
-    .long Lpt_13919 - Lcpu_fast_base
-    .long Lpt_13920 - Lcpu_fast_base
-    .long Lpt_13921 - Lcpu_fast_base
-    .long Lpt_13922 - Lcpu_fast_base
-    .long Lpt_13923 - Lcpu_fast_base
-    .long Lpt_13924 - Lcpu_fast_base
-    .long Lpt_13925 - Lcpu_fast_base
-    .long Lpt_13926 - Lcpu_fast_base
-    .long Lpt_13927 - Lcpu_fast_base
-    .long Lpt_13928 - Lcpu_fast_base
-    .long Lpt_13929 - Lcpu_fast_base
-    .long Lpt_13930 - Lcpu_fast_base
-    .long Lpt_13931 - Lcpu_fast_base
-    .long Lpt_13932 - Lcpu_fast_base
-    .long Lpt_13933 - Lcpu_fast_base
-    .long Lpt_13934 - Lcpu_fast_base
-    .long Lpt_13935 - Lcpu_fast_base
-    .long Lpt_13936 - Lcpu_fast_base
-    .long Lpt_13937 - Lcpu_fast_base
-    .long Lpt_13938 - Lcpu_fast_base
-    .long Lpt_13939 - Lcpu_fast_base
-    .long Lpt_13940 - Lcpu_fast_base
-    .long Lpt_13941 - Lcpu_fast_base
-    .long Lpt_13942 - Lcpu_fast_base
-    .long Lpt_13943 - Lcpu_fast_base
-    .long Lpt_13944 - Lcpu_fast_base
-    .long Lpt_13945 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -13952,6 +13944,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_13946 - Lcpu_fast_base
+    .long Lpt_13947 - Lcpu_fast_base
+    .long Lpt_13948 - Lcpu_fast_base
+    .long Lpt_13949 - Lcpu_fast_base
+    .long Lpt_13950 - Lcpu_fast_base
+    .long Lpt_13951 - Lcpu_fast_base
+    .long Lpt_13952 - Lcpu_fast_base
+    .long Lpt_13953 - Lcpu_fast_base
+    .long Lpt_13954 - Lcpu_fast_base
+    .long Lpt_13955 - Lcpu_fast_base
+    .long Lpt_13956 - Lcpu_fast_base
+    .long Lpt_13957 - Lcpu_fast_base
+    .long Lpt_13958 - Lcpu_fast_base
+    .long Lpt_13959 - Lcpu_fast_base
+    .long Lpt_13960 - Lcpu_fast_base
+    .long Lpt_13961 - Lcpu_fast_base
+    .long Lpt_13962 - Lcpu_fast_base
+    .long Lpt_13963 - Lcpu_fast_base
+    .long Lpt_13964 - Lcpu_fast_base
+    .long Lpt_13965 - Lcpu_fast_base
+    .long Lpt_13966 - Lcpu_fast_base
+    .long Lpt_13967 - Lcpu_fast_base
+    .long Lpt_13968 - Lcpu_fast_base
+    .long Lpt_13969 - Lcpu_fast_base
+    .long Lpt_13970 - Lcpu_fast_base
+    .long Lpt_13971 - Lcpu_fast_base
+    .long Lpt_13972 - Lcpu_fast_base
+    .long Lpt_13973 - Lcpu_fast_base
+    .long Lpt_13974 - Lcpu_fast_base
+    .long Lpt_13975 - Lcpu_fast_base
+    .long Lpt_13976 - Lcpu_fast_base
+    .long Lpt_13977 - Lcpu_fast_base
+    .long Lpt_13978 - Lcpu_fast_base
+    .long Lpt_13979 - Lcpu_fast_base
+    .long Lpt_13980 - Lcpu_fast_base
+    .long Lpt_13981 - Lcpu_fast_base
+    .long Lpt_13982 - Lcpu_fast_base
+    .long Lpt_13983 - Lcpu_fast_base
+    .long Lpt_13984 - Lcpu_fast_base
+    .long Lpt_13985 - Lcpu_fast_base
+    .long Lpt_13986 - Lcpu_fast_base
+    .long Lpt_13987 - Lcpu_fast_base
+    .long Lpt_13988 - Lcpu_fast_base
+    .long Lpt_13989 - Lcpu_fast_base
+    .long Lpt_13990 - Lcpu_fast_base
+    .long Lpt_13991 - Lcpu_fast_base
+    .long Lpt_13992 - Lcpu_fast_base
+    .long Lpt_13993 - Lcpu_fast_base
+    .long Lpt_13994 - Lcpu_fast_base
+    .long Lpt_13995 - Lcpu_fast_base
+    .long Lpt_13996 - Lcpu_fast_base
+    .long Lpt_13997 - Lcpu_fast_base
+    .long Lpt_13998 - Lcpu_fast_base
+    .long Lpt_13999 - Lcpu_fast_base
+    .long Lpt_14000 - Lcpu_fast_base
+    .long Lpt_14001 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14016,62 +14064,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_14018 - Lcpu_fast_base
-    .long Lpt_14019 - Lcpu_fast_base
-    .long Lpt_14020 - Lcpu_fast_base
-    .long Lpt_14021 - Lcpu_fast_base
-    .long Lpt_14022 - Lcpu_fast_base
-    .long Lpt_14023 - Lcpu_fast_base
-    .long Lpt_14024 - Lcpu_fast_base
-    .long Lpt_14025 - Lcpu_fast_base
-    .long Lpt_14026 - Lcpu_fast_base
-    .long Lpt_14027 - Lcpu_fast_base
-    .long Lpt_14028 - Lcpu_fast_base
-    .long Lpt_14029 - Lcpu_fast_base
-    .long Lpt_14030 - Lcpu_fast_base
-    .long Lpt_14031 - Lcpu_fast_base
-    .long Lpt_14032 - Lcpu_fast_base
-    .long Lpt_14033 - Lcpu_fast_base
-    .long Lpt_14034 - Lcpu_fast_base
-    .long Lpt_14035 - Lcpu_fast_base
-    .long Lpt_14036 - Lcpu_fast_base
-    .long Lpt_14037 - Lcpu_fast_base
-    .long Lpt_14038 - Lcpu_fast_base
-    .long Lpt_14039 - Lcpu_fast_base
-    .long Lpt_14040 - Lcpu_fast_base
-    .long Lpt_14041 - Lcpu_fast_base
-    .long Lpt_14042 - Lcpu_fast_base
-    .long Lpt_14043 - Lcpu_fast_base
-    .long Lpt_14044 - Lcpu_fast_base
-    .long Lpt_14045 - Lcpu_fast_base
-    .long Lpt_14046 - Lcpu_fast_base
-    .long Lpt_14047 - Lcpu_fast_base
-    .long Lpt_14048 - Lcpu_fast_base
-    .long Lpt_14049 - Lcpu_fast_base
-    .long Lpt_14050 - Lcpu_fast_base
-    .long Lpt_14051 - Lcpu_fast_base
-    .long Lpt_14052 - Lcpu_fast_base
-    .long Lpt_14053 - Lcpu_fast_base
-    .long Lpt_14054 - Lcpu_fast_base
-    .long Lpt_14055 - Lcpu_fast_base
-    .long Lpt_14056 - Lcpu_fast_base
-    .long Lpt_14057 - Lcpu_fast_base
-    .long Lpt_14058 - Lcpu_fast_base
-    .long Lpt_14059 - Lcpu_fast_base
-    .long Lpt_14060 - Lcpu_fast_base
-    .long Lpt_14061 - Lcpu_fast_base
-    .long Lpt_14062 - Lcpu_fast_base
-    .long Lpt_14063 - Lcpu_fast_base
-    .long Lpt_14064 - Lcpu_fast_base
-    .long Lpt_14065 - Lcpu_fast_base
-    .long Lpt_14066 - Lcpu_fast_base
-    .long Lpt_14067 - Lcpu_fast_base
-    .long Lpt_14068 - Lcpu_fast_base
-    .long Lpt_14069 - Lcpu_fast_base
-    .long Lpt_14070 - Lcpu_fast_base
-    .long Lpt_14071 - Lcpu_fast_base
-    .long Lpt_14072 - Lcpu_fast_base
-    .long Lpt_14073 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_14074 - Lcpu_fast_base
     .long Lpt_14075 - Lcpu_fast_base
     .long Lpt_14076 - Lcpu_fast_base
@@ -14136,14 +14136,14 @@
     .long Lpt_14135 - Lcpu_fast_base
     .long Lpt_14136 - Lcpu_fast_base
     .long Lpt_14137 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_14138 - Lcpu_fast_base
+    .long Lpt_14139 - Lcpu_fast_base
+    .long Lpt_14140 - Lcpu_fast_base
+    .long Lpt_14141 - Lcpu_fast_base
+    .long Lpt_14142 - Lcpu_fast_base
+    .long Lpt_14143 - Lcpu_fast_base
+    .long Lpt_14144 - Lcpu_fast_base
+    .long Lpt_14145 - Lcpu_fast_base
     .long Lpt_14146 - Lcpu_fast_base
     .long Lpt_14147 - Lcpu_fast_base
     .long Lpt_14148 - Lcpu_fast_base
@@ -14192,14 +14192,6 @@
     .long Lpt_14191 - Lcpu_fast_base
     .long Lpt_14192 - Lcpu_fast_base
     .long Lpt_14193 - Lcpu_fast_base
-    .long Lpt_14194 - Lcpu_fast_base
-    .long Lpt_14195 - Lcpu_fast_base
-    .long Lpt_14196 - Lcpu_fast_base
-    .long Lpt_14197 - Lcpu_fast_base
-    .long Lpt_14198 - Lcpu_fast_base
-    .long Lpt_14199 - Lcpu_fast_base
-    .long Lpt_14200 - Lcpu_fast_base
-    .long Lpt_14201 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14208,6 +14200,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_14202 - Lcpu_fast_base
+    .long Lpt_14203 - Lcpu_fast_base
+    .long Lpt_14204 - Lcpu_fast_base
+    .long Lpt_14205 - Lcpu_fast_base
+    .long Lpt_14206 - Lcpu_fast_base
+    .long Lpt_14207 - Lcpu_fast_base
+    .long Lpt_14208 - Lcpu_fast_base
+    .long Lpt_14209 - Lcpu_fast_base
+    .long Lpt_14210 - Lcpu_fast_base
+    .long Lpt_14211 - Lcpu_fast_base
+    .long Lpt_14212 - Lcpu_fast_base
+    .long Lpt_14213 - Lcpu_fast_base
+    .long Lpt_14214 - Lcpu_fast_base
+    .long Lpt_14215 - Lcpu_fast_base
+    .long Lpt_14216 - Lcpu_fast_base
+    .long Lpt_14217 - Lcpu_fast_base
+    .long Lpt_14218 - Lcpu_fast_base
+    .long Lpt_14219 - Lcpu_fast_base
+    .long Lpt_14220 - Lcpu_fast_base
+    .long Lpt_14221 - Lcpu_fast_base
+    .long Lpt_14222 - Lcpu_fast_base
+    .long Lpt_14223 - Lcpu_fast_base
+    .long Lpt_14224 - Lcpu_fast_base
+    .long Lpt_14225 - Lcpu_fast_base
+    .long Lpt_14226 - Lcpu_fast_base
+    .long Lpt_14227 - Lcpu_fast_base
+    .long Lpt_14228 - Lcpu_fast_base
+    .long Lpt_14229 - Lcpu_fast_base
+    .long Lpt_14230 - Lcpu_fast_base
+    .long Lpt_14231 - Lcpu_fast_base
+    .long Lpt_14232 - Lcpu_fast_base
+    .long Lpt_14233 - Lcpu_fast_base
+    .long Lpt_14234 - Lcpu_fast_base
+    .long Lpt_14235 - Lcpu_fast_base
+    .long Lpt_14236 - Lcpu_fast_base
+    .long Lpt_14237 - Lcpu_fast_base
+    .long Lpt_14238 - Lcpu_fast_base
+    .long Lpt_14239 - Lcpu_fast_base
+    .long Lpt_14240 - Lcpu_fast_base
+    .long Lpt_14241 - Lcpu_fast_base
+    .long Lpt_14242 - Lcpu_fast_base
+    .long Lpt_14243 - Lcpu_fast_base
+    .long Lpt_14244 - Lcpu_fast_base
+    .long Lpt_14245 - Lcpu_fast_base
+    .long Lpt_14246 - Lcpu_fast_base
+    .long Lpt_14247 - Lcpu_fast_base
+    .long Lpt_14248 - Lcpu_fast_base
+    .long Lpt_14249 - Lcpu_fast_base
+    .long Lpt_14250 - Lcpu_fast_base
+    .long Lpt_14251 - Lcpu_fast_base
+    .long Lpt_14252 - Lcpu_fast_base
+    .long Lpt_14253 - Lcpu_fast_base
+    .long Lpt_14254 - Lcpu_fast_base
+    .long Lpt_14255 - Lcpu_fast_base
+    .long Lpt_14256 - Lcpu_fast_base
+    .long Lpt_14257 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14272,62 +14320,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_14274 - Lcpu_fast_base
-    .long Lpt_14275 - Lcpu_fast_base
-    .long Lpt_14276 - Lcpu_fast_base
-    .long Lpt_14277 - Lcpu_fast_base
-    .long Lpt_14278 - Lcpu_fast_base
-    .long Lpt_14279 - Lcpu_fast_base
-    .long Lpt_14280 - Lcpu_fast_base
-    .long Lpt_14281 - Lcpu_fast_base
-    .long Lpt_14282 - Lcpu_fast_base
-    .long Lpt_14283 - Lcpu_fast_base
-    .long Lpt_14284 - Lcpu_fast_base
-    .long Lpt_14285 - Lcpu_fast_base
-    .long Lpt_14286 - Lcpu_fast_base
-    .long Lpt_14287 - Lcpu_fast_base
-    .long Lpt_14288 - Lcpu_fast_base
-    .long Lpt_14289 - Lcpu_fast_base
-    .long Lpt_14290 - Lcpu_fast_base
-    .long Lpt_14291 - Lcpu_fast_base
-    .long Lpt_14292 - Lcpu_fast_base
-    .long Lpt_14293 - Lcpu_fast_base
-    .long Lpt_14294 - Lcpu_fast_base
-    .long Lpt_14295 - Lcpu_fast_base
-    .long Lpt_14296 - Lcpu_fast_base
-    .long Lpt_14297 - Lcpu_fast_base
-    .long Lpt_14298 - Lcpu_fast_base
-    .long Lpt_14299 - Lcpu_fast_base
-    .long Lpt_14300 - Lcpu_fast_base
-    .long Lpt_14301 - Lcpu_fast_base
-    .long Lpt_14302 - Lcpu_fast_base
-    .long Lpt_14303 - Lcpu_fast_base
-    .long Lpt_14304 - Lcpu_fast_base
-    .long Lpt_14305 - Lcpu_fast_base
-    .long Lpt_14306 - Lcpu_fast_base
-    .long Lpt_14307 - Lcpu_fast_base
-    .long Lpt_14308 - Lcpu_fast_base
-    .long Lpt_14309 - Lcpu_fast_base
-    .long Lpt_14310 - Lcpu_fast_base
-    .long Lpt_14311 - Lcpu_fast_base
-    .long Lpt_14312 - Lcpu_fast_base
-    .long Lpt_14313 - Lcpu_fast_base
-    .long Lpt_14314 - Lcpu_fast_base
-    .long Lpt_14315 - Lcpu_fast_base
-    .long Lpt_14316 - Lcpu_fast_base
-    .long Lpt_14317 - Lcpu_fast_base
-    .long Lpt_14318 - Lcpu_fast_base
-    .long Lpt_14319 - Lcpu_fast_base
-    .long Lpt_14320 - Lcpu_fast_base
-    .long Lpt_14321 - Lcpu_fast_base
-    .long Lpt_14322 - Lcpu_fast_base
-    .long Lpt_14323 - Lcpu_fast_base
-    .long Lpt_14324 - Lcpu_fast_base
-    .long Lpt_14325 - Lcpu_fast_base
-    .long Lpt_14326 - Lcpu_fast_base
-    .long Lpt_14327 - Lcpu_fast_base
-    .long Lpt_14328 - Lcpu_fast_base
-    .long Lpt_14329 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_14330 - Lcpu_fast_base
     .long Lpt_14331 - Lcpu_fast_base
     .long Lpt_14332 - Lcpu_fast_base
@@ -14392,14 +14392,14 @@
     .long Lpt_14391 - Lcpu_fast_base
     .long Lpt_14392 - Lcpu_fast_base
     .long Lpt_14393 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_14394 - Lcpu_fast_base
+    .long Lpt_14395 - Lcpu_fast_base
+    .long Lpt_14396 - Lcpu_fast_base
+    .long Lpt_14397 - Lcpu_fast_base
+    .long Lpt_14398 - Lcpu_fast_base
+    .long Lpt_14399 - Lcpu_fast_base
+    .long Lpt_14400 - Lcpu_fast_base
+    .long Lpt_14401 - Lcpu_fast_base
     .long Lpt_14402 - Lcpu_fast_base
     .long Lpt_14403 - Lcpu_fast_base
     .long Lpt_14404 - Lcpu_fast_base
@@ -14448,14 +14448,6 @@
     .long Lpt_14447 - Lcpu_fast_base
     .long Lpt_14448 - Lcpu_fast_base
     .long Lpt_14449 - Lcpu_fast_base
-    .long Lpt_14450 - Lcpu_fast_base
-    .long Lpt_14451 - Lcpu_fast_base
-    .long Lpt_14452 - Lcpu_fast_base
-    .long Lpt_14453 - Lcpu_fast_base
-    .long Lpt_14454 - Lcpu_fast_base
-    .long Lpt_14455 - Lcpu_fast_base
-    .long Lpt_14456 - Lcpu_fast_base
-    .long Lpt_14457 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14464,6 +14456,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_14458 - Lcpu_fast_base
+    .long Lpt_14459 - Lcpu_fast_base
+    .long Lpt_14460 - Lcpu_fast_base
+    .long Lpt_14461 - Lcpu_fast_base
+    .long Lpt_14462 - Lcpu_fast_base
+    .long Lpt_14463 - Lcpu_fast_base
+    .long Lpt_14464 - Lcpu_fast_base
+    .long Lpt_14465 - Lcpu_fast_base
+    .long Lpt_14466 - Lcpu_fast_base
+    .long Lpt_14467 - Lcpu_fast_base
+    .long Lpt_14468 - Lcpu_fast_base
+    .long Lpt_14469 - Lcpu_fast_base
+    .long Lpt_14470 - Lcpu_fast_base
+    .long Lpt_14471 - Lcpu_fast_base
+    .long Lpt_14472 - Lcpu_fast_base
+    .long Lpt_14473 - Lcpu_fast_base
+    .long Lpt_14474 - Lcpu_fast_base
+    .long Lpt_14475 - Lcpu_fast_base
+    .long Lpt_14476 - Lcpu_fast_base
+    .long Lpt_14477 - Lcpu_fast_base
+    .long Lpt_14478 - Lcpu_fast_base
+    .long Lpt_14479 - Lcpu_fast_base
+    .long Lpt_14480 - Lcpu_fast_base
+    .long Lpt_14481 - Lcpu_fast_base
+    .long Lpt_14482 - Lcpu_fast_base
+    .long Lpt_14483 - Lcpu_fast_base
+    .long Lpt_14484 - Lcpu_fast_base
+    .long Lpt_14485 - Lcpu_fast_base
+    .long Lpt_14486 - Lcpu_fast_base
+    .long Lpt_14487 - Lcpu_fast_base
+    .long Lpt_14488 - Lcpu_fast_base
+    .long Lpt_14489 - Lcpu_fast_base
+    .long Lpt_14490 - Lcpu_fast_base
+    .long Lpt_14491 - Lcpu_fast_base
+    .long Lpt_14492 - Lcpu_fast_base
+    .long Lpt_14493 - Lcpu_fast_base
+    .long Lpt_14494 - Lcpu_fast_base
+    .long Lpt_14495 - Lcpu_fast_base
+    .long Lpt_14496 - Lcpu_fast_base
+    .long Lpt_14497 - Lcpu_fast_base
+    .long Lpt_14498 - Lcpu_fast_base
+    .long Lpt_14499 - Lcpu_fast_base
+    .long Lpt_14500 - Lcpu_fast_base
+    .long Lpt_14501 - Lcpu_fast_base
+    .long Lpt_14502 - Lcpu_fast_base
+    .long Lpt_14503 - Lcpu_fast_base
+    .long Lpt_14504 - Lcpu_fast_base
+    .long Lpt_14505 - Lcpu_fast_base
+    .long Lpt_14506 - Lcpu_fast_base
+    .long Lpt_14507 - Lcpu_fast_base
+    .long Lpt_14508 - Lcpu_fast_base
+    .long Lpt_14509 - Lcpu_fast_base
+    .long Lpt_14510 - Lcpu_fast_base
+    .long Lpt_14511 - Lcpu_fast_base
+    .long Lpt_14512 - Lcpu_fast_base
+    .long Lpt_14513 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14528,62 +14576,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_14530 - Lcpu_fast_base
-    .long Lpt_14531 - Lcpu_fast_base
-    .long Lpt_14532 - Lcpu_fast_base
-    .long Lpt_14533 - Lcpu_fast_base
-    .long Lpt_14534 - Lcpu_fast_base
-    .long Lpt_14535 - Lcpu_fast_base
-    .long Lpt_14536 - Lcpu_fast_base
-    .long Lpt_14537 - Lcpu_fast_base
-    .long Lpt_14538 - Lcpu_fast_base
-    .long Lpt_14539 - Lcpu_fast_base
-    .long Lpt_14540 - Lcpu_fast_base
-    .long Lpt_14541 - Lcpu_fast_base
-    .long Lpt_14542 - Lcpu_fast_base
-    .long Lpt_14543 - Lcpu_fast_base
-    .long Lpt_14544 - Lcpu_fast_base
-    .long Lpt_14545 - Lcpu_fast_base
-    .long Lpt_14546 - Lcpu_fast_base
-    .long Lpt_14547 - Lcpu_fast_base
-    .long Lpt_14548 - Lcpu_fast_base
-    .long Lpt_14549 - Lcpu_fast_base
-    .long Lpt_14550 - Lcpu_fast_base
-    .long Lpt_14551 - Lcpu_fast_base
-    .long Lpt_14552 - Lcpu_fast_base
-    .long Lpt_14553 - Lcpu_fast_base
-    .long Lpt_14554 - Lcpu_fast_base
-    .long Lpt_14555 - Lcpu_fast_base
-    .long Lpt_14556 - Lcpu_fast_base
-    .long Lpt_14557 - Lcpu_fast_base
-    .long Lpt_14558 - Lcpu_fast_base
-    .long Lpt_14559 - Lcpu_fast_base
-    .long Lpt_14560 - Lcpu_fast_base
-    .long Lpt_14561 - Lcpu_fast_base
-    .long Lpt_14562 - Lcpu_fast_base
-    .long Lpt_14563 - Lcpu_fast_base
-    .long Lpt_14564 - Lcpu_fast_base
-    .long Lpt_14565 - Lcpu_fast_base
-    .long Lpt_14566 - Lcpu_fast_base
-    .long Lpt_14567 - Lcpu_fast_base
-    .long Lpt_14568 - Lcpu_fast_base
-    .long Lpt_14569 - Lcpu_fast_base
-    .long Lpt_14570 - Lcpu_fast_base
-    .long Lpt_14571 - Lcpu_fast_base
-    .long Lpt_14572 - Lcpu_fast_base
-    .long Lpt_14573 - Lcpu_fast_base
-    .long Lpt_14574 - Lcpu_fast_base
-    .long Lpt_14575 - Lcpu_fast_base
-    .long Lpt_14576 - Lcpu_fast_base
-    .long Lpt_14577 - Lcpu_fast_base
-    .long Lpt_14578 - Lcpu_fast_base
-    .long Lpt_14579 - Lcpu_fast_base
-    .long Lpt_14580 - Lcpu_fast_base
-    .long Lpt_14581 - Lcpu_fast_base
-    .long Lpt_14582 - Lcpu_fast_base
-    .long Lpt_14583 - Lcpu_fast_base
-    .long Lpt_14584 - Lcpu_fast_base
-    .long Lpt_14585 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14592,6 +14584,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_14586 - Lcpu_fast_base
+    .long Lpt_14587 - Lcpu_fast_base
+    .long Lpt_14588 - Lcpu_fast_base
+    .long Lpt_14589 - Lcpu_fast_base
+    .long Lpt_14590 - Lcpu_fast_base
+    .long Lpt_14591 - Lcpu_fast_base
+    .long Lpt_14592 - Lcpu_fast_base
+    .long Lpt_14593 - Lcpu_fast_base
+    .long Lpt_14594 - Lcpu_fast_base
+    .long Lpt_14595 - Lcpu_fast_base
+    .long Lpt_14596 - Lcpu_fast_base
+    .long Lpt_14597 - Lcpu_fast_base
+    .long Lpt_14598 - Lcpu_fast_base
+    .long Lpt_14599 - Lcpu_fast_base
+    .long Lpt_14600 - Lcpu_fast_base
+    .long Lpt_14601 - Lcpu_fast_base
+    .long Lpt_14602 - Lcpu_fast_base
+    .long Lpt_14603 - Lcpu_fast_base
+    .long Lpt_14604 - Lcpu_fast_base
+    .long Lpt_14605 - Lcpu_fast_base
+    .long Lpt_14606 - Lcpu_fast_base
+    .long Lpt_14607 - Lcpu_fast_base
+    .long Lpt_14608 - Lcpu_fast_base
+    .long Lpt_14609 - Lcpu_fast_base
+    .long Lpt_14610 - Lcpu_fast_base
+    .long Lpt_14611 - Lcpu_fast_base
+    .long Lpt_14612 - Lcpu_fast_base
+    .long Lpt_14613 - Lcpu_fast_base
+    .long Lpt_14614 - Lcpu_fast_base
+    .long Lpt_14615 - Lcpu_fast_base
+    .long Lpt_14616 - Lcpu_fast_base
+    .long Lpt_14617 - Lcpu_fast_base
+    .long Lpt_14618 - Lcpu_fast_base
+    .long Lpt_14619 - Lcpu_fast_base
+    .long Lpt_14620 - Lcpu_fast_base
+    .long Lpt_14621 - Lcpu_fast_base
+    .long Lpt_14622 - Lcpu_fast_base
+    .long Lpt_14623 - Lcpu_fast_base
+    .long Lpt_14624 - Lcpu_fast_base
+    .long Lpt_14625 - Lcpu_fast_base
+    .long Lpt_14626 - Lcpu_fast_base
+    .long Lpt_14627 - Lcpu_fast_base
+    .long Lpt_14628 - Lcpu_fast_base
+    .long Lpt_14629 - Lcpu_fast_base
+    .long Lpt_14630 - Lcpu_fast_base
+    .long Lpt_14631 - Lcpu_fast_base
+    .long Lpt_14632 - Lcpu_fast_base
+    .long Lpt_14633 - Lcpu_fast_base
+    .long Lpt_14634 - Lcpu_fast_base
+    .long Lpt_14635 - Lcpu_fast_base
+    .long Lpt_14636 - Lcpu_fast_base
+    .long Lpt_14637 - Lcpu_fast_base
+    .long Lpt_14638 - Lcpu_fast_base
+    .long Lpt_14639 - Lcpu_fast_base
+    .long Lpt_14640 - Lcpu_fast_base
+    .long Lpt_14641 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14656,62 +14704,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_14658 - Lcpu_fast_base
-    .long Lpt_14659 - Lcpu_fast_base
-    .long Lpt_14660 - Lcpu_fast_base
-    .long Lpt_14661 - Lcpu_fast_base
-    .long Lpt_14662 - Lcpu_fast_base
-    .long Lpt_14663 - Lcpu_fast_base
-    .long Lpt_14664 - Lcpu_fast_base
-    .long Lpt_14665 - Lcpu_fast_base
-    .long Lpt_14666 - Lcpu_fast_base
-    .long Lpt_14667 - Lcpu_fast_base
-    .long Lpt_14668 - Lcpu_fast_base
-    .long Lpt_14669 - Lcpu_fast_base
-    .long Lpt_14670 - Lcpu_fast_base
-    .long Lpt_14671 - Lcpu_fast_base
-    .long Lpt_14672 - Lcpu_fast_base
-    .long Lpt_14673 - Lcpu_fast_base
-    .long Lpt_14674 - Lcpu_fast_base
-    .long Lpt_14675 - Lcpu_fast_base
-    .long Lpt_14676 - Lcpu_fast_base
-    .long Lpt_14677 - Lcpu_fast_base
-    .long Lpt_14678 - Lcpu_fast_base
-    .long Lpt_14679 - Lcpu_fast_base
-    .long Lpt_14680 - Lcpu_fast_base
-    .long Lpt_14681 - Lcpu_fast_base
-    .long Lpt_14682 - Lcpu_fast_base
-    .long Lpt_14683 - Lcpu_fast_base
-    .long Lpt_14684 - Lcpu_fast_base
-    .long Lpt_14685 - Lcpu_fast_base
-    .long Lpt_14686 - Lcpu_fast_base
-    .long Lpt_14687 - Lcpu_fast_base
-    .long Lpt_14688 - Lcpu_fast_base
-    .long Lpt_14689 - Lcpu_fast_base
-    .long Lpt_14690 - Lcpu_fast_base
-    .long Lpt_14691 - Lcpu_fast_base
-    .long Lpt_14692 - Lcpu_fast_base
-    .long Lpt_14693 - Lcpu_fast_base
-    .long Lpt_14694 - Lcpu_fast_base
-    .long Lpt_14695 - Lcpu_fast_base
-    .long Lpt_14696 - Lcpu_fast_base
-    .long Lpt_14697 - Lcpu_fast_base
-    .long Lpt_14698 - Lcpu_fast_base
-    .long Lpt_14699 - Lcpu_fast_base
-    .long Lpt_14700 - Lcpu_fast_base
-    .long Lpt_14701 - Lcpu_fast_base
-    .long Lpt_14702 - Lcpu_fast_base
-    .long Lpt_14703 - Lcpu_fast_base
-    .long Lpt_14704 - Lcpu_fast_base
-    .long Lpt_14705 - Lcpu_fast_base
-    .long Lpt_14706 - Lcpu_fast_base
-    .long Lpt_14707 - Lcpu_fast_base
-    .long Lpt_14708 - Lcpu_fast_base
-    .long Lpt_14709 - Lcpu_fast_base
-    .long Lpt_14710 - Lcpu_fast_base
-    .long Lpt_14711 - Lcpu_fast_base
-    .long Lpt_14712 - Lcpu_fast_base
-    .long Lpt_14713 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14720,6 +14712,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_14714 - Lcpu_fast_base
+    .long Lpt_14715 - Lcpu_fast_base
+    .long Lpt_14716 - Lcpu_fast_base
+    .long Lpt_14717 - Lcpu_fast_base
+    .long Lpt_14718 - Lcpu_fast_base
+    .long Lpt_14719 - Lcpu_fast_base
+    .long Lpt_14720 - Lcpu_fast_base
+    .long Lpt_14721 - Lcpu_fast_base
+    .long Lpt_14722 - Lcpu_fast_base
+    .long Lpt_14723 - Lcpu_fast_base
+    .long Lpt_14724 - Lcpu_fast_base
+    .long Lpt_14725 - Lcpu_fast_base
+    .long Lpt_14726 - Lcpu_fast_base
+    .long Lpt_14727 - Lcpu_fast_base
+    .long Lpt_14728 - Lcpu_fast_base
+    .long Lpt_14729 - Lcpu_fast_base
+    .long Lpt_14730 - Lcpu_fast_base
+    .long Lpt_14731 - Lcpu_fast_base
+    .long Lpt_14732 - Lcpu_fast_base
+    .long Lpt_14733 - Lcpu_fast_base
+    .long Lpt_14734 - Lcpu_fast_base
+    .long Lpt_14735 - Lcpu_fast_base
+    .long Lpt_14736 - Lcpu_fast_base
+    .long Lpt_14737 - Lcpu_fast_base
+    .long Lpt_14738 - Lcpu_fast_base
+    .long Lpt_14739 - Lcpu_fast_base
+    .long Lpt_14740 - Lcpu_fast_base
+    .long Lpt_14741 - Lcpu_fast_base
+    .long Lpt_14742 - Lcpu_fast_base
+    .long Lpt_14743 - Lcpu_fast_base
+    .long Lpt_14744 - Lcpu_fast_base
+    .long Lpt_14745 - Lcpu_fast_base
+    .long Lpt_14746 - Lcpu_fast_base
+    .long Lpt_14747 - Lcpu_fast_base
+    .long Lpt_14748 - Lcpu_fast_base
+    .long Lpt_14749 - Lcpu_fast_base
+    .long Lpt_14750 - Lcpu_fast_base
+    .long Lpt_14751 - Lcpu_fast_base
+    .long Lpt_14752 - Lcpu_fast_base
+    .long Lpt_14753 - Lcpu_fast_base
+    .long Lpt_14754 - Lcpu_fast_base
+    .long Lpt_14755 - Lcpu_fast_base
+    .long Lpt_14756 - Lcpu_fast_base
+    .long Lpt_14757 - Lcpu_fast_base
+    .long Lpt_14758 - Lcpu_fast_base
+    .long Lpt_14759 - Lcpu_fast_base
+    .long Lpt_14760 - Lcpu_fast_base
+    .long Lpt_14761 - Lcpu_fast_base
+    .long Lpt_14762 - Lcpu_fast_base
+    .long Lpt_14763 - Lcpu_fast_base
+    .long Lpt_14764 - Lcpu_fast_base
+    .long Lpt_14765 - Lcpu_fast_base
+    .long Lpt_14766 - Lcpu_fast_base
+    .long Lpt_14767 - Lcpu_fast_base
+    .long Lpt_14768 - Lcpu_fast_base
+    .long Lpt_14769 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14784,62 +14832,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_14786 - Lcpu_fast_base
-    .long Lpt_14787 - Lcpu_fast_base
-    .long Lpt_14788 - Lcpu_fast_base
-    .long Lpt_14789 - Lcpu_fast_base
-    .long Lpt_14790 - Lcpu_fast_base
-    .long Lpt_14791 - Lcpu_fast_base
-    .long Lpt_14792 - Lcpu_fast_base
-    .long Lpt_14793 - Lcpu_fast_base
-    .long Lpt_14794 - Lcpu_fast_base
-    .long Lpt_14795 - Lcpu_fast_base
-    .long Lpt_14796 - Lcpu_fast_base
-    .long Lpt_14797 - Lcpu_fast_base
-    .long Lpt_14798 - Lcpu_fast_base
-    .long Lpt_14799 - Lcpu_fast_base
-    .long Lpt_14800 - Lcpu_fast_base
-    .long Lpt_14801 - Lcpu_fast_base
-    .long Lpt_14802 - Lcpu_fast_base
-    .long Lpt_14803 - Lcpu_fast_base
-    .long Lpt_14804 - Lcpu_fast_base
-    .long Lpt_14805 - Lcpu_fast_base
-    .long Lpt_14806 - Lcpu_fast_base
-    .long Lpt_14807 - Lcpu_fast_base
-    .long Lpt_14808 - Lcpu_fast_base
-    .long Lpt_14809 - Lcpu_fast_base
-    .long Lpt_14810 - Lcpu_fast_base
-    .long Lpt_14811 - Lcpu_fast_base
-    .long Lpt_14812 - Lcpu_fast_base
-    .long Lpt_14813 - Lcpu_fast_base
-    .long Lpt_14814 - Lcpu_fast_base
-    .long Lpt_14815 - Lcpu_fast_base
-    .long Lpt_14816 - Lcpu_fast_base
-    .long Lpt_14817 - Lcpu_fast_base
-    .long Lpt_14818 - Lcpu_fast_base
-    .long Lpt_14819 - Lcpu_fast_base
-    .long Lpt_14820 - Lcpu_fast_base
-    .long Lpt_14821 - Lcpu_fast_base
-    .long Lpt_14822 - Lcpu_fast_base
-    .long Lpt_14823 - Lcpu_fast_base
-    .long Lpt_14824 - Lcpu_fast_base
-    .long Lpt_14825 - Lcpu_fast_base
-    .long Lpt_14826 - Lcpu_fast_base
-    .long Lpt_14827 - Lcpu_fast_base
-    .long Lpt_14828 - Lcpu_fast_base
-    .long Lpt_14829 - Lcpu_fast_base
-    .long Lpt_14830 - Lcpu_fast_base
-    .long Lpt_14831 - Lcpu_fast_base
-    .long Lpt_14832 - Lcpu_fast_base
-    .long Lpt_14833 - Lcpu_fast_base
-    .long Lpt_14834 - Lcpu_fast_base
-    .long Lpt_14835 - Lcpu_fast_base
-    .long Lpt_14836 - Lcpu_fast_base
-    .long Lpt_14837 - Lcpu_fast_base
-    .long Lpt_14838 - Lcpu_fast_base
-    .long Lpt_14839 - Lcpu_fast_base
-    .long Lpt_14840 - Lcpu_fast_base
-    .long Lpt_14841 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_14842 - Lcpu_fast_base
     .long Lpt_14843 - Lcpu_fast_base
     .long Lpt_14844 - Lcpu_fast_base
@@ -14904,14 +14904,14 @@
     .long Lpt_14903 - Lcpu_fast_base
     .long Lpt_14904 - Lcpu_fast_base
     .long Lpt_14905 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_14906 - Lcpu_fast_base
+    .long Lpt_14907 - Lcpu_fast_base
+    .long Lpt_14908 - Lcpu_fast_base
+    .long Lpt_14909 - Lcpu_fast_base
+    .long Lpt_14910 - Lcpu_fast_base
+    .long Lpt_14911 - Lcpu_fast_base
+    .long Lpt_14912 - Lcpu_fast_base
+    .long Lpt_14913 - Lcpu_fast_base
     .long Lpt_14914 - Lcpu_fast_base
     .long Lpt_14915 - Lcpu_fast_base
     .long Lpt_14916 - Lcpu_fast_base
@@ -14960,14 +14960,6 @@
     .long Lpt_14959 - Lcpu_fast_base
     .long Lpt_14960 - Lcpu_fast_base
     .long Lpt_14961 - Lcpu_fast_base
-    .long Lpt_14962 - Lcpu_fast_base
-    .long Lpt_14963 - Lcpu_fast_base
-    .long Lpt_14964 - Lcpu_fast_base
-    .long Lpt_14965 - Lcpu_fast_base
-    .long Lpt_14966 - Lcpu_fast_base
-    .long Lpt_14967 - Lcpu_fast_base
-    .long Lpt_14968 - Lcpu_fast_base
-    .long Lpt_14969 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -14976,6 +14968,62 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_14970 - Lcpu_fast_base
+    .long Lpt_14971 - Lcpu_fast_base
+    .long Lpt_14972 - Lcpu_fast_base
+    .long Lpt_14973 - Lcpu_fast_base
+    .long Lpt_14974 - Lcpu_fast_base
+    .long Lpt_14975 - Lcpu_fast_base
+    .long Lpt_14976 - Lcpu_fast_base
+    .long Lpt_14977 - Lcpu_fast_base
+    .long Lpt_14978 - Lcpu_fast_base
+    .long Lpt_14979 - Lcpu_fast_base
+    .long Lpt_14980 - Lcpu_fast_base
+    .long Lpt_14981 - Lcpu_fast_base
+    .long Lpt_14982 - Lcpu_fast_base
+    .long Lpt_14983 - Lcpu_fast_base
+    .long Lpt_14984 - Lcpu_fast_base
+    .long Lpt_14985 - Lcpu_fast_base
+    .long Lpt_14986 - Lcpu_fast_base
+    .long Lpt_14987 - Lcpu_fast_base
+    .long Lpt_14988 - Lcpu_fast_base
+    .long Lpt_14989 - Lcpu_fast_base
+    .long Lpt_14990 - Lcpu_fast_base
+    .long Lpt_14991 - Lcpu_fast_base
+    .long Lpt_14992 - Lcpu_fast_base
+    .long Lpt_14993 - Lcpu_fast_base
+    .long Lpt_14994 - Lcpu_fast_base
+    .long Lpt_14995 - Lcpu_fast_base
+    .long Lpt_14996 - Lcpu_fast_base
+    .long Lpt_14997 - Lcpu_fast_base
+    .long Lpt_14998 - Lcpu_fast_base
+    .long Lpt_14999 - Lcpu_fast_base
+    .long Lpt_15000 - Lcpu_fast_base
+    .long Lpt_15001 - Lcpu_fast_base
+    .long Lpt_15002 - Lcpu_fast_base
+    .long Lpt_15003 - Lcpu_fast_base
+    .long Lpt_15004 - Lcpu_fast_base
+    .long Lpt_15005 - Lcpu_fast_base
+    .long Lpt_15006 - Lcpu_fast_base
+    .long Lpt_15007 - Lcpu_fast_base
+    .long Lpt_15008 - Lcpu_fast_base
+    .long Lpt_15009 - Lcpu_fast_base
+    .long Lpt_15010 - Lcpu_fast_base
+    .long Lpt_15011 - Lcpu_fast_base
+    .long Lpt_15012 - Lcpu_fast_base
+    .long Lpt_15013 - Lcpu_fast_base
+    .long Lpt_15014 - Lcpu_fast_base
+    .long Lpt_15015 - Lcpu_fast_base
+    .long Lpt_15016 - Lcpu_fast_base
+    .long Lpt_15017 - Lcpu_fast_base
+    .long Lpt_15018 - Lcpu_fast_base
+    .long Lpt_15019 - Lcpu_fast_base
+    .long Lpt_15020 - Lcpu_fast_base
+    .long Lpt_15021 - Lcpu_fast_base
+    .long Lpt_15022 - Lcpu_fast_base
+    .long Lpt_15023 - Lcpu_fast_base
+    .long Lpt_15024 - Lcpu_fast_base
+    .long Lpt_15025 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -15040,62 +15088,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_15042 - Lcpu_fast_base
-    .long Lpt_15043 - Lcpu_fast_base
-    .long Lpt_15044 - Lcpu_fast_base
-    .long Lpt_15045 - Lcpu_fast_base
-    .long Lpt_15046 - Lcpu_fast_base
-    .long Lpt_15047 - Lcpu_fast_base
-    .long Lpt_15048 - Lcpu_fast_base
-    .long Lpt_15049 - Lcpu_fast_base
-    .long Lpt_15050 - Lcpu_fast_base
-    .long Lpt_15051 - Lcpu_fast_base
-    .long Lpt_15052 - Lcpu_fast_base
-    .long Lpt_15053 - Lcpu_fast_base
-    .long Lpt_15054 - Lcpu_fast_base
-    .long Lpt_15055 - Lcpu_fast_base
-    .long Lpt_15056 - Lcpu_fast_base
-    .long Lpt_15057 - Lcpu_fast_base
-    .long Lpt_15058 - Lcpu_fast_base
-    .long Lpt_15059 - Lcpu_fast_base
-    .long Lpt_15060 - Lcpu_fast_base
-    .long Lpt_15061 - Lcpu_fast_base
-    .long Lpt_15062 - Lcpu_fast_base
-    .long Lpt_15063 - Lcpu_fast_base
-    .long Lpt_15064 - Lcpu_fast_base
-    .long Lpt_15065 - Lcpu_fast_base
-    .long Lpt_15066 - Lcpu_fast_base
-    .long Lpt_15067 - Lcpu_fast_base
-    .long Lpt_15068 - Lcpu_fast_base
-    .long Lpt_15069 - Lcpu_fast_base
-    .long Lpt_15070 - Lcpu_fast_base
-    .long Lpt_15071 - Lcpu_fast_base
-    .long Lpt_15072 - Lcpu_fast_base
-    .long Lpt_15073 - Lcpu_fast_base
-    .long Lpt_15074 - Lcpu_fast_base
-    .long Lpt_15075 - Lcpu_fast_base
-    .long Lpt_15076 - Lcpu_fast_base
-    .long Lpt_15077 - Lcpu_fast_base
-    .long Lpt_15078 - Lcpu_fast_base
-    .long Lpt_15079 - Lcpu_fast_base
-    .long Lpt_15080 - Lcpu_fast_base
-    .long Lpt_15081 - Lcpu_fast_base
-    .long Lpt_15082 - Lcpu_fast_base
-    .long Lpt_15083 - Lcpu_fast_base
-    .long Lpt_15084 - Lcpu_fast_base
-    .long Lpt_15085 - Lcpu_fast_base
-    .long Lpt_15086 - Lcpu_fast_base
-    .long Lpt_15087 - Lcpu_fast_base
-    .long Lpt_15088 - Lcpu_fast_base
-    .long Lpt_15089 - Lcpu_fast_base
-    .long Lpt_15090 - Lcpu_fast_base
-    .long Lpt_15091 - Lcpu_fast_base
-    .long Lpt_15092 - Lcpu_fast_base
-    .long Lpt_15093 - Lcpu_fast_base
-    .long Lpt_15094 - Lcpu_fast_base
-    .long Lpt_15095 - Lcpu_fast_base
-    .long Lpt_15096 - Lcpu_fast_base
-    .long Lpt_15097 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_15098 - Lcpu_fast_base
     .long Lpt_15099 - Lcpu_fast_base
     .long Lpt_15100 - Lcpu_fast_base
@@ -15163,15 +15163,15 @@
     .long Lpt_15162 - Lcpu_fast_base
     .long Lpt_15163 - Lcpu_fast_base
     .long Lpt_15164 - Lcpu_fast_base
-    .long 0
+    .long Lpt_15165 - Lcpu_fast_base
     .long Lpt_15166 - Lcpu_fast_base
     .long Lpt_15167 - Lcpu_fast_base
     .long Lpt_15168 - Lcpu_fast_base
-    .long 0
+    .long Lpt_15169 - Lcpu_fast_base
     .long Lpt_15170 - Lcpu_fast_base
     .long Lpt_15171 - Lcpu_fast_base
     .long Lpt_15172 - Lcpu_fast_base
-    .long 0
+    .long Lpt_15173 - Lcpu_fast_base
     .long Lpt_15174 - Lcpu_fast_base
     .long Lpt_15175 - Lcpu_fast_base
     .long Lpt_15176 - Lcpu_fast_base
@@ -15179,7 +15179,7 @@
     .long Lpt_15178 - Lcpu_fast_base
     .long Lpt_15179 - Lcpu_fast_base
     .long Lpt_15180 - Lcpu_fast_base
-    .long 0
+    .long Lpt_15181 - Lcpu_fast_base
     .long Lpt_15182 - Lcpu_fast_base
     .long Lpt_15183 - Lcpu_fast_base
     .long Lpt_15184 - Lcpu_fast_base
@@ -15187,7 +15187,7 @@
     .long Lpt_15186 - Lcpu_fast_base
     .long Lpt_15187 - Lcpu_fast_base
     .long Lpt_15188 - Lcpu_fast_base
-    .long 0
+    .long Lpt_15189 - Lcpu_fast_base
     .long Lpt_15190 - Lcpu_fast_base
     .long Lpt_15191 - Lcpu_fast_base
     .long Lpt_15192 - Lcpu_fast_base
@@ -15195,7 +15195,7 @@
     .long Lpt_15194 - Lcpu_fast_base
     .long Lpt_15195 - Lcpu_fast_base
     .long Lpt_15196 - Lcpu_fast_base
-    .long 0
+    .long Lpt_15197 - Lcpu_fast_base
     .long Lpt_15198 - Lcpu_fast_base
     .long Lpt_15199 - Lcpu_fast_base
     .long Lpt_15200 - Lcpu_fast_base
@@ -15203,7 +15203,7 @@
     .long Lpt_15202 - Lcpu_fast_base
     .long Lpt_15203 - Lcpu_fast_base
     .long Lpt_15204 - Lcpu_fast_base
-    .long 0
+    .long Lpt_15205 - Lcpu_fast_base
     .long Lpt_15206 - Lcpu_fast_base
     .long Lpt_15207 - Lcpu_fast_base
     .long Lpt_15208 - Lcpu_fast_base
@@ -15211,7 +15211,7 @@
     .long Lpt_15210 - Lcpu_fast_base
     .long Lpt_15211 - Lcpu_fast_base
     .long Lpt_15212 - Lcpu_fast_base
-    .long 0
+    .long Lpt_15213 - Lcpu_fast_base
     .long Lpt_15214 - Lcpu_fast_base
     .long Lpt_15215 - Lcpu_fast_base
     .long Lpt_15216 - Lcpu_fast_base
@@ -15223,7 +15223,7 @@
     .long Lpt_15222 - Lcpu_fast_base
     .long Lpt_15223 - Lcpu_fast_base
     .long Lpt_15224 - Lcpu_fast_base
-    .long Lpt_15225 - Lcpu_fast_base
+    .long 0
     .long Lpt_15226 - Lcpu_fast_base
     .long Lpt_15227 - Lcpu_fast_base
     .long Lpt_15228 - Lcpu_fast_base
@@ -15235,27 +15235,27 @@
     .long Lpt_15234 - Lcpu_fast_base
     .long Lpt_15235 - Lcpu_fast_base
     .long Lpt_15236 - Lcpu_fast_base
-    .long Lpt_15237 - Lcpu_fast_base
+    .long 0
     .long Lpt_15238 - Lcpu_fast_base
     .long Lpt_15239 - Lcpu_fast_base
     .long Lpt_15240 - Lcpu_fast_base
     .long Lpt_15241 - Lcpu_fast_base
-    .long Lpt_15242 - Lcpu_fast_base
-    .long Lpt_15243 - Lcpu_fast_base
-    .long Lpt_15244 - Lcpu_fast_base
-    .long Lpt_15245 - Lcpu_fast_base
-    .long Lpt_15246 - Lcpu_fast_base
-    .long Lpt_15247 - Lcpu_fast_base
-    .long Lpt_15248 - Lcpu_fast_base
-    .long Lpt_15249 - Lcpu_fast_base
-    .long Lpt_15250 - Lcpu_fast_base
-    .long Lpt_15251 - Lcpu_fast_base
-    .long Lpt_15252 - Lcpu_fast_base
-    .long Lpt_15253 - Lcpu_fast_base
-    .long Lpt_15254 - Lcpu_fast_base
-    .long Lpt_15255 - Lcpu_fast_base
-    .long Lpt_15256 - Lcpu_fast_base
-    .long Lpt_15257 - Lcpu_fast_base
+    .long Lpt_15242 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15243 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15242 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15243 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15246 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15247 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15246 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15247 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15250 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15251 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15250 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15251 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15254 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15255 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15254 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_15255 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_15258 - Lcpu_fast_base
     .long Lpt_15259 - Lcpu_fast_base
     .long Lpt_15260 - Lcpu_fast_base
@@ -15275,7 +15275,7 @@
     .long Lpt_15274 - Lcpu_fast_base
     .long Lpt_15275 - Lcpu_fast_base
     .long Lpt_15276 - Lcpu_fast_base
-    .long Lpt_15277 - Lcpu_fast_base
+    .long 0
     .long Lpt_15278 - Lcpu_fast_base
     .long Lpt_15279 - Lcpu_fast_base
     .long Lpt_15280 - Lcpu_fast_base
@@ -15283,7 +15283,7 @@
     .long Lpt_15282 - Lcpu_fast_base
     .long Lpt_15283 - Lcpu_fast_base
     .long Lpt_15284 - Lcpu_fast_base
-    .long Lpt_15285 - Lcpu_fast_base
+    .long 0
     .long Lpt_15286 - Lcpu_fast_base
     .long Lpt_15287 - Lcpu_fast_base
     .long Lpt_15288 - Lcpu_fast_base
@@ -15291,7 +15291,7 @@
     .long Lpt_15290 - Lcpu_fast_base
     .long Lpt_15291 - Lcpu_fast_base
     .long Lpt_15292 - Lcpu_fast_base
-    .long Lpt_15293 - Lcpu_fast_base
+    .long 0
     .long Lpt_15294 - Lcpu_fast_base
     .long Lpt_15295 - Lcpu_fast_base
     .long Lpt_15296 - Lcpu_fast_base
@@ -15299,7 +15299,7 @@
     .long Lpt_15298 - Lcpu_fast_base
     .long Lpt_15299 - Lcpu_fast_base
     .long Lpt_15300 - Lcpu_fast_base
-    .long Lpt_15301 - Lcpu_fast_base
+    .long 0
     .long Lpt_15302 - Lcpu_fast_base
     .long Lpt_15303 - Lcpu_fast_base
     .long Lpt_15304 - Lcpu_fast_base
@@ -15307,7 +15307,7 @@
     .long Lpt_15306 - Lcpu_fast_base
     .long Lpt_15307 - Lcpu_fast_base
     .long Lpt_15308 - Lcpu_fast_base
-    .long Lpt_15309 - Lcpu_fast_base
+    .long 0
     .long Lpt_15310 - Lcpu_fast_base
     .long Lpt_15311 - Lcpu_fast_base
     .long Lpt_15312 - Lcpu_fast_base
@@ -15315,7 +15315,7 @@
     .long Lpt_15314 - Lcpu_fast_base
     .long Lpt_15315 - Lcpu_fast_base
     .long Lpt_15316 - Lcpu_fast_base
-    .long Lpt_15317 - Lcpu_fast_base
+    .long 0
     .long Lpt_15318 - Lcpu_fast_base
     .long Lpt_15319 - Lcpu_fast_base
     .long Lpt_15320 - Lcpu_fast_base
@@ -16816,22 +16816,22 @@
     .long Lpt_16815 - Lcpu_fast_base
     .long Lpt_16816 - Lcpu_fast_base
     .long Lpt_16817 - Lcpu_fast_base
-    .long Lpt_16818 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16819 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16818 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16819 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16822 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16823 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16822 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16823 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16826 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16827 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16826 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16827 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_16818 - Lcpu_fast_base
+    .long Lpt_16819 - Lcpu_fast_base
+    .long Lpt_16820 - Lcpu_fast_base
+    .long Lpt_16821 - Lcpu_fast_base
+    .long Lpt_16822 - Lcpu_fast_base
+    .long Lpt_16823 - Lcpu_fast_base
+    .long Lpt_16824 - Lcpu_fast_base
+    .long Lpt_16825 - Lcpu_fast_base
+    .long Lpt_16826 - Lcpu_fast_base
+    .long Lpt_16827 - Lcpu_fast_base
+    .long Lpt_16828 - Lcpu_fast_base
+    .long Lpt_16829 - Lcpu_fast_base
+    .long Lpt_16830 - Lcpu_fast_base
+    .long Lpt_16831 - Lcpu_fast_base
+    .long Lpt_16832 - Lcpu_fast_base
+    .long Lpt_16833 - Lcpu_fast_base
     .long Lpt_16834 - Lcpu_fast_base
     .long Lpt_16835 - Lcpu_fast_base
     .long Lpt_16836 - Lcpu_fast_base
@@ -16880,22 +16880,22 @@
     .long Lpt_16879 - Lcpu_fast_base
     .long Lpt_16880 - Lcpu_fast_base
     .long Lpt_16881 - Lcpu_fast_base
-    .long Lpt_16882 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16883 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16882 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16883 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16886 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16887 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16886 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16887 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16890 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16891 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16890 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16891 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_16882 - Lcpu_fast_base
+    .long Lpt_16883 - Lcpu_fast_base
+    .long Lpt_16884 - Lcpu_fast_base
+    .long Lpt_16885 - Lcpu_fast_base
+    .long Lpt_16886 - Lcpu_fast_base
+    .long Lpt_16887 - Lcpu_fast_base
+    .long Lpt_16888 - Lcpu_fast_base
+    .long Lpt_16889 - Lcpu_fast_base
+    .long Lpt_16890 - Lcpu_fast_base
+    .long Lpt_16891 - Lcpu_fast_base
+    .long Lpt_16892 - Lcpu_fast_base
+    .long Lpt_16893 - Lcpu_fast_base
+    .long Lpt_16894 - Lcpu_fast_base
+    .long Lpt_16895 - Lcpu_fast_base
+    .long Lpt_16896 - Lcpu_fast_base
+    .long Lpt_16897 - Lcpu_fast_base
     .long Lpt_16898 - Lcpu_fast_base
     .long Lpt_16899 - Lcpu_fast_base
     .long Lpt_16900 - Lcpu_fast_base
@@ -16904,30 +16904,30 @@
     .long Lpt_16903 - Lcpu_fast_base
     .long Lpt_16904 - Lcpu_fast_base
     .long Lpt_16905 - Lcpu_fast_base
-    .long Lpt_16906 - Lcpu_fast_base
-    .long Lpt_16907 - Lcpu_fast_base
-    .long Lpt_16908 - Lcpu_fast_base
-    .long Lpt_16909 - Lcpu_fast_base
-    .long Lpt_16910 - Lcpu_fast_base
-    .long Lpt_16911 - Lcpu_fast_base
-    .long Lpt_16912 - Lcpu_fast_base
-    .long Lpt_16913 - Lcpu_fast_base
+    .long Lpt_16906 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16907 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16906 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16907 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16910 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16911 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16910 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16911 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_16914 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_16915 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_16914 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_16915 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16918 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16919 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16918 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16919 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16922 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16923 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16922 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16923 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
     .long 0
+    .long Lpt_16922 - Lcpu_fast_base
+    .long Lpt_16923 - Lcpu_fast_base
+    .long Lpt_16924 - Lcpu_fast_base
+    .long Lpt_16925 - Lcpu_fast_base
+    .long Lpt_16926 - Lcpu_fast_base
+    .long Lpt_16927 - Lcpu_fast_base
+    .long Lpt_16928 - Lcpu_fast_base
+    .long Lpt_16929 - Lcpu_fast_base
     .long Lpt_16930 - Lcpu_fast_base
     .long Lpt_16931 - Lcpu_fast_base
     .long Lpt_16932 - Lcpu_fast_base
@@ -16944,109 +16944,109 @@
     .long Lpt_16943 - Lcpu_fast_base
     .long Lpt_16944 - Lcpu_fast_base
     .long Lpt_16945 - Lcpu_fast_base
-    .long Lpt_16946 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16947 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16946 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16947 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16950 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16951 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16950 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16951 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16954 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16955 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16954 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_16955 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_16946 - Lcpu_fast_base
+    .long Lpt_16947 - Lcpu_fast_base
+    .long Lpt_16948 - Lcpu_fast_base
+    .long Lpt_16949 - Lcpu_fast_base
+    .long Lpt_16950 - Lcpu_fast_base
+    .long Lpt_16951 - Lcpu_fast_base
+    .long Lpt_16952 - Lcpu_fast_base
+    .long Lpt_16953 - Lcpu_fast_base
+    .long Lpt_16954 - Lcpu_fast_base
+    .long Lpt_16955 - Lcpu_fast_base
+    .long Lpt_16956 - Lcpu_fast_base
+    .long Lpt_16957 - Lcpu_fast_base
+    .long Lpt_16958 - Lcpu_fast_base
+    .long Lpt_16959 - Lcpu_fast_base
+    .long Lpt_16960 - Lcpu_fast_base
+    .long Lpt_16961 - Lcpu_fast_base
     .long Lpt_16962 - Lcpu_fast_base
     .long Lpt_16963 - Lcpu_fast_base
     .long Lpt_16964 - Lcpu_fast_base
-    .long 0
+    .long Lpt_16965 - Lcpu_fast_base
     .long Lpt_16966 - Lcpu_fast_base
     .long Lpt_16967 - Lcpu_fast_base
     .long Lpt_16968 - Lcpu_fast_base
+    .long Lpt_16969 - Lcpu_fast_base
+    .long Lpt_16970 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16971 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16970 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16971 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16974 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16975 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16974 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16975 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16978 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16979 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16978 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_16979 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_16970 - Lcpu_fast_base
-    .long Lpt_16971 - Lcpu_fast_base
-    .long Lpt_16972 - Lcpu_fast_base
     .long 0
-    .long Lpt_16974 - Lcpu_fast_base
-    .long Lpt_16975 - Lcpu_fast_base
-    .long Lpt_16976 - Lcpu_fast_base
     .long 0
-    .long Lpt_16978 - Lcpu_fast_base
-    .long Lpt_16979 - Lcpu_fast_base
-    .long Lpt_16980 - Lcpu_fast_base
-    .long 0
-    .long Lpt_16982 - Lcpu_fast_base
-    .long Lpt_16983 - Lcpu_fast_base
-    .long Lpt_16984 - Lcpu_fast_base
     .long 0
     .long Lpt_16986 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_16987 - Lcpu_fast_base
+    .long Lpt_16988 - Lcpu_fast_base
     .long Lpt_16989 - Lcpu_fast_base
     .long Lpt_16990 - Lcpu_fast_base
-    .long 0
-    .long 0
+    .long Lpt_16991 - Lcpu_fast_base
+    .long Lpt_16992 - Lcpu_fast_base
     .long Lpt_16993 - Lcpu_fast_base
     .long Lpt_16994 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_16995 - Lcpu_fast_base
+    .long Lpt_16996 - Lcpu_fast_base
+    .long Lpt_16997 - Lcpu_fast_base
     .long Lpt_16998 - Lcpu_fast_base
+    .long Lpt_16999 - Lcpu_fast_base
+    .long Lpt_17000 - Lcpu_fast_base
+    .long Lpt_17001 - Lcpu_fast_base
+    .long Lpt_17002 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17003 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17002 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17003 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17006 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17007 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17006 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17007 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17010 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17011 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17010 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17011 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
-    .long Lpt_17002 - Lcpu_fast_base
-    .long Lpt_17003 - Lcpu_fast_base
-    .long Lpt_17004 - Lcpu_fast_base
-    .long 0
-    .long Lpt_17006 - Lcpu_fast_base
-    .long Lpt_17007 - Lcpu_fast_base
-    .long Lpt_17008 - Lcpu_fast_base
-    .long 0
-    .long Lpt_17010 - Lcpu_fast_base
-    .long Lpt_17011 - Lcpu_fast_base
-    .long Lpt_17012 - Lcpu_fast_base
-    .long 0
-    .long Lpt_17014 - Lcpu_fast_base
-    .long Lpt_17015 - Lcpu_fast_base
-    .long Lpt_17016 - Lcpu_fast_base
     .long 0
     .long Lpt_17018 - Lcpu_fast_base
     .long Lpt_17019 - Lcpu_fast_base
     .long Lpt_17020 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17021 - Lcpu_fast_base
     .long Lpt_17022 - Lcpu_fast_base
     .long Lpt_17023 - Lcpu_fast_base
     .long Lpt_17024 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17025 - Lcpu_fast_base
     .long Lpt_17026 - Lcpu_fast_base
     .long Lpt_17027 - Lcpu_fast_base
     .long Lpt_17028 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17029 - Lcpu_fast_base
     .long Lpt_17030 - Lcpu_fast_base
     .long Lpt_17031 - Lcpu_fast_base
     .long Lpt_17032 - Lcpu_fast_base
+    .long Lpt_17033 - Lcpu_fast_base
+    .long Lpt_17034 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17035 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17034 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17035 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17038 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17039 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17038 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17039 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17042 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17043 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17042 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17043 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_17034 - Lcpu_fast_base
-    .long Lpt_17035 - Lcpu_fast_base
-    .long Lpt_17036 - Lcpu_fast_base
     .long 0
-    .long Lpt_17038 - Lcpu_fast_base
-    .long Lpt_17039 - Lcpu_fast_base
-    .long Lpt_17040 - Lcpu_fast_base
     .long 0
-    .long Lpt_17042 - Lcpu_fast_base
-    .long Lpt_17043 - Lcpu_fast_base
-    .long Lpt_17044 - Lcpu_fast_base
-    .long 0
-    .long Lpt_17046 - Lcpu_fast_base
-    .long Lpt_17047 - Lcpu_fast_base
-    .long Lpt_17048 - Lcpu_fast_base
     .long 0
     .long Lpt_17050 - Lcpu_fast_base
     .long Lpt_17051 - Lcpu_fast_base
@@ -17064,29 +17064,29 @@
     .long Lpt_17063 - Lcpu_fast_base
     .long Lpt_17064 - Lcpu_fast_base
     .long 0
-    .long 0
-    .long 0
+    .long Lpt_17066 - Lcpu_fast_base
+    .long Lpt_17067 - Lcpu_fast_base
     .long Lpt_17068 - Lcpu_fast_base
     .long 0
-    .long 0
-    .long 0
+    .long Lpt_17070 - Lcpu_fast_base
+    .long Lpt_17071 - Lcpu_fast_base
     .long Lpt_17072 - Lcpu_fast_base
     .long 0
     .long Lpt_17074 - Lcpu_fast_base
-    .long Lpt_17075 - Lcpu_fast_base
-    .long Lpt_17076 - Lcpu_fast_base
     .long 0
+    .long 0
+    .long Lpt_17077 - Lcpu_fast_base
     .long Lpt_17078 - Lcpu_fast_base
-    .long Lpt_17079 - Lcpu_fast_base
-    .long Lpt_17080 - Lcpu_fast_base
     .long 0
+    .long 0
+    .long Lpt_17081 - Lcpu_fast_base
     .long Lpt_17082 - Lcpu_fast_base
-    .long Lpt_17083 - Lcpu_fast_base
-    .long Lpt_17084 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long 0
     .long Lpt_17086 - Lcpu_fast_base
-    .long Lpt_17087 - Lcpu_fast_base
-    .long Lpt_17088 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long 0
     .long Lpt_17090 - Lcpu_fast_base
     .long Lpt_17091 - Lcpu_fast_base
@@ -17151,60 +17151,60 @@
     .long Lpt_17150 - Lcpu_fast_base
     .long Lpt_17151 - Lcpu_fast_base
     .long Lpt_17152 - Lcpu_fast_base
-    .long Lpt_17153 - Lcpu_fast_base
     .long 0
-    .long Lpt_17155 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_17156 - Lcpu_fast_base
     .long 0
     .long 0
-    .long Lpt_17159 - Lcpu_fast_base
+    .long 0
     .long Lpt_17160 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17162 - Lcpu_fast_base
     .long Lpt_17163 - Lcpu_fast_base
     .long Lpt_17164 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17166 - Lcpu_fast_base
     .long Lpt_17167 - Lcpu_fast_base
     .long Lpt_17168 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17170 - Lcpu_fast_base
     .long Lpt_17171 - Lcpu_fast_base
     .long Lpt_17172 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17174 - Lcpu_fast_base
     .long Lpt_17175 - Lcpu_fast_base
     .long Lpt_17176 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17178 - Lcpu_fast_base
     .long Lpt_17179 - Lcpu_fast_base
     .long Lpt_17180 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17182 - Lcpu_fast_base
     .long Lpt_17183 - Lcpu_fast_base
     .long Lpt_17184 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17186 - Lcpu_fast_base
     .long Lpt_17187 - Lcpu_fast_base
     .long Lpt_17188 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17190 - Lcpu_fast_base
     .long Lpt_17191 - Lcpu_fast_base
     .long Lpt_17192 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17194 - Lcpu_fast_base
     .long Lpt_17195 - Lcpu_fast_base
     .long Lpt_17196 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17198 - Lcpu_fast_base
     .long Lpt_17199 - Lcpu_fast_base
     .long Lpt_17200 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17202 - Lcpu_fast_base
     .long Lpt_17203 - Lcpu_fast_base
     .long Lpt_17204 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17206 - Lcpu_fast_base
     .long Lpt_17207 - Lcpu_fast_base
     .long Lpt_17208 - Lcpu_fast_base
     .long 0
@@ -17215,7 +17215,7 @@
     .long Lpt_17214 - Lcpu_fast_base
     .long Lpt_17215 - Lcpu_fast_base
     .long Lpt_17216 - Lcpu_fast_base
-    .long Lpt_17217 - Lcpu_fast_base
+    .long 0
     .long Lpt_17218 - Lcpu_fast_base
     .long Lpt_17219 - Lcpu_fast_base
     .long Lpt_17220 - Lcpu_fast_base
@@ -17223,7 +17223,7 @@
     .long Lpt_17222 - Lcpu_fast_base
     .long Lpt_17223 - Lcpu_fast_base
     .long Lpt_17224 - Lcpu_fast_base
-    .long Lpt_17225 - Lcpu_fast_base
+    .long 0
     .long Lpt_17226 - Lcpu_fast_base
     .long Lpt_17227 - Lcpu_fast_base
     .long Lpt_17228 - Lcpu_fast_base
@@ -17231,7 +17231,7 @@
     .long Lpt_17230 - Lcpu_fast_base
     .long Lpt_17231 - Lcpu_fast_base
     .long Lpt_17232 - Lcpu_fast_base
-    .long Lpt_17233 - Lcpu_fast_base
+    .long 0
     .long Lpt_17234 - Lcpu_fast_base
     .long Lpt_17235 - Lcpu_fast_base
     .long Lpt_17236 - Lcpu_fast_base
@@ -17239,63 +17239,63 @@
     .long Lpt_17238 - Lcpu_fast_base
     .long Lpt_17239 - Lcpu_fast_base
     .long Lpt_17240 - Lcpu_fast_base
+    .long Lpt_17241 - Lcpu_fast_base
     .long 0
-    .long Lpt_17242 - Lcpu_fast_base
     .long Lpt_17243 - Lcpu_fast_base
     .long Lpt_17244 - Lcpu_fast_base
     .long 0
-    .long Lpt_17246 - Lcpu_fast_base
+    .long 0
     .long Lpt_17247 - Lcpu_fast_base
     .long Lpt_17248 - Lcpu_fast_base
-    .long Lpt_17249 - Lcpu_fast_base
-    .long Lpt_17250 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_17251 - Lcpu_fast_base
     .long Lpt_17252 - Lcpu_fast_base
     .long 0
-    .long Lpt_17254 - Lcpu_fast_base
+    .long 0
     .long Lpt_17255 - Lcpu_fast_base
     .long Lpt_17256 - Lcpu_fast_base
-    .long Lpt_17257 - Lcpu_fast_base
-    .long Lpt_17258 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_17259 - Lcpu_fast_base
     .long Lpt_17260 - Lcpu_fast_base
     .long 0
-    .long Lpt_17262 - Lcpu_fast_base
+    .long 0
     .long Lpt_17263 - Lcpu_fast_base
     .long Lpt_17264 - Lcpu_fast_base
     .long 0
-    .long Lpt_17266 - Lcpu_fast_base
+    .long 0
     .long Lpt_17267 - Lcpu_fast_base
     .long Lpt_17268 - Lcpu_fast_base
     .long 0
-    .long Lpt_17270 - Lcpu_fast_base
+    .long 0
     .long Lpt_17271 - Lcpu_fast_base
     .long Lpt_17272 - Lcpu_fast_base
     .long 0
-    .long Lpt_17274 - Lcpu_fast_base
+    .long 0
     .long Lpt_17275 - Lcpu_fast_base
     .long Lpt_17276 - Lcpu_fast_base
     .long 0
-    .long Lpt_17278 - Lcpu_fast_base
+    .long 0
     .long Lpt_17279 - Lcpu_fast_base
     .long Lpt_17280 - Lcpu_fast_base
     .long 0
-    .long Lpt_17282 - Lcpu_fast_base
+    .long 0
     .long Lpt_17283 - Lcpu_fast_base
     .long Lpt_17284 - Lcpu_fast_base
     .long 0
-    .long Lpt_17286 - Lcpu_fast_base
+    .long 0
     .long Lpt_17287 - Lcpu_fast_base
     .long Lpt_17288 - Lcpu_fast_base
-    .long Lpt_17289 - Lcpu_fast_base
-    .long Lpt_17290 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_17291 - Lcpu_fast_base
     .long Lpt_17292 - Lcpu_fast_base
     .long 0
-    .long Lpt_17294 - Lcpu_fast_base
+    .long 0
     .long Lpt_17295 - Lcpu_fast_base
     .long Lpt_17296 - Lcpu_fast_base
-    .long Lpt_17297 - Lcpu_fast_base
+    .long 0
     .long Lpt_17298 - Lcpu_fast_base
     .long Lpt_17299 - Lcpu_fast_base
     .long Lpt_17300 - Lcpu_fast_base
@@ -17311,7 +17311,7 @@
     .long Lpt_17310 - Lcpu_fast_base
     .long Lpt_17311 - Lcpu_fast_base
     .long Lpt_17312 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17313 - Lcpu_fast_base
     .long Lpt_17314 - Lcpu_fast_base
     .long Lpt_17315 - Lcpu_fast_base
     .long Lpt_17316 - Lcpu_fast_base
@@ -17319,7 +17319,7 @@
     .long Lpt_17318 - Lcpu_fast_base
     .long Lpt_17319 - Lcpu_fast_base
     .long Lpt_17320 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17321 - Lcpu_fast_base
     .long Lpt_17322 - Lcpu_fast_base
     .long Lpt_17323 - Lcpu_fast_base
     .long Lpt_17324 - Lcpu_fast_base
@@ -17335,7 +17335,7 @@
     .long Lpt_17334 - Lcpu_fast_base
     .long Lpt_17335 - Lcpu_fast_base
     .long Lpt_17336 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17337 - Lcpu_fast_base
     .long Lpt_17338 - Lcpu_fast_base
     .long Lpt_17339 - Lcpu_fast_base
     .long Lpt_17340 - Lcpu_fast_base
@@ -17343,7 +17343,7 @@
     .long Lpt_17342 - Lcpu_fast_base
     .long Lpt_17343 - Lcpu_fast_base
     .long Lpt_17344 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17345 - Lcpu_fast_base
     .long Lpt_17346 - Lcpu_fast_base
     .long Lpt_17347 - Lcpu_fast_base
     .long Lpt_17348 - Lcpu_fast_base
@@ -17352,12 +17352,12 @@
     .long Lpt_17351 - Lcpu_fast_base
     .long Lpt_17352 - Lcpu_fast_base
     .long 0
-    .long 0
-    .long 0
+    .long Lpt_17354 - Lcpu_fast_base
+    .long Lpt_17355 - Lcpu_fast_base
     .long Lpt_17356 - Lcpu_fast_base
     .long 0
-    .long 0
-    .long 0
+    .long Lpt_17358 - Lcpu_fast_base
+    .long Lpt_17359 - Lcpu_fast_base
     .long Lpt_17360 - Lcpu_fast_base
     .long 0
     .long Lpt_17362 - Lcpu_fast_base
@@ -17375,23 +17375,23 @@
     .long Lpt_17374 - Lcpu_fast_base
     .long Lpt_17375 - Lcpu_fast_base
     .long Lpt_17376 - Lcpu_fast_base
-    .long 0
-    .long Lpt_17378 - Lcpu_fast_base
-    .long Lpt_17379 - Lcpu_fast_base
-    .long Lpt_17380 - Lcpu_fast_base
-    .long 0
-    .long Lpt_17382 - Lcpu_fast_base
-    .long Lpt_17383 - Lcpu_fast_base
-    .long Lpt_17384 - Lcpu_fast_base
-    .long 0
-    .long Lpt_17386 - Lcpu_fast_base
-    .long Lpt_17387 - Lcpu_fast_base
-    .long Lpt_17388 - Lcpu_fast_base
-    .long 0
-    .long Lpt_17390 - Lcpu_fast_base
-    .long Lpt_17391 - Lcpu_fast_base
-    .long Lpt_17392 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17377 - Lcpu_fast_base
+    .long Lpt_17378 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17379 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17378 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17379 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17382 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17383 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17382 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17383 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17386 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17387 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17386 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17387 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17390 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17391 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17390 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17391 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_17394 - Lcpu_fast_base
     .long Lpt_17395 - Lcpu_fast_base
     .long Lpt_17396 - Lcpu_fast_base
@@ -17399,7 +17399,7 @@
     .long Lpt_17398 - Lcpu_fast_base
     .long Lpt_17399 - Lcpu_fast_base
     .long Lpt_17400 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17401 - Lcpu_fast_base
     .long Lpt_17402 - Lcpu_fast_base
     .long Lpt_17403 - Lcpu_fast_base
     .long Lpt_17404 - Lcpu_fast_base
@@ -17407,7 +17407,7 @@
     .long Lpt_17406 - Lcpu_fast_base
     .long Lpt_17407 - Lcpu_fast_base
     .long Lpt_17408 - Lcpu_fast_base
-    .long 0
+    .long Lpt_17409 - Lcpu_fast_base
     .long Lpt_17410 - Lcpu_fast_base
     .long Lpt_17411 - Lcpu_fast_base
     .long Lpt_17412 - Lcpu_fast_base
@@ -17439,7 +17439,7 @@
     .long Lpt_17438 - Lcpu_fast_base
     .long Lpt_17439 - Lcpu_fast_base
     .long Lpt_17440 - Lcpu_fast_base
-    .long Lpt_17441 - Lcpu_fast_base
+    .long 0
     .long Lpt_17442 - Lcpu_fast_base
     .long Lpt_17443 - Lcpu_fast_base
     .long Lpt_17444 - Lcpu_fast_base
@@ -17447,7 +17447,7 @@
     .long Lpt_17446 - Lcpu_fast_base
     .long Lpt_17447 - Lcpu_fast_base
     .long Lpt_17448 - Lcpu_fast_base
-    .long Lpt_17449 - Lcpu_fast_base
+    .long 0
     .long Lpt_17450 - Lcpu_fast_base
     .long Lpt_17451 - Lcpu_fast_base
     .long Lpt_17452 - Lcpu_fast_base
@@ -17455,15 +17455,15 @@
     .long Lpt_17454 - Lcpu_fast_base
     .long Lpt_17455 - Lcpu_fast_base
     .long Lpt_17456 - Lcpu_fast_base
-    .long Lpt_17457 - Lcpu_fast_base
-    .long Lpt_17458 - Lcpu_fast_base
-    .long Lpt_17459 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_17460 - Lcpu_fast_base
     .long 0
-    .long Lpt_17462 - Lcpu_fast_base
-    .long Lpt_17463 - Lcpu_fast_base
+    .long 0
+    .long 0
     .long Lpt_17464 - Lcpu_fast_base
-    .long Lpt_17465 - Lcpu_fast_base
+    .long 0
     .long Lpt_17466 - Lcpu_fast_base
     .long Lpt_17467 - Lcpu_fast_base
     .long Lpt_17468 - Lcpu_fast_base
@@ -17479,7 +17479,7 @@
     .long Lpt_17478 - Lcpu_fast_base
     .long Lpt_17479 - Lcpu_fast_base
     .long Lpt_17480 - Lcpu_fast_base
-    .long Lpt_17481 - Lcpu_fast_base
+    .long 0
     .long Lpt_17482 - Lcpu_fast_base
     .long Lpt_17483 - Lcpu_fast_base
     .long Lpt_17484 - Lcpu_fast_base
@@ -17487,7 +17487,7 @@
     .long Lpt_17486 - Lcpu_fast_base
     .long Lpt_17487 - Lcpu_fast_base
     .long Lpt_17488 - Lcpu_fast_base
-    .long Lpt_17489 - Lcpu_fast_base
+    .long 0
     .long Lpt_17490 - Lcpu_fast_base
     .long Lpt_17491 - Lcpu_fast_base
     .long Lpt_17492 - Lcpu_fast_base
@@ -17511,7 +17511,7 @@
     .long Lpt_17510 - Lcpu_fast_base
     .long Lpt_17511 - Lcpu_fast_base
     .long Lpt_17512 - Lcpu_fast_base
-    .long Lpt_17513 - Lcpu_fast_base
+    .long 0
     .long Lpt_17514 - Lcpu_fast_base
     .long Lpt_17515 - Lcpu_fast_base
     .long Lpt_17516 - Lcpu_fast_base
@@ -17519,7 +17519,7 @@
     .long Lpt_17518 - Lcpu_fast_base
     .long Lpt_17519 - Lcpu_fast_base
     .long Lpt_17520 - Lcpu_fast_base
-    .long Lpt_17521 - Lcpu_fast_base
+    .long 0
     .long Lpt_17522 - Lcpu_fast_base
     .long Lpt_17523 - Lcpu_fast_base
     .long Lpt_17524 - Lcpu_fast_base
@@ -17527,7 +17527,7 @@
     .long Lpt_17526 - Lcpu_fast_base
     .long Lpt_17527 - Lcpu_fast_base
     .long Lpt_17528 - Lcpu_fast_base
-    .long Lpt_17529 - Lcpu_fast_base
+    .long 0
     .long Lpt_17530 - Lcpu_fast_base
     .long Lpt_17531 - Lcpu_fast_base
     .long Lpt_17532 - Lcpu_fast_base
@@ -17535,19 +17535,19 @@
     .long Lpt_17534 - Lcpu_fast_base
     .long Lpt_17535 - Lcpu_fast_base
     .long Lpt_17536 - Lcpu_fast_base
-    .long Lpt_17537 - Lcpu_fast_base
     .long 0
-    .long 0
+    .long Lpt_17538 - Lcpu_fast_base
+    .long Lpt_17539 - Lcpu_fast_base
     .long Lpt_17540 - Lcpu_fast_base
-    .long Lpt_17541 - Lcpu_fast_base
+    .long 0
     .long Lpt_17542 - Lcpu_fast_base
     .long Lpt_17543 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_17544 - Lcpu_fast_base
+    .long Lpt_17545 - Lcpu_fast_base
+    .long Lpt_17546 - Lcpu_fast_base
+    .long Lpt_17547 - Lcpu_fast_base
     .long Lpt_17548 - Lcpu_fast_base
-    .long Lpt_17549 - Lcpu_fast_base
+    .long 0
     .long Lpt_17550 - Lcpu_fast_base
     .long Lpt_17551 - Lcpu_fast_base
     .long Lpt_17552 - Lcpu_fast_base
@@ -17555,7 +17555,7 @@
     .long Lpt_17554 - Lcpu_fast_base
     .long Lpt_17555 - Lcpu_fast_base
     .long Lpt_17556 - Lcpu_fast_base
-    .long Lpt_17557 - Lcpu_fast_base
+    .long 0
     .long Lpt_17558 - Lcpu_fast_base
     .long Lpt_17559 - Lcpu_fast_base
     .long Lpt_17560 - Lcpu_fast_base
@@ -17563,7 +17563,7 @@
     .long Lpt_17562 - Lcpu_fast_base
     .long Lpt_17563 - Lcpu_fast_base
     .long Lpt_17564 - Lcpu_fast_base
-    .long Lpt_17565 - Lcpu_fast_base
+    .long 0
     .long Lpt_17566 - Lcpu_fast_base
     .long Lpt_17567 - Lcpu_fast_base
     .long Lpt_17568 - Lcpu_fast_base
@@ -17571,159 +17571,279 @@
     .long Lpt_17570 - Lcpu_fast_base
     .long Lpt_17571 - Lcpu_fast_base
     .long Lpt_17572 - Lcpu_fast_base
-    .long Lpt_17573 - Lcpu_fast_base
+    .long 0
     .long Lpt_17574 - Lcpu_fast_base
     .long Lpt_17575 - Lcpu_fast_base
     .long Lpt_17576 - Lcpu_fast_base
-    .long Lpt_17577 - Lcpu_fast_base
+    .long 0
     .long Lpt_17578 - Lcpu_fast_base
     .long Lpt_17579 - Lcpu_fast_base
     .long Lpt_17580 - Lcpu_fast_base
-    .long Lpt_17581 - Lcpu_fast_base
+    .long 0
     .long Lpt_17582 - Lcpu_fast_base
     .long Lpt_17583 - Lcpu_fast_base
     .long Lpt_17584 - Lcpu_fast_base
     .long Lpt_17585 - Lcpu_fast_base
-    .long Lpt_17586 - Lcpu_fast_base
-    .long Lpt_17587 - Lcpu_fast_base
-    .long Lpt_17588 - Lcpu_fast_base
-    .long Lpt_17589 - Lcpu_fast_base
-    .long Lpt_17590 - Lcpu_fast_base
-    .long Lpt_17591 - Lcpu_fast_base
-    .long Lpt_17592 - Lcpu_fast_base
-    .long Lpt_17593 - Lcpu_fast_base
-    .long Lpt_17594 - Lcpu_fast_base
-    .long Lpt_17595 - Lcpu_fast_base
-    .long Lpt_17596 - Lcpu_fast_base
-    .long Lpt_17597 - Lcpu_fast_base
-    .long Lpt_17598 - Lcpu_fast_base
-    .long Lpt_17599 - Lcpu_fast_base
-    .long Lpt_17600 - Lcpu_fast_base
-    .long Lpt_17601 - Lcpu_fast_base
-    .long Lpt_17602 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17603 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17602 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17603 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17606 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17607 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17606 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17607 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17586 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17587 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17586 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17587 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17590 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17591 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17590 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17591 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17594 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17595 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17594 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17595 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17598 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17599 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17598 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17599 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17602 - Lcpu_fast_base
+    .long Lpt_17603 - Lcpu_fast_base
+    .long Lpt_17604 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17606 - Lcpu_fast_base
+    .long Lpt_17607 - Lcpu_fast_base
+    .long Lpt_17608 - Lcpu_fast_base
+    .long Lpt_17609 - Lcpu_fast_base
+    .long Lpt_17610 - Lcpu_fast_base
+    .long Lpt_17611 - Lcpu_fast_base
+    .long Lpt_17612 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17614 - Lcpu_fast_base
+    .long Lpt_17615 - Lcpu_fast_base
+    .long Lpt_17616 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17618 - Lcpu_fast_base
+    .long Lpt_17619 - Lcpu_fast_base
+    .long Lpt_17620 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17622 - Lcpu_fast_base
+    .long Lpt_17623 - Lcpu_fast_base
+    .long Lpt_17624 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17626 - Lcpu_fast_base
+    .long Lpt_17627 - Lcpu_fast_base
+    .long Lpt_17628 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17630 - Lcpu_fast_base
+    .long Lpt_17631 - Lcpu_fast_base
+    .long Lpt_17632 - Lcpu_fast_base
+    .long Lpt_17633 - Lcpu_fast_base
+    .long Lpt_17634 - Lcpu_fast_base
+    .long Lpt_17635 - Lcpu_fast_base
+    .long Lpt_17636 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17638 - Lcpu_fast_base
+    .long Lpt_17639 - Lcpu_fast_base
+    .long Lpt_17640 - Lcpu_fast_base
+    .long Lpt_17641 - Lcpu_fast_base
+    .long Lpt_17642 - Lcpu_fast_base
+    .long Lpt_17643 - Lcpu_fast_base
+    .long Lpt_17644 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17646 - Lcpu_fast_base
+    .long Lpt_17647 - Lcpu_fast_base
+    .long Lpt_17648 - Lcpu_fast_base
+    .long Lpt_17649 - Lcpu_fast_base
+    .long Lpt_17650 - Lcpu_fast_base
+    .long Lpt_17651 - Lcpu_fast_base
+    .long Lpt_17652 - Lcpu_fast_base
+    .long 0
+    .long Lpt_17654 - Lcpu_fast_base
+    .long Lpt_17655 - Lcpu_fast_base
+    .long Lpt_17656 - Lcpu_fast_base
+    .long Lpt_17657 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long Lpt_17660 - Lcpu_fast_base
+    .long Lpt_17661 - Lcpu_fast_base
+    .long Lpt_17662 - Lcpu_fast_base
+    .long Lpt_17663 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
     .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_17618 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17619 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17618 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17619 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17622 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17623 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17622 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17623 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17626 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17627 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17626 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17627 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_17634 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17635 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17634 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17635 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17638 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17639 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17638 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17639 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_17650 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17651 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17650 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17651 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17654 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17655 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17654 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17655 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17658 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17659 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17658 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17659 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_17666 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17667 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17666 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17667 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17670 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17671 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17670 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17671 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_17682 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17683 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17682 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17683 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17686 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17687 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17686 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17687 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17690 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17691 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17690 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17691 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_17698 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17699 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17698 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17699 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17702 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17703 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17702 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17703 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_17714 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17715 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17714 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17715 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17718 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17719 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17718 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_17719 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17668 - Lcpu_fast_base
+    .long Lpt_17669 - Lcpu_fast_base
+    .long Lpt_17670 - Lcpu_fast_base
+    .long Lpt_17671 - Lcpu_fast_base
+    .long Lpt_17672 - Lcpu_fast_base
+    .long Lpt_17673 - Lcpu_fast_base
+    .long Lpt_17674 - Lcpu_fast_base
+    .long Lpt_17675 - Lcpu_fast_base
+    .long Lpt_17676 - Lcpu_fast_base
+    .long Lpt_17677 - Lcpu_fast_base
+    .long Lpt_17678 - Lcpu_fast_base
+    .long Lpt_17679 - Lcpu_fast_base
+    .long Lpt_17680 - Lcpu_fast_base
+    .long Lpt_17681 - Lcpu_fast_base
+    .long Lpt_17682 - Lcpu_fast_base
+    .long Lpt_17683 - Lcpu_fast_base
+    .long Lpt_17684 - Lcpu_fast_base
+    .long Lpt_17685 - Lcpu_fast_base
+    .long Lpt_17686 - Lcpu_fast_base
+    .long Lpt_17687 - Lcpu_fast_base
+    .long Lpt_17688 - Lcpu_fast_base
+    .long Lpt_17689 - Lcpu_fast_base
+    .long Lpt_17690 - Lcpu_fast_base
+    .long Lpt_17691 - Lcpu_fast_base
+    .long Lpt_17692 - Lcpu_fast_base
+    .long Lpt_17693 - Lcpu_fast_base
+    .long Lpt_17694 - Lcpu_fast_base
+    .long Lpt_17695 - Lcpu_fast_base
+    .long Lpt_17696 - Lcpu_fast_base
+    .long Lpt_17697 - Lcpu_fast_base
+    .long Lpt_17698 - Lcpu_fast_base
+    .long Lpt_17699 - Lcpu_fast_base
+    .long Lpt_17700 - Lcpu_fast_base
+    .long Lpt_17701 - Lcpu_fast_base
+    .long Lpt_17702 - Lcpu_fast_base
+    .long Lpt_17703 - Lcpu_fast_base
+    .long Lpt_17704 - Lcpu_fast_base
+    .long Lpt_17705 - Lcpu_fast_base
+    .long Lpt_17706 - Lcpu_fast_base
+    .long Lpt_17707 - Lcpu_fast_base
+    .long Lpt_17708 - Lcpu_fast_base
+    .long Lpt_17709 - Lcpu_fast_base
+    .long Lpt_17710 - Lcpu_fast_base
+    .long Lpt_17711 - Lcpu_fast_base
+    .long Lpt_17712 - Lcpu_fast_base
+    .long Lpt_17713 - Lcpu_fast_base
+    .long Lpt_17714 - Lcpu_fast_base
+    .long Lpt_17715 - Lcpu_fast_base
+    .long Lpt_17716 - Lcpu_fast_base
+    .long Lpt_17717 - Lcpu_fast_base
+    .long Lpt_17718 - Lcpu_fast_base
+    .long Lpt_17719 - Lcpu_fast_base
+    .long Lpt_17720 - Lcpu_fast_base
+    .long Lpt_17721 - Lcpu_fast_base
     .long Lpt_17722 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_17723 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_17722 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long Lpt_17723 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17726 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17727 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17726 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17727 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_17738 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17739 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17738 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17739 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17742 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17743 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17742 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17743 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17746 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17747 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17746 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17747 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_17754 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17755 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17754 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17755 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17758 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17759 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17758 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17759 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_17770 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17771 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17770 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17771 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17774 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17775 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17774 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17775 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17778 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17779 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17778 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17779 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_17786 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17787 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17786 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17787 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17790 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17791 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17790 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17791 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_17802 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17803 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17802 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17803 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17806 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17807 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17806 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17807 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17810 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17811 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17810 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17811 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_17818 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17819 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17818 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17819 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17822 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17823 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17822 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17823 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_17834 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17835 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17834 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17835 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17838 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17839 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17838 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17839 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17842 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17843 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17842 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_17843 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -17744,126 +17864,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_17746 - Lcpu_fast_base
-    .long Lpt_17747 - Lcpu_fast_base
-    .long Lpt_17748 - Lcpu_fast_base
-    .long Lpt_17749 - Lcpu_fast_base
-    .long Lpt_17750 - Lcpu_fast_base
-    .long Lpt_17751 - Lcpu_fast_base
-    .long Lpt_17752 - Lcpu_fast_base
-    .long Lpt_17753 - Lcpu_fast_base
-    .long Lpt_17754 - Lcpu_fast_base
-    .long Lpt_17755 - Lcpu_fast_base
-    .long Lpt_17756 - Lcpu_fast_base
-    .long Lpt_17757 - Lcpu_fast_base
-    .long Lpt_17758 - Lcpu_fast_base
-    .long Lpt_17759 - Lcpu_fast_base
-    .long Lpt_17760 - Lcpu_fast_base
-    .long Lpt_17761 - Lcpu_fast_base
-    .long Lpt_17762 - Lcpu_fast_base
-    .long Lpt_17763 - Lcpu_fast_base
-    .long Lpt_17764 - Lcpu_fast_base
-    .long Lpt_17765 - Lcpu_fast_base
-    .long Lpt_17766 - Lcpu_fast_base
-    .long Lpt_17767 - Lcpu_fast_base
-    .long Lpt_17768 - Lcpu_fast_base
-    .long Lpt_17769 - Lcpu_fast_base
-    .long Lpt_17770 - Lcpu_fast_base
-    .long Lpt_17771 - Lcpu_fast_base
-    .long Lpt_17772 - Lcpu_fast_base
-    .long Lpt_17773 - Lcpu_fast_base
-    .long Lpt_17774 - Lcpu_fast_base
-    .long Lpt_17775 - Lcpu_fast_base
-    .long Lpt_17776 - Lcpu_fast_base
-    .long Lpt_17777 - Lcpu_fast_base
-    .long Lpt_17778 - Lcpu_fast_base
-    .long Lpt_17779 - Lcpu_fast_base
-    .long Lpt_17780 - Lcpu_fast_base
-    .long Lpt_17781 - Lcpu_fast_base
-    .long Lpt_17782 - Lcpu_fast_base
-    .long Lpt_17783 - Lcpu_fast_base
-    .long Lpt_17784 - Lcpu_fast_base
-    .long Lpt_17785 - Lcpu_fast_base
-    .long Lpt_17786 - Lcpu_fast_base
-    .long Lpt_17787 - Lcpu_fast_base
-    .long Lpt_17788 - Lcpu_fast_base
-    .long Lpt_17789 - Lcpu_fast_base
-    .long Lpt_17790 - Lcpu_fast_base
-    .long Lpt_17791 - Lcpu_fast_base
-    .long Lpt_17792 - Lcpu_fast_base
-    .long Lpt_17793 - Lcpu_fast_base
-    .long Lpt_17794 - Lcpu_fast_base
-    .long Lpt_17795 - Lcpu_fast_base
-    .long Lpt_17796 - Lcpu_fast_base
-    .long Lpt_17797 - Lcpu_fast_base
-    .long Lpt_17798 - Lcpu_fast_base
-    .long Lpt_17799 - Lcpu_fast_base
-    .long Lpt_17800 - Lcpu_fast_base
-    .long Lpt_17801 - Lcpu_fast_base
-    .long Lpt_17802 - Lcpu_fast_base
-    .long Lpt_17803 - Lcpu_fast_base
-    .long Lpt_17804 - Lcpu_fast_base
-    .long Lpt_17805 - Lcpu_fast_base
-    .long Lpt_17806 - Lcpu_fast_base
-    .long Lpt_17807 - Lcpu_fast_base
-    .long Lpt_17808 - Lcpu_fast_base
-    .long Lpt_17809 - Lcpu_fast_base
-    .long Lpt_17810 - Lcpu_fast_base
-    .long Lpt_17811 - Lcpu_fast_base
-    .long Lpt_17812 - Lcpu_fast_base
-    .long Lpt_17813 - Lcpu_fast_base
-    .long Lpt_17814 - Lcpu_fast_base
-    .long Lpt_17815 - Lcpu_fast_base
-    .long Lpt_17816 - Lcpu_fast_base
-    .long Lpt_17817 - Lcpu_fast_base
-    .long Lpt_17818 - Lcpu_fast_base
-    .long Lpt_17819 - Lcpu_fast_base
-    .long Lpt_17820 - Lcpu_fast_base
-    .long Lpt_17821 - Lcpu_fast_base
-    .long Lpt_17822 - Lcpu_fast_base
-    .long Lpt_17823 - Lcpu_fast_base
-    .long Lpt_17824 - Lcpu_fast_base
-    .long Lpt_17825 - Lcpu_fast_base
-    .long Lpt_17826 - Lcpu_fast_base
-    .long Lpt_17827 - Lcpu_fast_base
-    .long Lpt_17828 - Lcpu_fast_base
-    .long Lpt_17829 - Lcpu_fast_base
-    .long Lpt_17830 - Lcpu_fast_base
-    .long Lpt_17831 - Lcpu_fast_base
-    .long Lpt_17832 - Lcpu_fast_base
-    .long Lpt_17833 - Lcpu_fast_base
-    .long Lpt_17834 - Lcpu_fast_base
-    .long Lpt_17835 - Lcpu_fast_base
-    .long Lpt_17836 - Lcpu_fast_base
-    .long Lpt_17837 - Lcpu_fast_base
-    .long Lpt_17838 - Lcpu_fast_base
-    .long Lpt_17839 - Lcpu_fast_base
-    .long Lpt_17840 - Lcpu_fast_base
-    .long Lpt_17841 - Lcpu_fast_base
-    .long Lpt_17842 - Lcpu_fast_base
-    .long Lpt_17843 - Lcpu_fast_base
-    .long Lpt_17844 - Lcpu_fast_base
-    .long Lpt_17845 - Lcpu_fast_base
-    .long Lpt_17846 - Lcpu_fast_base
-    .long Lpt_17847 - Lcpu_fast_base
-    .long Lpt_17848 - Lcpu_fast_base
-    .long Lpt_17849 - Lcpu_fast_base
-    .long Lpt_17850 - Lcpu_fast_base
-    .long Lpt_17851 - Lcpu_fast_base
-    .long Lpt_17852 - Lcpu_fast_base
-    .long Lpt_17853 - Lcpu_fast_base
-    .long Lpt_17854 - Lcpu_fast_base
-    .long Lpt_17855 - Lcpu_fast_base
-    .long Lpt_17856 - Lcpu_fast_base
-    .long Lpt_17857 - Lcpu_fast_base
-    .long Lpt_17858 - Lcpu_fast_base
-    .long Lpt_17859 - Lcpu_fast_base
-    .long Lpt_17860 - Lcpu_fast_base
-    .long Lpt_17861 - Lcpu_fast_base
-    .long Lpt_17862 - Lcpu_fast_base
-    .long Lpt_17863 - Lcpu_fast_base
-    .long Lpt_17864 - Lcpu_fast_base
-    .long Lpt_17865 - Lcpu_fast_base
     .long Lpt_17866 - Lcpu_fast_base
     .long Lpt_17867 - Lcpu_fast_base
     .long Lpt_17868 - Lcpu_fast_base
@@ -17984,22 +17984,22 @@
     .long Lpt_17983 - Lcpu_fast_base
     .long Lpt_17984 - Lcpu_fast_base
     .long Lpt_17985 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_17986 - Lcpu_fast_base
+    .long Lpt_17987 - Lcpu_fast_base
+    .long Lpt_17988 - Lcpu_fast_base
+    .long Lpt_17989 - Lcpu_fast_base
+    .long Lpt_17990 - Lcpu_fast_base
+    .long Lpt_17991 - Lcpu_fast_base
+    .long Lpt_17992 - Lcpu_fast_base
+    .long Lpt_17993 - Lcpu_fast_base
+    .long Lpt_17994 - Lcpu_fast_base
+    .long Lpt_17995 - Lcpu_fast_base
+    .long Lpt_17996 - Lcpu_fast_base
+    .long Lpt_17997 - Lcpu_fast_base
+    .long Lpt_17998 - Lcpu_fast_base
+    .long Lpt_17999 - Lcpu_fast_base
+    .long Lpt_18000 - Lcpu_fast_base
+    .long Lpt_18001 - Lcpu_fast_base
     .long Lpt_18002 - Lcpu_fast_base
     .long Lpt_18003 - Lcpu_fast_base
     .long Lpt_18004 - Lcpu_fast_base
@@ -18104,22 +18104,22 @@
     .long Lpt_18103 - Lcpu_fast_base
     .long Lpt_18104 - Lcpu_fast_base
     .long Lpt_18105 - Lcpu_fast_base
-    .long Lpt_18106 - Lcpu_fast_base
-    .long Lpt_18107 - Lcpu_fast_base
-    .long Lpt_18108 - Lcpu_fast_base
-    .long Lpt_18109 - Lcpu_fast_base
-    .long Lpt_18110 - Lcpu_fast_base
-    .long Lpt_18111 - Lcpu_fast_base
-    .long Lpt_18112 - Lcpu_fast_base
-    .long Lpt_18113 - Lcpu_fast_base
-    .long Lpt_18114 - Lcpu_fast_base
-    .long Lpt_18115 - Lcpu_fast_base
-    .long Lpt_18116 - Lcpu_fast_base
-    .long Lpt_18117 - Lcpu_fast_base
-    .long Lpt_18118 - Lcpu_fast_base
-    .long Lpt_18119 - Lcpu_fast_base
-    .long Lpt_18120 - Lcpu_fast_base
-    .long Lpt_18121 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_18122 - Lcpu_fast_base
     .long Lpt_18123 - Lcpu_fast_base
     .long Lpt_18124 - Lcpu_fast_base
@@ -18240,14 +18240,14 @@
     .long Lpt_18239 - Lcpu_fast_base
     .long Lpt_18240 - Lcpu_fast_base
     .long Lpt_18241 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_18242 - Lcpu_fast_base
+    .long Lpt_18243 - Lcpu_fast_base
+    .long Lpt_18244 - Lcpu_fast_base
+    .long Lpt_18245 - Lcpu_fast_base
+    .long Lpt_18246 - Lcpu_fast_base
+    .long Lpt_18247 - Lcpu_fast_base
+    .long Lpt_18248 - Lcpu_fast_base
+    .long Lpt_18249 - Lcpu_fast_base
     .long Lpt_18250 - Lcpu_fast_base
     .long Lpt_18251 - Lcpu_fast_base
     .long Lpt_18252 - Lcpu_fast_base
@@ -18256,30 +18256,30 @@
     .long Lpt_18255 - Lcpu_fast_base
     .long Lpt_18256 - Lcpu_fast_base
     .long Lpt_18257 - Lcpu_fast_base
-    .long Lpt_18258 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18259 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18258 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18259 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18262 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18263 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18262 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18263 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_18258 - Lcpu_fast_base
+    .long Lpt_18259 - Lcpu_fast_base
+    .long Lpt_18260 - Lcpu_fast_base
+    .long Lpt_18261 - Lcpu_fast_base
+    .long Lpt_18262 - Lcpu_fast_base
+    .long Lpt_18263 - Lcpu_fast_base
+    .long Lpt_18264 - Lcpu_fast_base
+    .long Lpt_18265 - Lcpu_fast_base
+    .long Lpt_18266 - Lcpu_fast_base
+    .long Lpt_18267 - Lcpu_fast_base
+    .long Lpt_18268 - Lcpu_fast_base
+    .long Lpt_18269 - Lcpu_fast_base
+    .long Lpt_18270 - Lcpu_fast_base
+    .long Lpt_18271 - Lcpu_fast_base
+    .long Lpt_18272 - Lcpu_fast_base
+    .long Lpt_18273 - Lcpu_fast_base
+    .long Lpt_18274 - Lcpu_fast_base
+    .long Lpt_18275 - Lcpu_fast_base
+    .long Lpt_18276 - Lcpu_fast_base
+    .long Lpt_18277 - Lcpu_fast_base
+    .long Lpt_18278 - Lcpu_fast_base
+    .long Lpt_18279 - Lcpu_fast_base
+    .long Lpt_18280 - Lcpu_fast_base
+    .long Lpt_18281 - Lcpu_fast_base
     .long Lpt_18282 - Lcpu_fast_base
     .long Lpt_18283 - Lcpu_fast_base
     .long Lpt_18284 - Lcpu_fast_base
@@ -18288,30 +18288,30 @@
     .long Lpt_18287 - Lcpu_fast_base
     .long Lpt_18288 - Lcpu_fast_base
     .long Lpt_18289 - Lcpu_fast_base
-    .long Lpt_18290 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18291 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18290 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18291 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18294 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18295 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18294 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18295 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_18290 - Lcpu_fast_base
+    .long Lpt_18291 - Lcpu_fast_base
+    .long Lpt_18292 - Lcpu_fast_base
+    .long Lpt_18293 - Lcpu_fast_base
+    .long Lpt_18294 - Lcpu_fast_base
+    .long Lpt_18295 - Lcpu_fast_base
+    .long Lpt_18296 - Lcpu_fast_base
+    .long Lpt_18297 - Lcpu_fast_base
+    .long Lpt_18298 - Lcpu_fast_base
+    .long Lpt_18299 - Lcpu_fast_base
+    .long Lpt_18300 - Lcpu_fast_base
+    .long Lpt_18301 - Lcpu_fast_base
+    .long Lpt_18302 - Lcpu_fast_base
+    .long Lpt_18303 - Lcpu_fast_base
+    .long Lpt_18304 - Lcpu_fast_base
+    .long Lpt_18305 - Lcpu_fast_base
+    .long Lpt_18306 - Lcpu_fast_base
+    .long Lpt_18307 - Lcpu_fast_base
+    .long Lpt_18308 - Lcpu_fast_base
+    .long Lpt_18309 - Lcpu_fast_base
+    .long Lpt_18310 - Lcpu_fast_base
+    .long Lpt_18311 - Lcpu_fast_base
+    .long Lpt_18312 - Lcpu_fast_base
+    .long Lpt_18313 - Lcpu_fast_base
     .long Lpt_18314 - Lcpu_fast_base
     .long Lpt_18315 - Lcpu_fast_base
     .long Lpt_18316 - Lcpu_fast_base
@@ -18320,30 +18320,30 @@
     .long Lpt_18319 - Lcpu_fast_base
     .long Lpt_18320 - Lcpu_fast_base
     .long Lpt_18321 - Lcpu_fast_base
-    .long Lpt_18322 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18323 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18322 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18323 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18326 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18327 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18326 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18327 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_18322 - Lcpu_fast_base
+    .long Lpt_18323 - Lcpu_fast_base
+    .long Lpt_18324 - Lcpu_fast_base
+    .long Lpt_18325 - Lcpu_fast_base
+    .long Lpt_18326 - Lcpu_fast_base
+    .long Lpt_18327 - Lcpu_fast_base
+    .long Lpt_18328 - Lcpu_fast_base
+    .long Lpt_18329 - Lcpu_fast_base
+    .long Lpt_18330 - Lcpu_fast_base
+    .long Lpt_18331 - Lcpu_fast_base
+    .long Lpt_18332 - Lcpu_fast_base
+    .long Lpt_18333 - Lcpu_fast_base
+    .long Lpt_18334 - Lcpu_fast_base
+    .long Lpt_18335 - Lcpu_fast_base
+    .long Lpt_18336 - Lcpu_fast_base
+    .long Lpt_18337 - Lcpu_fast_base
+    .long Lpt_18338 - Lcpu_fast_base
+    .long Lpt_18339 - Lcpu_fast_base
+    .long Lpt_18340 - Lcpu_fast_base
+    .long Lpt_18341 - Lcpu_fast_base
+    .long Lpt_18342 - Lcpu_fast_base
+    .long Lpt_18343 - Lcpu_fast_base
+    .long Lpt_18344 - Lcpu_fast_base
+    .long Lpt_18345 - Lcpu_fast_base
     .long Lpt_18346 - Lcpu_fast_base
     .long Lpt_18347 - Lcpu_fast_base
     .long Lpt_18348 - Lcpu_fast_base
@@ -18352,14 +18352,38 @@
     .long Lpt_18351 - Lcpu_fast_base
     .long Lpt_18352 - Lcpu_fast_base
     .long Lpt_18353 - Lcpu_fast_base
-    .long Lpt_18354 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18355 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18354 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18355 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18358 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18359 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18358 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18359 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18354 - Lcpu_fast_base
+    .long Lpt_18355 - Lcpu_fast_base
+    .long Lpt_18356 - Lcpu_fast_base
+    .long Lpt_18357 - Lcpu_fast_base
+    .long Lpt_18358 - Lcpu_fast_base
+    .long Lpt_18359 - Lcpu_fast_base
+    .long Lpt_18360 - Lcpu_fast_base
+    .long Lpt_18361 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_18370 - Lcpu_fast_base
+    .long Lpt_18371 - Lcpu_fast_base
+    .long Lpt_18372 - Lcpu_fast_base
+    .long Lpt_18373 - Lcpu_fast_base
+    .long Lpt_18374 - Lcpu_fast_base
+    .long Lpt_18375 - Lcpu_fast_base
+    .long Lpt_18376 - Lcpu_fast_base
+    .long Lpt_18377 - Lcpu_fast_base
+    .long Lpt_18378 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18379 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18378 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18379 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18382 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18383 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18382 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18383 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18376,22 +18400,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18378 - Lcpu_fast_base
-    .long Lpt_18379 - Lcpu_fast_base
-    .long Lpt_18380 - Lcpu_fast_base
-    .long Lpt_18381 - Lcpu_fast_base
-    .long Lpt_18382 - Lcpu_fast_base
-    .long Lpt_18383 - Lcpu_fast_base
-    .long Lpt_18384 - Lcpu_fast_base
-    .long Lpt_18385 - Lcpu_fast_base
-    .long Lpt_18386 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18387 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18386 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18387 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18390 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18391 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18390 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18391 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18402 - Lcpu_fast_base
+    .long Lpt_18403 - Lcpu_fast_base
+    .long Lpt_18404 - Lcpu_fast_base
+    .long Lpt_18405 - Lcpu_fast_base
+    .long Lpt_18406 - Lcpu_fast_base
+    .long Lpt_18407 - Lcpu_fast_base
+    .long Lpt_18408 - Lcpu_fast_base
+    .long Lpt_18409 - Lcpu_fast_base
+    .long Lpt_18410 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18411 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18410 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18411 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18414 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18415 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18414 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18415 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18408,22 +18432,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18410 - Lcpu_fast_base
-    .long Lpt_18411 - Lcpu_fast_base
-    .long Lpt_18412 - Lcpu_fast_base
-    .long Lpt_18413 - Lcpu_fast_base
-    .long Lpt_18414 - Lcpu_fast_base
-    .long Lpt_18415 - Lcpu_fast_base
-    .long Lpt_18416 - Lcpu_fast_base
-    .long Lpt_18417 - Lcpu_fast_base
-    .long Lpt_18418 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18419 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18418 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18419 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18422 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18423 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18422 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18423 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18434 - Lcpu_fast_base
+    .long Lpt_18435 - Lcpu_fast_base
+    .long Lpt_18436 - Lcpu_fast_base
+    .long Lpt_18437 - Lcpu_fast_base
+    .long Lpt_18438 - Lcpu_fast_base
+    .long Lpt_18439 - Lcpu_fast_base
+    .long Lpt_18440 - Lcpu_fast_base
+    .long Lpt_18441 - Lcpu_fast_base
+    .long Lpt_18442 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18443 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18442 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18443 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18446 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18447 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18446 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18447 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18432,30 +18456,6 @@
     .long 0
     .long 0
     .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_18442 - Lcpu_fast_base
-    .long Lpt_18443 - Lcpu_fast_base
-    .long Lpt_18444 - Lcpu_fast_base
-    .long Lpt_18445 - Lcpu_fast_base
-    .long Lpt_18446 - Lcpu_fast_base
-    .long Lpt_18447 - Lcpu_fast_base
-    .long Lpt_18448 - Lcpu_fast_base
-    .long Lpt_18449 - Lcpu_fast_base
-    .long Lpt_18450 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18451 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18450 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18451 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18454 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18455 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18454 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18455 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18472,6 +18472,14 @@
     .long Lpt_18471 - Lcpu_fast_base
     .long Lpt_18472 - Lcpu_fast_base
     .long Lpt_18473 - Lcpu_fast_base
+    .long Lpt_18474 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18475 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18474 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18475 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18478 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18479 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18478 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18479 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18480,34 +18488,30 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18482 - Lcpu_fast_base
-    .long Lpt_18483 - Lcpu_fast_base
-    .long Lpt_18484 - Lcpu_fast_base
-    .long Lpt_18485 - Lcpu_fast_base
-    .long Lpt_18486 - Lcpu_fast_base
-    .long Lpt_18487 - Lcpu_fast_base
-    .long Lpt_18488 - Lcpu_fast_base
-    .long Lpt_18489 - Lcpu_fast_base
-    .long Lpt_18490 - Lcpu_fast_base
-    .long Lpt_18491 - Lcpu_fast_base
-    .long Lpt_18492 - Lcpu_fast_base
-    .long Lpt_18493 - Lcpu_fast_base
-    .long Lpt_18494 - Lcpu_fast_base
-    .long Lpt_18495 - Lcpu_fast_base
-    .long Lpt_18496 - Lcpu_fast_base
-    .long Lpt_18497 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
     .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_18498 - Lcpu_fast_base
+    .long Lpt_18499 - Lcpu_fast_base
+    .long Lpt_18500 - Lcpu_fast_base
+    .long Lpt_18501 - Lcpu_fast_base
     .long Lpt_18502 - Lcpu_fast_base
     .long Lpt_18503 - Lcpu_fast_base
     .long Lpt_18504 - Lcpu_fast_base
     .long Lpt_18505 - Lcpu_fast_base
-    .long Lpt_18506 - Lcpu_fast_base
-    .long Lpt_18507 - Lcpu_fast_base
-    .long Lpt_18508 - Lcpu_fast_base
-    .long Lpt_18509 - Lcpu_fast_base
+    .long Lpt_18506 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18507 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18506 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18507 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18510 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18511 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18510 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18511 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18516,18 +18520,14 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18518 - Lcpu_fast_base
-    .long Lpt_18519 - Lcpu_fast_base
-    .long Lpt_18520 - Lcpu_fast_base
-    .long Lpt_18521 - Lcpu_fast_base
-    .long Lpt_18522 - Lcpu_fast_base
-    .long Lpt_18523 - Lcpu_fast_base
-    .long Lpt_18524 - Lcpu_fast_base
-    .long Lpt_18525 - Lcpu_fast_base
-    .long Lpt_18526 - Lcpu_fast_base
-    .long Lpt_18527 - Lcpu_fast_base
-    .long Lpt_18528 - Lcpu_fast_base
-    .long Lpt_18529 - Lcpu_fast_base
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_18530 - Lcpu_fast_base
     .long Lpt_18531 - Lcpu_fast_base
     .long Lpt_18532 - Lcpu_fast_base
@@ -18536,34 +18536,14 @@
     .long Lpt_18535 - Lcpu_fast_base
     .long Lpt_18536 - Lcpu_fast_base
     .long Lpt_18537 - Lcpu_fast_base
-    .long Lpt_18538 - Lcpu_fast_base
-    .long Lpt_18539 - Lcpu_fast_base
-    .long Lpt_18540 - Lcpu_fast_base
-    .long Lpt_18541 - Lcpu_fast_base
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long Lpt_18550 - Lcpu_fast_base
-    .long Lpt_18551 - Lcpu_fast_base
-    .long Lpt_18552 - Lcpu_fast_base
-    .long Lpt_18553 - Lcpu_fast_base
-    .long Lpt_18554 - Lcpu_fast_base
-    .long Lpt_18555 - Lcpu_fast_base
-    .long Lpt_18556 - Lcpu_fast_base
-    .long Lpt_18557 - Lcpu_fast_base
-    .long Lpt_18558 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18559 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18558 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18559 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18562 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18563 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18562 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18563 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18538 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18539 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18538 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18539 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18542 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18543 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18542 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18543 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18580,22 +18560,40 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18582 - Lcpu_fast_base
-    .long Lpt_18583 - Lcpu_fast_base
-    .long Lpt_18584 - Lcpu_fast_base
-    .long Lpt_18585 - Lcpu_fast_base
+    .long Lpt_18562 - Lcpu_fast_base
+    .long Lpt_18563 - Lcpu_fast_base
+    .long Lpt_18564 - Lcpu_fast_base
+    .long Lpt_18565 - Lcpu_fast_base
+    .long Lpt_18566 - Lcpu_fast_base
+    .long Lpt_18567 - Lcpu_fast_base
+    .long Lpt_18568 - Lcpu_fast_base
+    .long Lpt_18569 - Lcpu_fast_base
+    .long Lpt_18570 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18571 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18570 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18571 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18574 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18575 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18574 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18575 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long Lpt_18586 - Lcpu_fast_base
     .long Lpt_18587 - Lcpu_fast_base
     .long Lpt_18588 - Lcpu_fast_base
     .long Lpt_18589 - Lcpu_fast_base
-    .long Lpt_18590 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18591 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18590 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18591 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18594 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18595 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18594 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18595 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18590 - Lcpu_fast_base
+    .long Lpt_18591 - Lcpu_fast_base
+    .long Lpt_18592 - Lcpu_fast_base
+    .long Lpt_18593 - Lcpu_fast_base
+    .long Lpt_18594 - Lcpu_fast_base
+    .long Lpt_18595 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -18604,30 +18602,34 @@
     .long 0
     .long 0
     .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_18604 - Lcpu_fast_base
+    .long Lpt_18605 - Lcpu_fast_base
+    .long Lpt_18606 - Lcpu_fast_base
+    .long Lpt_18607 - Lcpu_fast_base
+    .long Lpt_18608 - Lcpu_fast_base
+    .long Lpt_18609 - Lcpu_fast_base
+    .long Lpt_18610 - Lcpu_fast_base
+    .long Lpt_18611 - Lcpu_fast_base
+    .long Lpt_18612 - Lcpu_fast_base
+    .long Lpt_18613 - Lcpu_fast_base
     .long Lpt_18614 - Lcpu_fast_base
     .long Lpt_18615 - Lcpu_fast_base
     .long Lpt_18616 - Lcpu_fast_base
     .long Lpt_18617 - Lcpu_fast_base
     .long Lpt_18618 - Lcpu_fast_base
     .long Lpt_18619 - Lcpu_fast_base
-    .long Lpt_18620 - Lcpu_fast_base
-    .long Lpt_18621 - Lcpu_fast_base
-    .long Lpt_18622 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18623 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18622 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18623 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18626 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18627 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18626 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18627 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_18624 - Lcpu_fast_base
+    .long Lpt_18625 - Lcpu_fast_base
+    .long Lpt_18626 - Lcpu_fast_base
+    .long Lpt_18627 - Lcpu_fast_base
+    .long Lpt_18628 - Lcpu_fast_base
+    .long Lpt_18629 - Lcpu_fast_base
+    .long Lpt_18630 - Lcpu_fast_base
+    .long Lpt_18631 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -18636,14 +18638,12 @@
     .long 0
     .long 0
     .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_18640 - Lcpu_fast_base
+    .long Lpt_18641 - Lcpu_fast_base
+    .long Lpt_18642 - Lcpu_fast_base
+    .long Lpt_18643 - Lcpu_fast_base
+    .long Lpt_18644 - Lcpu_fast_base
+    .long Lpt_18645 - Lcpu_fast_base
     .long Lpt_18646 - Lcpu_fast_base
     .long Lpt_18647 - Lcpu_fast_base
     .long Lpt_18648 - Lcpu_fast_base
@@ -18652,14 +18652,16 @@
     .long Lpt_18651 - Lcpu_fast_base
     .long Lpt_18652 - Lcpu_fast_base
     .long Lpt_18653 - Lcpu_fast_base
-    .long Lpt_18654 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18655 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18654 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18655 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18658 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18659 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18658 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18659 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18654 - Lcpu_fast_base
+    .long Lpt_18655 - Lcpu_fast_base
+    .long Lpt_18656 - Lcpu_fast_base
+    .long Lpt_18657 - Lcpu_fast_base
+    .long Lpt_18658 - Lcpu_fast_base
+    .long Lpt_18659 - Lcpu_fast_base
+    .long Lpt_18660 - Lcpu_fast_base
+    .long Lpt_18661 - Lcpu_fast_base
+    .long Lpt_18662 - Lcpu_fast_base
+    .long Lpt_18663 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -18668,30 +18670,22 @@
     .long 0
     .long 0
     .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_18672 - Lcpu_fast_base
+    .long Lpt_18673 - Lcpu_fast_base
+    .long Lpt_18674 - Lcpu_fast_base
+    .long Lpt_18675 - Lcpu_fast_base
+    .long Lpt_18676 - Lcpu_fast_base
+    .long Lpt_18677 - Lcpu_fast_base
     .long Lpt_18678 - Lcpu_fast_base
     .long Lpt_18679 - Lcpu_fast_base
-    .long Lpt_18680 - Lcpu_fast_base
-    .long Lpt_18681 - Lcpu_fast_base
-    .long Lpt_18682 - Lcpu_fast_base
-    .long Lpt_18683 - Lcpu_fast_base
-    .long Lpt_18684 - Lcpu_fast_base
-    .long Lpt_18685 - Lcpu_fast_base
-    .long Lpt_18686 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18687 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18686 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18687 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18690 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18691 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18690 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18691 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18680 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18681 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18680 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18681 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18684 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18685 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18684 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18685 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18708,22 +18702,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_18704 - Lcpu_fast_base
+    .long Lpt_18705 - Lcpu_fast_base
+    .long Lpt_18706 - Lcpu_fast_base
+    .long Lpt_18707 - Lcpu_fast_base
+    .long Lpt_18708 - Lcpu_fast_base
+    .long Lpt_18709 - Lcpu_fast_base
     .long Lpt_18710 - Lcpu_fast_base
     .long Lpt_18711 - Lcpu_fast_base
-    .long Lpt_18712 - Lcpu_fast_base
-    .long Lpt_18713 - Lcpu_fast_base
-    .long Lpt_18714 - Lcpu_fast_base
-    .long Lpt_18715 - Lcpu_fast_base
-    .long Lpt_18716 - Lcpu_fast_base
-    .long Lpt_18717 - Lcpu_fast_base
-    .long Lpt_18718 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18719 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18718 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18719 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18722 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18723 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18722 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18723 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18712 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18713 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18712 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18713 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18716 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18717 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18716 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18717 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18740,6 +18734,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_18736 - Lcpu_fast_base
+    .long Lpt_18737 - Lcpu_fast_base
+    .long Lpt_18738 - Lcpu_fast_base
+    .long Lpt_18739 - Lcpu_fast_base
+    .long Lpt_18740 - Lcpu_fast_base
+    .long Lpt_18741 - Lcpu_fast_base
+    .long Lpt_18742 - Lcpu_fast_base
+    .long Lpt_18743 - Lcpu_fast_base
+    .long Lpt_18744 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18745 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18744 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18745 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18748 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18749 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18748 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18749 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18748,14 +18758,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18750 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18751 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18750 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18751 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18754 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18755 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18754 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18755 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18764,6 +18766,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_18768 - Lcpu_fast_base
+    .long Lpt_18769 - Lcpu_fast_base
+    .long Lpt_18770 - Lcpu_fast_base
+    .long Lpt_18771 - Lcpu_fast_base
+    .long Lpt_18772 - Lcpu_fast_base
+    .long Lpt_18773 - Lcpu_fast_base
+    .long Lpt_18774 - Lcpu_fast_base
+    .long Lpt_18775 - Lcpu_fast_base
+    .long Lpt_18776 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18777 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18776 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18777 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18780 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18781 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18780 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18781 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18780,46 +18798,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18782 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18783 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18782 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18783 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18786 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18787 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18786 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18787 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_18800 - Lcpu_fast_base
+    .long Lpt_18801 - Lcpu_fast_base
+    .long Lpt_18802 - Lcpu_fast_base
+    .long Lpt_18803 - Lcpu_fast_base
+    .long Lpt_18804 - Lcpu_fast_base
+    .long Lpt_18805 - Lcpu_fast_base
     .long Lpt_18806 - Lcpu_fast_base
     .long Lpt_18807 - Lcpu_fast_base
-    .long Lpt_18808 - Lcpu_fast_base
-    .long Lpt_18809 - Lcpu_fast_base
-    .long Lpt_18810 - Lcpu_fast_base
-    .long Lpt_18811 - Lcpu_fast_base
-    .long Lpt_18812 - Lcpu_fast_base
-    .long Lpt_18813 - Lcpu_fast_base
-    .long Lpt_18814 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18815 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18814 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18815 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18818 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18819 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18818 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18819 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18808 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18809 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18808 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18809 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18812 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18813 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18812 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18813 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18836,22 +18830,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_18832 - Lcpu_fast_base
+    .long Lpt_18833 - Lcpu_fast_base
+    .long Lpt_18834 - Lcpu_fast_base
+    .long Lpt_18835 - Lcpu_fast_base
+    .long Lpt_18836 - Lcpu_fast_base
+    .long Lpt_18837 - Lcpu_fast_base
     .long Lpt_18838 - Lcpu_fast_base
     .long Lpt_18839 - Lcpu_fast_base
-    .long Lpt_18840 - Lcpu_fast_base
-    .long Lpt_18841 - Lcpu_fast_base
-    .long Lpt_18842 - Lcpu_fast_base
-    .long Lpt_18843 - Lcpu_fast_base
-    .long Lpt_18844 - Lcpu_fast_base
-    .long Lpt_18845 - Lcpu_fast_base
-    .long Lpt_18846 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18847 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18846 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18847 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18850 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18851 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18850 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18851 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18840 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18841 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18840 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18841 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18844 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18845 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18844 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18845 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18868,22 +18862,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18870 - Lcpu_fast_base
-    .long Lpt_18871 - Lcpu_fast_base
-    .long Lpt_18872 - Lcpu_fast_base
-    .long Lpt_18873 - Lcpu_fast_base
-    .long Lpt_18874 - Lcpu_fast_base
-    .long Lpt_18875 - Lcpu_fast_base
-    .long Lpt_18876 - Lcpu_fast_base
-    .long Lpt_18877 - Lcpu_fast_base
-    .long Lpt_18878 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18879 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18878 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18879 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18882 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18883 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18882 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18883 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_18872 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18873 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18872 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18873 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18876 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18877 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18876 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18877 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18900,22 +18894,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_18902 - Lcpu_fast_base
-    .long Lpt_18903 - Lcpu_fast_base
-    .long Lpt_18904 - Lcpu_fast_base
-    .long Lpt_18905 - Lcpu_fast_base
-    .long Lpt_18906 - Lcpu_fast_base
-    .long Lpt_18907 - Lcpu_fast_base
-    .long Lpt_18908 - Lcpu_fast_base
-    .long Lpt_18909 - Lcpu_fast_base
-    .long Lpt_18910 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18911 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18910 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18911 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18914 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18915 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18914 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18915 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_18904 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18905 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18904 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18905 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18908 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18909 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18908 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18909 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18932,22 +18926,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_18928 - Lcpu_fast_base
+    .long Lpt_18929 - Lcpu_fast_base
+    .long Lpt_18930 - Lcpu_fast_base
+    .long Lpt_18931 - Lcpu_fast_base
+    .long Lpt_18932 - Lcpu_fast_base
+    .long Lpt_18933 - Lcpu_fast_base
     .long Lpt_18934 - Lcpu_fast_base
     .long Lpt_18935 - Lcpu_fast_base
-    .long Lpt_18936 - Lcpu_fast_base
-    .long Lpt_18937 - Lcpu_fast_base
-    .long Lpt_18938 - Lcpu_fast_base
-    .long Lpt_18939 - Lcpu_fast_base
-    .long Lpt_18940 - Lcpu_fast_base
-    .long Lpt_18941 - Lcpu_fast_base
-    .long Lpt_18942 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18943 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18942 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18943 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18946 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18947 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18946 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18947 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18936 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18937 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18936 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18937 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18940 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18941 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18940 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18941 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18964,22 +18958,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_18960 - Lcpu_fast_base
+    .long Lpt_18961 - Lcpu_fast_base
+    .long Lpt_18962 - Lcpu_fast_base
+    .long Lpt_18963 - Lcpu_fast_base
+    .long Lpt_18964 - Lcpu_fast_base
+    .long Lpt_18965 - Lcpu_fast_base
     .long Lpt_18966 - Lcpu_fast_base
     .long Lpt_18967 - Lcpu_fast_base
-    .long Lpt_18968 - Lcpu_fast_base
-    .long Lpt_18969 - Lcpu_fast_base
-    .long Lpt_18970 - Lcpu_fast_base
-    .long Lpt_18971 - Lcpu_fast_base
-    .long Lpt_18972 - Lcpu_fast_base
-    .long Lpt_18973 - Lcpu_fast_base
-    .long Lpt_18974 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18975 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18974 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18975 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18978 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18979 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18978 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_18979 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18968 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18969 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18968 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18969 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18972 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18973 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18972 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_18973 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -18996,22 +18990,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_18992 - Lcpu_fast_base
+    .long Lpt_18993 - Lcpu_fast_base
+    .long Lpt_18994 - Lcpu_fast_base
+    .long Lpt_18995 - Lcpu_fast_base
+    .long Lpt_18996 - Lcpu_fast_base
+    .long Lpt_18997 - Lcpu_fast_base
     .long Lpt_18998 - Lcpu_fast_base
     .long Lpt_18999 - Lcpu_fast_base
-    .long Lpt_19000 - Lcpu_fast_base
-    .long Lpt_19001 - Lcpu_fast_base
-    .long Lpt_19002 - Lcpu_fast_base
-    .long Lpt_19003 - Lcpu_fast_base
-    .long Lpt_19004 - Lcpu_fast_base
-    .long Lpt_19005 - Lcpu_fast_base
-    .long Lpt_19006 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19007 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19006 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19007 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19010 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19011 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19010 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19011 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19000 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19001 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19000 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19001 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19004 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19005 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19004 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19005 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19028,22 +19022,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19024 - Lcpu_fast_base
+    .long Lpt_19025 - Lcpu_fast_base
+    .long Lpt_19026 - Lcpu_fast_base
+    .long Lpt_19027 - Lcpu_fast_base
+    .long Lpt_19028 - Lcpu_fast_base
+    .long Lpt_19029 - Lcpu_fast_base
     .long Lpt_19030 - Lcpu_fast_base
     .long Lpt_19031 - Lcpu_fast_base
-    .long Lpt_19032 - Lcpu_fast_base
-    .long Lpt_19033 - Lcpu_fast_base
-    .long Lpt_19034 - Lcpu_fast_base
-    .long Lpt_19035 - Lcpu_fast_base
-    .long Lpt_19036 - Lcpu_fast_base
-    .long Lpt_19037 - Lcpu_fast_base
-    .long Lpt_19038 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19039 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19038 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19039 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19042 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19043 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19042 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19043 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19032 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19033 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19032 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19033 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19036 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19037 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19036 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19037 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19060,22 +19054,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19056 - Lcpu_fast_base
+    .long Lpt_19057 - Lcpu_fast_base
+    .long Lpt_19058 - Lcpu_fast_base
+    .long Lpt_19059 - Lcpu_fast_base
+    .long Lpt_19060 - Lcpu_fast_base
+    .long Lpt_19061 - Lcpu_fast_base
     .long Lpt_19062 - Lcpu_fast_base
     .long Lpt_19063 - Lcpu_fast_base
-    .long Lpt_19064 - Lcpu_fast_base
-    .long Lpt_19065 - Lcpu_fast_base
-    .long Lpt_19066 - Lcpu_fast_base
-    .long Lpt_19067 - Lcpu_fast_base
-    .long Lpt_19068 - Lcpu_fast_base
-    .long Lpt_19069 - Lcpu_fast_base
-    .long Lpt_19070 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19071 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19070 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19071 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19074 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19075 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19074 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19075 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19064 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19065 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19064 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19065 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19068 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19069 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19068 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19069 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19092,22 +19086,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19088 - Lcpu_fast_base
+    .long Lpt_19089 - Lcpu_fast_base
+    .long Lpt_19090 - Lcpu_fast_base
+    .long Lpt_19091 - Lcpu_fast_base
+    .long Lpt_19092 - Lcpu_fast_base
+    .long Lpt_19093 - Lcpu_fast_base
     .long Lpt_19094 - Lcpu_fast_base
     .long Lpt_19095 - Lcpu_fast_base
-    .long Lpt_19096 - Lcpu_fast_base
-    .long Lpt_19097 - Lcpu_fast_base
-    .long Lpt_19098 - Lcpu_fast_base
-    .long Lpt_19099 - Lcpu_fast_base
-    .long Lpt_19100 - Lcpu_fast_base
-    .long Lpt_19101 - Lcpu_fast_base
-    .long Lpt_19102 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19103 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19102 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19103 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19106 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19107 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19106 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19107 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19096 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19097 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19096 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19097 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19100 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19101 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19100 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19101 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19124,22 +19118,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19120 - Lcpu_fast_base
+    .long Lpt_19121 - Lcpu_fast_base
+    .long Lpt_19122 - Lcpu_fast_base
+    .long Lpt_19123 - Lcpu_fast_base
+    .long Lpt_19124 - Lcpu_fast_base
+    .long Lpt_19125 - Lcpu_fast_base
     .long Lpt_19126 - Lcpu_fast_base
     .long Lpt_19127 - Lcpu_fast_base
-    .long Lpt_19128 - Lcpu_fast_base
-    .long Lpt_19129 - Lcpu_fast_base
-    .long Lpt_19130 - Lcpu_fast_base
-    .long Lpt_19131 - Lcpu_fast_base
-    .long Lpt_19132 - Lcpu_fast_base
-    .long Lpt_19133 - Lcpu_fast_base
-    .long Lpt_19134 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19135 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19134 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19135 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19138 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19139 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19138 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19139 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19128 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19129 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19128 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19129 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19132 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19133 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19132 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19133 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19156,22 +19150,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19152 - Lcpu_fast_base
+    .long Lpt_19153 - Lcpu_fast_base
+    .long Lpt_19154 - Lcpu_fast_base
+    .long Lpt_19155 - Lcpu_fast_base
+    .long Lpt_19156 - Lcpu_fast_base
+    .long Lpt_19157 - Lcpu_fast_base
     .long Lpt_19158 - Lcpu_fast_base
     .long Lpt_19159 - Lcpu_fast_base
-    .long Lpt_19160 - Lcpu_fast_base
-    .long Lpt_19161 - Lcpu_fast_base
-    .long Lpt_19162 - Lcpu_fast_base
-    .long Lpt_19163 - Lcpu_fast_base
-    .long Lpt_19164 - Lcpu_fast_base
-    .long Lpt_19165 - Lcpu_fast_base
-    .long Lpt_19166 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19167 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19166 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19167 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19170 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19171 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19170 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19171 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19160 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19161 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19160 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19161 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19164 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19165 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19164 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19165 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19188,22 +19182,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19184 - Lcpu_fast_base
+    .long Lpt_19185 - Lcpu_fast_base
+    .long Lpt_19186 - Lcpu_fast_base
+    .long Lpt_19187 - Lcpu_fast_base
+    .long Lpt_19188 - Lcpu_fast_base
+    .long Lpt_19189 - Lcpu_fast_base
     .long Lpt_19190 - Lcpu_fast_base
     .long Lpt_19191 - Lcpu_fast_base
-    .long Lpt_19192 - Lcpu_fast_base
-    .long Lpt_19193 - Lcpu_fast_base
-    .long Lpt_19194 - Lcpu_fast_base
-    .long Lpt_19195 - Lcpu_fast_base
-    .long Lpt_19196 - Lcpu_fast_base
-    .long Lpt_19197 - Lcpu_fast_base
-    .long Lpt_19198 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19199 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19198 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19199 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19202 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19203 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19202 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19203 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19192 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19193 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19192 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19193 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19196 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19197 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19196 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19197 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19220,22 +19214,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19216 - Lcpu_fast_base
+    .long Lpt_19217 - Lcpu_fast_base
+    .long Lpt_19218 - Lcpu_fast_base
+    .long Lpt_19219 - Lcpu_fast_base
+    .long Lpt_19220 - Lcpu_fast_base
+    .long Lpt_19221 - Lcpu_fast_base
     .long Lpt_19222 - Lcpu_fast_base
     .long Lpt_19223 - Lcpu_fast_base
-    .long Lpt_19224 - Lcpu_fast_base
-    .long Lpt_19225 - Lcpu_fast_base
-    .long Lpt_19226 - Lcpu_fast_base
-    .long Lpt_19227 - Lcpu_fast_base
-    .long Lpt_19228 - Lcpu_fast_base
-    .long Lpt_19229 - Lcpu_fast_base
-    .long Lpt_19230 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19231 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19230 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19231 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19234 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19235 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19234 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19235 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19224 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19225 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19224 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19225 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19228 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19229 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19228 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19229 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19252,22 +19246,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19248 - Lcpu_fast_base
+    .long Lpt_19249 - Lcpu_fast_base
+    .long Lpt_19250 - Lcpu_fast_base
+    .long Lpt_19251 - Lcpu_fast_base
+    .long Lpt_19252 - Lcpu_fast_base
+    .long Lpt_19253 - Lcpu_fast_base
     .long Lpt_19254 - Lcpu_fast_base
     .long Lpt_19255 - Lcpu_fast_base
-    .long Lpt_19256 - Lcpu_fast_base
-    .long Lpt_19257 - Lcpu_fast_base
-    .long Lpt_19258 - Lcpu_fast_base
-    .long Lpt_19259 - Lcpu_fast_base
-    .long Lpt_19260 - Lcpu_fast_base
-    .long Lpt_19261 - Lcpu_fast_base
-    .long Lpt_19262 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19263 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19262 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19263 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19266 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19267 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19266 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19267 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19256 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19257 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19256 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19257 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19260 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19261 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19260 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19261 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19284,22 +19278,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19280 - Lcpu_fast_base
+    .long Lpt_19281 - Lcpu_fast_base
+    .long Lpt_19282 - Lcpu_fast_base
+    .long Lpt_19283 - Lcpu_fast_base
+    .long Lpt_19284 - Lcpu_fast_base
+    .long Lpt_19285 - Lcpu_fast_base
     .long Lpt_19286 - Lcpu_fast_base
     .long Lpt_19287 - Lcpu_fast_base
-    .long Lpt_19288 - Lcpu_fast_base
-    .long Lpt_19289 - Lcpu_fast_base
-    .long Lpt_19290 - Lcpu_fast_base
-    .long Lpt_19291 - Lcpu_fast_base
-    .long Lpt_19292 - Lcpu_fast_base
-    .long Lpt_19293 - Lcpu_fast_base
-    .long Lpt_19294 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19295 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19294 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19295 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19298 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19299 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19298 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19299 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19288 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19289 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19288 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19289 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19292 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19293 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19292 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19293 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19316,22 +19310,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19312 - Lcpu_fast_base
+    .long Lpt_19313 - Lcpu_fast_base
+    .long Lpt_19314 - Lcpu_fast_base
+    .long Lpt_19315 - Lcpu_fast_base
+    .long Lpt_19316 - Lcpu_fast_base
+    .long Lpt_19317 - Lcpu_fast_base
     .long Lpt_19318 - Lcpu_fast_base
     .long Lpt_19319 - Lcpu_fast_base
-    .long Lpt_19320 - Lcpu_fast_base
-    .long Lpt_19321 - Lcpu_fast_base
-    .long Lpt_19322 - Lcpu_fast_base
-    .long Lpt_19323 - Lcpu_fast_base
-    .long Lpt_19324 - Lcpu_fast_base
-    .long Lpt_19325 - Lcpu_fast_base
-    .long Lpt_19326 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19327 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19326 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19327 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19330 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19331 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19330 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19331 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19320 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19321 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19320 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19321 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19324 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19325 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19324 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19325 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19348,22 +19342,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19344 - Lcpu_fast_base
+    .long Lpt_19345 - Lcpu_fast_base
+    .long Lpt_19346 - Lcpu_fast_base
+    .long Lpt_19347 - Lcpu_fast_base
+    .long Lpt_19348 - Lcpu_fast_base
+    .long Lpt_19349 - Lcpu_fast_base
     .long Lpt_19350 - Lcpu_fast_base
     .long Lpt_19351 - Lcpu_fast_base
-    .long Lpt_19352 - Lcpu_fast_base
-    .long Lpt_19353 - Lcpu_fast_base
-    .long Lpt_19354 - Lcpu_fast_base
-    .long Lpt_19355 - Lcpu_fast_base
-    .long Lpt_19356 - Lcpu_fast_base
-    .long Lpt_19357 - Lcpu_fast_base
-    .long Lpt_19358 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19359 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19358 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19359 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19362 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19363 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19362 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19363 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19352 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19353 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19352 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19353 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19356 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19357 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19356 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19357 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19380,22 +19374,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19376 - Lcpu_fast_base
+    .long Lpt_19377 - Lcpu_fast_base
+    .long Lpt_19378 - Lcpu_fast_base
+    .long Lpt_19379 - Lcpu_fast_base
+    .long Lpt_19380 - Lcpu_fast_base
+    .long Lpt_19381 - Lcpu_fast_base
     .long Lpt_19382 - Lcpu_fast_base
     .long Lpt_19383 - Lcpu_fast_base
-    .long Lpt_19384 - Lcpu_fast_base
-    .long Lpt_19385 - Lcpu_fast_base
-    .long Lpt_19386 - Lcpu_fast_base
-    .long Lpt_19387 - Lcpu_fast_base
-    .long Lpt_19388 - Lcpu_fast_base
-    .long Lpt_19389 - Lcpu_fast_base
-    .long Lpt_19390 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19391 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19390 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19391 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19394 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19395 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19394 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19395 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19384 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19385 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19384 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19385 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19388 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19389 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19388 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19389 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19412,22 +19406,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19408 - Lcpu_fast_base
+    .long Lpt_19409 - Lcpu_fast_base
+    .long Lpt_19410 - Lcpu_fast_base
+    .long Lpt_19411 - Lcpu_fast_base
+    .long Lpt_19412 - Lcpu_fast_base
+    .long Lpt_19413 - Lcpu_fast_base
     .long Lpt_19414 - Lcpu_fast_base
     .long Lpt_19415 - Lcpu_fast_base
-    .long Lpt_19416 - Lcpu_fast_base
-    .long Lpt_19417 - Lcpu_fast_base
-    .long Lpt_19418 - Lcpu_fast_base
-    .long Lpt_19419 - Lcpu_fast_base
-    .long Lpt_19420 - Lcpu_fast_base
-    .long Lpt_19421 - Lcpu_fast_base
-    .long Lpt_19422 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19423 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19422 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19423 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19426 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19427 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19426 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19427 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19416 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19417 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19416 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19417 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19420 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19421 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19420 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19421 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19444,6 +19438,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19440 - Lcpu_fast_base
+    .long Lpt_19441 - Lcpu_fast_base
+    .long Lpt_19442 - Lcpu_fast_base
+    .long Lpt_19443 - Lcpu_fast_base
+    .long Lpt_19444 - Lcpu_fast_base
+    .long Lpt_19445 - Lcpu_fast_base
+    .long Lpt_19446 - Lcpu_fast_base
+    .long Lpt_19447 - Lcpu_fast_base
+    .long Lpt_19448 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19449 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19448 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19449 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19452 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19453 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19452 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19453 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19452,14 +19462,6 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_19454 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19455 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19454 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19455 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19458 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19459 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19458 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19459 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19468,6 +19470,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19472 - Lcpu_fast_base
+    .long Lpt_19473 - Lcpu_fast_base
+    .long Lpt_19474 - Lcpu_fast_base
+    .long Lpt_19475 - Lcpu_fast_base
+    .long Lpt_19476 - Lcpu_fast_base
+    .long Lpt_19477 - Lcpu_fast_base
+    .long Lpt_19478 - Lcpu_fast_base
+    .long Lpt_19479 - Lcpu_fast_base
+    .long Lpt_19480 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19481 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19480 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19481 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19484 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19485 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19484 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19485 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19484,46 +19502,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_19486 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19487 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19486 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19487 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19490 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19491 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19490 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19491 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
-    .long 0
+    .long Lpt_19504 - Lcpu_fast_base
+    .long Lpt_19505 - Lcpu_fast_base
+    .long Lpt_19506 - Lcpu_fast_base
+    .long Lpt_19507 - Lcpu_fast_base
+    .long Lpt_19508 - Lcpu_fast_base
+    .long Lpt_19509 - Lcpu_fast_base
     .long Lpt_19510 - Lcpu_fast_base
     .long Lpt_19511 - Lcpu_fast_base
-    .long Lpt_19512 - Lcpu_fast_base
-    .long Lpt_19513 - Lcpu_fast_base
-    .long Lpt_19514 - Lcpu_fast_base
-    .long Lpt_19515 - Lcpu_fast_base
-    .long Lpt_19516 - Lcpu_fast_base
-    .long Lpt_19517 - Lcpu_fast_base
-    .long Lpt_19518 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19519 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19518 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19519 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19522 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19523 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19522 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19523 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19512 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19513 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19512 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19513 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19516 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19517 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19516 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19517 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19540,22 +19534,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19536 - Lcpu_fast_base
+    .long Lpt_19537 - Lcpu_fast_base
+    .long Lpt_19538 - Lcpu_fast_base
+    .long Lpt_19539 - Lcpu_fast_base
+    .long Lpt_19540 - Lcpu_fast_base
+    .long Lpt_19541 - Lcpu_fast_base
     .long Lpt_19542 - Lcpu_fast_base
     .long Lpt_19543 - Lcpu_fast_base
-    .long Lpt_19544 - Lcpu_fast_base
-    .long Lpt_19545 - Lcpu_fast_base
-    .long Lpt_19546 - Lcpu_fast_base
-    .long Lpt_19547 - Lcpu_fast_base
-    .long Lpt_19548 - Lcpu_fast_base
-    .long Lpt_19549 - Lcpu_fast_base
-    .long Lpt_19550 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19551 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19550 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19551 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19554 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19555 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19554 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19555 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19544 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19545 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19544 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19545 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19548 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19549 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19548 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19549 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19572,22 +19566,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_19574 - Lcpu_fast_base
-    .long Lpt_19575 - Lcpu_fast_base
-    .long Lpt_19576 - Lcpu_fast_base
-    .long Lpt_19577 - Lcpu_fast_base
-    .long Lpt_19578 - Lcpu_fast_base
-    .long Lpt_19579 - Lcpu_fast_base
-    .long Lpt_19580 - Lcpu_fast_base
-    .long Lpt_19581 - Lcpu_fast_base
-    .long Lpt_19582 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19583 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19582 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19583 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19586 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19587 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19586 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19587 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_19576 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19577 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19576 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19577 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19580 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19581 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19580 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19581 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19604,22 +19598,22 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_19606 - Lcpu_fast_base
-    .long Lpt_19607 - Lcpu_fast_base
-    .long Lpt_19608 - Lcpu_fast_base
-    .long Lpt_19609 - Lcpu_fast_base
-    .long Lpt_19610 - Lcpu_fast_base
-    .long Lpt_19611 - Lcpu_fast_base
-    .long Lpt_19612 - Lcpu_fast_base
-    .long Lpt_19613 - Lcpu_fast_base
-    .long Lpt_19614 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19615 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19614 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19615 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19618 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19619 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19618 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19619 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_19608 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19609 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19608 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19609 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19612 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19613 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19612 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19613 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19636,22 +19630,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19632 - Lcpu_fast_base
+    .long Lpt_19633 - Lcpu_fast_base
+    .long Lpt_19634 - Lcpu_fast_base
+    .long Lpt_19635 - Lcpu_fast_base
+    .long Lpt_19636 - Lcpu_fast_base
+    .long Lpt_19637 - Lcpu_fast_base
     .long Lpt_19638 - Lcpu_fast_base
     .long Lpt_19639 - Lcpu_fast_base
-    .long Lpt_19640 - Lcpu_fast_base
-    .long Lpt_19641 - Lcpu_fast_base
-    .long Lpt_19642 - Lcpu_fast_base
-    .long Lpt_19643 - Lcpu_fast_base
-    .long Lpt_19644 - Lcpu_fast_base
-    .long Lpt_19645 - Lcpu_fast_base
-    .long Lpt_19646 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19647 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19646 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19647 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19650 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19651 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19650 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19651 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19640 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19641 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19640 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19641 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19644 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19645 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19644 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19645 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19668,22 +19662,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19664 - Lcpu_fast_base
+    .long Lpt_19665 - Lcpu_fast_base
+    .long Lpt_19666 - Lcpu_fast_base
+    .long Lpt_19667 - Lcpu_fast_base
+    .long Lpt_19668 - Lcpu_fast_base
+    .long Lpt_19669 - Lcpu_fast_base
     .long Lpt_19670 - Lcpu_fast_base
     .long Lpt_19671 - Lcpu_fast_base
-    .long Lpt_19672 - Lcpu_fast_base
-    .long Lpt_19673 - Lcpu_fast_base
-    .long Lpt_19674 - Lcpu_fast_base
-    .long Lpt_19675 - Lcpu_fast_base
-    .long Lpt_19676 - Lcpu_fast_base
-    .long Lpt_19677 - Lcpu_fast_base
-    .long Lpt_19678 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19679 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19678 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19679 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19682 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19683 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19682 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19683 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19672 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19673 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19672 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19673 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19676 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19677 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19676 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19677 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19700,6 +19694,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19696 - Lcpu_fast_base
+    .long Lpt_19697 - Lcpu_fast_base
+    .long Lpt_19698 - Lcpu_fast_base
+    .long Lpt_19699 - Lcpu_fast_base
+    .long Lpt_19700 - Lcpu_fast_base
+    .long Lpt_19701 - Lcpu_fast_base
+    .long Lpt_19702 - Lcpu_fast_base
+    .long Lpt_19703 - Lcpu_fast_base
+    .long Lpt_19704 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19705 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19704 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19705 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19708 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19709 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19708 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19709 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19716,6 +19726,22 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19728 - Lcpu_fast_base
+    .long Lpt_19729 - Lcpu_fast_base
+    .long Lpt_19730 - Lcpu_fast_base
+    .long Lpt_19731 - Lcpu_fast_base
+    .long Lpt_19732 - Lcpu_fast_base
+    .long Lpt_19733 - Lcpu_fast_base
+    .long Lpt_19734 - Lcpu_fast_base
+    .long Lpt_19735 - Lcpu_fast_base
+    .long Lpt_19736 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19737 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19736 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19737 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19740 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19741 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19740 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19741 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19724,38 +19750,62 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_19726 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19728 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19730 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19732 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19726 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19728 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19730 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19732 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19742 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19760 - Lcpu_fast_base
+    .long Lpt_19761 - Lcpu_fast_base
+    .long Lpt_19762 - Lcpu_fast_base
+    .long Lpt_19763 - Lcpu_fast_base
+    .long Lpt_19764 - Lcpu_fast_base
+    .long Lpt_19765 - Lcpu_fast_base
+    .long Lpt_19766 - Lcpu_fast_base
+    .long Lpt_19767 - Lcpu_fast_base
+    .long Lpt_19768 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19769 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19768 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19769 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19772 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19773 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19772 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19773 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
     .long 0
-    .long Lpt_19744 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19746 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19748 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19742 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19744 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19746 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
-    .long Lpt_19748 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19792 - Lcpu_fast_base
+    .long Lpt_19793 - Lcpu_fast_base
+    .long Lpt_19794 - Lcpu_fast_base
+    .long Lpt_19795 - Lcpu_fast_base
+    .long Lpt_19796 - Lcpu_fast_base
+    .long Lpt_19797 - Lcpu_fast_base
+    .long Lpt_19798 - Lcpu_fast_base
+    .long Lpt_19799 - Lcpu_fast_base
+    .long Lpt_19800 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19801 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19800 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19801 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19804 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19805 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19804 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_19805 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19764,6 +19814,70 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19816 - Lcpu_fast_base
+    .long Lpt_19817 - Lcpu_fast_base
+    .long Lpt_19818 - Lcpu_fast_base
+    .long Lpt_19819 - Lcpu_fast_base
+    .long Lpt_19820 - Lcpu_fast_base
+    .long Lpt_19821 - Lcpu_fast_base
+    .long Lpt_19822 - Lcpu_fast_base
+    .long Lpt_19823 - Lcpu_fast_base
+    .long Lpt_19824 - Lcpu_fast_base
+    .long Lpt_19825 - Lcpu_fast_base
+    .long Lpt_19826 - Lcpu_fast_base
+    .long Lpt_19827 - Lcpu_fast_base
+    .long Lpt_19828 - Lcpu_fast_base
+    .long Lpt_19829 - Lcpu_fast_base
+    .long Lpt_19830 - Lcpu_fast_base
+    .long Lpt_19831 - Lcpu_fast_base
+    .long Lpt_19832 - Lcpu_fast_base
+    .long Lpt_19833 - Lcpu_fast_base
+    .long Lpt_19834 - Lcpu_fast_base
+    .long Lpt_19835 - Lcpu_fast_base
+    .long Lpt_19836 - Lcpu_fast_base
+    .long Lpt_19837 - Lcpu_fast_base
+    .long Lpt_19838 - Lcpu_fast_base
+    .long Lpt_19839 - Lcpu_fast_base
+    .long Lpt_19840 - Lcpu_fast_base
+    .long Lpt_19841 - Lcpu_fast_base
+    .long Lpt_19842 - Lcpu_fast_base
+    .long Lpt_19843 - Lcpu_fast_base
+    .long Lpt_19844 - Lcpu_fast_base
+    .long Lpt_19845 - Lcpu_fast_base
+    .long Lpt_19846 - Lcpu_fast_base
+    .long Lpt_19847 - Lcpu_fast_base
+    .long Lpt_19848 - Lcpu_fast_base
+    .long Lpt_19849 - Lcpu_fast_base
+    .long Lpt_19850 - Lcpu_fast_base
+    .long Lpt_19851 - Lcpu_fast_base
+    .long Lpt_19852 - Lcpu_fast_base
+    .long Lpt_19853 - Lcpu_fast_base
+    .long Lpt_19854 - Lcpu_fast_base
+    .long Lpt_19855 - Lcpu_fast_base
+    .long Lpt_19856 - Lcpu_fast_base
+    .long Lpt_19857 - Lcpu_fast_base
+    .long Lpt_19858 - Lcpu_fast_base
+    .long Lpt_19859 - Lcpu_fast_base
+    .long Lpt_19860 - Lcpu_fast_base
+    .long Lpt_19861 - Lcpu_fast_base
+    .long Lpt_19862 - Lcpu_fast_base
+    .long Lpt_19863 - Lcpu_fast_base
+    .long Lpt_19864 - Lcpu_fast_base
+    .long Lpt_19865 - Lcpu_fast_base
+    .long Lpt_19866 - Lcpu_fast_base
+    .long Lpt_19867 - Lcpu_fast_base
+    .long Lpt_19868 - Lcpu_fast_base
+    .long Lpt_19869 - Lcpu_fast_base
+    .long Lpt_19870 - Lcpu_fast_base
+    .long Lpt_19871 - Lcpu_fast_base
+    .long Lpt_19872 - Lcpu_fast_base
+    .long Lpt_19873 - Lcpu_fast_base
+    .long Lpt_19874 - Lcpu_fast_base
+    .long Lpt_19875 - Lcpu_fast_base
+    .long Lpt_19876 - Lcpu_fast_base
+    .long Lpt_19877 - Lcpu_fast_base
+    .long Lpt_19878 - Lcpu_fast_base
+    .long Lpt_19879 - Lcpu_fast_base
     .long 0
     .long 0
     .long 0
@@ -19796,21 +19910,37 @@
     .long 0
     .long 0
     .long 0
+    .long Lpt_19912 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19914 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19916 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19918 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19912 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19914 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19916 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19918 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19928 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19930 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19932 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19934 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19928 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19930 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19932 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
+    .long Lpt_19934 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0
@@ -19852,54 +19982,110 @@
     .long 0
     .long 0
     .long 0
-    .long Lpt_19854 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19855 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19856 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19857 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19858 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19859 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19860 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19861 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19854 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19855 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19856 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19857 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19858 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19859 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19860 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19861 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19870 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19871 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19872 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19873 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19874 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19875 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19876 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19877 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19870 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19871 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19872 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19873 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19874 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19875 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19876 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19877 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19886 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19887 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19888 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19889 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19890 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19891 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19892 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19893 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19886 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19887 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19888 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19889 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19890 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19891 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19892 - Lcpu_fast_base + CPU_PT_WIDE_RM
-    .long Lpt_19893 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long 0
+    .long Lpt_20040 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20041 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20042 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20043 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20044 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20045 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20046 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20047 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20040 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20041 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20042 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20043 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20044 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20045 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20046 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20047 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20056 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20057 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20058 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20059 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20060 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20061 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20062 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20063 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20056 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20057 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20058 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20059 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20060 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20061 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20062 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20063 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20072 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20073 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20074 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20075 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20076 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20077 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20078 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20079 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20072 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20073 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20074 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20075 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20076 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20077 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20078 - Lcpu_fast_base + CPU_PT_WIDE_RM
+    .long Lpt_20079 - Lcpu_fast_base + CPU_PT_WIDE_RM
     .long 0
     .long 0
     .long 0

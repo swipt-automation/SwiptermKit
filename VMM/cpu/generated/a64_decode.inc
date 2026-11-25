@@ -48,6 +48,7 @@ typedef enum a64_dec_op : uint16_t {
     A64_DEC_BARRIERS_DMB,
     A64_DEC_BARRIERS_DSB,
     A64_DEC_BARRIERS_ISB,
+    A64_DEC_BARRIERS_SB,
     A64_DEC_BITFIELD_BFM,
     A64_DEC_BITFIELD_SBFM,
     A64_DEC_BITFIELD_UBFM,
@@ -76,8 +77,11 @@ typedef enum a64_dec_op : uint16_t {
     A64_DEC_CRYPTOSHA3,
     A64_DEC_CRYPTOSHA512_2,
     A64_DEC_CRYPTOSHA512_3,
+    A64_DEC_DP_1SRC_ABS,
     A64_DEC_DP_1SRC_CLS,
     A64_DEC_DP_1SRC_CLZ,
+    A64_DEC_DP_1SRC_CNT,
+    A64_DEC_DP_1SRC_CTZ,
     A64_DEC_DP_1SRC_RBIT,
     A64_DEC_DP_1SRC_REV,
     A64_DEC_DP_1SRC_REV16,
@@ -95,7 +99,11 @@ typedef enum a64_dec_op : uint16_t {
     A64_DEC_DP_2SRC_LSRV,
     A64_DEC_DP_2SRC_RORV,
     A64_DEC_DP_2SRC_SDIV,
+    A64_DEC_DP_2SRC_SMAX,
+    A64_DEC_DP_2SRC_SMIN,
     A64_DEC_DP_2SRC_UDIV,
+    A64_DEC_DP_2SRC_UMAX,
+    A64_DEC_DP_2SRC_UMIN,
     A64_DEC_DP_3SRC_MADD,
     A64_DEC_DP_3SRC_MSUB,
     A64_DEC_DP_3SRC_SMADDL,
@@ -127,6 +135,7 @@ typedef enum a64_dec_op : uint16_t {
     A64_DEC_HINTS_WFE,
     A64_DEC_HINTS_WFI,
     A64_DEC_HINT_NOP,
+    A64_DEC_LDAPSTL_UNSCALED,
     A64_DEC_LDST_EXCLP,
     A64_DEC_LDST_EXCLR,
     A64_DEC_LDST_IMMPOST,
@@ -156,6 +165,10 @@ typedef enum a64_dec_op : uint16_t {
     A64_DEC_LSE_CAS,
     A64_DEC_LSE_CASP,
     A64_DEC_LSE_MEMOP,
+    A64_DEC_MINMAX_IMM_SMAX,
+    A64_DEC_MINMAX_IMM_SMIN,
+    A64_DEC_MINMAX_IMM_UMAX,
+    A64_DEC_MINMAX_IMM_UMIN,
     A64_DEC_MOPS_CPY,
     A64_DEC_MOPS_SET,
     A64_DEC_MOVEWIDE_MOVK,
@@ -164,7 +177,13 @@ typedef enum a64_dec_op : uint16_t {
     A64_DEC_PCRELADDR_ADR,
     A64_DEC_PCRELADDR_ADRP,
     A64_DEC_PERM_UNDEF_UDF,
+    A64_DEC_PSTATE_AXFLAG,
+    A64_DEC_PSTATE_CFINV,
     A64_DEC_PSTATE_MSR,
+    A64_DEC_PSTATE_XAFLAG,
+    A64_DEC_RMIF_RMIF,
+    A64_DEC_SETF_SETF16,
+    A64_DEC_SETF_SETF8,
     A64_DEC_SYSTEMINSTRS_SYS,
     A64_DEC_SYSTEMINSTRS_SYSL,
     A64_DEC_SYSTEMMOVE_MRS,
@@ -1753,36 +1772,52 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                         } else {
                                                             if (word & 0x00004000u) {
                                                                 if (word & 0x00008000u) {
-                                                                    if (word & 0x00040000u) {
-                                                                        if (word & 0x00010000u) {
-                                                                            if (word & 0x00020000u) {
+                                                                    if (word & 0x00010000u) {
+                                                                        if (word & 0x00020000u) {
+                                                                            if (word & 0x00040000u) {
                                                                                 if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                             } else {
                                                                                 if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                             }
                                                                         } else {
-                                                                            if ((word & 0x001a2000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            if (word & 0x00040000u) {
+                                                                                if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            } else {
+                                                                                if (word & 0x00080000u) {
+                                                                                    if ((word & 0x00102000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                                } else {
+                                                                                    if ((word & 0x00102000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                                }
+                                                                            }
                                                                         }
                                                                     } else {
-                                                                        if (word & 0x00010000u) {
-                                                                            if (word & 0x00020000u) {
-                                                                                if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
-                                                                            } else {
-                                                                                if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
-                                                                            }
-                                                                        } else {
+                                                                        if (word & 0x00040000u) {
                                                                             if ((word & 0x001a2000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                        } else {
+                                                                            if (word & 0x00080000u) {
+                                                                                if ((word & 0x00122000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            } else {
+                                                                                if ((word & 0x00122000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            }
                                                                         }
                                                                     }
                                                                 } else {
                                                                     if (word & 0x00010000u) {
                                                                         if (word & 0x00020000u) {
-                                                                            if ((word & 0x001c2000u) == 0x00040000u) return A64_DEC_FLOATDP1;
-                                                                        } else {
                                                                             if (word & 0x00040000u) {
                                                                                 if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                             } else {
                                                                                 if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            }
+                                                                        } else {
+                                                                            if (word & 0x00040000u) {
+                                                                                if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            } else {
+                                                                                if (word & 0x00080000u) {
+                                                                                    if ((word & 0x00102000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                                } else {
+                                                                                    if ((word & 0x00102000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                                }
                                                                             }
                                                                         }
                                                                     } else {
@@ -1796,7 +1831,11 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                                             if (word & 0x00040000u) {
                                                                                 if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                             } else {
-                                                                                if ((word & 0x00182000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                                if (word & 0x00080000u) {
+                                                                                    if ((word & 0x00102000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                                } else {
+                                                                                    if ((word & 0x00102000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                                }
                                                                             }
                                                                         }
                                                                     }
@@ -1951,7 +1990,11 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                                         if (word & 0x00040000u) {
                                                                             if ((word & 0x00982000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                         } else {
-                                                                            if ((word & 0x00982000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            if (word & 0x00080000u) {
+                                                                                if ((word & 0x00902000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            } else {
+                                                                                if ((word & 0x00902000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            }
                                                                         }
                                                                     }
                                                                 } else {
@@ -1961,29 +2004,41 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                                         if (word & 0x00040000u) {
                                                                             if ((word & 0x00982000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                         } else {
-                                                                            if ((word & 0x00982000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            if (word & 0x00080000u) {
+                                                                                if ((word & 0x00902000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            } else {
+                                                                                if ((word & 0x00902000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                            }
                                                                         }
                                                                     }
                                                                 }
                                                             } else {
                                                                 if (word & 0x00010000u) {
-                                                                    if (word & 0x00020000u) {
-                                                                        if ((word & 0x009c2000u) == 0x00040000u) return A64_DEC_FLOATDP1;
-                                                                    } else {
-                                                                        if (word & 0x00040000u) {
+                                                                    if (word & 0x00040000u) {
+                                                                        if (word & 0x00020000u) {
                                                                             if ((word & 0x00982000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                         } else {
                                                                             if ((word & 0x00982000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                         }
+                                                                    } else {
+                                                                        if (word & 0x00080000u) {
+                                                                            if ((word & 0x00922000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                        } else {
+                                                                            if ((word & 0x00922000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                        }
                                                                     }
                                                                 } else {
-                                                                    if (word & 0x00020000u) {
-                                                                        if ((word & 0x009c2000u) == 0x00040000u) return A64_DEC_FLOATDP1;
-                                                                    } else {
-                                                                        if (word & 0x00040000u) {
+                                                                    if (word & 0x00040000u) {
+                                                                        if (word & 0x00020000u) {
                                                                             if ((word & 0x00982000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                         } else {
                                                                             if ((word & 0x00982000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                        }
+                                                                    } else {
+                                                                        if (word & 0x00080000u) {
+                                                                            if ((word & 0x00922000u) == 0x00000000u) return A64_DEC_FLOATDP1;
+                                                                        } else {
+                                                                            if ((word & 0x00922000u) == 0x00000000u) return A64_DEC_FLOATDP1;
                                                                         }
                                                                     }
                                                                 }
@@ -2085,111 +2140,122 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                         }
                     }
                 } else {
-                    if (word & 0x40000000u) {
-                        if (word & 0x01000000u) {
-                            if (word & 0x00100000u) {
-                                if (word & 0x00200000u) {
-                                    if ((word & 0x82c00000u) == 0x80000000u) return A64_DEC_SYSTEMMOVE_MRS;
-                                } else {
-                                    if ((word & 0x82c00000u) == 0x80000000u) return A64_DEC_SYSTEMMOVE_MSR;
-                                }
-                            } else {
-                                if (word & 0x00080000u) {
+                    if (word & 0x80000000u) {
+                        if (word & 0x40000000u) {
+                            if (word & 0x01000000u) {
+                                if (word & 0x00100000u) {
                                     if (word & 0x00200000u) {
-                                        if ((word & 0x82c00000u) == 0x80000000u) return A64_DEC_SYSTEMINSTRS_SYSL;
+                                        if ((word & 0x02c00000u) == 0x00000000u) return A64_DEC_SYSTEMMOVE_MRS;
                                     } else {
-                                        if ((word & 0x82c00000u) == 0x80000000u) return A64_DEC_SYSTEMINSTRS_SYS;
+                                        if ((word & 0x02c00000u) == 0x00000000u) return A64_DEC_SYSTEMMOVE_MSR;
                                     }
                                 } else {
-                                    if (word & 0x00001000u) {
-                                        if (word & 0x00000040u) {
-                                            if (word & 0x00000080u) {
-                                                if ((word & 0x82e7e03fu) == 0x8003201fu) return A64_DEC_BARRIERS_ISB;
-                                            } else {
-                                                if ((word & 0x82e7e03fu) == 0x8003201fu) return A64_DEC_BARRIERS_CLREX;
-                                            }
+                                    if (word & 0x00080000u) {
+                                        if (word & 0x00200000u) {
+                                            if ((word & 0x02c00000u) == 0x00000000u) return A64_DEC_SYSTEMINSTRS_SYSL;
                                         } else {
+                                            if ((word & 0x02c00000u) == 0x00000000u) return A64_DEC_SYSTEMINSTRS_SYS;
+                                        }
+                                    } else {
+                                        if (word & 0x00001000u) {
                                             if (word & 0x00000020u) {
-                                                if ((word & 0x82e7e09fu) == 0x8003209fu) return A64_DEC_BARRIERS_DMB;
+                                                if (word & 0x00000040u) {
+                                                    if ((word & 0x02e7ef9fu) == 0x0003209fu) return A64_DEC_BARRIERS_SB;
+                                                } else {
+                                                    if ((word & 0x02e7e09fu) == 0x0003209fu) return A64_DEC_BARRIERS_DMB;
+                                                }
                                             } else {
-                                                if ((word & 0x82e7e09fu) == 0x8003209fu) return A64_DEC_BARRIERS_DSB;
+                                                if (word & 0x00000040u) {
+                                                    if (word & 0x00000080u) {
+                                                        if ((word & 0x02e7e01fu) == 0x0003201fu) return A64_DEC_BARRIERS_ISB;
+                                                    } else {
+                                                        if ((word & 0x02e7e01fu) == 0x0003201fu) return A64_DEC_BARRIERS_CLREX;
+                                                    }
+                                                } else {
+                                                    if ((word & 0x02e7e09fu) == 0x0003209fu) return A64_DEC_BARRIERS_DSB;
+                                                }
                                             }
-                                        }
-                                    } else {
-                                        if (word & 0x00002000u) {
-                                            if ((word & 0x82e7cfffu) == 0x8003029fu) return A64_DEC_HINT_NOP;
-                                            if ((word & 0x82e7cfffu) == 0x8003021fu) return A64_DEC_HINT_NOP;
-                                            if ((word & 0x82e7cfffu) == 0x8003001fu) return A64_DEC_HINT_NOP;
-                                            if ((word & 0x82e7cfffu) == 0x800300bfu) return A64_DEC_HINTS_SEVL;
-                                            if ((word & 0x82e7cfffu) == 0x8003009fu) return A64_DEC_HINTS_SEV;
-                                            if ((word & 0x82e7cfffu) == 0x8003005fu) return A64_DEC_HINTS_WFE;
-                                            if ((word & 0x82e7cfffu) == 0x8003007fu) return A64_DEC_HINTS_WFI;
-                                            if ((word & 0x82e7cfffu) == 0x8003003fu) return A64_DEC_HINT_NOP;
-                                            if ((word & 0x82e7c01fu) == 0x8003001fu) return A64_DEC_HINT_NOP;
                                         } else {
-                                            if ((word & 0x82e0c01fu) == 0x8000401fu && !((((((word >> 16) & 7u) == 0x0u)) && ((((((word >> 5) & 7u) & 0x6u) == 0x0u) || (((word >> 5) & 7u) == 0x2u)))))) return A64_DEC_PSTATE_MSR;
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            if (word & 0x02000000u) {
-                                if (word & 0x00200000u) {
-                                    if (word & 0x00800000u) {
-                                        if ((word & 0x805fffffu) == 0x801f03e0u) return A64_DEC_BRANCH_REG_DRPS;
-                                    } else {
-                                        if ((word & 0x805ffc1fu) == 0x801f0000u) return A64_DEC_BRANCH_REG_BLR;
-                                    }
-                                } else {
-                                    if (word & 0x00400000u) {
-                                        if ((word & 0x809ffc1fu) == 0x801f0000u) return A64_DEC_BRANCH_REG_RET;
-                                    } else {
-                                        if (word & 0x00800000u) {
-                                            if ((word & 0x801fffffu) == 0x801f03e0u) return A64_DEC_BRANCH_REG_ERET;
-                                        } else {
-                                            if ((word & 0x801ffc1fu) == 0x801f0000u) return A64_DEC_BRANCH_REG_BR;
+                                            if (word & 0x00002000u) {
+                                                if ((word & 0x02e7cfffu) == 0x0003029fu) return A64_DEC_HINT_NOP;
+                                                if ((word & 0x02e7cfffu) == 0x0003021fu) return A64_DEC_HINT_NOP;
+                                                if ((word & 0x02e7cfffu) == 0x0003001fu) return A64_DEC_HINT_NOP;
+                                                if ((word & 0x02e7cfffu) == 0x000300bfu) return A64_DEC_HINTS_SEVL;
+                                                if ((word & 0x02e7cfffu) == 0x0003009fu) return A64_DEC_HINTS_SEV;
+                                                if ((word & 0x02e7cfffu) == 0x0003005fu) return A64_DEC_HINTS_WFE;
+                                                if ((word & 0x02e7cfffu) == 0x0003007fu) return A64_DEC_HINTS_WFI;
+                                                if ((word & 0x02e7cfffu) == 0x0003003fu) return A64_DEC_HINT_NOP;
+                                                if ((word & 0x02e7c01fu) == 0x0003001fu) return A64_DEC_HINT_NOP;
+                                            } else {
+                                                if ((word & 0x02e7cfffu) == 0x0000405fu) return A64_DEC_PSTATE_AXFLAG;
+                                                if ((word & 0x02e7cfffu) == 0x0000401fu) return A64_DEC_PSTATE_CFINV;
+                                                if ((word & 0x02e7cfffu) == 0x0000403fu) return A64_DEC_PSTATE_XAFLAG;
+                                                if ((word & 0x02e0c01fu) == 0x0000401fu && !((((((word >> 16) & 7u) == 0x0u)) && ((((((word >> 5) & 7u) & 0x6u) == 0x0u) || (((word >> 5) & 7u) == 0x2u)))))) return A64_DEC_PSTATE_MSR;
+                                            }
                                         }
                                     }
                                 }
                             } else {
-                                if (word & 0x80000000u) {
+                                if (word & 0x00200000u) {
                                     if (word & 0x00000001u) {
                                         if (word & 0x00000002u) {
-                                            if (word & 0x00200000u) {
-                                                if ((word & 0x00c0001cu) == 0x00800000u) return A64_DEC_EXCEPTION_DCPS3;
+                                            if ((word & 0x02c0001cu) == 0x00800000u) return A64_DEC_EXCEPTION_DCPS3;
+                                        } else {
+                                            if ((word & 0x02c0001cu) == 0x00800000u) return A64_DEC_EXCEPTION_DCPS1;
+                                        }
+                                    } else {
+                                        if (word & 0x00800000u) {
+                                            if (word & 0x00000002u) {
+                                                if ((word & 0x0240001cu) == 0x00000000u) return A64_DEC_EXCEPTION_DCPS2;
                                             } else {
-                                                if ((word & 0x00c0001cu) == 0x00000000u) return A64_DEC_EXCEPTION_SMC;
+                                                if ((word & 0x025ffffcu) == 0x021f03e0u) return A64_DEC_BRANCH_REG_DRPS;
                                             }
                                         } else {
-                                            if (word & 0x00200000u) {
-                                                if ((word & 0x00c0001cu) == 0x00800000u) return A64_DEC_EXCEPTION_DCPS1;
+                                            if (word & 0x02000000u) {
+                                                if ((word & 0x005ffc1eu) == 0x001f0000u) return A64_DEC_BRANCH_REG_BLR;
+                                            } else {
+                                                if ((word & 0x0040001eu) == 0x00000000u) return A64_DEC_EXCEPTION_BRK;
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    if (word & 0x02000000u) {
+                                        if (word & 0x00400000u) {
+                                            if ((word & 0x009ffc1fu) == 0x001f0000u) return A64_DEC_BRANCH_REG_RET;
+                                        } else {
+                                            if (word & 0x00800000u) {
+                                                if ((word & 0x001fffffu) == 0x001f03e0u) return A64_DEC_BRANCH_REG_ERET;
+                                            } else {
+                                                if ((word & 0x001ffc1fu) == 0x001f0000u) return A64_DEC_BRANCH_REG_BR;
+                                            }
+                                        }
+                                    } else {
+                                        if (word & 0x00000001u) {
+                                            if (word & 0x00000002u) {
+                                                if ((word & 0x00c0001cu) == 0x00000000u) return A64_DEC_EXCEPTION_SMC;
                                             } else {
                                                 if ((word & 0x00c0001cu) == 0x00000000u) return A64_DEC_EXCEPTION_SVC;
                                             }
-                                        }
-                                    } else {
-                                        if (word & 0x00000002u) {
-                                            if (word & 0x00200000u) {
-                                                if ((word & 0x00c0001cu) == 0x00800000u) return A64_DEC_EXCEPTION_DCPS2;
-                                            } else {
-                                                if ((word & 0x00c0001cu) == 0x00000000u) return A64_DEC_EXCEPTION_HVC;
-                                            }
                                         } else {
-                                            if (word & 0x00200000u) {
-                                                if ((word & 0x00c0001cu) == 0x00000000u) return A64_DEC_EXCEPTION_BRK;
+                                            if (word & 0x00000002u) {
+                                                if ((word & 0x00c0001cu) == 0x00000000u) return A64_DEC_EXCEPTION_HVC;
                                             } else {
                                                 if ((word & 0x00c0001cu) == 0x00400000u) return A64_DEC_EXCEPTION_HLT;
                                             }
                                         }
                                     }
-                                } else {
-                                    if ((word & 0x00000010u) == 0x00000000u) return A64_DEC_B_COND;
                                 }
                             }
+                        } else {
+                            return A64_DEC_BRANCH_IMM_BL;
                         }
                     } else {
-                        if (word & 0x80000000u) {
-                            return A64_DEC_BRANCH_IMM_BL;
+                        if (word & 0x40000000u) {
+                            if (word & 0x00000010u) {
+                                if ((word & 0x03000000u) == 0x00000000u) return A64_DEC_B_COND;
+                            } else {
+                                if ((word & 0x03000000u) == 0x00000000u) return A64_DEC_B_COND;
+                            }
                         } else {
                             return A64_DEC_BRANCH_IMM_B;
                         }
@@ -2200,63 +2266,103 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
             if (word & 0x01000000u) {
                 if (word & 0x00800000u) {
                     if (word & 0x00400000u) {
-                        if (word & 0x02000000u) {
-                            if (word & 0x08000000u) {
-                                if ((word & 0xe020fc00u) == 0x80007c00u) return A64_DEC_DP_3SRC_UMULH;
-                            } else {
-                                if ((word & 0xe0200000u) == 0x80000000u && (((word >> 29) & 3u) != 0x3u)) return A64_DEC_EXTRACT_EXTR;
-                            }
-                        } else {
+                        if (word & 0x08000000u) {
                             if (word & 0x20000000u) {
                                 if (word & 0x40000000u) {
-                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_LDST_POS;
+                                    if ((word & 0x82000000u) == 0x00000000u) return A64_DEC_LDST_POS;
                                 } else {
-                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_LDST_POS;
+                                    if ((word & 0x82000000u) == 0x00000000u) return A64_DEC_LDST_POS;
                                 }
                             } else {
-                                if (word & 0x00001000u) {
-                                    if (word & 0x00002000u) {
-                                        if (word & 0x00004000u) {
-                                            if ((word & 0x08208c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
-                                        } else {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                if (word & 0x00000400u) {
+                                    if (word & 0x00001000u) {
+                                        if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
+                                                if (word & 0x00000800u) {
+                                                    if ((word & 0xc2208000u) == 0x82000000u) return A64_DEC_DP_3SRC_UMULH;
+                                                } else {
+                                                    if ((word & 0x02208000u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                }
                                             } else {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                }
+                                            }
+                                        } else {
+                                            if (word & 0x00004000u) {
+                                                if ((word & 0x02208800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                            } else {
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                }
                                             }
                                         }
                                     } else {
-                                        if (word & 0x00004000u) {
-                                            if ((word & 0x08208c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
-                                        } else {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                        if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
+                                                if ((word & 0x02208800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
                                             } else {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                }
+                                            }
+                                        } else {
+                                            if (word & 0x00004000u) {
+                                                if ((word & 0x02208800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                            } else {
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                                }
                                             }
                                         }
                                     }
                                 } else {
-                                    if (word & 0x00002000u) {
-                                        if (word & 0x00004000u) {
-                                            if ((word & 0x08208c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                    if (word & 0x40000000u) {
+                                        if ((word & 0x82200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
+                                    } else {
+                                        if ((word & 0x82200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
+                                    }
+                                }
+                            }
+                        } else {
+                            if (word & 0x80000000u) {
+                                if (word & 0x02000000u) {
+                                    if ((word & 0x60200000u) == 0x00000000u && (((word >> 29) & 3u) != 0x3u)) return A64_DEC_EXTRACT_EXTR;
+                                } else {
+                                    if (word & 0x00040000u) {
+                                        if (word & 0x00080000u) {
+                                            if ((word & 0x60300000u) == 0x00000000u) return A64_DEC_MINMAX_IMM_UMIN;
                                         } else {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
-                                            } else {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
-                                            }
+                                            if ((word & 0x60300000u) == 0x00000000u) return A64_DEC_MINMAX_IMM_UMAX;
                                         }
                                     } else {
-                                        if (word & 0x00004000u) {
-                                            if ((word & 0x08208c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
+                                        if (word & 0x00080000u) {
+                                            if ((word & 0x60300000u) == 0x00000000u) return A64_DEC_MINMAX_IMM_SMIN;
                                         } else {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
-                                            } else {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_SET;
-                                            }
+                                            if ((word & 0x60300000u) == 0x00000000u) return A64_DEC_MINMAX_IMM_SMAX;
                                         }
+                                    }
+                                }
+                            } else {
+                                if (word & 0x00040000u) {
+                                    if (word & 0x00080000u) {
+                                        if ((word & 0x62300000u) == 0x00000000u) return A64_DEC_MINMAX_IMM_UMIN;
+                                    } else {
+                                        if ((word & 0x62300000u) == 0x00000000u) return A64_DEC_MINMAX_IMM_UMAX;
+                                    }
+                                } else {
+                                    if (word & 0x00080000u) {
+                                        if ((word & 0x62300000u) == 0x00000000u) return A64_DEC_MINMAX_IMM_SMIN;
+                                    } else {
+                                        if ((word & 0x62300000u) == 0x00000000u) return A64_DEC_MINMAX_IMM_SMAX;
                                     }
                                 }
                             }
@@ -2277,75 +2383,87 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                 }
                             }
                         } else {
-                            if (word & 0x00008000u) {
-                                if (word & 0x00200000u) {
-                                    if ((word & 0xca000000u) == 0x8a000000u) return A64_DEC_DP_3SRC_UMSUBL;
+                            if (word & 0x02000000u) {
+                                if (word & 0x00008000u) {
+                                    if ((word & 0xc8200000u) == 0x88200000u) return A64_DEC_DP_3SRC_UMSUBL;
                                 } else {
-                                    if (word & 0x00001000u) {
-                                        if (word & 0x00002000u) {
-                                            if (word & 0x00004000u) {
-                                                if ((word & 0x0a000c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            } else {
-                                                if ((word & 0x0a000c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            }
-                                        } else {
-                                            if (word & 0x00004000u) {
-                                                if ((word & 0x0a000c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            } else {
-                                                if ((word & 0x0a000c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            }
-                                        }
-                                    } else {
-                                        if (word & 0x00002000u) {
-                                            if (word & 0x00004000u) {
-                                                if ((word & 0x0a000c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            } else {
-                                                if ((word & 0x0a000c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            }
-                                        } else {
-                                            if (word & 0x00004000u) {
-                                                if ((word & 0x0a000c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            } else {
-                                                if ((word & 0x0a000c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            }
-                                        }
-                                    }
-                                }
-                            } else {
-                                if (word & 0x02000000u) {
                                     if (word & 0x00200000u) {
                                         if ((word & 0xc8000000u) == 0x88000000u) return A64_DEC_DP_3SRC_UMADDL;
                                     } else {
                                         if ((word & 0xc8000000u) == 0x00000000u && (((word >> 29) & 3u) != 0x3u)) return A64_DEC_EXTRACT_EXTR;
                                     }
-                                } else {
+                                }
+                            } else {
+                                if (word & 0x00000400u) {
                                     if (word & 0x00001000u) {
                                         if (word & 0x00002000u) {
                                             if (word & 0x00004000u) {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             } else {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             }
                                         } else {
                                             if (word & 0x00004000u) {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             } else {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             }
                                         }
                                     } else {
                                         if (word & 0x00002000u) {
                                             if (word & 0x00004000u) {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             } else {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             }
                                         } else {
                                             if (word & 0x00004000u) {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             } else {
-                                                if ((word & 0x08200c00u) == 0x08000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x08200800u) == 0x08000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             }
+                                        }
+                                    }
+                                } else {
+                                    if (word & 0x40000000u) {
+                                        if ((word & 0x88200800u) == 0x08000000u) return A64_DEC_LDAPSTL_UNSCALED;
+                                    } else {
+                                        if (word & 0x80000000u) {
+                                            if ((word & 0x08200800u) == 0x08000000u) return A64_DEC_LDAPSTL_UNSCALED;
+                                        } else {
+                                            if ((word & 0x08200800u) == 0x08000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                         }
                                     }
                                 }
@@ -2370,68 +2488,84 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                     }
                                 }
                             } else {
-                                if (word & 0x00001000u) {
-                                    if (word & 0x00002000u) {
-                                        if (word & 0x00004000u) {
-                                            if (word & 0x00000800u) {
-                                                if ((word & 0xc2208400u) == 0x82000400u) return A64_DEC_DP_3SRC_SMULH;
+                                if (word & 0x00000400u) {
+                                    if (word & 0x00001000u) {
+                                        if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
+                                                if (word & 0x00000800u) {
+                                                    if ((word & 0xc2208000u) == 0x82000000u) return A64_DEC_DP_3SRC_SMULH;
+                                                } else {
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x02200000u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x02200000u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
+                                                }
                                             } else {
                                                 if (word & 0x00008000u) {
-                                                    if ((word & 0x02200400u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
                                                 } else {
-                                                    if ((word & 0x02200400u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
                                                 }
                                             }
                                         } else {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                            if (word & 0x00004000u) {
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             } else {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             }
                                         }
                                     } else {
-                                        if (word & 0x00004000u) {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                        if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             } else {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             }
                                         } else {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                            if (word & 0x00004000u) {
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             } else {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                } else {
+                                                    if ((word & 0x02200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                }
                                             }
                                         }
                                     }
                                 } else {
-                                    if (word & 0x00002000u) {
-                                        if (word & 0x00004000u) {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            } else {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            }
+                                    if (word & 0x40000000u) {
+                                        if (word & 0x80000000u) {
+                                            if ((word & 0x02200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                         } else {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            } else {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            }
+                                            if ((word & 0x02200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                         }
                                     } else {
-                                        if (word & 0x00004000u) {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            } else {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            }
+                                        if (word & 0x80000000u) {
+                                            if ((word & 0x02200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                         } else {
-                                            if (word & 0x00008000u) {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            } else {
-                                                if ((word & 0x02200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                            }
+                                            if ((word & 0x02200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                         }
                                     }
                                 }
@@ -2475,64 +2609,80 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                         }
                                     }
                                 } else {
-                                    if (word & 0x00001000u) {
-                                        if (word & 0x00002000u) {
-                                            if (word & 0x00004000u) {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                    if (word & 0x00000400u) {
+                                        if (word & 0x00001000u) {
+                                            if (word & 0x00002000u) {
+                                                if (word & 0x00004000u) {
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
                                                 } else {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
                                                 }
                                             } else {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00004000u) {
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
                                                 } else {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
                                                 }
                                             }
                                         } else {
-                                            if (word & 0x00004000u) {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                            if (word & 0x00002000u) {
+                                                if (word & 0x00004000u) {
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
                                                 } else {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
                                                 }
                                             } else {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                if (word & 0x00004000u) {
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
                                                 } else {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    if (word & 0x00008000u) {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    } else {
+                                                        if ((word & 0x00200800u) == 0x00000000u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
+                                                    }
                                                 }
                                             }
                                         }
                                     } else {
-                                        if (word & 0x00002000u) {
-                                            if (word & 0x00004000u) {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                                } else {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                                }
+                                        if (word & 0x40000000u) {
+                                            if (word & 0x80000000u) {
+                                                if ((word & 0x00200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                             } else {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                                } else {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                                }
+                                                if ((word & 0x00200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                             }
                                         } else {
-                                            if (word & 0x00004000u) {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                                } else {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                                }
+                                            if (word & 0x80000000u) {
+                                                if ((word & 0x00200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                             } else {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                                } else {
-                                                    if ((word & 0x00200c00u) == 0x00000400u && ((word >> 30) & 3u) == 0x0u) return A64_DEC_MOPS_CPY;
-                                                }
+                                                if ((word & 0x00200800u) == 0x00000000u) return A64_DEC_LDAPSTL_UNSCALED;
                                             }
                                         }
                                     }
@@ -2603,7 +2753,11 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                 if (word & 0x08000000u) {
                                     if (word & 0x00000400u) {
                                         if (word & 0x00000800u) {
-                                            if ((word & 0x207ff000u) == 0x00400000u) return A64_DEC_DP_1SRC_REV;
+                                            if (word & 0x00001000u) {
+                                                if ((word & 0x207fe000u) == 0x00400000u) return A64_DEC_DP_1SRC_CNT;
+                                            } else {
+                                                if ((word & 0x207fe000u) == 0x00400000u) return A64_DEC_DP_1SRC_REV;
+                                            }
                                         } else {
                                             if (word & 0x00400000u) {
                                                 if (word & 0x00001000u) {
@@ -2617,13 +2771,21 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                         }
                                     } else {
                                         if (word & 0x00000800u) {
-                                            if ((word & 0x207ff000u) == 0x00400000u) return A64_DEC_DP_1SRC_REV32;
+                                            if (word & 0x00001000u) {
+                                                if ((word & 0x207fe000u) == 0x00400000u) return A64_DEC_DP_1SRC_CTZ;
+                                            } else {
+                                                if ((word & 0x207fe000u) == 0x00400000u) return A64_DEC_DP_1SRC_REV32;
+                                            }
                                         } else {
                                             if (word & 0x00400000u) {
                                                 if (word & 0x00001000u) {
                                                     if ((word & 0x203fe000u) == 0x00000000u) return A64_DEC_DP_1SRC_CLZ;
                                                 } else {
-                                                    if ((word & 0x203fe000u) == 0x00000000u) return A64_DEC_DP_1SRC_RBIT;
+                                                    if (word & 0x00002000u) {
+                                                        if ((word & 0x203fc000u) == 0x00000000u) return A64_DEC_DP_1SRC_ABS;
+                                                    } else {
+                                                        if ((word & 0x203fc000u) == 0x00000000u) return A64_DEC_DP_1SRC_RBIT;
+                                                    }
                                                 }
                                             } else {
                                                 if ((word & 0x20200000u) == 0x00000000u) return A64_DEC_CONDSEL_CSINV;
@@ -2665,22 +2827,30 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                 if (word & 0x08000000u) {
                                     if (word & 0x00000400u) {
                                         if (word & 0x00000800u) {
-                                            if (word & 0x00004000u) {
-                                                if (word & 0x00001000u) {
-                                                    if ((word & 0x2060a000u) == 0x00400000u) return A64_DEC_DP_2SRC_CRC32CX;
+                                            if (word & 0x00002000u) {
+                                                if (word & 0x00004000u) {
+                                                    if ((word & 0x20609000u) == 0x00400000u) return A64_DEC_DP_2SRC_UMIN;
                                                 } else {
-                                                    if ((word & 0x2060a000u) == 0x00400000u) return A64_DEC_DP_2SRC_CRC32X;
+                                                    if ((word & 0x20609000u) == 0x00400000u) return A64_DEC_DP_2SRC_RORV;
                                                 }
                                             } else {
-                                                if (word & 0x00002000u) {
-                                                    if ((word & 0x20609000u) == 0x00400000u) return A64_DEC_DP_2SRC_RORV;
+                                                if (word & 0x00001000u) {
+                                                    if ((word & 0x2060c000u) == 0x00404000u) return A64_DEC_DP_2SRC_CRC32CX;
                                                 } else {
-                                                    if ((word & 0x20609000u) == 0x00400000u) return A64_DEC_DP_2SRC_SDIV;
+                                                    if (word & 0x00004000u) {
+                                                        if ((word & 0x20608000u) == 0x00400000u) return A64_DEC_DP_2SRC_CRC32X;
+                                                    } else {
+                                                        if ((word & 0x20608000u) == 0x00400000u) return A64_DEC_DP_2SRC_SDIV;
+                                                    }
                                                 }
                                             }
                                         } else {
                                             if (word & 0x00400000u) {
-                                                if ((word & 0x2020f000u) == 0x00002000u) return A64_DEC_DP_2SRC_LSRV;
+                                                if (word & 0x00004000u) {
+                                                    if ((word & 0x2020b000u) == 0x00002000u) return A64_DEC_DP_2SRC_UMAX;
+                                                } else {
+                                                    if ((word & 0x2020b000u) == 0x00002000u) return A64_DEC_DP_2SRC_LSRV;
+                                                }
                                             } else {
                                                 if ((word & 0x20200000u) == 0x00000000u) return A64_DEC_CONDSEL_CSINC;
                                             }
@@ -2688,13 +2858,21 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                     } else {
                                         if (word & 0x00000800u) {
                                             if (word & 0x00002000u) {
-                                                if ((word & 0x2060d000u) == 0x00400000u) return A64_DEC_DP_2SRC_ASRV;
+                                                if (word & 0x00004000u) {
+                                                    if ((word & 0x20609000u) == 0x00400000u) return A64_DEC_DP_2SRC_SMIN;
+                                                } else {
+                                                    if ((word & 0x20609000u) == 0x00400000u) return A64_DEC_DP_2SRC_ASRV;
+                                                }
                                             } else {
                                                 if ((word & 0x2060d000u) == 0x00400000u) return A64_DEC_DP_2SRC_UDIV;
                                             }
                                         } else {
                                             if (word & 0x00400000u) {
-                                                if ((word & 0x2020f000u) == 0x00002000u) return A64_DEC_DP_2SRC_LSLV;
+                                                if (word & 0x00004000u) {
+                                                    if ((word & 0x2020b000u) == 0x00002000u) return A64_DEC_DP_2SRC_SMAX;
+                                                } else {
+                                                    if ((word & 0x2020b000u) == 0x00002000u) return A64_DEC_DP_2SRC_LSLV;
+                                                }
                                             } else {
                                                 if ((word & 0x20200000u) == 0x00000000u) return A64_DEC_CONDSEL_CSEL;
                                             }
@@ -2712,10 +2890,14 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                             if ((word & 0x20200410u) == 0x20000000u) return A64_DEC_CONDCMP_REG_CCMN;
                                         }
                                     } else {
-                                        if (word & 0x20000000u) {
-                                            if ((word & 0x0020fc00u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_ADCS;
+                                        if (word & 0x00000400u) {
+                                            if ((word & 0x20207810u) == 0x20000000u) return A64_DEC_RMIF_RMIF;
                                         } else {
-                                            if ((word & 0x0020fc00u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_ADC;
+                                            if (word & 0x20000000u) {
+                                                if ((word & 0x0020f800u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_ADCS;
+                                            } else {
+                                                if ((word & 0x0020f800u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_ADC;
+                                            }
                                         }
                                     }
                                 } else {
@@ -3144,78 +3326,138 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                     }
                 } else {
                     if (word & 0x02000000u) {
-                        if (word & 0x00400000u) {
-                            if (word & 0x00000800u) {
-                                if (word & 0x00000400u) {
-                                    if (word & 0x00002000u) {
-                                        if ((word & 0x68a0d000u) == 0x08800000u) return A64_DEC_DP_2SRC_RORV;
+                        if (word & 0x40000000u) {
+                            if (word & 0x00400000u) {
+                                if (word & 0x00000800u) {
+                                    if (word & 0x00000400u) {
+                                        if ((word & 0x28bff000u) == 0x08801000u) return A64_DEC_DP_1SRC_CNT;
                                     } else {
-                                        if ((word & 0x68a0d000u) == 0x08800000u) return A64_DEC_DP_2SRC_SDIV;
-                                    }
-                                } else {
-                                    if (word & 0x00800000u) {
-                                        if (word & 0x00004000u) {
+                                        if (word & 0x00800000u) {
                                             if (word & 0x00001000u) {
-                                                if ((word & 0x6820a000u) == 0x08000000u) return A64_DEC_DP_2SRC_CRC32CW;
+                                                if ((word & 0x283fe000u) == 0x08000000u) return A64_DEC_DP_1SRC_CTZ;
                                             } else {
-                                                if ((word & 0x6820a000u) == 0x08000000u) return A64_DEC_DP_2SRC_CRC32W;
+                                                if ((word & 0x283fe000u) == 0x08000000u) return A64_DEC_DP_1SRC_REV;
                                             }
                                         } else {
-                                            if (word & 0x00002000u) {
-                                                if ((word & 0x68209000u) == 0x08000000u) return A64_DEC_DP_2SRC_ASRV;
-                                            } else {
-                                                if (word & 0x40000000u) {
-                                                    if ((word & 0x283f9000u) == 0x08000000u) return A64_DEC_DP_1SRC_REV;
-                                                } else {
-                                                    if ((word & 0x28209000u) == 0x08000000u) return A64_DEC_DP_2SRC_UDIV;
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        if (word & 0x40000000u) {
                                             if ((word & 0x28200010u) == 0x28000000u) return A64_DEC_CONDCMP_IMM_CCMP;
-                                        } else {
-                                            if ((word & 0x28200010u) == 0x28000000u) return A64_DEC_CONDCMP_IMM_CCMN;
-                                        }
-                                    }
-                                }
-                            } else {
-                                if (word & 0x00000400u) {
-                                    if (word & 0x00001000u) {
-                                        if (word & 0x00004000u) {
-                                            if ((word & 0x68a0a000u) == 0x08800000u) return A64_DEC_DP_2SRC_CRC32CH;
-                                        } else {
-                                            if ((word & 0x68bfa000u) == 0x48800000u) return A64_DEC_DP_1SRC_CLS;
-                                        }
-                                    } else {
-                                        if (word & 0x00002000u) {
-                                            if ((word & 0x68a0c000u) == 0x08800000u) return A64_DEC_DP_2SRC_LSRV;
-                                        } else {
-                                            if (word & 0x00004000u) {
-                                                if ((word & 0x68a08000u) == 0x08800000u) return A64_DEC_DP_2SRC_CRC32H;
-                                            } else {
-                                                if ((word & 0x68bf8000u) == 0x48800000u) return A64_DEC_DP_1SRC_REV16;
-                                            }
                                         }
                                     }
                                 } else {
-                                    if (word & 0x40000000u) {
+                                    if (word & 0x00000400u) {
+                                        if (word & 0x00001000u) {
+                                            if ((word & 0x28bfe000u) == 0x08800000u) return A64_DEC_DP_1SRC_CLS;
+                                        } else {
+                                            if ((word & 0x28bfe000u) == 0x08800000u) return A64_DEC_DP_1SRC_REV16;
+                                        }
+                                    } else {
                                         if (word & 0x00800000u) {
                                             if (word & 0x00001000u) {
                                                 if ((word & 0x283fe000u) == 0x08000000u) return A64_DEC_DP_1SRC_CLZ;
                                             } else {
-                                                if ((word & 0x283fe000u) == 0x08000000u) return A64_DEC_DP_1SRC_RBIT;
+                                                if (word & 0x00002000u) {
+                                                    if ((word & 0x283fc000u) == 0x08000000u) return A64_DEC_DP_1SRC_ABS;
+                                                } else {
+                                                    if ((word & 0x283fc000u) == 0x08000000u) return A64_DEC_DP_1SRC_RBIT;
+                                                }
                                             }
                                         } else {
                                             if ((word & 0x28200010u) == 0x28000000u) return A64_DEC_CONDCMP_REG_CCMP;
                                         }
+                                    }
+                                }
+                            } else {
+                                if (word & 0x00800000u) {
+                                    if (word & 0x08000000u) {
+                                        if (word & 0x00000400u) {
+                                            if ((word & 0x20200800u) == 0x00000000u) return A64_DEC_CONDSEL_CSNEG;
+                                        } else {
+                                            if ((word & 0x20200800u) == 0x00000000u) return A64_DEC_CONDSEL_CSINV;
+                                        }
+                                    } else {
+                                        if (word & 0x20000000u) {
+                                            return A64_DEC_MOVEWIDE_MOVK;
+                                        } else {
+                                            return A64_DEC_MOVEWIDE_MOVZ;
+                                        }
+                                    }
+                                } else {
+                                    if (word & 0x08000000u) {
+                                        if (word & 0x20000000u) {
+                                            if ((word & 0x0020fc00u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_SBCS;
+                                        } else {
+                                            if ((word & 0x0020fc00u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_SBC;
+                                        }
+                                    } else {
+                                        if (word & 0x20000000u) {
+                                            return A64_DEC_LOG_IMM_ANDS;
+                                        } else {
+                                            return A64_DEC_LOG_IMM_EOR;
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            if (word & 0x00400000u) {
+                                if (word & 0x00000800u) {
+                                    if (word & 0x00000400u) {
+                                        if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
+                                                if ((word & 0x28a09000u) == 0x08800000u) return A64_DEC_DP_2SRC_UMIN;
+                                            } else {
+                                                if ((word & 0x28a09000u) == 0x08800000u) return A64_DEC_DP_2SRC_RORV;
+                                            }
+                                        } else {
+                                            if ((word & 0x28a0d000u) == 0x08800000u) return A64_DEC_DP_2SRC_SDIV;
+                                        }
                                     } else {
                                         if (word & 0x00800000u) {
-                                            if (word & 0x00001000u) {
-                                                if ((word & 0x2820e000u) == 0x08004000u) return A64_DEC_DP_2SRC_CRC32CB;
+                                            if (word & 0x00002000u) {
+                                                if (word & 0x00004000u) {
+                                                    if ((word & 0x28209000u) == 0x08000000u) return A64_DEC_DP_2SRC_SMIN;
+                                                } else {
+                                                    if ((word & 0x28209000u) == 0x08000000u) return A64_DEC_DP_2SRC_ASRV;
+                                                }
                                             } else {
-                                                if (word & 0x00002000u) {
-                                                    if ((word & 0x2820c000u) == 0x08000000u) return A64_DEC_DP_2SRC_LSLV;
+                                                if (word & 0x00001000u) {
+                                                    if ((word & 0x2820c000u) == 0x08004000u) return A64_DEC_DP_2SRC_CRC32CW;
+                                                } else {
+                                                    if (word & 0x00004000u) {
+                                                        if ((word & 0x28208000u) == 0x08000000u) return A64_DEC_DP_2SRC_CRC32W;
+                                                    } else {
+                                                        if ((word & 0x28208000u) == 0x08000000u) return A64_DEC_DP_2SRC_UDIV;
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            if ((word & 0x28200010u) == 0x28000000u) return A64_DEC_CONDCMP_IMM_CCMN;
+                                        }
+                                    }
+                                } else {
+                                    if (word & 0x00000400u) {
+                                        if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
+                                                if ((word & 0x28a09000u) == 0x08800000u) return A64_DEC_DP_2SRC_UMAX;
+                                            } else {
+                                                if ((word & 0x28a09000u) == 0x08800000u) return A64_DEC_DP_2SRC_LSRV;
+                                            }
+                                        } else {
+                                            if (word & 0x00001000u) {
+                                                if ((word & 0x28a0c000u) == 0x08804000u) return A64_DEC_DP_2SRC_CRC32CH;
+                                            } else {
+                                                if ((word & 0x28a0c000u) == 0x08804000u) return A64_DEC_DP_2SRC_CRC32H;
+                                            }
+                                        }
+                                    } else {
+                                        if (word & 0x00800000u) {
+                                            if (word & 0x00002000u) {
+                                                if (word & 0x00004000u) {
+                                                    if ((word & 0x28209000u) == 0x08000000u) return A64_DEC_DP_2SRC_SMAX;
+                                                } else {
+                                                    if ((word & 0x28209000u) == 0x08000000u) return A64_DEC_DP_2SRC_LSLV;
+                                                }
+                                            } else {
+                                                if (word & 0x00001000u) {
+                                                    if ((word & 0x2820c000u) == 0x08004000u) return A64_DEC_DP_2SRC_CRC32CB;
                                                 } else {
                                                     if ((word & 0x2820c000u) == 0x08004000u) return A64_DEC_DP_2SRC_CRC32B;
                                                 }
@@ -3225,59 +3467,35 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                         }
                                     }
                                 }
-                            }
-                        } else {
-                            if (word & 0x00800000u) {
-                                if (word & 0x08000000u) {
-                                    if (word & 0x00000400u) {
-                                        if (word & 0x40000000u) {
-                                            if ((word & 0x20200800u) == 0x00000000u) return A64_DEC_CONDSEL_CSNEG;
+                            } else {
+                                if (word & 0x20000000u) {
+                                    if (word & 0x08000000u) {
+                                        if (word & 0x00000800u) {
+                                            if (word & 0x00004000u) {
+                                                if ((word & 0x00bfb41fu) == 0x0000000du) return A64_DEC_SETF_SETF16;
+                                            } else {
+                                                if ((word & 0x00bfb41fu) == 0x0000000du) return A64_DEC_SETF_SETF8;
+                                            }
                                         } else {
-                                            if ((word & 0x20200800u) == 0x00000000u) return A64_DEC_CONDSEL_CSINC;
+                                            if ((word & 0x00a0f400u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_ADCS;
                                         }
                                     } else {
-                                        if (word & 0x40000000u) {
-                                            if ((word & 0x20200800u) == 0x00000000u) return A64_DEC_CONDSEL_CSINV;
-                                        } else {
-                                            if ((word & 0x20200800u) == 0x00000000u) return A64_DEC_CONDSEL_CSEL;
-                                        }
+                                        if ((word & 0x00800000u) == 0x00000000u) return A64_DEC_LOG_IMM_ORR;
                                     }
                                 } else {
-                                    if (word & 0x20000000u) {
-                                        if ((word & 0x40000000u) == 0x40000000u) return A64_DEC_MOVEWIDE_MOVK;
-                                    } else {
-                                        if (word & 0x40000000u) {
-                                            return A64_DEC_MOVEWIDE_MOVZ;
+                                    if (word & 0x00800000u) {
+                                        if (word & 0x08000000u) {
+                                            if (word & 0x00000400u) {
+                                                if ((word & 0x00200800u) == 0x00000000u) return A64_DEC_CONDSEL_CSINC;
+                                            } else {
+                                                if ((word & 0x00200800u) == 0x00000000u) return A64_DEC_CONDSEL_CSEL;
+                                            }
                                         } else {
                                             return A64_DEC_MOVEWIDE_MOVN;
                                         }
-                                    }
-                                }
-                            } else {
-                                if (word & 0x08000000u) {
-                                    if (word & 0x20000000u) {
-                                        if (word & 0x40000000u) {
-                                            if ((word & 0x0020fc00u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_SBCS;
-                                        } else {
-                                            if ((word & 0x0020fc00u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_ADCS;
-                                        }
                                     } else {
-                                        if (word & 0x40000000u) {
-                                            if ((word & 0x0020fc00u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_SBC;
-                                        } else {
+                                        if (word & 0x08000000u) {
                                             if ((word & 0x0020fc00u) == 0x00000000u) return A64_DEC_ADDSUB_CARRY_ADC;
-                                        }
-                                    }
-                                } else {
-                                    if (word & 0x20000000u) {
-                                        if (word & 0x40000000u) {
-                                            return A64_DEC_LOG_IMM_ANDS;
-                                        } else {
-                                            return A64_DEC_LOG_IMM_ORR;
-                                        }
-                                    } else {
-                                        if (word & 0x40000000u) {
-                                            return A64_DEC_LOG_IMM_EOR;
                                         } else {
                                             return A64_DEC_LOG_IMM_AND;
                                         }
@@ -3927,7 +4145,11 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                     if (word & 0x00080000u) {
                                                         if ((word & 0x88d60800u) == 0x08d00800u) return A64_DEC_ASIMDMISCFP16;
                                                     } else {
-                                                        if ((word & 0x88960800u) == 0x08800800u) return A64_DEC_ASIMDMISC;
+                                                        if (word & 0x00800000u) {
+                                                            if ((word & 0x88160800u) == 0x08000800u) return A64_DEC_ASIMDMISC;
+                                                        } else {
+                                                            if ((word & 0x88160800u) == 0x08000800u) return A64_DEC_ASIMDMISC;
+                                                        }
                                                     }
                                                 } else {
                                                     if (word & 0x00080000u) {
@@ -4107,10 +4329,10 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                     }
                                 }
                             } else {
-                                if (word & 0x00004000u) {
+                                if (word & 0x00002000u) {
                                     if (word & 0x00000400u) {
                                         if (word & 0x00000800u) {
-                                            if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
                                                 if (word & 0x00008000u) {
                                                     if (word & 0x00800000u) {
                                                         if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
@@ -4122,17 +4344,13 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                 }
                                             } else {
                                                 if (word & 0x00008000u) {
-                                                    if (word & 0x00800000u) {
-                                                        if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                    } else {
-                                                        if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                    }
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
                                                 } else {
                                                     if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
                                                 }
                                             }
                                         } else {
-                                            if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
                                                 if (word & 0x00008000u) {
                                                     if (word & 0x00800000u) {
                                                         if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
@@ -4144,11 +4362,7 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                 }
                                             } else {
                                                 if (word & 0x00008000u) {
-                                                    if (word & 0x00800000u) {
-                                                        if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                    } else {
-                                                        if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                    }
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
                                                 } else {
                                                     if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
                                                 }
@@ -4157,36 +4371,36 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                     } else {
                                         if (word & 0x00008000u) {
                                             if (word & 0x00000800u) {
-                                                if (word & 0x00010000u) {
+                                                if (word & 0x00100000u) {
                                                     if (word & 0x00080000u) {
-                                                        if ((word & 0x88d62000u) == 0x08500000u) return A64_DEC_ASIMDMISCFP16;
-                                                    } else {
                                                         if (word & 0x00800000u) {
-                                                            if ((word & 0x88162000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                            if ((word & 0x88474000u) == 0x08410000u) return A64_DEC_ASIMDMISCFP16;
                                                         } else {
-                                                            if ((word & 0x88162000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                            if ((word & 0x88474000u) == 0x08410000u) return A64_DEC_ASIMDMISCFP16;
+                                                        }
+                                                    } else {
+                                                        if (word & 0x00010000u) {
+                                                            if ((word & 0x88064000u) == 0x08000000u) return A64_DEC_ASIMDALL;
+                                                        } else {
+                                                            if ((word & 0x88064000u) == 0x08000000u) return A64_DEC_ASIMDALL;
                                                         }
                                                     }
                                                 } else {
-                                                    if (word & 0x00080000u) {
-                                                        if ((word & 0x88d62000u) == 0x08d00000u) return A64_DEC_ASIMDMISCFP16;
+                                                    if (word & 0x00004000u) {
+                                                        if ((word & 0x888f0000u) == 0x08010000u) return A64_DEC_ASIMDMISC;
                                                     } else {
-                                                        if (word & 0x00100000u) {
-                                                            if (word & 0x00800000u) {
-                                                                if ((word & 0xc8462000u) == 0x48000000u) return A64_DEC_ASIMDALL;
-                                                            } else {
-                                                                if ((word & 0xc8462000u) == 0x48000000u) return A64_DEC_ASIMDALL;
-                                                            }
+                                                        if (word & 0x00800000u) {
+                                                            if ((word & 0x880f0000u) == 0x08010000u) return A64_DEC_ASIMDMISC;
                                                         } else {
-                                                            if ((word & 0x88862000u) == 0x08800000u) return A64_DEC_ASIMDMISC;
+                                                            if ((word & 0x880f0000u) == 0x08010000u) return A64_DEC_ASIMDMISC;
                                                         }
                                                     }
                                                 }
                                             } else {
-                                                if ((word & 0x88002000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
+                                                if ((word & 0x88004000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
                                             }
                                         } else {
-                                            if (word & 0x00002000u) {
+                                            if (word & 0x00004000u) {
                                                 if (word & 0x00000800u) {
                                                     if (word & 0x00010000u) {
                                                         if ((word & 0x88de0000u) == 0x08400000u) return A64_DEC_ASIMDMISC;
@@ -4210,47 +4424,75 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                         }
                                     }
                                 } else {
-                                    if (word & 0x00002000u) {
-                                        if (word & 0x00008000u) {
-                                            if (word & 0x00000400u) {
-                                                if (word & 0x00000800u) {
-                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                    if (word & 0x00000400u) {
+                                        if (word & 0x00000800u) {
+                                            if (word & 0x00004000u) {
+                                                if (word & 0x00008000u) {
+                                                    if (word & 0x00800000u) {
+                                                        if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                    } else {
+                                                        if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                    }
                                                 } else {
                                                     if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
                                                 }
                                             } else {
-                                                if (word & 0x00000800u) {
-                                                    if (word & 0x00080000u) {
-                                                        if (word & 0x00800000u) {
-                                                            if ((word & 0x88570000u) == 0x08510000u) return A64_DEC_ASIMDMISCFP16;
-                                                        } else {
-                                                            if ((word & 0x88570000u) == 0x08510000u) return A64_DEC_ASIMDMISCFP16;
-                                                        }
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                } else {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                }
+                                            }
+                                        } else {
+                                            if (word & 0x00004000u) {
+                                                if (word & 0x00008000u) {
+                                                    if (word & 0x00800000u) {
+                                                        if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
                                                     } else {
-                                                        if (word & 0x00100000u) {
-                                                            if (word & 0x00010000u) {
-                                                                if ((word & 0x88060000u) == 0x08000000u) return A64_DEC_ASIMDALL;
-                                                            } else {
-                                                                if ((word & 0x88060000u) == 0x08000000u) return A64_DEC_ASIMDALL;
-                                                            }
+                                                        if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                    }
+                                                } else {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                }
+                                            } else {
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                } else {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        if (word & 0x00004000u) {
+                                            if (word & 0x00008000u) {
+                                                if (word & 0x00000800u) {
+                                                    if (word & 0x00010000u) {
+                                                        if (word & 0x00080000u) {
+                                                            if ((word & 0x88d60000u) == 0x08500000u) return A64_DEC_ASIMDMISCFP16;
                                                         } else {
                                                             if (word & 0x00800000u) {
-                                                                if ((word & 0x88070000u) == 0x08010000u) return A64_DEC_ASIMDMISC;
+                                                                if ((word & 0x88160000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
                                                             } else {
-                                                                if ((word & 0x88070000u) == 0x08010000u) return A64_DEC_ASIMDMISC;
+                                                                if ((word & 0x88160000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                            }
+                                                        }
+                                                    } else {
+                                                        if (word & 0x00080000u) {
+                                                            if ((word & 0x88d60000u) == 0x08d00000u) return A64_DEC_ASIMDMISCFP16;
+                                                        } else {
+                                                            if (word & 0x00100000u) {
+                                                                if (word & 0x00800000u) {
+                                                                    if ((word & 0xc8460000u) == 0x48000000u) return A64_DEC_ASIMDALL;
+                                                                } else {
+                                                                    if ((word & 0xc8460000u) == 0x48000000u) return A64_DEC_ASIMDALL;
+                                                                }
+                                                            } else {
+                                                                if ((word & 0x88860000u) == 0x08800000u) return A64_DEC_ASIMDMISC;
                                                             }
                                                         }
                                                     }
                                                 } else {
                                                     if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
-                                                }
-                                            }
-                                        } else {
-                                            if (word & 0x00000400u) {
-                                                if (word & 0x00000800u) {
-                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                } else {
-                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
                                                 }
                                             } else {
                                                 if (word & 0x00000800u) {
@@ -4261,22 +4503,6 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                     }
                                                 } else {
                                                     if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        if (word & 0x00000400u) {
-                                            if (word & 0x00000800u) {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                } else {
-                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                }
-                                            } else {
-                                                if (word & 0x00008000u) {
-                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                } else {
-                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
                                                 }
                                             }
                                         } else {
@@ -4323,20 +4549,36 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                     } else {
                         if (word & 0x04000000u) {
                             if (word & 0x00008000u) {
-                                if (word & 0x00004000u) {
-                                    if (word & 0x00002000u) {
-                                        if ((word & 0x88000c00u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
+                                if (word & 0x00002000u) {
+                                    if (word & 0x00000800u) {
+                                        if (word & 0x00001000u) {
+                                            if (word & 0x00800000u) {
+                                                if ((word & 0x88404400u) == 0x08404400u) return A64_DEC_ASIMDSAME2;
+                                            } else {
+                                                if ((word & 0x88404400u) == 0x08404400u) return A64_DEC_ASIMDSAME2;
+                                            }
+                                        } else {
+                                            if ((word & 0xc8c04400u) == 0x48404400u) return A64_DEC_ASIMDSAME2;
+                                        }
                                     } else {
-                                        if ((word & 0x88000400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
+                                        if (word & 0x00004000u) {
+                                            if ((word & 0x88000400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
+                                        } else {
+                                            if ((word & 0xc8c01400u) == 0x48800400u) return A64_DEC_ASIMDSAME2;
+                                        }
                                     }
                                 } else {
-                                    if (word & 0x00000800u) {
-                                        if ((word & 0x88003400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
+                                    if (word & 0x00004000u) {
+                                        if ((word & 0x88000400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
                                     } else {
-                                        if (word & 0x00001000u) {
-                                            if ((word & 0x88002400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
+                                        if (word & 0x00000800u) {
+                                            if ((word & 0x88001400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
                                         } else {
-                                            if ((word & 0x88002400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
+                                            if (word & 0x00001000u) {
+                                                if ((word & 0x88000400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
+                                            } else {
+                                                if ((word & 0x88000400u) == 0x08000400u) return A64_DEC_ASIMDSAME2;
+                                            }
                                         }
                                     }
                                 }
@@ -4465,69 +4707,85 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                 }
                             }
                         } else {
-                            if (word & 0x00001000u) {
-                                if (word & 0x00004000u) {
-                                    if (word & 0x00002000u) {
-                                        if ((word & 0x88008000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                            if (word & 0x00002000u) {
+                                if (word & 0x00001000u) {
+                                    if (word & 0x00004000u) {
+                                        if (word & 0x00008000u) {
+                                            if (word & 0x00400000u) {
+                                                if (word & 0x00800000u) {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                                } else {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                                }
+                                            } else {
+                                                if (word & 0x00800000u) {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                                } else {
+                                                    if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                                }
+                                            }
+                                        } else {
+                                            if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                        }
                                     } else {
                                         if (word & 0x00008000u) {
                                             if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
                                         } else {
-                                            if (word & 0x00800000u) {
-                                                if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
-                                            } else {
-                                                if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
-                                            }
+                                            if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
                                         }
                                     }
                                 } else {
-                                    if (word & 0x00008000u) {
-                                        if (word & 0x00002000u) {
+                                    if (word & 0x00004000u) {
+                                        if (word & 0x00008000u) {
                                             if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
                                         } else {
-                                            if (word & 0x00800000u) {
-                                                if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
-                                            } else {
-                                                if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
-                                            }
+                                            if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
                                         }
                                     } else {
-                                        if (word & 0x00002000u) {
+                                        if (word & 0x00008000u) {
                                             if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
                                         } else {
-                                            if (word & 0x00800000u) {
-                                                if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
-                                            } else {
-                                                if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
-                                            }
+                                            if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
                                         }
                                     }
                                 }
                             } else {
-                                if (word & 0x00002000u) {
-                                    if (word & 0x00004000u) {
+                                if (word & 0x00004000u) {
+                                    if (word & 0x00001000u) {
                                         if (word & 0x00008000u) {
                                             if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
                                         } else {
-                                            if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                            if (word & 0x00800000u) {
+                                                if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                            } else {
+                                                if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                            }
                                         }
                                     } else {
-                                        if (word & 0x00008000u) {
-                                            if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
-                                        } else {
-                                            if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
-                                        }
-                                    }
-                                } else {
-                                    if (word & 0x00004000u) {
                                         if (word & 0x00008000u) {
                                             if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
                                         } else {
                                             if ((word & 0x88c00000u) == 0x08800000u) return A64_DEC_ASIMDELEM;
                                         }
-                                    } else {
-                                        if (word & 0x00008000u) {
+                                    }
+                                } else {
+                                    if (word & 0x00008000u) {
+                                        if (word & 0x00001000u) {
+                                            if (word & 0x00800000u) {
+                                                if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                            } else {
+                                                if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                            }
+                                        } else {
                                             if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                        }
+                                    } else {
+                                        if (word & 0x00001000u) {
+                                            if (word & 0x00800000u) {
+                                                if ((word & 0x88000000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                            } else {
+                                                if ((word & 0x88400000u) == 0x08000000u) return A64_DEC_ASIMDELEM;
+                                            }
                                         } else {
                                             if ((word & 0x88c00000u) == 0x08800000u) return A64_DEC_ASIMDELEM;
                                         }
@@ -4597,8 +4855,8 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                         } else {
                             if (word & 0x04000000u) {
                                 if (word & 0x00001000u) {
-                                    if (word & 0x00004000u) {
-                                        if (word & 0x00002000u) {
+                                    if (word & 0x00002000u) {
+                                        if (word & 0x00004000u) {
                                             if (word & 0x00000400u) {
                                                 if (word & 0x00000800u) {
                                                     if (word & 0x00008000u) {
@@ -4623,17 +4881,21 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                 }
                                             } else {
                                                 if (word & 0x00008000u) {
-                                                    if (word & 0x00080000u) {
-                                                        if ((word & 0x08d70800u) == 0x08d00800u) return A64_DEC_ASIMDMISCFP16;
-                                                    } else {
-                                                        if (word & 0x00100000u) {
+                                                    if (word & 0x00100000u) {
+                                                        if (word & 0x00080000u) {
+                                                            if ((word & 0x08c70800u) == 0x08c00800u) return A64_DEC_ASIMDMISCFP16;
+                                                        } else {
                                                             if (word & 0x00800000u) {
                                                                 if ((word & 0x08470800u) == 0x08000800u) return A64_DEC_ASIMDALL;
                                                             } else {
                                                                 if ((word & 0x08470800u) == 0x08000800u) return A64_DEC_ASIMDALL;
                                                             }
+                                                        }
+                                                    } else {
+                                                        if (word & 0x00010000u) {
+                                                            if ((word & 0x088e0800u) == 0x08000800u) return A64_DEC_ASIMDMISC;
                                                         } else {
-                                                            if ((word & 0x08870800u) == 0x08800800u) return A64_DEC_ASIMDMISC;
+                                                            if ((word & 0x088e0800u) == 0x08800800u) return A64_DEC_ASIMDMISC;
                                                         }
                                                     }
                                                 } else {
@@ -4653,6 +4915,62 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                 }
                                             }
                                         } else {
+                                            if (word & 0x00008000u) {
+                                                if (word & 0x00000400u) {
+                                                    if (word & 0x00000800u) {
+                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                    } else {
+                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                    }
+                                                } else {
+                                                    if (word & 0x00000800u) {
+                                                        if (word & 0x00100000u) {
+                                                            if (word & 0x00080000u) {
+                                                                if (word & 0x00800000u) {
+                                                                    if ((word & 0x08470000u) == 0x08410000u) return A64_DEC_ASIMDMISCFP16;
+                                                                } else {
+                                                                    if ((word & 0x08470000u) == 0x08410000u) return A64_DEC_ASIMDMISCFP16;
+                                                                }
+                                                            } else {
+                                                                if ((word & 0x08070000u) == 0x08010000u) return A64_DEC_ASIMDALL;
+                                                            }
+                                                        } else {
+                                                            if (word & 0x00010000u) {
+                                                                if (word & 0x00800000u) {
+                                                                    if ((word & 0x080e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                                } else {
+                                                                    if ((word & 0x080e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                                }
+                                                            } else {
+                                                                if ((word & 0x080e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                            }
+                                                        }
+                                                    } else {
+                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
+                                                    }
+                                                }
+                                            } else {
+                                                if (word & 0x00000400u) {
+                                                    if (word & 0x00000800u) {
+                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                    } else {
+                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
+                                                    }
+                                                } else {
+                                                    if (word & 0x00000800u) {
+                                                        if (word & 0x00100000u) {
+                                                            if ((word & 0x080f0000u) == 0x08000000u) return A64_DEC_ASIMDALL;
+                                                        } else {
+                                                            if ((word & 0x080f0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                        }
+                                                    } else {
+                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        if (word & 0x00004000u) {
                                             if (word & 0x00000400u) {
                                                 if (word & 0x00000800u) {
                                                     if (word & 0x00008000u) {
@@ -4704,62 +5022,6 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                             if ((word & 0x48d70000u) == 0x48000000u) return A64_DEC_CRYPTOAES;
                                                         } else {
                                                             if ((word & 0x08170000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
-                                                        }
-                                                    } else {
-                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        if (word & 0x00002000u) {
-                                            if (word & 0x00008000u) {
-                                                if (word & 0x00000400u) {
-                                                    if (word & 0x00000800u) {
-                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                    } else {
-                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                    }
-                                                } else {
-                                                    if (word & 0x00000800u) {
-                                                        if (word & 0x00100000u) {
-                                                            if (word & 0x00080000u) {
-                                                                if (word & 0x00800000u) {
-                                                                    if ((word & 0x08470000u) == 0x08410000u) return A64_DEC_ASIMDMISCFP16;
-                                                                } else {
-                                                                    if ((word & 0x08470000u) == 0x08410000u) return A64_DEC_ASIMDMISCFP16;
-                                                                }
-                                                            } else {
-                                                                if ((word & 0x08070000u) == 0x08010000u) return A64_DEC_ASIMDALL;
-                                                            }
-                                                        } else {
-                                                            if (word & 0x00010000u) {
-                                                                if (word & 0x00800000u) {
-                                                                    if ((word & 0x080e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
-                                                                } else {
-                                                                    if ((word & 0x080e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
-                                                                }
-                                                            } else {
-                                                                if ((word & 0x080e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
-                                                            }
-                                                        }
-                                                    } else {
-                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
-                                                    }
-                                                }
-                                            } else {
-                                                if (word & 0x00000400u) {
-                                                    if (word & 0x00000800u) {
-                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                    } else {
-                                                        if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDSAME;
-                                                    }
-                                                } else {
-                                                    if (word & 0x00000800u) {
-                                                        if (word & 0x00100000u) {
-                                                            if ((word & 0x080f0000u) == 0x08000000u) return A64_DEC_ASIMDALL;
-                                                        } else {
-                                                            if ((word & 0x080f0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
                                                         }
                                                     } else {
                                                         if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
@@ -4842,10 +5104,14 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                     }
                                                 } else {
                                                     if (word & 0x00000800u) {
-                                                        if (word & 0x00080000u) {
-                                                            if ((word & 0x08d70000u) == 0x08d00000u) return A64_DEC_ASIMDMISCFP16;
+                                                        if (word & 0x00010000u) {
+                                                            if ((word & 0x089e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
                                                         } else {
-                                                            if ((word & 0x08970000u) == 0x08800000u) return A64_DEC_ASIMDMISC;
+                                                            if (word & 0x00080000u) {
+                                                                if ((word & 0x08d60000u) == 0x08d00000u) return A64_DEC_ASIMDMISCFP16;
+                                                            } else {
+                                                                if ((word & 0x08960000u) == 0x08800000u) return A64_DEC_ASIMDMISC;
+                                                            }
                                                         }
                                                     } else {
                                                         if ((word & 0x08000000u) == 0x08000000u) return A64_DEC_ASIMDDIFF;
@@ -4861,7 +5127,11 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                 } else {
                                                     if (word & 0x00000800u) {
                                                         if (word & 0x00010000u) {
-                                                            if ((word & 0x089e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                            if (word & 0x00800000u) {
+                                                                if ((word & 0x085e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                            } else {
+                                                                if ((word & 0x081e0000u) == 0x08000000u) return A64_DEC_ASIMDMISC;
+                                                            }
                                                         } else {
                                                             if (word & 0x00080000u) {
                                                                 if ((word & 0x48d60000u) == 0x48000000u) return A64_DEC_CRYPTOAES;
@@ -5084,34 +5354,38 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                             if (word & 0x04000000u) {
                                 if (word & 0x00000800u) {
                                     if (word & 0x00001000u) {
-                                        if (word & 0x00000400u) {
-                                            if (word & 0x00400000u) {
-                                                if (word & 0x00002000u) {
+                                        if (word & 0x00002000u) {
+                                            if (word & 0x00000400u) {
+                                                if (word & 0x00400000u) {
                                                     if (word & 0x00800000u) {
                                                         if ((word & 0x0800c000u) == 0x08000000u) return A64_DEC_ASIMDSAMEFP16;
                                                     } else {
                                                         if ((word & 0x0800c000u) == 0x08000000u) return A64_DEC_ASIMDSAMEFP16;
                                                     }
                                                 } else {
-                                                    if ((word & 0x0880c000u) == 0x08000000u) return A64_DEC_ASIMDSAMEFP16;
-                                                }
-                                            } else {
-                                                if (word & 0x00002000u) {
                                                     if (word & 0x40000000u) {
                                                         if ((word & 0x088fc000u) == 0x08080000u) return A64_DEC_ASIMDINS;
                                                     } else {
                                                         if ((word & 0x0880c000u) == 0x08000000u) return A64_DEC_ASIMDINS;
                                                     }
-                                                } else {
-                                                    if ((word & 0x4880c000u) == 0x48000000u) return A64_DEC_ASIMDINS;
                                                 }
-                                            }
-                                        } else {
-                                            if (word & 0x00002000u) {
+                                            } else {
                                                 if (word & 0x00004000u) {
                                                     if ((word & 0x08008000u) == 0x08000000u) return A64_DEC_ASIMDPERM;
                                                 } else {
                                                     if ((word & 0x08008000u) == 0x08000000u) return A64_DEC_ASIMDPERM;
+                                                }
+                                            }
+                                        } else {
+                                            if (word & 0x00000400u) {
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x08c04000u) == 0x08800000u) return A64_DEC_ASIMDSAME2;
+                                                } else {
+                                                    if (word & 0x00400000u) {
+                                                        if ((word & 0x08804000u) == 0x08000000u) return A64_DEC_ASIMDSAMEFP16;
+                                                    } else {
+                                                        if ((word & 0x48804000u) == 0x48000000u) return A64_DEC_ASIMDINS;
+                                                    }
                                                 }
                                             } else {
                                                 if (word & 0x00004000u) {
@@ -5124,10 +5398,14 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                     } else {
                                         if (word & 0x00002000u) {
                                             if (word & 0x00000400u) {
-                                                if (word & 0x40000000u) {
-                                                    if ((word & 0x08c0c000u) == 0x08000000u) return A64_DEC_ASIMDINS;
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x48c04000u) == 0x48800000u) return A64_DEC_ASIMDSAME2;
                                                 } else {
-                                                    if ((word & 0x08c0c000u) == 0x08000000u) return A64_DEC_ASIMDINS;
+                                                    if (word & 0x40000000u) {
+                                                        if ((word & 0x08c04000u) == 0x08000000u) return A64_DEC_ASIMDINS;
+                                                    } else {
+                                                        if ((word & 0x08c04000u) == 0x08000000u) return A64_DEC_ASIMDINS;
+                                                    }
                                                 }
                                             } else {
                                                 if (word & 0x00004000u) {
@@ -5149,8 +5427,8 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                         }
                                     }
                                 } else {
-                                    if (word & 0x00000400u) {
-                                        if (word & 0x00001000u) {
+                                    if (word & 0x00001000u) {
+                                        if (word & 0x00000400u) {
                                             if (word & 0x00002000u) {
                                                 if (word & 0x00800000u) {
                                                     if ((word & 0x0840c000u) == 0x08400000u) return A64_DEC_ASIMDSAMEFP16;
@@ -5170,7 +5448,27 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                             }
                                         } else {
                                             if (word & 0x00002000u) {
-                                                if ((word & 0x08c0c000u) == 0x08400000u) return A64_DEC_ASIMDSAMEFP16;
+                                                if (word & 0x00004000u) {
+                                                    if ((word & 0x08c08000u) == 0x08000000u) return A64_DEC_ASIMDTBL;
+                                                } else {
+                                                    if ((word & 0x08c08000u) == 0x08000000u) return A64_DEC_ASIMDTBL;
+                                                }
+                                            } else {
+                                                if (word & 0x00004000u) {
+                                                    if ((word & 0x08c08000u) == 0x08000000u) return A64_DEC_ASIMDTBL;
+                                                } else {
+                                                    if ((word & 0x08c08000u) == 0x08000000u) return A64_DEC_ASIMDTBL;
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        if (word & 0x00000400u) {
+                                            if (word & 0x00002000u) {
+                                                if (word & 0x00008000u) {
+                                                    if ((word & 0x48c04000u) == 0x48800000u) return A64_DEC_ASIMDSAME2;
+                                                } else {
+                                                    if ((word & 0x08c04000u) == 0x08400000u) return A64_DEC_ASIMDSAMEFP16;
+                                                }
                                             } else {
                                                 if (word & 0x00400000u) {
                                                     if (word & 0x00800000u) {
@@ -5180,22 +5478,6 @@ static inline a64_dec_op_t a64_decode_word(uint32_t word) {
                                                     }
                                                 } else {
                                                     if ((word & 0x0880c000u) == 0x08000000u) return A64_DEC_ASIMDINS;
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        if (word & 0x00001000u) {
-                                            if (word & 0x00002000u) {
-                                                if (word & 0x00004000u) {
-                                                    if ((word & 0x08c08000u) == 0x08000000u) return A64_DEC_ASIMDTBL;
-                                                } else {
-                                                    if ((word & 0x08c08000u) == 0x08000000u) return A64_DEC_ASIMDTBL;
-                                                }
-                                            } else {
-                                                if (word & 0x00004000u) {
-                                                    if ((word & 0x08c08000u) == 0x08000000u) return A64_DEC_ASIMDTBL;
-                                                } else {
-                                                    if ((word & 0x08c08000u) == 0x08000000u) return A64_DEC_ASIMDTBL;
                                                 }
                                             }
                                         } else {

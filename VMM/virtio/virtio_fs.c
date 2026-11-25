@@ -9,10 +9,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/time.h>
 #include <sys/uio.h>
+#include <sys/xattr.h>
 #include <unistd.h>
 
 enum {
@@ -24,6 +26,8 @@ enum {
     VIRTIO_FS_TAG_LEN = 36,
     VIRTIO_FS_HASH_INIT = 64,
     VIRTIO_FS_MAX_NODE_FDS = 128,
+    VIRTIO_FS_COPY_CHUNK = 16 << 20,
+    VIRTIO_FS_COPY_BUFFER = 1 << 20,
 
     FUSE_KERNEL_VERSION = 7,
     FUSE_KERNEL_MINOR_VERSION = 31,
@@ -70,6 +74,7 @@ enum : uint32_t {
     FUSE_READDIRPLUS = 44,
     FUSE_RENAME2 = 45,
     FUSE_LSEEK = 46,
+    FUSE_COPY_FILE_RANGE = 47,
 };
 
 enum : uint32_t {
@@ -111,6 +116,12 @@ enum : uint32_t {
     LINUX_O_NOFOLLOW = 0100000U,
     LINUX_RENAME_NOREPLACE = 1U << 0,
     LINUX_RENAME_EXCHANGE = 1U << 1,
+    LINUX_FALLOC_FL_KEEP_SIZE = 0x01U,
+    LINUX_FALLOC_FL_PUNCH_HOLE = 0x02U,
+    LINUX_FALLOC_FL_ZERO_RANGE = 0x10U,
+    LINUX_XATTR_CREATE = 1U,
+    LINUX_XATTR_REPLACE = 2U,
+    LINUX_XATTR_NAME_MAX = 255U,
 };
 
 enum : int32_t {
@@ -119,6 +130,7 @@ enum : int32_t {
     LINUX_EINTR = 4,
     LINUX_EIO = 5,
     LINUX_ENXIO = 6,
+    LINUX_E2BIG = 7,
     LINUX_EBADF = 9,
     LINUX_EAGAIN = 11,
     LINUX_ENOMEM = 12,
@@ -393,6 +405,39 @@ typedef struct fuse_lseek_out {
     uint64_t offset;
 } fuse_lseek_out_t;
 
+typedef struct fuse_fallocate_in {
+    uint64_t fh;
+    uint64_t offset;
+    uint64_t length;
+    uint32_t mode;
+    uint32_t padding;
+} fuse_fallocate_in_t;
+
+typedef struct fuse_copy_file_range_in {
+    uint64_t fh_in;
+    uint64_t off_in;
+    uint64_t nodeid_out;
+    uint64_t fh_out;
+    uint64_t off_out;
+    uint64_t len;
+    uint64_t flags;
+} fuse_copy_file_range_in_t;
+
+typedef struct fuse_setxattr_in {
+    uint32_t size;
+    uint32_t flags;
+} fuse_setxattr_in_t;
+
+typedef struct fuse_getxattr_in {
+    uint32_t size;
+    uint32_t padding;
+} fuse_getxattr_in_t;
+
+typedef struct fuse_getxattr_out {
+    uint32_t size;
+    uint32_t padding;
+} fuse_getxattr_out_t;
+
 static_assert(sizeof(fuse_in_header_t) == 40);
 static_assert(sizeof(fuse_out_header_t) == 16);
 static_assert(sizeof(fuse_attr_t) == 88);
@@ -487,6 +532,7 @@ static int32_t darwin_to_linux_errno(int err) {
     case EINTR: return LINUX_EINTR;
     case EIO: return LINUX_EIO;
     case ENXIO: return LINUX_ENXIO;
+    case E2BIG: return LINUX_E2BIG;
     case EBADF: return LINUX_EBADF;
     case EAGAIN: return LINUX_EAGAIN;
     case ENOMEM: return LINUX_ENOMEM;
@@ -514,8 +560,10 @@ static int32_t darwin_to_linux_errno(int err) {
     case ENOTEMPTY: return LINUX_ENOTEMPTY;
     case ELOOP: return LINUX_ELOOP;
     case ENODATA: return LINUX_ENODATA;
+    case ENOATTR: return LINUX_ENODATA;
     case EOVERFLOW: return LINUX_EOVERFLOW;
     case EOPNOTSUPP: return LINUX_EOPNOTSUPP;
+    case ENOTSUP: return LINUX_EOPNOTSUPP;
     case ESTALE: return LINUX_ESTALE;
     case EDQUOT: return LINUX_EDQUOT;
     default: return LINUX_EIO;
@@ -998,6 +1046,174 @@ static int fs_data_iov(const virtio_iov_t *iov, size_t count, bool write, size_t
         skip = 0;
     }
     return used;
+}
+
+static bool fs_xattr_name_allowed(const char *name) {
+    static const char *const prefixes[] = { "user.", "trusted.", "security.", "system." };
+    for (size_t i = 0; i < sizeof(prefixes) / sizeof(prefixes[0]); i++) {
+        size_t len = strlen(prefixes[i]);
+        if (strncmp(name, prefixes[i], len) == 0 && name[len] != '\0') {
+            return true;
+        }
+    }
+    return false;
+}
+
+static ssize_t fs_xattr_list(int fd, char **out) {
+    for (;;) {
+        ssize_t size = flistxattr(fd, NULL, 0, 0);
+        if (size < 0) {
+            return -1;
+        }
+        char *buf = malloc(size > 0 ? (size_t)size : 1);
+        if (!buf) {
+            errno = ENOMEM;
+            return -1;
+        }
+        ssize_t got = flistxattr(fd, buf, (size_t)size, 0);
+        if (got < 0) {
+            int err = errno;
+            free(buf);
+            if (err == ERANGE) {
+                continue;
+            }
+            errno = err;
+            return -1;
+        }
+        size_t kept = 0;
+        for (size_t pos = 0; pos < (size_t)got;) {
+            size_t len = strlen(buf + pos) + 1;
+            if (fs_xattr_name_allowed(buf + pos)) {
+                memmove(buf + kept, buf + pos, len);
+                kept += len;
+            }
+            pos += len;
+        }
+        *out = buf;
+        return (ssize_t)kept;
+    }
+}
+
+static int fs_write_zeros(int fd, off_t offset, off_t length) {
+    static const uint8_t zeros[4096];
+    while (length > 0) {
+        size_t chunk = length < (off_t)sizeof(zeros) ? (size_t)length : sizeof(zeros);
+        ssize_t n = pwrite(fd, zeros, chunk, offset);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+        offset += n;
+        length -= n;
+    }
+    return 0;
+}
+
+static int fs_fallocate(int fd, uint32_t mode, off_t offset, off_t length) {
+    struct stat st;
+    if (fstat(fd, &st) < 0) {
+        return -1;
+    }
+    off_t end = offset + length;
+    off_t hole_end = end < st.st_size ? end : st.st_size;
+    if (mode & LINUX_FALLOC_FL_PUNCH_HOLE) {
+        if (offset < hole_end) {
+            struct statfs sfs;
+            if (fstatfs(fd, &sfs) < 0) {
+                return -1;
+            }
+            off_t block = (off_t)sfs.f_bsize;
+            off_t head = (offset + block - 1) / block * block;
+            off_t tail = hole_end / block * block;
+            if (head >= tail) {
+                if (fs_write_zeros(fd, offset, hole_end - offset) < 0) {
+                    return -1;
+                }
+            } else {
+                if (fs_write_zeros(fd, offset, head - offset) < 0 ||
+                    fs_write_zeros(fd, tail, hole_end - tail) < 0) {
+                    return -1;
+                }
+                fpunchhole_t hole = { .fp_offset = head, .fp_length = tail - head };
+                if (fcntl(fd, F_PUNCHHOLE, &hole) < 0) {
+                    return -1;
+                }
+            }
+        }
+        return 0;
+    }
+    if (mode & LINUX_FALLOC_FL_ZERO_RANGE) {
+        if (offset < hole_end && fs_write_zeros(fd, offset, hole_end - offset) < 0) {
+            return -1;
+        }
+    } else if (offset < st.st_size && (off_t)st.st_blocks * 512 < st.st_size) {
+        errno = ENOTSUP;
+        return -1;
+    }
+    if (end <= st.st_size) {
+        return 0;
+    }
+    fstore_t store = {
+        .fst_flags = F_ALLOCATECONTIG | F_ALLOCATEALL | F_ALLOCATEPERSIST,
+        .fst_posmode = F_PEOFPOSMODE,
+        .fst_length = end - st.st_size,
+    };
+    if (fcntl(fd, F_PREALLOCATE, &store) < 0) {
+        store.fst_flags = F_ALLOCATEALL | F_ALLOCATEPERSIST;
+        if (fcntl(fd, F_PREALLOCATE, &store) < 0) {
+            return -1;
+        }
+    }
+    if (mode & LINUX_FALLOC_FL_KEEP_SIZE) {
+        return 0;
+    }
+    return ftruncate(fd, end);
+}
+
+static ssize_t fs_copy_range(int in_fd, off_t off_in, int out_fd, off_t off_out, size_t len) {
+    size_t buf_size = len < VIRTIO_FS_COPY_BUFFER ? len : VIRTIO_FS_COPY_BUFFER;
+    uint8_t *buf = malloc(buf_size);
+    if (!buf) {
+        errno = ENOMEM;
+        return -1;
+    }
+    size_t done = 0;
+    int err = 0;
+    while (done < len) {
+        size_t chunk = len - done < buf_size ? len - done : buf_size;
+        ssize_t got = pread(in_fd, buf, chunk, off_in + (off_t)done);
+        if (got < 0 && errno == EINTR) {
+            continue;
+        }
+        if (got <= 0) {
+            err = got < 0 ? errno : 0;
+            break;
+        }
+        size_t written = 0;
+        while (written < (size_t)got) {
+            ssize_t n = pwrite(out_fd, buf + written, (size_t)got - written, off_out + (off_t)(done + written));
+            if (n < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                err = errno;
+                break;
+            }
+            written += (size_t)n;
+        }
+        done += written;
+        if (err) {
+            break;
+        }
+    }
+    free(buf);
+    if (done == 0 && err) {
+        errno = err;
+        return -1;
+    }
+    return (ssize_t)done;
 }
 
 static int fs_snapshot_dir(fs_handle_t *h) {
@@ -1891,13 +2107,164 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         return fs_reply(iov, total_iov, in.unique, 0, NULL, 0);
     }
 
-    case FUSE_SETXATTR:
-    case FUSE_REMOVEXATTR:
-    case FUSE_FALLOCATE:
-        return fs_reply(iov, total_iov, in.unique, fs->read_only ? -LINUX_EROFS : -LINUX_ENOSYS, NULL, 0);
+    case FUSE_FALLOCATE: {
+        if (fs->read_only) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EROFS, NULL, 0);
+        }
+        fuse_fallocate_in_t req = {0};
+        if (virtio_iov_read(iov, total_iov, sizeof(in), &req, sizeof(req)) < sizeof(req)) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
+        }
+        if (req.mode & ~(LINUX_FALLOC_FL_KEEP_SIZE | LINUX_FALLOC_FL_PUNCH_HOLE | LINUX_FALLOC_FL_ZERO_RANGE)) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EOPNOTSUPP, NULL, 0);
+        }
+        fs_handle_t *h = fs_find_handle(fs, req.fh);
+        if (!h || h->is_dir) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EBADF, NULL, 0);
+        }
+        if (fs_fallocate(h->fd, req.mode, (off_t)req.offset, (off_t)req.length) < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        return fs_reply(iov, total_iov, in.unique, 0, NULL, 0);
+    }
+
+    case FUSE_COPY_FILE_RANGE: {
+        if (fs->read_only) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EROFS, NULL, 0);
+        }
+        fuse_copy_file_range_in_t req = {0};
+        if (virtio_iov_read(iov, total_iov, sizeof(in), &req, sizeof(req)) < sizeof(req)) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
+        }
+        if (req.flags != 0) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
+        }
+        fs_handle_t *src = fs_find_handle(fs, req.fh_in);
+        fs_handle_t *dst = fs_find_handle(fs, req.fh_out);
+        if (!src || src->is_dir || !dst || dst->is_dir) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EBADF, NULL, 0);
+        }
+        size_t len = req.len < VIRTIO_FS_COPY_CHUNK ? (size_t)req.len : VIRTIO_FS_COPY_CHUNK;
+        ssize_t copied = len == 0 ? 0 : fs_copy_range(src->fd, (off_t)req.off_in, dst->fd, (off_t)req.off_out, len);
+        if (copied < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        fuse_write_out_t resp = { .size = (uint32_t)copied };
+        return fs_reply(iov, total_iov, in.unique, 0, &resp, sizeof(resp));
+    }
 
     case FUSE_GETXATTR:
-    case FUSE_LISTXATTR:
+    case FUSE_LISTXATTR: {
+        fuse_getxattr_in_t req = {0};
+        if (virtio_iov_read(iov, total_iov, sizeof(in), &req, sizeof(req)) < sizeof(req)) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
+        }
+        fs_inode_t *node = fs_find_inode(fs, in.nodeid);
+        if (!node) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
+        }
+        char *buf = NULL;
+        ssize_t len;
+        if (in.opcode == FUSE_GETXATTR) {
+            char name[LINUX_XATTR_NAME_MAX + 1];
+            size_t rem = body_len > sizeof(req) ? body_len - sizeof(req) : 0;
+            size_t n = rem < sizeof(name) ? rem : sizeof(name) - 1;
+            virtio_iov_read(iov, total_iov, sizeof(in) + sizeof(req), name, n);
+            name[n] = '\0';
+            if (!fs_xattr_name_allowed(name)) {
+                return fs_reply(iov, total_iov, in.unique, -LINUX_EOPNOTSUPP, NULL, 0);
+            }
+            int fd = fs_inode_fd(fs, node);
+            if (fd < 0) {
+                return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+            }
+            size_t in_cap = virtio_iov_total(iov, total_iov, true);
+            size_t cap = in_cap > sizeof(fuse_out_header_t) ? in_cap - sizeof(fuse_out_header_t) : 0;
+            size_t size = req.size < cap ? req.size : cap;
+            buf = size > 0 ? malloc(size) : NULL;
+            if (size > 0 && !buf) {
+                return fs_reply(iov, total_iov, in.unique, -LINUX_ENOMEM, NULL, 0);
+            }
+            len = fgetxattr(fd, name, buf, size, 0, 0);
+        } else {
+            int fd = fs_inode_fd(fs, node);
+            len = fd < 0 ? -1 : fs_xattr_list(fd, &buf);
+            if (len > 0 && req.size > 0 && (size_t)len > req.size) {
+                free(buf);
+                return fs_reply(iov, total_iov, in.unique, -LINUX_ERANGE, NULL, 0);
+            }
+        }
+        if (len < 0) {
+            int err = errno;
+            free(buf);
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(err), NULL, 0);
+        }
+        uint32_t written;
+        if (req.size == 0) {
+            fuse_getxattr_out_t resp = { .size = (uint32_t)len };
+            written = fs_reply(iov, total_iov, in.unique, 0, &resp, sizeof(resp));
+        } else {
+            written = fs_reply(iov, total_iov, in.unique, 0, buf, (size_t)len);
+        }
+        free(buf);
+        return written;
+    }
+
+    case FUSE_SETXATTR:
+    case FUSE_REMOVEXATTR: {
+        if (fs->read_only) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EROFS, NULL, 0);
+        }
+        fuse_setxattr_in_t req = {0};
+        size_t name_off = sizeof(in);
+        if (in.opcode == FUSE_SETXATTR) {
+            if (virtio_iov_read(iov, total_iov, sizeof(in), &req, sizeof(req)) < sizeof(req)) {
+                return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
+            }
+            name_off += sizeof(req);
+        }
+        fs_inode_t *node = fs_find_inode(fs, in.nodeid);
+        if (!node) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
+        }
+        char name[LINUX_XATTR_NAME_MAX + 1];
+        size_t rem = out_total > name_off ? out_total - name_off : 0;
+        size_t n = rem < sizeof(name) ? rem : sizeof(name) - 1;
+        virtio_iov_read(iov, total_iov, name_off, name, n);
+        name[n] = '\0';
+        if (!fs_xattr_name_allowed(name)) {
+            return fs_reply(iov, total_iov, in.unique, -LINUX_EOPNOTSUPP, NULL, 0);
+        }
+        int fd = fs_inode_fd(fs, node);
+        if (fd < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        int rc;
+        if (in.opcode == FUSE_SETXATTR) {
+            size_t value_off = name_off + strlen(name) + 1;
+            if (out_total < value_off || out_total - value_off < req.size) {
+                return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
+            }
+            uint8_t *value = malloc(req.size > 0 ? req.size : 1);
+            if (!value) {
+                return fs_reply(iov, total_iov, in.unique, -LINUX_ENOMEM, NULL, 0);
+            }
+            virtio_iov_read(iov, total_iov, value_off, value, req.size);
+            int options = ((req.flags & LINUX_XATTR_CREATE) ? XATTR_CREATE : 0) |
+                          ((req.flags & LINUX_XATTR_REPLACE) ? XATTR_REPLACE : 0);
+            rc = fsetxattr(fd, name, value, req.size, 0, options);
+            int err = errno;
+            free(value);
+            errno = err;
+        } else {
+            rc = fremovexattr(fd, name, 0);
+        }
+        if (rc < 0) {
+            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        }
+        return fs_reply(iov, total_iov, in.unique, 0, NULL, 0);
+    }
+
     default:
         return fs_reply(iov, total_iov, in.unique, -LINUX_ENOSYS, NULL, 0);
     }
