@@ -33,13 +33,7 @@ typedef struct vmm_config {
 
 enum {
     VMM_TLB_RING = 64,
-    VMM_ICACHE_RING = 64,
 };
-
-typedef struct vmm_icache_shootdown {
-    uint32_t count;
-    uint64_t pa_pages[VCPU_ICACHE_PENDING];
-} vmm_icache_shootdown_t;
 
 struct vmm_machine {
     uint8_t *ram;
@@ -48,10 +42,10 @@ struct vmm_machine {
     uint32_t cpu_count;
     vcpu_t *cpus[VMM_MAX_VCPUS];
 
-    _Atomic uint64_t tlb_epoch;
-    _Atomic uint64_t icache_epoch;
-    _Atomic uint32_t wfe_waiters;
-    _Atomic bool running;
+    alignas(128) _Atomic uint64_t tlb_epoch;
+    alignas(128) _Atomic uint32_t wfe_waiters;
+    alignas(128) os_unfair_lock tlb_lock;
+    alignas(128) _Atomic bool running;
     _Atomic bool suspended;
     _Atomic uint64_t timer_base;
 
@@ -65,12 +59,8 @@ struct vmm_machine {
     void (*on_halt)(void *ctx);
     void (*on_panic)(void *ctx, const char *message);
 
-    os_unfair_lock tlb_lock;
     vmm_tlbi_t tlb_ring[VMM_TLB_RING];
-    os_unfair_lock icache_lock;
-    vmm_icache_shootdown_t icache_ring[VMM_ICACHE_RING];
-    _Atomic uint64_t *icache_ram_bitmap;
-    size_t icache_ram_words;
+    struct cpu_pool *cpu_pool;
 };
 
 vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out);

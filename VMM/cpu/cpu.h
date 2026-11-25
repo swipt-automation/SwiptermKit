@@ -10,10 +10,6 @@
 
 typedef struct ir_insn ir_insn_t;
 
-enum {
-    VCPU_ICACHE_PENDING = 64,
-};
-
 typedef void (*ir_handler_fn)(vcpu_t *cpu, const ir_insn_t *ir,
                               softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 
@@ -29,7 +25,8 @@ struct ir_insn {
     uint8_t rm;
     uint8_t ra;
     uint16_t op;
-    uint16_t flags;
+    uint8_t flags;
+    uint8_t heat;
     uint32_t fast_offset;
     uint8_t fast_rd;
     uint8_t fast_rn;
@@ -144,16 +141,15 @@ struct vcpu {
     _Atomic bool stop_requested;
     _Atomic bool halted_wfi;
     _Atomic bool event_reg;
+    _Atomic uint8_t shootdown;
     uint32_t cpu_id;
     uint8_t irq_mask;
     uint8_t irq_force;
 
     uint64_t tlb_asid_salt;
     uint64_t tlb_epoch_local;
-    uint64_t icache_epoch_local;
+    uint64_t ivau_epoch;
     bool icache_shootdown_pending;
-    bool icache_shootdown_all;
-    uint8_t icache_pending_count;
     uint16_t tlb_user_gen;
     vmm_machine_t *vm;
     void *icache;
@@ -164,7 +160,6 @@ struct vcpu {
     alignas(16) __uint128_t v[32];
 
     uint64_t excl_pa;
-    uint64_t ic_ivau_last_va_page;
     alignas(16) __uint128_t excl_val;
 
     union {
@@ -191,7 +186,6 @@ struct vcpu {
     vcpu_el2_state_t el2;
     uintptr_t excl_hva;
     _Atomic uintptr_t wfe_watch_hva;
-    uint64_t icache_pending_pa[VCPU_ICACHE_PENDING];
     uint32_t wfe_poll_ticks;
     uint32_t wfi_poll_ticks;
     uint32_t traps;
@@ -218,7 +212,7 @@ vcpu_stop_reason_t vcpu_run(vcpu_t *cpu);
 void vcpu_raise_exception(vcpu_t *cpu, uint32_t esr, uint64_t far, uint64_t elr);
 void vcpu_eret(vcpu_t *cpu);
 void vcpu_flush_icache_all(vcpu_t *cpu);
-bool vcpu_flush_icache_va(vcpu_t *cpu, uint64_t va);
-void vcpu_flush_icache_pa(vcpu_t *cpu, uint64_t pa_page);
+void vcpu_flush_icache_va(vcpu_t *cpu, uint64_t va);
+void cpu_pool_destroy(vmm_machine_t *vm);
 
 #endif

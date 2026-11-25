@@ -1199,12 +1199,10 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSOP_IC_IALLUIS:
         cpu->pc = cpu_ir_pc(cpu, ir) + 4ULL;
         vcpu_flush_icache_all(cpu);
-        cpu->icache_shootdown_all = true;
-        mmu_icache_broadcast(cpu);
+        mmu_icache_sync(cpu);
         return;
     case A64_SYSOP_IC_IALLU:
         cpu->pc = cpu_ir_pc(cpu, ir) + 4ULL;
-        cpu->ic_ivau_last_va_page = UINT64_MAX;
         vcpu_flush_icache_all(cpu);
         return;
     case A64_SYSOP_IC_IVAU: {
@@ -1213,17 +1211,7 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
             vcpu_raise_sys_trap(cpu, word, cpu->pc);
             return;
         }
-        uint64_t va_page = xt & ~(uint64_t)VMM_PAGE_MASK;
-        uint64_t cur_va = ((cpu_icache_t *)cpu->icache)->cur_page->va_page;
-        uint64_t next_pc = cpu_ir_pc(cpu, ir) + 4ULL;
-        bool queued = vcpu_flush_icache_va(cpu, xt);
-        if (va_page == cur_va) {
-            cpu->pc = next_pc;
-            return;
-        }
-        if (queued) {
-            cpu->ic_ivau_last_va_page = va_page;
-        }
+        vcpu_flush_icache_va(cpu, xt);
         break;
     }
 
@@ -1306,10 +1294,11 @@ void cpu_op_hvc(vcpu_t *cpu, const ir_insn_t *ir,
     }
     cpu->pc = cur_pc + 4ULL;
     cpu_fp_leave_guest(cpu);
+    cpu_qs_park(cpu);
     if (!vmm_handle_psci(cpu)) {
         cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
     }
-    if (atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {
+    if (!cpu_qs_unpark(cpu) || atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {
         return;
     }
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
@@ -1329,10 +1318,11 @@ void cpu_op_smc(vcpu_t *cpu, const ir_insn_t *ir,
     }
     cpu->pc = cur_pc + 4ULL;
     cpu_fp_leave_guest(cpu);
+    cpu_qs_park(cpu);
     if (!vmm_handle_psci(cpu)) {
         cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
     }
-    if (atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {
+    if (!cpu_qs_unpark(cpu) || atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {
         return;
     }
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
@@ -1379,7 +1369,10 @@ void cpu_op_wfi(vcpu_t *cpu, const ir_insn_t *ir,
     }
     cpu->pc = cpu_ir_pc(cpu, ir) + 4ULL;
     cpu_fp_leave_guest(cpu);
+    cpu_qs_park(cpu);
+    cpu_pool_trim(cpu_pool(cpu), cpu);
     vmm_vcpu_wfi(cpu);
+    cpu_qs_unpark(cpu);
 }
 
 void cpu_op_wfe(vcpu_t *cpu, const ir_insn_t *ir,
@@ -1397,8 +1390,9 @@ void cpu_op_wfe(vcpu_t *cpu, const ir_insn_t *ir,
         return;
     }
     cpu_fp_leave_guest(cpu);
+    cpu_qs_park(cpu);
     vmm_vcpu_wfe(cpu);
-    if (vcpu_check_interrupts(cpu)) {
+    if (!cpu_qs_unpark(cpu) || vcpu_check_interrupts(cpu)) {
         cpu->pc = cpu_ir_pc(cpu, ir) + 4ULL;
         return;
     }
@@ -1424,11 +1418,9 @@ void cpu_op_sevl(vcpu_t *cpu, const ir_insn_t *ir,
 void cpu_op_barrier(vcpu_t *cpu, const ir_insn_t *ir,
                     softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
     atomic_thread_fence(memory_order_seq_cst);
-    if (__builtin_expect(cpu->icache_shootdown_pending, 0)) {
-        mmu_icache_broadcast(cpu);
-    }
     cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
-    if (__builtin_expect(ic->cur_exec_epoch != cpu->exec_epoch, 0)) {
+    bool waited = cpu->icache_shootdown_pending && mmu_icache_sync(cpu);
+    if (__builtin_expect(waited || ic->cur_exec_epoch != cpu->exec_epoch || !cpu_page_live(cpu), 0)) {
         cpu->pc = cpu_ir_pc(cpu, ir) + 4ULL;
         return;
     }

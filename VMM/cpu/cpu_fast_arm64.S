@@ -62,6 +62,27 @@ _cpu_fast_run:
     DISPATCH
 .endmacro
 
+.macro LAND
+    ldrb w9, [x20, #IR_HEAT]
+    cbnz w9, Lheat
+    DISPATCH
+.endmacro
+
+.macro ASYNC t0, t1, t2
+    ldr x\t0, [x19, #CPU_IRQ]
+    tbnz x\t0, #((CPU_STOP - CPU_IRQ) * 8), Lcross_slow
+    tbnz x\t0, #((CPU_SHOOTDOWN - CPU_IRQ) * 8), Lcross_slow
+    cbz w\t0, 1f
+    ldrh w\t1, [x19, #CPU_IRQ_MASK]
+    ldr w\t2, [x19, #CPU_DAIF]
+    ubfx w\t2, w\t2, #7, #1
+    lsl w\t2, w\t2, #3
+    lsr w\t1, w\t1, w\t2
+    and w\t1, w\t1, w\t0
+    cbnz w\t1, Lcross_slow
+1:
+.endmacro
+
 .macro READ_X dst, field, index=w9
     ldrb \index, [x20, #\field]
     ldr \dst, [x19, \index, uxtw #3]
@@ -97,18 +118,21 @@ Lcold_return:
     cbz x0, Lresolve
     b Lreload
 
-Ljit_enter:
-    ldur x16, [x25, #(PAGE_JIT - PAGE_INSNS)]
-    sub x17, x20, x25
-    add x16, x16, x17, lsr #3
-    ldr w17, [x16]
-    and w9, w17, #0xff
+Ljit_helper:
+    stp x29, x30, [sp, #-16]!
+    bl _cpu_jit_helper
+    ldp x29, x30, [sp], #16
+    tbnz x0, #0, 1f
+    ret
+1:
+    and x0, x0, #~1
+    b Lcold_return
+
+Lheat:
+    sub w9, w9, #1
+    strb w9, [x20, #IR_HEAT]
     cbz w9, Ljit_compile
-    sub w17, w17, #1
-    str w17, [x16]
-    lsr w17, w17, #8
-    add x16, x24, w17, uxtw
-    br x16
+    DISPATCH
 
 Ljit_compile:
     COMMIT
@@ -130,17 +154,6 @@ Lstat_dispatch:
     str x17, [x16, #IC_STAT_DISPATCHES]
     ret
 #endif
-
-Ltile_miss:
-    mrs x9, nzcv
-    str w9, [x19, #CPU_NZCV]
-    sub x0, x25, #PAGE_INSNS
-    sub x1, x20, x25
-    lsr x1, x1, #10
-    bl _cpu_fast_decode_tile
-    ldr w9, [x19, #CPU_NZCV]
-    msr nzcv, x9
-    DISPATCH
 
 Lresolve:
     mov x0, x19
@@ -167,11 +180,11 @@ Lreload:
     ldr x9, [x19, #CPU_ICACHE]
     ldr w28, [x9, #IC_RAS_SP]
     ldr x25, [x9, #IC_CUR_PAGE]
-    ldr x26, [x25, #PAGE_VA]
+    ldr x26, [x9, #IC_CUR_VA]
     add x25, x25, #PAGE_INSNS
     ldr w9, [x19, #CPU_NZCV]
     msr nzcv, x9
-    DISPATCH
+    LAND
 
 Lpoll:
     COMMIT
@@ -181,34 +194,13 @@ Lpoll:
     cbnz w0, Lresolve
     ldr w9, [x19, #CPU_NZCV]
     msr nzcv, x9
-    DISPATCH
-
-Lasync_check:
-    ldr x9, [x19, #CPU_IRQ]
-    tbnz x9, #((CPU_STOP - CPU_IRQ) * 8), Lcross_slow
-    cbz w9, 1f
-    ldrh w0, [x19, #CPU_IRQ_MASK]
-    ldr w1, [x19, #CPU_DAIF]
-    ubfx w1, w1, #7, #1
-    lsl w1, w1, #3
-    lsr w0, w0, w1
-    and w0, w0, w9
-    cbnz w0, Lcross_slow
-1:
-    ldr x9, [x19, #CPU_VM]
-    ldp x0, x1, [x9, #VM_TLB_EPOCH]
-    ldp x2, x3, [x19, #CPU_TLB_EPOCH]
-    eor x0, x0, x2
-    eor x1, x1, x3
-    orr x0, x0, x1
-    cbnz x0, Lcross_slow
-    br x17
+    LAND
 
 Lcross_page:
     tbnz x13, #0, Lcross_slow
     tbnz x13, #1, Lcross_slow
     eor x9, x13, x26
-    and x9, x9, #0xfffffffffffff000
+    lsr x9, x9, #12
     cbz x9, Lsame_page
 
     lsr x9, x13, #12
@@ -219,10 +211,8 @@ Lcross_page:
     orr x10, x10, x27
     b 3f
 2:
-    add w11, w11, #1
-    tbnz w11, #16, 4f
-    b Lcross_slow
-4:
+    eor w11, w11, #0xffff
+    cbnz w11, Lcross_slow
     and x11, x23, #(1 << SALT_MMU_OFF)
     orr x10, x10, #2
     orr x10, x10, x11
@@ -243,22 +233,23 @@ Lcross_page:
     ldr w9, [x12, #PAGE_GEN]
     eor w9, w9, w11
     cbnz w9, Lcross_slow
-    adr x17, Lcross_hit
-    b Lasync_check
+    ASYNC 9, 10, 16
 
 Lcross_hit:
     ldr x9, [x19, #CPU_ICACHE]
     ldr x10, [x19, #CPU_EXEC_EPOCH]
+    and x26, x13, #0xfffffffffffff000
     stp x12, x10, [x9, #IC_CUR_PAGE]
-    ldr x26, [x12, #PAGE_VA]
+    stp x26, x11, [x9, #IC_CUR_VA]
+    ldrb w9, [x12, #PAGE_REF]
+    cbnz w9, 1f
+    mov w9, #1
+    strb w9, [x12, #PAGE_REF]
+1:
     add x25, x12, #PAGE_INSNS
     and x9, x13, #0xffc
     add x20, x25, x9, lsl #3
-    lsr w10, w9, #7
-    ldr w11, [x12, #PAGE_DECODED_MASK]
-    lsr w11, w11, w10
-    tbz w11, #0, Ltile_miss
-    DISPATCH
+    LAND
 
 Lsame_page:
     ldr x9, [x19, #CPU_ICACHE]
@@ -266,18 +257,14 @@ Lsame_page:
     ldr x11, [x19, #CPU_EXEC_EPOCH]
     eor x10, x10, x11
     cbnz x10, Lcross_slow
-    adr x17, Lsame_page_hit
-    b Lasync_check
-
-Lsame_page_hit:
-    sub x12, x25, #PAGE_INSNS
+    ldr x10, [x9, #IC_CUR_GEN]
+    ldur w11, [x25, #(PAGE_GEN - PAGE_INSNS)]
+    eor w10, w10, w11
+    cbnz w10, Lcross_slow
+    ASYNC 9, 10, 11
     and x9, x13, #0xffc
     add x20, x25, x9, lsl #3
-    lsr w10, w9, #7
-    ldr w11, [x12, #PAGE_DECODED_MASK]
-    lsr w11, w11, w10
-    tbz w11, #0, Ltile_miss
-    DISPATCH
+    LAND
 
 Lcross_slow:
     str x13, [x19, #CPU_PC]
@@ -293,6 +280,12 @@ Lnop:
 
 Lmov_imm:
     ldr x14, [x20, #IR_IMM]
+    WRITE_X x14
+    NEXT
+
+Ladr:
+    ldr x14, [x20, #IR_IMM]
+    add x14, x14, x26
     WRITE_X x14
     NEXT
 
@@ -473,24 +466,22 @@ BITFIELD sbfiz64, x, asr, 1
     cbnz x9, \cold
 1:
 .endif
-    lsr x9, x12, #12
-    and x10, x12, #0x0000fffffffff000
     lsr x11, x12, #48
+    and x10, x12, #0x0000fffffffff000
     cbnz x11, 2f
-    eor w9, w9, w23
+    eor x9, x23, x12, lsr #12
     orr x10, x10, x27
     b 3f
 2:
-    add w11, w11, #1
-    tbnz w11, #16, 4f
-    b \cold
-4:
+    eor w11, w11, #0xffff
+    cbnz w11, \cold
+    lsr x9, x12, #12
     and x11, x23, #(1 << SALT_MMU_OFF)
-    orr x10, x10, #2
     orr x10, x10, x11
+    orr x10, x10, #2
 3:
-    and w9, w9, #((1 << (TLB_BANK_SHIFT - 4)) - 1)
-    add x9, \bank, w9, uxtw #4
+    ubfiz x9, x9, #4, #(TLB_BANK_SHIFT - 4)
+    add x9, \bank, x9
     ldp x9, x11, [x9]
     eor x9, x9, x10
     cbnz x9, \cold
@@ -846,6 +837,7 @@ Lstlr_wake:
 .macro LITERAL name, insn, width, bytes
 L\name:
     ldr x12, [x20, #IR_IMM]
+    add x12, x12, x26
     TLB x21, \bytes, \bytes
     \insn \width\()15, [x12]
     WRITE_X x15
@@ -899,19 +891,6 @@ Lmrs_sp_el0:
     WRITE_X x14
     NEXT
 
-Lic_ivau:
-    ldrb w9, [x19, #CPU_EL]
-    cbnz w9, 1f
-    ldr x9, [x19, #CPU_SCTLR]
-    tbz x9, #26, Lcold
-1:
-    READ_X x14, IR_RD
-    and x14, x14, #0xfffffffffffff000
-    ldr x9, [x19, #CPU_IC_IVAU_LAST]
-    eor x9, x9, x14
-    cbnz x9, Lcold
-    NEXT
-
 Ldc_uet:
     ldrb w9, [x19, #CPU_EL]
     cbnz w9, 1f
@@ -949,16 +928,13 @@ CRC crc32cx, x
     add x9, x9, #4
     str x9, [x19, #(30 * 8)]
     add x10, x20, #IR_SIZE
-    sub x11, x25, #PAGE_INSNS
-    ldr w12, [x19, #CPU_RAS_EPOCH]
-    ldr w14, [x11, #PAGE_GEN]
-    bfi x12, x14, #32, #32
-    and w15, w28, #15
     ldr x14, [x19, #CPU_ICACHE]
-    add x14, x14, #IC_RAS
-    add x14, x14, x15, lsl #5
-    stp x9, x10, [x14]
-    stp x11, x12, [x14, #16]
+    ldr x11, [x19, #CPU_RAS_EPOCH]
+    ldr x12, [x14, #IC_CUR_GEN]
+    and w15, w28, #15
+    add x15, x14, x15, lsl #5
+    stp x9, x10, [x15, #IC_RAS]
+    stp x11, x12, [x15, #(IC_RAS + 16)]
     add w28, w28, #1
 .endmacro
 
@@ -966,20 +942,24 @@ Lbl:
     PUSH_RETURN
 Lbranch_taken:
 Lb:
-    ldrh w11, [x20, #IR_FLAGS]
+    ldrb w11, [x20, #IR_FLAGS]
     ldr x13, [x20, #IR_IMM]
-    tbz w11, #0, Lcross_page
+    tbz w11, #0, Lbranch_far
     sub x9, x20, x13
     mov x20, x13
-    tbnz x9, #63, Lbranch_dispatch
+    tbnz x9, #63, Lland
 Lbranch_poll:
     ldr w9, [x19, #CPU_BUDGET]
     sub w9, w9, #1
     str w9, [x19, #CPU_BUDGET]
     cbz w9, Lpoll
     tbnz w9, #31, Lpoll
-Lbranch_dispatch:
-    DISPATCH
+Lland:
+    LAND
+
+Lbranch_far:
+    add x13, x26, x13
+    b Lcross_page
 
 Lblr:
     READ_X x13, IR_RN
@@ -993,34 +973,34 @@ Lbr:
 Lret:
     READ_X x13, IR_RN
 Lret_target:
+    ldr x14, [x19, #CPU_ICACHE]
     sub w15, w28, #1
     and w15, w15, #15
-    ldr x14, [x19, #CPU_ICACHE]
-    add x14, x14, #IC_RAS
-    add x14, x14, x15, lsl #5
-    ldp x9, x10, [x14]
+    add x16, x14, x15, lsl #5
+    ldp x9, x10, [x16, #IC_RAS]
     eor x9, x9, x13
     cbnz x9, Lcross_page
     cbz x10, Lcross_page
-    ldp x12, x11, [x14, #16]
-    cbz x12, Lcross_page
-    ldr w9, [x19, #CPU_RAS_EPOCH]
-    ldr w14, [x12, #PAGE_GEN]
-    bfi x9, x14, #32, #32
-    eor x9, x9, x11
+    ldp x9, x11, [x16, #(IC_RAS + 16)]
+    ldr x12, [x19, #CPU_RAS_EPOCH]
+    eor x9, x9, x12
     cbnz x9, Lcross_page
-    adr x17, Lret_hit
-    b Lasync_check
+    and x12, x10, #POOL_SLOT_MASK
+    ldr w9, [x12, #PAGE_GEN]
+    eor w9, w9, w11
+    cbnz w9, Lcross_page
+    ASYNC 9, 16, 17
 
 Lret_hit:
     mov w28, w15
-    ldr x9, [x19, #CPU_ICACHE]
-    ldr x11, [x19, #CPU_EXEC_EPOCH]
-    stp x12, x11, [x9, #IC_CUR_PAGE]
-    ldr x26, [x12, #PAGE_VA]
+    ldr x9, [x19, #CPU_EXEC_EPOCH]
+    stp x12, x9, [x14, #IC_CUR_PAGE]
+    sub x26, x13, #4
+    and x26, x26, #0xfffffffffffff000
+    stp x26, x11, [x14, #IC_CUR_VA]
     add x25, x12, #PAGE_INSNS
     mov x20, x10
-    DISPATCH
+    LAND
 
 .macro ZERO_BRANCH name, width, cond
 L\name:
@@ -1253,7 +1233,7 @@ Lccmp_\cc:
 
 Lccmp_apply:
     READ_X x10, IR_RN
-    ldrh w13, [x20, #IR_FLAGS]
+    ldrb w13, [x20, #IR_FLAGS]
     tbnz w13, #5, 1f
     READ_X x12, IR_RM, w11
     b 2f
@@ -2027,10 +2007,14 @@ Lbarrier:
     ldrb w9, [x19, #CPU_ICACHE_SHOOTDOWN]
     cbnz w9, Lpt_cold
     ldr x9, [x19, #CPU_ICACHE]
-    ldr x9, [x9, #IC_CUR_EXEC_EPOCH]
-    ldr x10, [x19, #CPU_EXEC_EPOCH]
-    eor x9, x9, x10
-    cbnz x9, Lpt_cold
+    ldr x10, [x9, #IC_CUR_EXEC_EPOCH]
+    ldr x11, [x19, #CPU_EXEC_EPOCH]
+    eor x10, x10, x11
+    cbnz x10, Lpt_cold
+    ldr x10, [x9, #IC_CUR_GEN]
+    ldur w11, [x25, #(PAGE_GEN - PAGE_INSNS)]
+    eor w10, w10, w11
+    cbnz w10, Lpt_cold
     NEXT
 
 Lclrex:
@@ -2227,6 +2211,7 @@ Lmsr_fpsr:
 
 Ladrp_add:
     ldr x14, [x20, #IR_IMM]
+    add x14, x14, x26
     WRITE_X x14
     ldr x15, [x20, #(IR_SIZE + IR_IMM)]
     add x15, x15, x14
@@ -2236,6 +2221,7 @@ Ladrp_add:
 .macro ADRP_LOAD name, width, bytes
 L\name:
     ldr x14, [x20, #IR_IMM]
+    add x14, x14, x26
     ldr x12, [x20, #(IR_SIZE + IR_IMM)]
     add x12, x12, x14
     TLB x21, \bytes, \bytes, Lpt_cold

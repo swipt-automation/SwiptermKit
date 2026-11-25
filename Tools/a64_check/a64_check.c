@@ -40,6 +40,7 @@ enum : uint32_t {
     SCRATCH_STATE = 27,
     SCRATCH_SP = 26,
     PLATFORM_REG = 18,
+    TILE_INSNS = 32,
 };
 
 enum : uint64_t {
@@ -156,6 +157,13 @@ static void setup_machine(void) {
     memcpy((void *)DATA_BASE, data_pristine, DATA_SIZE);
 }
 
+static void invalidate_code(uint64_t va, uint64_t bytes) {
+    for (uint64_t page = va & ~(uint64_t)VMM_PAGE_MASK; page < va + bytes; page += VMM_PAGE_SIZE) {
+        vcpu_flush_icache_va(cpu, page);
+    }
+    cpu->icache_shootdown_pending = false;
+}
+
 static uint64_t place_code(const uint32_t *words, uint32_t count) {
     uint64_t bytes = ((uint64_t)count * 4 + 4 + TILE_BYTES - 1) & ~(uint64_t)(TILE_BYTES - 1);
     if (code_cursor + bytes > CODE_END) {
@@ -168,6 +176,7 @@ static uint64_t place_code(const uint32_t *words, uint32_t count) {
     memset(out, 0, bytes);
     memcpy(out, words, (size_t)count * 4);
     out[count] = WORD_WFI;
+    invalidate_code(at, bytes);
     return at;
 }
 
@@ -183,12 +192,11 @@ static const ir_insn_t *resolve_at(uint64_t pc) {
 static outcome_t guest_run(uint64_t pc, uint32_t count, const test_state_t *in, test_state_t *out,
                            bool force_cold, bool fp_active, uint32_t *fast_mask) {
     ir_insn_t *ir = (ir_insn_t *)resolve_at(pc);
-    ir_page_t *page = ((cpu_icache_t *)cpu->icache)->cur_page;
     *fast_mask = 0;
     for (uint32_t i = 0; i < count; ++i) {
         if (fast_path(&ir[i])) {
             if (jit_mode) {
-                page->jit->entry[ir + i - page->insns] &= ~0xFFU;
+                ir[i].heat = force_cold ? 0 : 1;
             }
             *fast_mask |= 1U << i;
             if (force_cold) {
@@ -1074,6 +1082,7 @@ static int command_elf(int argc, char **argv) {
                     memset((void *)guest_page, 0, VMM_PAGE_SIZE);
                     memcpy((void *)(guest_page + (va - page_va)), file + seg->offset + (va - seg->addr),
                            page_end - va);
+                    invalidate_code(guest_page, VMM_PAGE_SIZE);
                     for (uint64_t tile_va = va & ~(uint64_t)(TILE_BYTES - 1); tile_va < page_end; tile_va += TILE_BYTES) {
                         const ir_insn_t *ir = resolve_at(guest_page + (tile_va - page_va));
                         for (uint32_t k = 0; k < TILE_INSNS; ++k) {

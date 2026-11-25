@@ -28,7 +28,6 @@ static uint64_t mmu_user_salt(const vcpu_t *cpu, uint16_t asid) {
 }
 
 void mmu_update_asid_salt(vcpu_t *cpu) {
-    cpu->ic_ivau_last_va_page = UINT64_MAX;
     uint64_t salt = mmu_user_salt(cpu, mmu_current_asid(cpu));
     if ((cpu->sctlr_el1 & 1ULL) == 0) {
         salt |= MMU_SALT_MMU_OFF;
@@ -43,10 +42,8 @@ void mmu_update_asid_salt(vcpu_t *cpu) {
         salt |= MMU_SALT_FP_TRAP;
         cpu_fp_leave_guest(cpu);
     }
-    if (cpu->tlb_asid_salt != salt) {
-        cpu->tlb_asid_salt = salt;
-        cpu->ras_epoch++;
-    }
+    cpu->tlb_asid_salt = salt;
+    cpu_ras_rekey(cpu);
 }
 
 void mmu_tlbi_all(vcpu_t *cpu) {
@@ -63,7 +60,6 @@ void mmu_tlbi_all(vcpu_t *cpu) {
     }
     cpu->exec_epoch++;
     cpu->ras_epoch++;
-    cpu->ic_ivau_last_va_page = UINT64_MAX;
 }
 
 static void tlb_flush_user_local(vcpu_t *cpu) {
@@ -72,7 +68,7 @@ static void tlb_flush_user_local(vcpu_t *cpu) {
     }
     mmu_update_asid_salt(cpu);
     cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
-    if (ic->cur_page && (ic->cur_page->va_page >> 48) == 0ULL) {
+    if ((ic->cur_va >> 48) == 0ULL) {
         ic->cur_exec_epoch = 0;
     }
 }
@@ -106,7 +102,6 @@ static void tlb_flush_ctx(vcpu_t *cpu, uint32_t mask) {
         }
         cpu->exec_epoch++;
         cpu->ras_epoch++;
-        cpu->ic_ivau_last_va_page = UINT64_MAX;
     }
 }
 
@@ -141,7 +136,7 @@ static void tlb_flush_page_local(vcpu_t *cpu, uint32_t mask, uint64_t va, uint64
         tlb_flush_slot(cpu, mask, (uint32_t)(va >> VMM_PAGE_SHIFT), page | SOFTTLB_TAG_GLOBAL);
     }
     cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
-    if (ic->cur_page && ic->cur_page->va_page == va) {
+    if (ic->cur_va == va) {
         ic->cur_exec_epoch = 0;
     }
 }
@@ -156,7 +151,6 @@ static void tlb_apply(vcpu_t *cpu, const vmm_tlbi_t *op) {
         return;
     }
     cpu->ras_epoch++;
-    cpu->ic_ivau_last_va_page = UINT64_MAX;
     if ((op->va >> 48) == 0ULL && (op->pages == 0 || op->all_asids)) {
         tlb_flush_user_local(cpu);
         return;
@@ -181,7 +175,7 @@ static bool tlb_apply_ring(vcpu_t *cpu, uint64_t target) {
     return false;
 }
 
-static void shootdown_wait(vcpu_t *cpu, uint64_t target, bool icache) {
+static void shootdown_wait(vcpu_t *cpu, uint64_t target) {
     vmm_machine_t *vm = cpu->vm;
     if (!atomic_load_explicit(&vm->running, memory_order_acquire)) {
         return;
@@ -192,11 +186,11 @@ static void shootdown_wait(vcpu_t *cpu, uint64_t target, bool icache) {
         if (i == cpu->cpu_id || !other) {
             continue;
         }
-        const uint64_t *local = icache ? &other->icache_epoch_local : &other->tlb_epoch_local;
         uint32_t spins = 0;
-        while (__atomic_load_n(local, __ATOMIC_ACQUIRE) < target) {
+        while (__atomic_load_n(&other->tlb_epoch_local, __ATOMIC_ACQUIRE) < target) {
             mmu_poll_shootdown(cpu);
             if (atomic_load_explicit(&other->halted_wfi, memory_order_seq_cst) ||
+                cpu_qs_parked(vm->cpu_pool, i) ||
                 atomic_load_explicit(&other->stop_requested, memory_order_acquire) ||
                 !atomic_load_explicit(&vm->running, memory_order_acquire) ||
                 atomic_load_explicit(&vm->suspended, memory_order_acquire)) {
@@ -236,71 +230,31 @@ void mmu_tlbi(vcpu_t *cpu, vmm_tlbi_t op, bool inner_shareable) {
         mmu_tlbi_all(cpu);
     }
     __atomic_store_n(&cpu->tlb_epoch_local, target, __ATOMIC_RELEASE);
-    shootdown_wait(cpu, target, false);
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
+        if (i != cpu->cpu_id && vm->cpus[i]) {
+            atomic_store_explicit(&vm->cpus[i]->shootdown, 1, memory_order_seq_cst);
+        }
+    }
+    shootdown_wait(cpu, target);
 }
 
-static bool icache_apply_ring(vcpu_t *cpu, uint64_t target) {
-    const vmm_machine_t *vm = cpu->vm;
-    uint64_t epoch = cpu->icache_epoch_local;
-    if (target - epoch > VMM_ICACHE_RING) {
-        return true;
-    }
-    while (epoch != target) {
-        ++epoch;
-        const vmm_icache_shootdown_t *rec = &vm->icache_ring[epoch & (VMM_ICACHE_RING - 1U)];
-        if (rec->count > VCPU_ICACHE_PENDING) {
-            return true;
-        }
-        for (uint32_t i = 0; i < rec->count; ++i) {
-            vcpu_flush_icache_pa(cpu, rec->pa_pages[i]);
-        }
-    }
-    return false;
-}
-
-void mmu_icache_broadcast(vcpu_t *cpu) {
-    vmm_machine_t *vm = cpu->vm;
-    uint64_t pages[VCPU_ICACHE_PENDING];
-    uint32_t count = 0;
-    bool all = cpu->icache_shootdown_all;
-    atomic_thread_fence(memory_order_seq_cst);
-    for (uint32_t i = 0; i < cpu->icache_pending_count; ++i) {
-        uint64_t pa_page = cpu->icache_pending_pa[i];
-        uint64_t mask;
-        _Atomic uint64_t *word = cpu_icache_ram_word(vm, pa_page, &mask);
-        if (word && (atomic_load_explicit(word, memory_order_seq_cst) & mask) == 0) {
-            continue;
-        }
-        vcpu_flush_icache_pa(cpu, pa_page);
-        pages[count++] = pa_page;
-    }
-    cpu->icache_pending_count = 0;
-    cpu->icache_shootdown_all = false;
+bool mmu_icache_sync(vcpu_t *cpu) {
     cpu->icache_shootdown_pending = false;
-    cpu->ic_ivau_last_va_page = UINT64_MAX;
-    if ((!all && count == 0U) || vm->cpu_count <= 1) {
-        return;
+    if (cpu->ivau_epoch == 0) {
+        return false;
     }
-
-    os_unfair_lock_lock(&vm->icache_lock);
-    uint64_t target = atomic_load_explicit(&vm->icache_epoch, memory_order_relaxed);
-    bool lagged = icache_apply_ring(cpu, target);
-    ++target;
-    vmm_icache_shootdown_t *rec = &vm->icache_ring[target & (VMM_ICACHE_RING - 1U)];
-    rec->count = all ? UINT32_MAX : count;
-    memcpy(rec->pa_pages, pages, count * sizeof(pages[0]));
-    atomic_store_explicit(&vm->icache_epoch, target, memory_order_seq_cst);
-    os_unfair_lock_unlock(&vm->icache_lock);
-    if (lagged) {
-        vcpu_flush_icache_all(cpu);
-    }
-    __atomic_store_n(&cpu->icache_epoch_local, target, __ATOMIC_RELEASE);
-    shootdown_wait(cpu, target, true);
+    cpu_qs_park(cpu);
+    cpu_qs_wait(cpu_pool(cpu), cpu, cpu->ivau_epoch);
+    cpu->ivau_epoch = 0;
+    cpu_qs_unpark(cpu);
+    return true;
 }
 
 bool mmu_poll_shootdown(vcpu_t *cpu) {
     vmm_machine_t *vm = cpu->vm;
-    bool flushed = false;
+    if (atomic_load_explicit(&cpu->shootdown, memory_order_relaxed) != 0) {
+        atomic_store_explicit(&cpu->shootdown, 0, memory_order_seq_cst);
+    }
     if (__builtin_expect(atomic_load_explicit(&vm->tlb_epoch, memory_order_seq_cst) != cpu->tlb_epoch_local, 0)) {
         os_unfair_lock_lock(&vm->tlb_lock);
         uint64_t epoch = atomic_load_explicit(&vm->tlb_epoch, memory_order_relaxed);
@@ -310,20 +264,9 @@ bool mmu_poll_shootdown(vcpu_t *cpu) {
             mmu_tlbi_all(cpu);
         }
         __atomic_store_n(&cpu->tlb_epoch_local, epoch, __ATOMIC_RELEASE);
-        flushed = true;
+        return true;
     }
-    if (__builtin_expect(atomic_load_explicit(&vm->icache_epoch, memory_order_seq_cst) != cpu->icache_epoch_local, 0)) {
-        os_unfair_lock_lock(&vm->icache_lock);
-        uint64_t epoch = atomic_load_explicit(&vm->icache_epoch, memory_order_relaxed);
-        bool lagged = icache_apply_ring(cpu, epoch);
-        os_unfair_lock_unlock(&vm->icache_lock);
-        if (lagged) {
-            vcpu_flush_icache_all(cpu);
-        }
-        __atomic_store_n(&cpu->icache_epoch_local, epoch, __ATOMIC_RELEASE);
-        flushed = true;
-    }
-    return flushed;
+    return false;
 }
 
 void *mmu_gpa_to_hva(const vmm_machine_t *vm, uint64_t gpa, size_t len) {
@@ -881,8 +824,9 @@ bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va, uint64_t *pa_out) {
 }
 
 static uint32_t mmu_isv_syndrome(const vcpu_t *cpu, uint64_t elr) {
-    const ir_page_t *pg = ((const cpu_icache_t *)cpu->icache)->cur_page;
-    if (!pg || pg->va_page != (elr & ~(uint64_t)VMM_PAGE_MASK)) {
+    const cpu_icache_t *ic = (const cpu_icache_t *)cpu->icache;
+    const ir_page_t *pg = ic->cur_page;
+    if (!pg || ic->cur_va != (elr & ~(uint64_t)VMM_PAGE_MASK)) {
         return 0;
     }
     uint32_t word = *(const uint32_t *)(pg->hva_page + (elr & VMM_PAGE_MASK));

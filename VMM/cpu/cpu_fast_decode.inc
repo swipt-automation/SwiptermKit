@@ -4,6 +4,7 @@
 CHECK_OFFSET(ir_insn_t, target_or_imm, IR_IMM);
 CHECK_OFFSET(ir_insn_t, op, IR_OP);
 CHECK_OFFSET(ir_insn_t, flags, IR_FLAGS);
+CHECK_OFFSET(ir_insn_t, heat, IR_HEAT);
 CHECK_OFFSET(ir_insn_t, fast_offset, IR_OFFSET);
 CHECK_OFFSET(ir_insn_t, fast_rd, IR_RD);
 CHECK_OFFSET(ir_insn_t, fast_rn, IR_RN);
@@ -31,17 +32,16 @@ static_assert(CPU_FPSR_MASK == 0x0800009FU);
 CHECK_OFFSET(vcpu_t, backedge_budget, CPU_BUDGET);
 CHECK_OFFSET(vcpu_t, irq_pending, CPU_IRQ);
 CHECK_OFFSET(vcpu_t, stop_requested, CPU_STOP);
+CHECK_OFFSET(vcpu_t, shootdown, CPU_SHOOTDOWN);
 CHECK_OFFSET(vcpu_t, irq_mask, CPU_IRQ_MASK);
 CHECK_OFFSET(vcpu_t, irq_force, CPU_IRQ_MASK + 1);
 CHECK_OFFSET(vcpu_t, tlb_asid_salt, CPU_SALT);
 CHECK_OFFSET(vcpu_t, tlb_epoch_local, CPU_TLB_EPOCH);
-CHECK_OFFSET(vcpu_t, icache_epoch_local, CPU_ICACHE_EPOCH);
 CHECK_OFFSET(vcpu_t, vm, CPU_VM);
 CHECK_OFFSET(vcpu_t, icache, CPU_ICACHE);
 CHECK_OFFSET(vcpu_t, exec_epoch, CPU_EXEC_EPOCH);
 CHECK_OFFSET(vcpu_t, ras_epoch, CPU_RAS_EPOCH);
 CHECK_OFFSET(vcpu_t, v, CPU_V);
-CHECK_OFFSET(vcpu_t, ic_ivau_last_va_page, CPU_IC_IVAU_LAST);
 CHECK_OFFSET(vcpu_t, sctlr_el1, CPU_SCTLR);
 CHECK_OFFSET(vcpu_t, tpidr_el0, CPU_TPIDR_EL0);
 CHECK_OFFSET(vcpu_t, tpidrro_el0, CPU_TPIDRRO_EL0);
@@ -51,17 +51,15 @@ CHECK_OFFSET(vcpu_t, cntpct_base, CPU_CNTP_BASE);
 CHECK_OFFSET(vcpu_t, cntvct_base, CPU_CNTV_BASE);
 CHECK_OFFSET(vcpu_t, exec_cache, CPU_EXEC_CACHE);
 CHECK_OFFSET(vcpu_t, tlb, CPU_TLB);
-CHECK_OFFSET(vmm_machine_t, tlb_epoch, VM_TLB_EPOCH);
-CHECK_OFFSET(vmm_machine_t, icache_epoch, VM_ICACHE_EPOCH);
 CHECK_OFFSET(vmm_machine_t, wfe_waiters, VM_WFE_WAITERS);
-CHECK_OFFSET(ir_page_t, pa_page, PAGE_PA);
-CHECK_OFFSET(ir_page_t, va_page, PAGE_VA);
-CHECK_OFFSET(ir_page_t, decoded_mask, PAGE_DECODED_MASK);
 CHECK_OFFSET(ir_page_t, gen, PAGE_GEN);
-CHECK_OFFSET(ir_page_t, jit, PAGE_JIT);
+CHECK_OFFSET(ir_page_t, ref, PAGE_REF);
 CHECK_OFFSET(ir_page_t, insns, PAGE_INSNS);
+static_assert(POOL_SLOT_MASK == ~(uint64_t)(POOL_SLOT_BYTES - 1U));
 CHECK_OFFSET(cpu_icache_t, cur_page, IC_CUR_PAGE);
 CHECK_OFFSET(cpu_icache_t, cur_exec_epoch, IC_CUR_EXEC_EPOCH);
+CHECK_OFFSET(cpu_icache_t, cur_va, IC_CUR_VA);
+CHECK_OFFSET(cpu_icache_t, cur_gen, IC_CUR_GEN);
 CHECK_OFFSET(cpu_icache_t, ras_sp, IC_RAS_SP);
 #ifdef CPU_STATS
 CHECK_OFFSET(cpu_icache_t, stat_dispatches, IC_STAT_DISPATCHES);
@@ -73,9 +71,8 @@ CHECK_OFFSET(exec_cache_entry_t, exec_epoch, 16);
 CHECK_OFFSET(exec_cache_entry_t, pg_gen, 24);
 CHECK_OFFSET(ras_entry_t, pc, 0);
 CHECK_OFFSET(ras_entry_t, ir, 8);
-CHECK_OFFSET(ras_entry_t, pg, 16);
-CHECK_OFFSET(ras_entry_t, ras_epoch, 24);
-CHECK_OFFSET(ras_entry_t, pg_gen, 28);
+CHECK_OFFSET(ras_entry_t, tag, 16);
+CHECK_OFFSET(ras_entry_t, gen, 24);
 static_assert(sizeof(((vcpu_t *)0)->tlb[0]) == (1U << TLB_BANK_SHIFT));
 static_assert(SOFTTLB_BANK_COUNT == SOFTTLB_BANKS && offsetof(vcpu_mmu_ctx_t, tlb) == 0);
 static_assert(sizeof(((vcpu_mmu_ctx_t *)0)->exec_cache[0]) == (1U << EXEC_BANK_SHIFT));
@@ -85,7 +82,7 @@ static_assert(SOFTTLB_EL0_R == 0 && SOFTTLB_EL0_W == 1 && SOFTTLB_EL1_R == 2 && 
 static_assert(VMM_PAGE_SHIFT == 12 && MMU_SALT_USER_TAG == 0xffff000000000ffcULL);
 static_assert(MMU_SALT_MMU_OFF == 1ULL << SALT_MMU_OFF && MMU_SALT_ALIGN == 1ULL << SALT_ALIGN &&
               MMU_SALT_FP_TRAP == 1ULL << SALT_FP_TRAP && MMU_SALT_ALIGN > EXEC_CACHE_MASK);
-static_assert(TILE_SHIFT == 5 && RAS_SIZE == 16);
+static_assert(RAS_SIZE == 16);
 static_assert(IR_IMM_HI == IR_IMM + 4 && CPU_V % 16 == 0 && V_SLOT + 32 <= 256);
 #undef CHECK_OFFSET
 
@@ -359,6 +356,7 @@ typedef struct cpu_fast_entry {
 static const cpu_fast_entry_t cpu_fast_entries[] = {
     {op_nop, FAST_KIND_FIXED, FAST_nop},
     {op_mov_imm, FAST_KIND_FIXED, FAST_mov_imm},
+    {op_adr, FAST_KIND_FIXED, FAST_adr},
     {op_mov_reg64, FAST_KIND_FIXED, FAST_mov_reg},
     {op_mov_reg32, FAST_KIND_FIXED, FAST_mov_reg32},
     {op_add_reg64, FAST_KIND_FIXED, FAST_add_r64},
@@ -1060,11 +1058,6 @@ static void cpu_fast_decode(ir_insn_t *ir, const ir_page_t *pg) {
         case A64_SYSOP_DC_ZVA:
             ir->fast_rd = (uint8_t)rt;
             op = FAST_dc_zva;
-            break;
-        case A64_SYSOP_IC_IVAU:
-            if (rt == REG_ZR) return;
-            ir->fast_rd = (uint8_t)rt;
-            op = FAST_ic_ivau;
             break;
         case A64_SYSOP_DC_CVAC:
         case A64_SYSOP_DC_CVAU:

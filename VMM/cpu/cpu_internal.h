@@ -49,29 +49,25 @@ void cpu_stats_walk(vcpu_t *cpu);
 
 enum {
     IR_PAGE_INSNS = 1024,
-    TILE_SHIFT = 5,
-    TILE_INSNS = 1U << TILE_SHIFT,
-    ICACHE_SETS = 512,
-    ICACHE_SET_MASK = ICACHE_SETS - 1,
-    ICACHE_WAYS = 4,
     EXEC_CACHE_ENTRIES = 16384,
     EXEC_CACHE_MASK = EXEC_CACHE_ENTRIES - 1,
     RAS_SIZE = 16,
     RAS_MASK = RAS_SIZE - 1,
     BACKEDGE_BUDGET_INIT = 1024,
+    JIT_HEAT = 32,
+    JIT_REHEAT = 255,
 };
 
-enum : uint16_t {
+enum : uint8_t {
     IR_FLAG_NONE = 0,
     IR_FLAG_INPAGE = 1U << 0,
     IR_FLAG_WIDE = 1U << 1,
-    IR_FLAG_SIGN = 1U << 2,
+    IR_FLAG_SIMD = 1U << 2,
     IR_FLAG_SETFLAGS = 1U << 3,
     IR_FLAG_SUB = 1U << 4,
     IR_FLAG_INV = 1U << 5,
     IR_FLAG_POST = 1U << 6,
     IR_FLAG_PRE = 1U << 7,
-    IR_FLAG_SIMD = 1U << 8,
 };
 
 enum : uint32_t {
@@ -155,23 +151,39 @@ enum : uint32_t {
     CPU_TRAP_CNTVCT = 1U << 20,
 };
 
-typedef struct cpu_jit_page {
-    uint32_t entry[IR_PAGE_INSNS];
-    uint32_t word[IR_PAGE_INSNS];
-} cpu_jit_page_t;
+enum : uint32_t {
+    POOL_SLOTS = 6144,
+    POOL_BUCKETS = 4096,
+    POOL_SLOT_SHIFT = 16,
+    POOL_SLOT_BYTES = 1U << POOL_SLOT_SHIFT,
+    POOL_EVICT_BATCH = 64,
+    POOL_NONE = UINT32_MAX,
+};
+
+typedef enum pool_slot_state : uint8_t {
+    POOL_SLOT_FREE,
+    POOL_SLOT_BUSY,
+    POOL_SLOT_LIVE,
+    POOL_SLOT_RETIRED,
+} pool_slot_state_t;
 
 typedef struct ir_page {
-    uint64_t pa_page;
-    uint64_t va_page;
-    uintptr_t hva_page;
-    uint32_t decoded_mask;
-    uint32_t gen;
-    cpu_jit_page_t *jit;
+    _Atomic uint32_t gen;
+    _Atomic uint8_t ref;
     uint8_t el;
     uint8_t world;
     uint32_t traps;
-    ir_insn_t insns[IR_PAGE_INSNS + 1];
+    uint32_t next;
+    uint64_t pa_page;
+    uintptr_t hva_page;
+    uint64_t hash;
+    uint32_t pfn_gen;
+    uint32_t code_gen;
+    alignas(64) ir_insn_t insns[IR_PAGE_INSNS + 1];
+    uint32_t words[IR_PAGE_INSNS];
 } ir_page_t;
+
+static_assert(sizeof(ir_page_t) <= POOL_SLOT_BYTES);
 
 typedef struct exec_cache_entry {
     uint64_t tag;
@@ -195,74 +207,234 @@ CPU_ALWAYS_INLINE exec_cache_entry_t (*cpu_exec_cache(const vcpu_t *cpu))[EXEC_C
 typedef struct ras_entry {
     uint64_t pc;
     const ir_insn_t *ir;
-    ir_page_t *pg;
-    uint32_t ras_epoch;
-    uint32_t pg_gen;
+    uint64_t tag;
+    uint32_t gen;
+    uint32_t pad;
 } ras_entry_t;
 
 static_assert(sizeof(ras_entry_t) == 32);
+
+CPU_ALWAYS_INLINE ir_page_t *cpu_ir_page(const ir_insn_t *ir) {
+    return (ir_page_t *)((uintptr_t)ir & ~(uintptr_t)(POOL_SLOT_BYTES - 1U));
+}
 
 typedef struct cpu_jit_arena {
     uint8_t *rx;
     uint8_t *rw;
     uint32_t size;
-    uint32_t used;
     uint32_t base_offset;
-    uint32_t region_size;
-    void *work;
 } cpu_jit_arena_t;
+
+typedef enum cpu_jit_block_state : uint8_t {
+    JIT_BLOCK_FREE,
+    JIT_BLOCK_PENDING,
+    JIT_BLOCK_LIVE,
+    JIT_BLOCK_DEAD,
+} cpu_jit_block_state_t;
+
+typedef struct cpu_jit_block {
+    uint64_t pa_page;
+    uint64_t hash;
+    uint64_t epoch;
+    uint32_t traps;
+    uint32_t pfn_gen;
+    uint32_t code_gen;
+    uint32_t offset;
+    uint32_t orig;
+    uint32_t next;
+    uint32_t seg_next;
+    uint32_t pend_next;
+    uint16_t index;
+    uint16_t seg;
+    uint8_t el;
+    uint8_t world;
+    cpu_jit_block_state_t state;
+} cpu_jit_block_t;
+
+typedef struct cpu_jit_patch {
+    uint64_t pa_page;
+    uint32_t traps;
+    uint32_t pfn_gen;
+    uint32_t code_gen;
+    uint32_t site;
+    uint32_t next;
+    uint32_t seg_next;
+    uint16_t index;
+    uint16_t seg;
+    uint8_t el;
+    uint8_t world;
+    bool hashed;
+} cpu_jit_patch_t;
+
+typedef enum cpu_jit_segment_state : uint8_t {
+    JIT_SEG_FREE,
+    JIT_SEG_OPEN,
+    JIT_SEG_FULL,
+    JIT_SEG_RETIRED,
+} cpu_jit_segment_state_t;
+
+typedef struct cpu_jit_segment {
+    uint64_t seq;
+    uint64_t retire;
+    uint32_t blocks;
+    uint32_t patches;
+    uint32_t count;
+    uint32_t gen;
+    uint32_t holders;
+    cpu_jit_segment_state_t state;
+} cpu_jit_segment_t;
+
+enum : uint32_t {
+    JIT_BUCKETS = 4096,
+    JIT_BLOCKS = 65536,
+    JIT_PATCHES = 65536,
+    JIT_SEGMENT_BYTES = 1U << 20,
+    JIT_CHUNK_BYTES = 128U << 10,
+    JIT_RETIRE_AHEAD = 2,
+    JIT_BLOCK_RESERVE = 4096,
+};
+
+CPU_ALWAYS_INLINE uint32_t cpu_pa_bucket(uint64_t pa_page, uint32_t buckets) {
+    return (uint32_t)(((pa_page >> VMM_PAGE_SHIFT) * 0x9E3779B97F4A7C15ULL) >> 40) & (buckets - 1U);
+}
+
+typedef struct cpu_jit_pool {
+    os_unfair_lock toggle;
+    os_unfair_lock lock;
+    _Atomic bool active;
+    alignas(128) _Atomic uint64_t pend_epoch;
+    cpu_jit_arena_t arena;
+    uint32_t segments;
+    uint32_t open;
+    uint32_t carve;
+    uint32_t gen;
+    uint64_t seq;
+    cpu_jit_segment_t *seg;
+    cpu_jit_block_t *blocks;
+    uint32_t block_free;
+    uint32_t block_avail;
+    uint32_t pend_head;
+    uint32_t pend_tail;
+    cpu_jit_patch_t *patches;
+    uint32_t patch_free;
+    uint32_t *heads;
+    uint32_t *patch_heads;
+} cpu_jit_pool_t;
+
+typedef struct cpu_qs {
+    alignas(128) _Atomic uint64_t qs;
+    _Atomic bool parked;
+} cpu_qs_t;
+
+typedef struct cpu_pool {
+    alignas(128) _Atomic uint64_t epoch;
+    alignas(128) os_unfair_lock lock;
+    uint32_t free_head;
+    uint32_t clock;
+    uint32_t retire_head;
+    uint32_t retire_tail;
+    alignas(128) _Atomic uint32_t code_gen;
+    uint8_t *base;
+    uint8_t *map;
+    size_t map_bytes;
+    vmm_machine_t *vm;
+    _Atomic uint32_t *pfn_gen;
+    uint64_t pfn_count;
+    uint32_t slot_gen[POOL_SLOTS];
+    uint32_t slot_link[POOL_SLOTS];
+    uint64_t slot_retire[POOL_SLOTS];
+    pool_slot_state_t slot_state[POOL_SLOTS];
+    bool slot_reusable[POOL_SLOTS];
+    uint32_t heads[POOL_BUCKETS];
+    cpu_qs_t qs[VMM_MAX_VCPUS];
+    cpu_jit_pool_t jit;
+} cpu_pool_t;
 
 extern _Atomic uint32_t cpu_jit_generation;
 
 uintptr_t cpu_fast_base(void);
 void cpu_jit_reserve(void);
-bool cpu_jit_arena_acquire(vmm_machine_t *vm, uint32_t cpu_id, cpu_jit_arena_t *out);
+bool cpu_jit_arena_acquire(vmm_machine_t *vm, cpu_jit_arena_t *out);
 void cpu_jit_arena_release(vmm_machine_t *vm);
 void cpu_jit_arena_write(const cpu_jit_arena_t *arena, uint32_t offset, const uint32_t *code, uint32_t words);
+void cpu_jit_arena_patch(const cpu_jit_arena_t *arena, uint32_t offset, uint32_t word);
 uint32_t cpu_jit_enter(vcpu_t *cpu, ir_insn_t *ir);
 const ir_insn_t *cpu_fast_call(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
+uintptr_t cpu_jit_helper(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 bool cpu_jit_native(const ir_insn_t *ir);
 
 typedef struct cpu_icache {
     ir_page_t *cur_page;
     uint64_t cur_exec_epoch;
+    uint64_t cur_va;
+    uint64_t cur_gen;
     uint32_t ras_sp;
-    uint32_t next_gen;
     uint32_t host_fpcr;
     uint32_t host_fpsr;
+    uint32_t jit_generation;
 #ifdef CPU_STATS
     uint64_t stat_dispatches;
     struct cpu_stats *stats;
 #endif
     alignas(64) ras_entry_t ras[RAS_SIZE];
-    uint8_t plru[ICACHE_SETS];
-    ir_page_t *slots[ICACHE_SETS][ICACHE_WAYS];
-    ir_page_t *page_pool;
-    uint32_t page_count;
-    cpu_jit_arena_t jit;
-    uint32_t jit_generation;
+    cpu_pool_t *pool;
+    void *jit_work;
+    uint64_t qs_ticks;
 } cpu_icache_t;
+
+CPU_ALWAYS_INLINE cpu_pool_t *cpu_pool(const vcpu_t *cpu) {
+    return ((const cpu_icache_t *)cpu->icache)->pool;
+}
 
 CPU_ALWAYS_INLINE bool cpu_jit_stale(const vcpu_t *cpu) {
     return atomic_load_explicit(&cpu_jit_generation, memory_order_relaxed) !=
            ((const cpu_icache_t *)cpu->icache)->jit_generation;
 }
 
-CPU_ALWAYS_INLINE _Atomic uint64_t *cpu_icache_ram_word(const vmm_machine_t *vm, uint64_t pa_page,
-                                                       uint64_t *mask_out) {
-    uint64_t off = pa_page - VMM_RAM_BASE;
-    if (!vm || !vm->icache_ram_bitmap || off >= vm->ram_size) {
-        return NULL;
-    }
-    uint64_t pfn = off >> VMM_PAGE_SHIFT;
-    *mask_out = 1ULL << (pfn & 63U);
-    return &vm->icache_ram_bitmap[pfn >> 6];
+CPU_ALWAYS_INLINE bool cpu_page_live(const vcpu_t *cpu) {
+    const cpu_icache_t *ic = (const cpu_icache_t *)cpu->icache;
+    return ic->cur_page != NULL &&
+           atomic_load_explicit(&ic->cur_page->gen, memory_order_seq_cst) == (uint32_t)ic->cur_gen;
+}
+
+CPU_ALWAYS_INLINE uint64_t cpu_page_va(const vcpu_t *cpu) {
+    return ((const cpu_icache_t *)cpu->icache)->cur_va;
 }
 
 CPU_ALWAYS_INLINE uint64_t cpu_ir_pc(const vcpu_t *cpu, const ir_insn_t *ir) {
-    const ir_page_t *pg = ((const cpu_icache_t *)cpu->icache)->cur_page;
-    return pg->va_page + (uint64_t)(ir - pg->insns) * 4ULL;
+    const cpu_icache_t *ic = (const cpu_icache_t *)cpu->icache;
+    return ic->cur_va + (uint64_t)(ir - ic->cur_page->insns) * 4ULL;
 }
+
+uint32_t cpu_ras_key(const vcpu_t *cpu);
+
+CPU_ALWAYS_INLINE void cpu_ras_rekey(vcpu_t *cpu) {
+    cpu->ras_epoch = (uint32_t)cpu->ras_epoch | ((uint64_t)cpu_ras_key(cpu) << 32);
+}
+
+CPU_ALWAYS_INLINE uint32_t cpu_traps_key(uint32_t traps) {
+    return traps & ~(uint32_t)(CPU_TRAP_TWI | CPU_TRAP_TWE);
+}
+
+void cpu_pool_attach(vcpu_t *cpu);
+bool cpu_qs_announce(vcpu_t *cpu);
+void cpu_qs_park(vcpu_t *cpu);
+bool cpu_qs_unpark(vcpu_t *cpu);
+bool cpu_qs_parked(const cpu_pool_t *pool, uint32_t cpu_id);
+uint64_t cpu_qs_retire_epoch(cpu_pool_t *pool);
+uint64_t cpu_qs_quiescent(cpu_pool_t *pool, const vcpu_t *self);
+void cpu_jit_publish(cpu_pool_t *pool);
+void cpu_qs_wait(cpu_pool_t *pool, vcpu_t *self, uint64_t target);
+ir_page_t *cpu_pool_find(cpu_pool_t *pool, uint64_t pa_page, uint8_t el, uint8_t world, uint32_t traps,
+                         uint32_t *gen_out);
+ir_page_t *cpu_pool_alloc(cpu_pool_t *pool, vcpu_t *self);
+void cpu_pool_trim(cpu_pool_t *pool, const vcpu_t *self);
+void cpu_pool_publish(cpu_pool_t *pool, ir_page_t *pg);
+_Atomic uint32_t *cpu_pool_pfn_gen(cpu_pool_t *pool, uint64_t pa_page);
+uint64_t cpu_pool_retire_pa(cpu_pool_t *pool, uint64_t pa_page);
+uint64_t cpu_pool_retire_all(cpu_pool_t *pool);
+void vcpu_retire_icache_pa(vcpu_t *cpu, uint64_t pa_page);
+ir_page_t *cpu_pool_live(cpu_pool_t *pool, uint64_t pa_page, uint8_t el, uint8_t world, uint32_t traps);
 
 CPU_ALWAYS_INLINE uint64_t cpu_get_x(const vcpu_t *cpu, uint32_t reg) {
     return cpu->x[reg];

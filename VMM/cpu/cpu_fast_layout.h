@@ -6,6 +6,7 @@
 #define IR_IMM_HI 12
 #define IR_OP 20
 #define IR_FLAGS 22
+#define IR_HEAT 23
 #define IR_OFFSET 24
 #define IR_RD 28
 #define IR_RN 29
@@ -30,10 +31,10 @@
 #define CPU_FPSR 320
 #define CPU_IRQ 328
 #define CPU_STOP 332
+#define CPU_SHOOTDOWN 335
 #define CPU_IRQ_MASK 340
 #define CPU_SALT 344
 #define CPU_TLB_EPOCH 352
-#define CPU_ICACHE_EPOCH 360
 #define CPU_ICACHE_SHOOTDOWN 368
 #define CPU_VM 376
 #define CPU_ICACHE 384
@@ -41,7 +42,6 @@
 #define CPU_RAS_EPOCH 408
 #define CPU_V 416
 #define V_SLOT (CPU_V / 16)
-#define CPU_IC_IVAU_LAST 936
 #define CPU_EXCL_VAL 944
 #define CPU_SCTLR 960
 #define CPU_CNTKCTL 1056
@@ -56,9 +56,7 @@
 #define CPU_TLB 1784
 #define CPU_EXEC_CACHE 1792
 
-#define VM_TLB_EPOCH 88
-#define VM_ICACHE_EPOCH 96
-#define VM_WFE_WAITERS 104
+#define VM_WFE_WAITERS 256
 
 #define COMMPAGE_TIMEBASE_OFFSET 0x0000000FFFFFC088
 #define COMMPAGE_USER_TIMEBASE 0x0000000FFFFFC090
@@ -72,17 +70,17 @@
 #define VMM_DCZID_BS 4
 #define CPU_PT_WIDE_RM 0x80000000
 
-#define PAGE_PA 0
-#define PAGE_VA 8
-#define PAGE_DECODED_MASK 24
-#define PAGE_GEN 28
-#define PAGE_JIT 32
-#define PAGE_INSNS 48
+#define PAGE_GEN 0
+#define PAGE_REF 4
+#define PAGE_INSNS 64
+#define POOL_SLOT_MASK 0xffffffffffff0000
 
 #define IC_CUR_PAGE 0
 #define IC_CUR_EXEC_EPOCH 8
-#define IC_RAS_SP 16
-#define IC_STAT_DISPATCHES 32
+#define IC_CUR_VA 16
+#define IC_CUR_GEN 24
+#define IC_RAS_SP 32
+#define IC_STAT_DISPATCHES 48
 #define IC_RAS 64
 
 #endif

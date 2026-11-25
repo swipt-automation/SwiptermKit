@@ -99,7 +99,7 @@ void mmu_update_asid_salt(vcpu_t *cpu);
 void mmu_tlbi_all(vcpu_t *cpu);
 void mmu_tlbi(vcpu_t *cpu, vmm_tlbi_t op, bool inner_shareable);
 bool mmu_poll_shootdown(vcpu_t *cpu);
-void mmu_icache_broadcast(vcpu_t *cpu);
+bool mmu_icache_sync(vcpu_t *cpu);
 void *mmu_gpa_to_hva(const vmm_machine_t *vm, uint64_t gpa, size_t len);
 
 #endif

@@ -3,7 +3,6 @@ enum : uint32_t {
     JIT_CODE_WORDS = 16384,
     JIT_STUBS = 320,
     JIT_FIXUPS = 1024,
-    JIT_HEAT = 32,
 };
 
 enum : uint32_t {
@@ -19,6 +18,7 @@ enum : uint32_t {
     X_SALT = 23,
     X_FAST = 24,
     X_PAGE = 25,
+    X_VA = 26,
     X_USER_TAG = 27,
     X_RAS = 28,
     X_LR = 30,
@@ -91,7 +91,6 @@ typedef enum jit_sysop : uint8_t {
     JIT_SYS_ZVA,
     JIT_SYS_DC_EL0,
     JIT_SYS_DC_EL1,
-    JIT_SYS_IVAU,
 } jit_sysop_t;
 
 typedef enum jit_stub_kind : uint8_t {
@@ -127,7 +126,12 @@ typedef struct jit_work {
     uint32_t code[JIT_CODE_WORDS];
     jit_stub_t stubs[JIT_STUBS];
     jit_fixup_t fixups[JIT_FIXUPS];
+    jit_fixup_t sites[JIT_FIXUPS];
     uint32_t positions[JIT_STUBS];
+    uint32_t chunk_seg;
+    uint32_t chunk_gen;
+    uint32_t chunk_pos;
+    uint32_t chunk_end;
 } jit_work_t;
 
 typedef struct jit {
@@ -148,6 +152,15 @@ typedef struct jit {
     uint8_t fp;
     uint8_t el;
     uint8_t world;
+    bool loop;
+    bool self_loop;
+    uint32_t sites;
+    uint32_t seg_lo;
+    uint32_t seg_hi;
+    uint64_t used;
+    uint32_t vused;
+    uint32_t head;
+    jit_regs_t head_regs;
 } jit_t;
 
 typedef struct jit_fields {
@@ -196,11 +209,11 @@ static inline uint32_t A_MOVW(uint32_t rd, uint32_t rm) {
 static inline uint32_t A_EOR(uint32_t rd, uint32_t rn, uint32_t rm) {
     return 0xCA000000U | (rm << 16) | (rn << 5) | rd;
 }
+static inline uint32_t A_EOR_LSR(uint32_t rd, uint32_t rn, uint32_t rm, uint32_t shift) {
+    return 0xCA400000U | (rm << 16) | (shift << 10) | (rn << 5) | rd;
+}
 static inline uint32_t A_AND(uint32_t rd, uint32_t rn, uint32_t rm) {
     return 0x8A000000U | (rm << 16) | (rn << 5) | rd;
-}
-static inline uint32_t A_EORW(uint32_t rd, uint32_t rn, uint32_t rm) {
-    return 0x4A000000U | (rm << 16) | (rn << 5) | rd;
 }
 static inline uint32_t A_ANDW(uint32_t rd, uint32_t rn, uint32_t rm) {
     return 0x0A000000U | (rm << 16) | (rn << 5) | rd;
@@ -332,6 +345,7 @@ enum : uint32_t {
     A_DMB_ISHLD = 0xD50339BFU,
     A_DMB_ISHST = 0xD5033ABFU,
     A_DC_ZVA = 0xD50B7420U,
+    A_NOP = 0xD503201FU,
 };
 
 static uint32_t jit_bitmask(uint64_t imm, bool wide) {
@@ -386,10 +400,6 @@ static void jit_emit(jit_t *j, uint32_t word) {
 
 static uintptr_t jit_pc(const jit_t *j) {
     return j->rx + (uintptr_t)j->n * 4U;
-}
-
-static uint64_t jit_guest_pc(const jit_t *j) {
-    return j->pg->va_page + (uint64_t)j->k * 4ULL;
 }
 
 static void jit_patch(jit_t *j, uint32_t site, uint32_t target) {
@@ -559,6 +569,7 @@ static uint32_t jit_slot(jit_t *j, uint32_t slot, bool load) {
     }
     j->locked |= 1U << host;
     j->stamp[host] = ++j->clock;
+    j->used |= 1ULL << slot;
     return (uint32_t)host;
 }
 
@@ -645,6 +656,7 @@ static void jit_vector_use(jit_t *j, uint32_t reg) {
 }
 
 static void jit_flush(jit_t *j, const jit_regs_t *regs) {
+    j->vused |= regs->vloaded;
     for (uint32_t slot = 0; slot < SLOTS; ++slot) {
         if ((regs->dirty & (1ULL << slot)) == 0) {
             continue;
@@ -716,7 +728,7 @@ static void jit_helper_call(jit_t *j) {
     jit_add_imm(j, 1, X_PAGE, (int64_t)j->k * IR_SIZE);
     jit_emit(j, A_MOV(2, X_TLB_R));
     jit_emit(j, A_MOV(3, X_TLB_W));
-    jit_call(j, (const void *)cpu_fast_call);
+    jit_jump(j, cpu_fast_base() + cpu_fast_offsets[FAST_jit_helper], true);
     jit_add_imm(j, X_ADDR, X_PAGE, (int64_t)(j->k + 1U) * IR_SIZE);
     jit_emit(j, A_EOR(X_ADDR, X_ADDR, 0));
     jit_to_stub(j, A_CBZ(X_ADDR, true, true, 0), jit_stub(j, JIT_STUB_RETURN, 0));
@@ -732,57 +744,98 @@ static void jit_helper(jit_t *j) {
 }
 
 static void jit_exit_insn(jit_t *j, uint32_t index) {
-    uint32_t offset = j->pg->insns[index].fast_offset;
     if (index == j->start) {
         jit_jump(j, j->rx, false);
-    } else if (index < IR_PAGE_INSNS && offset >= jit_base_offset) {
-        jit_jump(j, cpu_fast_base() + offset, false);
-    } else {
-        jit_set_ir(j, index);
-        jit_dispatch(j);
+        return;
     }
-}
-
-static void jit_goto(jit_t *j, uint64_t target) {
-    if ((target & ~(uint64_t)VMM_PAGE_MASK) == j->pg->va_page) {
-        uint32_t index = (uint32_t)(target & VMM_PAGE_MASK) >> 2;
-        if (j->pg->decoded_mask & (1U << (index >> TILE_SHIFT))) {
-            if (index > j->k) {
-                jit_exit_insn(j, index);
-                return;
-            }
-            jit_emit(j, A_LDRW(X_TMP, X_CPU, CPU_BUDGET));
-            jit_emit(j, A_SUBWI(X_TMP, X_TMP, 1));
-            jit_emit(j, A_STRW(X_TMP, X_CPU, CPU_BUDGET));
-            uint32_t zero = j->n;
-            jit_emit(j, A_CBZ(X_TMP, false, false, 0));
-            uint32_t negative = j->n;
-            jit_emit(j, A_TBZ(X_TMP, 31, true, 0));
-            jit_exit_insn(j, index);
-            jit_patch(j, zero, j->n);
-            jit_patch(j, negative, j->n);
-            jit_set_ir(j, index);
-            jit_interp(j, FAST_poll);
+    if (index < IR_PAGE_INSNS) {
+        uint32_t offset = __atomic_load_n(&j->pg->insns[index].fast_offset, __ATOMIC_RELAXED);
+        if (offset >= j->seg_lo && offset < j->seg_hi) {
+            jit_jump(j, cpu_fast_base() + offset, false);
             return;
         }
+        if (j->sites < JIT_FIXUPS) {
+            j->w->sites[j->sites++] = (jit_fixup_t){j->n, index};
+        }
+        jit_emit(j, A_NOP);
     }
-    jit_mov_imm(j, X_TARGET, target);
+    jit_set_ir(j, index);
+    jit_dispatch(j);
+}
+
+static void jit_budget(jit_t *j, uint32_t *zero, uint32_t *negative) {
+    jit_emit(j, A_LDRW(X_TMP, X_CPU, CPU_BUDGET));
+    jit_emit(j, A_SUBWI(X_TMP, X_TMP, 1));
+    jit_emit(j, A_STRW(X_TMP, X_CPU, CPU_BUDGET));
+    *zero = j->n;
+    jit_emit(j, A_CBZ(X_TMP, false, false, 0));
+    *negative = j->n;
+    jit_emit(j, A_TBZ(X_TMP, 31, true, 0));
+}
+
+static void jit_loop_back(jit_t *j, const jit_regs_t *regs) {
+    const jit_regs_t *head = &j->head_regs;
+    for (uint32_t slot = 0; slot < SLOTS; ++slot) {
+        if ((regs->dirty & (1ULL << slot)) != 0 && regs->host[slot] != head->host[slot]) {
+            jit_emit(j, A_STRX((uint32_t)regs->host[slot], X_CPU, slot * 8U));
+        }
+    }
+    jit_vector_spill(j, regs->vdirty & ~head->vdirty, false);
+    for (uint32_t slot = 0; slot < SLOTS; ++slot) {
+        if (head->host[slot] >= 0 && regs->host[slot] != head->host[slot]) {
+            jit_emit(j, A_LDRX((uint32_t)head->host[slot], X_CPU, slot * 8U));
+        }
+    }
+    jit_vector_spill(j, head->vloaded & ~regs->vloaded, true);
+    uint32_t zero, negative;
+    jit_budget(j, &zero, &negative);
+    jit_emit(j, A_B((int32_t)j->head - (int32_t)j->n));
+    jit_patch(j, zero, j->n);
+    jit_patch(j, negative, j->n);
+    jit_flush(j, head);
+    jit_set_ir(j, j->start);
+    jit_interp(j, FAST_poll);
+}
+
+static void jit_goto(jit_t *j, int64_t rel, const jit_regs_t *regs) {
+    if (rel >= 0 && rel < VMM_PAGE_SIZE) {
+        uint32_t index = (uint32_t)rel >> 2;
+        if (index == j->start) {
+            j->self_loop = true;
+            if (j->loop) {
+                jit_loop_back(j, regs);
+                return;
+            }
+        }
+        jit_flush(j, regs);
+        if (index > j->k) {
+            jit_exit_insn(j, index);
+            return;
+        }
+        uint32_t zero, negative;
+        jit_budget(j, &zero, &negative);
+        jit_exit_insn(j, index);
+        jit_patch(j, zero, j->n);
+        jit_patch(j, negative, j->n);
+        jit_set_ir(j, index);
+        jit_interp(j, FAST_poll);
+        return;
+    }
+    jit_flush(j, regs);
+    jit_add_imm(j, X_TARGET, X_VA, rel);
     jit_interp(j, FAST_cross_page);
 }
 
 static void jit_push_return(jit_t *j) {
     jit_emit(j, A_LDRX(X_LR, X_CPU, CPU_ICACHE));
-    jit_emit(j, A_ADDI(X_LR, X_LR, IC_RAS, 0));
     jit_emit(j, A_ANDWI(X_ADDR, X_RAS, RAS_MASK));
-    jit_emit(j, A_ADDR(X_LR, X_LR, X_ADDR, 5));
-    jit_mov_imm(j, X_TMP, jit_guest_pc(j) + 4U);
+    jit_emit(j, A_ADDR(X_ADDR, X_LR, X_ADDR, 5));
+    jit_add_imm(j, X_TMP, X_VA, (int64_t)(j->k + 1U) * 4);
     jit_add_imm(j, X_TMP1, X_PAGE, (int64_t)(j->k + 1U) * IR_SIZE);
-    jit_emit(j, A_STPX(X_TMP, X_TMP1, X_LR, 0));
-    jit_emit(j, 0xD1000000U | ((uint32_t)PAGE_INSNS << 10) | (X_PAGE << 5) | X_ADDR);
-    jit_emit(j, A_LDRW(X_TMP2, X_CPU, CPU_RAS_EPOCH));
-    jit_emit(j, A_MOVK(X_TMP2, j->pg->gen & 0xFFFFU, 2));
-    jit_emit(j, A_MOVK(X_TMP2, j->pg->gen >> 16, 3));
-    jit_emit(j, A_STPX(X_ADDR, X_TMP2, X_LR, 16));
+    jit_emit(j, A_STPX(X_TMP, X_TMP1, X_ADDR, IC_RAS));
+    jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_RAS_EPOCH));
+    jit_emit(j, A_LDRX(X_TMP, X_LR, IC_CUR_GEN));
+    jit_emit(j, A_STPX(X_TMP2, X_TMP, X_ADDR, IC_RAS + 16));
     jit_emit(j, A_ADDWI(X_RAS, X_RAS, 1));
 }
 
@@ -839,13 +892,12 @@ static void jit_tlb(jit_t *j, uint32_t bank, uint32_t bytes, uint32_t align, boo
     for (uint32_t pass = 0; pass < 2; ++pass) {
         bool user = (pass == 0) == (j->el == 0);
         if (user) {
-            jit_emit(j, A_LSRI(X_TMP2, X_ADDR, 12));
-            jit_emit(j, A_EORW(X_TMP2, X_TMP2, X_SALT));
+            jit_emit(j, A_EOR_LSR(X_TMP2, X_SALT, X_ADDR, 12));
             jit_emit(j, A_ANDI(X_TMP, X_ADDR, 0x0000FFFFFFFFF000ULL));
             jit_emit(j, A_ORR(X_TMP, X_TMP, X_USER_TAG, 0));
         } else {
-            jit_emit(j, A_ADDWI(X_LR, X_LR, 1));
-            jit_cold_unless_bit(j, X_LR, 16, true);
+            jit_emit(j, A_EORWI(X_LR, X_LR, 0xFFFFU));
+            jit_to_stub(j, A_CBZ(X_LR, false, true, 0), jit_cold(j));
             jit_emit(j, A_LSRI(X_TMP2, X_ADDR, 12));
             jit_emit(j, A_ANDI(X_TMP, X_ADDR, 0x0000FFFFFFFFF000ULL));
             jit_emit(j, A_ANDI(X_LR, X_SALT, MMU_SALT_MMU_OFF));
@@ -1189,7 +1241,6 @@ static jit_sysop_t jit_sysop(uint32_t word, const ir_page_t *pg) {
     case A64_SYSOP_DC_ISW:
     case A64_SYSOP_DC_CSW:
     case A64_SYSOP_DC_CISW: return JIT_SYS_DC_EL1;
-    case A64_SYSOP_IC_IVAU: return JIT_SYS_IVAU;
     default: return JIT_SYS_NONE;
     }
 }
@@ -1382,13 +1433,12 @@ static void jit_adr(jit_t *j, uint32_t word) {
         return;
     }
     int64_t imm = cpu_sext((((word >> 5) & 0x7FFFFULL) << 2) | ((word >> 29) & 3ULL), 21);
-    uint64_t pc = jit_guest_pc(j);
-    uint64_t value = (word >> 31) ? (pc & ~(uint64_t)VMM_PAGE_MASK) + (uint64_t)(imm << 12) : pc + (uint64_t)imm;
-    jit_mov_imm(j, jit_write(j, rd, false, false), value);
+    int64_t rel = (word >> 31) ? (int64_t)((uint64_t)imm << 12) : (int64_t)j->k * 4 + imm;
+    jit_add_imm(j, jit_write(j, rd, false, false), X_VA, rel);
     jit_dirty(j, rd, false);
 }
 
-static uint64_t jit_branch_target(const jit_t *j, uint32_t word, a64_dec_op_t dec) {
+static int64_t jit_branch_target(const jit_t *j, uint32_t word, a64_dec_op_t dec) {
     int64_t offset;
     if (dec == A64_DEC_BRANCH_IMM_B || dec == A64_DEC_BRANCH_IMM_BL) {
         offset = cpu_sext(word & 0x03FFFFFFU, 26);
@@ -1397,7 +1447,7 @@ static uint64_t jit_branch_target(const jit_t *j, uint32_t word, a64_dec_op_t de
     } else {
         offset = cpu_sext((word >> 5) & 0x7FFFFU, 19);
     }
-    return jit_guest_pc(j) + (uint64_t)(offset * 4);
+    return (int64_t)j->k * 4 + offset * 4;
 }
 
 static void jit_branch_reg(jit_t *j, uint32_t word, jit_kind_t kind) {
@@ -1405,7 +1455,7 @@ static void jit_branch_reg(jit_t *j, uint32_t word, jit_kind_t kind) {
     jit_flush(j, &j->regs);
     jit_read_into(j, X_TARGET, rn);
     if (kind == JIT_BLR) {
-        jit_mov_imm(j, X_TMP2, jit_guest_pc(j) + 4U);
+        jit_add_imm(j, X_TMP2, X_VA, (int64_t)(j->k + 1U) * 4);
         jit_emit(j, A_STRX(X_TMP2, X_CPU, 30 * 8));
         jit_push_return(j);
     }
@@ -1531,7 +1581,7 @@ static void jit_literal(jit_t *j, uint32_t word) {
     if (vector) {
         jit_fp(j, 1);
     }
-    jit_mov_imm(j, X_ADDR, jit_guest_pc(j) + (uint64_t)(cpu_sext((word >> 5) & 0x7FFFFU, 19) * 4));
+    jit_add_imm(j, X_ADDR, X_VA, (int64_t)j->k * 4 + cpu_sext((word >> 5) & 0x7FFFFU, 19) * 4);
     jit_tlb(j, X_TLB_R, bytes[vector][opc], bytes[vector][opc], false);
     jit_emit(j, (vector ? simd[opc] : gpr[opc]) | (X_ADDR << 5) | data);
     if (vector) {
@@ -2149,14 +2199,6 @@ static void jit_sys(jit_t *j, uint32_t word) {
     case JIT_SYS_DC_EL0:
         jit_el0_check(j, CPU_SCTLR, 26);
         break;
-    case JIT_SYS_IVAU:
-        jit_el0_check(j, CPU_SCTLR, 26);
-        jit_emit(j, A_MOVN(X_TMP2, VMM_PAGE_MASK, 0));
-        jit_emit(j, A_AND(X_TMP2, data, X_TMP2));
-        jit_emit(j, A_LDRX(X_TMP, X_CPU, CPU_IC_IVAU_LAST));
-        jit_emit(j, A_EOR(X_TMP2, X_TMP2, X_TMP));
-        jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), jit_cold(j));
-        break;
     default:
         break;
     }
@@ -2174,9 +2216,14 @@ static void jit_barrier(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     }
     jit_emit(j, A_LDRB(X_TMP2, X_CPU, CPU_ICACHE_SHOOTDOWN));
     jit_to_stub(j, A_CBZ(X_TMP2, false, true, 0), cold);
-    jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_ICACHE));
-    jit_emit(j, A_LDRX(X_TMP2, X_TMP2, IC_CUR_EXEC_EPOCH));
+    jit_emit(j, A_LDRX(X_TMP1, X_CPU, CPU_ICACHE));
+    jit_emit(j, A_LDRX(X_TMP2, X_TMP1, IC_CUR_EXEC_EPOCH));
     jit_emit(j, A_LDRX(X_TMP, X_CPU, CPU_EXEC_EPOCH));
+    jit_emit(j, A_EOR(X_TMP2, X_TMP2, X_TMP));
+    jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
+    jit_emit(j, A_LDRX(X_TMP2, X_TMP1, IC_CUR_GEN));
+    jit_emit(j, A_SUBI(X_TMP, X_PAGE, PAGE_INSNS));
+    jit_emit(j, A_LDRW(X_TMP, X_TMP, PAGE_GEN));
     jit_emit(j, A_EOR(X_TMP2, X_TMP2, X_TMP));
     jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
 }
@@ -2196,42 +2243,39 @@ static bool jit_insn(jit_t *j, uint32_t word, const ir_insn_t *ir, bool *ended) 
         jit_adr(j, word);
         break;
     case JIT_B:
-        jit_flush(j, &j->regs);
-        jit_goto(j, jit_branch_target(j, word, dec));
+        jit_goto(j, jit_branch_target(j, word, dec), &j->regs);
         *ended = true;
         break;
     case JIT_BL: {
         uint32_t lr = jit_write(j, 30, false, false);
-        jit_mov_imm(j, lr, jit_guest_pc(j) + 4U);
+        jit_add_imm(j, lr, X_VA, (int64_t)(j->k + 1U) * 4);
         jit_dirty(j, 30, false);
         jit_push_return(j);
-        jit_flush(j, &j->regs);
-        jit_goto(j, jit_branch_target(j, word, dec));
+        jit_goto(j, jit_branch_target(j, word, dec), &j->regs);
         *ended = true;
         break;
     }
     case JIT_BCOND: {
-        uint64_t target = jit_branch_target(j, word, dec);
+        int64_t target = jit_branch_target(j, word, dec);
         if ((word & 15U) >= 14U) {
-            jit_flush(j, &j->regs);
-            jit_goto(j, target);
+            jit_goto(j, target, &j->regs);
             *ended = true;
         } else {
-            jit_to_stub(j, A_BCOND(word & 15U), jit_stub(j, JIT_STUB_GOTO, target));
+            jit_to_stub(j, A_BCOND(word & 15U), jit_stub(j, JIT_STUB_GOTO, (uint64_t)target));
         }
         break;
     }
     case JIT_CB: {
         uint32_t reg = jit_read(j, word & 31U, false);
         jit_to_stub(j, A_CBZ(reg, (word >> 31) != 0, ((word >> 24) & 1U) != 0, 0),
-                    jit_stub(j, JIT_STUB_GOTO, jit_branch_target(j, word, dec)));
+                    jit_stub(j, JIT_STUB_GOTO, (uint64_t)jit_branch_target(j, word, dec)));
         break;
     }
     case JIT_TB: {
         uint32_t reg = jit_read(j, word & 31U, false);
         uint32_t bit = ((word >> 31) << 5) | ((word >> 19) & 31U);
         jit_emit(j, A_TBZ(reg, bit, ((word >> 24) & 1U) == 0, 2));
-        jit_to_stub(j, A_B(0), jit_stub(j, JIT_STUB_GOTO, jit_branch_target(j, word, dec)));
+        jit_to_stub(j, A_B(0), jit_stub(j, JIT_STUB_GOTO, (uint64_t)jit_branch_target(j, word, dec)));
         break;
     }
     case JIT_BR:
@@ -2326,8 +2370,7 @@ static void jit_emit_stub(jit_t *j, const jit_stub_t *stub) {
         jit_interp(j, FAST_cold);
         break;
     case JIT_STUB_GOTO:
-        jit_flush(j, &stub->regs);
-        jit_goto(j, stub->target);
+        jit_goto(j, (int64_t)stub->target, &stub->regs);
         break;
     case JIT_STUB_RETURN:
         jit_interp(j, FAST_cold_return);
@@ -2353,24 +2396,51 @@ static void jit_emit_stub(jit_t *j, const jit_stub_t *stub) {
     }
 }
 
-static uint32_t jit_compile(jit_t *j) {
+static void jit_prologue(jit_t *j) {
+    uint32_t next = 0;
+    for (uint32_t slot = 0; slot < SLOTS; ++slot) {
+        if ((j->used & (1ULL << slot)) == 0) {
+            continue;
+        }
+        uint32_t host = jit_pool[next++];
+        j->regs.host[slot] = (int8_t)host;
+        j->regs.guest[host] = (int8_t)slot;
+        j->regs.dirty |= 1ULL << slot;
+    }
+    jit_reload(j, &j->regs);
+    j->regs.vloaded = j->vused;
+    j->regs.vdirty = j->vused;
+    jit_vector_spill(j, j->vused, true);
+    j->head = j->n;
+    j->head_regs = j->regs;
+}
+
+static uint32_t jit_pass(jit_t *j) {
     ir_page_t *pg = j->pg;
-    uint32_t enter = cpu_fast_offsets[FAST_jit_enter];
+    j->n = 0;
+    j->stubs = 0;
+    j->fixups = 0;
+    j->sites = 0;
+    j->overflow = false;
+    j->fp = 0;
+    j->clock = 0;
+    memset(j->stamp, 0, sizeof(j->stamp));
+    jit_regs_clear(&j->regs);
+    if (j->loop) {
+        jit_prologue(j);
+    }
     uint32_t k = j->start;
     bool ended = false;
-    while (!ended && k < IR_PAGE_INSNS && k - j->start < JIT_BLOCK_INSNS &&
-           (pg->decoded_mask & (1U << (k >> TILE_SHIFT))) != 0) {
+    while (!ended && k < IR_PAGE_INSNS && k - j->start < JIT_BLOCK_INSNS) {
         const ir_insn_t *ir = &pg->insns[k];
-        if (ir->fast_offset != enter && ir->fast_offset < jit_base_offset) {
-            break;
-        }
-        uint32_t word = pg->jit->word[k];
+        uint32_t word = pg->words[k];
         j->k = k;
         j->cold = -1;
         j->locked = 0;
         if (!jit_insn(j, word, ir, &ended)) {
             break;
         }
+        j->vused |= j->regs.vloaded;
         ++k;
     }
     if (k == j->start) {
@@ -2392,73 +2462,475 @@ static uint32_t jit_compile(jit_t *j) {
     return j->overflow ? 0 : j->n;
 }
 
-uint32_t cpu_jit_enter(vcpu_t *cpu, ir_insn_t *ir) {
-    cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
-    ir_page_t *pg = ic->cur_page;
-    cpu_jit_arena_t *arena = &ic->jit;
-    if (arena->size - arena->used < JIT_CODE_WORDS * 4U) {
-        cpu->pc = cpu_ir_pc(cpu, ir);
-        vcpu_flush_icache_all(cpu);
-        return UINT32_MAX;
+static uint32_t jit_compile(jit_t *j) {
+    uint32_t words = jit_pass(j);
+    if (words == 0 || !j->self_loop || (uint32_t)__builtin_popcountll(j->used) > sizeof(jit_pool)) {
+        return words;
     }
-    jit_t j = {
-        .w = arena->work,
-        .pg = pg,
-        .rx = (uintptr_t)arena->rx + arena->used,
-        .start = (uint32_t)(ir - pg->insns),
+    j->loop = true;
+    uint32_t looped = jit_pass(j);
+    if (looped != 0) {
+        return looped;
+    }
+    j->loop = false;
+    return jit_pass(j);
+}
+
+static uint32_t jit_patch_bucket(uint64_t pa_page, uint32_t index) {
+    return (uint32_t)(((pa_page + index * 4ULL) >> 2) * 0x9E3779B97F4A7C15ULL >> 40) & (JIT_BUCKETS - 1U);
+}
+
+static void jit_unhash_patch(cpu_jit_pool_t *jp, uint32_t p) {
+    cpu_jit_patch_t *patch = &jp->patches[p];
+    uint32_t *link = &jp->patch_heads[jit_patch_bucket(patch->pa_page, patch->index)];
+    while (*link != p) {
+        link = &jp->patches[*link].next;
+    }
+    *link = patch->next;
+    patch->hashed = false;
+}
+
+static void jit_unhash_block(cpu_jit_pool_t *jp, uint32_t b) {
+    uint32_t *link = &jp->heads[cpu_pa_bucket(jp->blocks[b].pa_page, JIT_BUCKETS)];
+    while (*link != b) {
+        link = &jp->blocks[*link].next;
+    }
+    *link = jp->blocks[b].next;
+}
+
+static void jit_backfill(cpu_jit_pool_t *jp, const cpu_jit_block_t *block) {
+    uint32_t *link = &jp->patch_heads[jit_patch_bucket(block->pa_page, block->index)];
+    while (*link != POOL_NONE) {
+        uint32_t p = *link;
+        cpu_jit_patch_t *patch = &jp->patches[p];
+        if (patch->seg == block->seg && patch->index == block->index && patch->pa_page == block->pa_page &&
+            patch->el == block->el && patch->world == block->world && patch->traps == block->traps &&
+            patch->pfn_gen == block->pfn_gen && patch->code_gen == block->code_gen) {
+            uint32_t target = block->offset - jp->arena.base_offset;
+            cpu_jit_arena_patch(&jp->arena, patch->site, A_B((int32_t)(target - patch->site) >> 2));
+            *link = patch->next;
+            patch->hashed = false;
+        } else {
+            link = &patch->next;
+        }
+    }
+}
+
+static void jit_publish_block(cpu_pool_t *pool, uint32_t b) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    cpu_jit_block_t *block = &jp->blocks[b];
+    os_unfair_lock_lock(&pool->lock);
+    bool current = atomic_load_explicit(cpu_pool_pfn_gen(pool, block->pa_page), memory_order_relaxed) ==
+                       block->pfn_gen &&
+                   atomic_load_explicit(&pool->code_gen, memory_order_relaxed) == block->code_gen;
+    ir_page_t *pg = current ? cpu_pool_live(pool, block->pa_page, block->el, block->world, block->traps) : NULL;
+    if (pg != NULL) {
+        uint32_t expected = block->orig;
+        current = pg->pfn_gen == block->pfn_gen && pg->code_gen == block->code_gen && pg->hash == block->hash &&
+                  __atomic_compare_exchange_n(&pg->insns[block->index].fast_offset, &expected, block->offset, false,
+                                              __ATOMIC_RELEASE, __ATOMIC_RELAXED);
+    }
+    os_unfair_lock_unlock(&pool->lock);
+    if (!current) {
+        block->state = JIT_BLOCK_DEAD;
+        return;
+    }
+    block->state = JIT_BLOCK_LIVE;
+    uint32_t *head = &jp->heads[cpu_pa_bucket(block->pa_page, JIT_BUCKETS)];
+    block->next = *head;
+    *head = b;
+    jit_backfill(jp, block);
+}
+
+static void jit_drain_locked(cpu_pool_t *pool, uint64_t quiescent) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    while (jp->pend_head != POOL_NONE && jp->blocks[jp->pend_head].epoch <= quiescent) {
+        uint32_t b = jp->pend_head;
+        jp->pend_head = jp->blocks[b].pend_next;
+        if (jp->pend_head == POOL_NONE) {
+            jp->pend_tail = POOL_NONE;
+        }
+        if (jp->blocks[b].state == JIT_BLOCK_PENDING) {
+            jit_publish_block(pool, b);
+        }
+    }
+    atomic_store_explicit(&jp->pend_epoch, jp->pend_head == POOL_NONE ? UINT64_MAX : jp->blocks[jp->pend_head].epoch,
+                          memory_order_relaxed);
+}
+
+void cpu_jit_publish(cpu_pool_t *pool) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    uint64_t pending = atomic_load_explicit(&jp->pend_epoch, memory_order_relaxed);
+    if (pending == UINT64_MAX || pending > cpu_qs_quiescent(pool, NULL) || !os_unfair_lock_trylock(&jp->lock)) {
+        return;
+    }
+    if (atomic_load_explicit(&jp->active, memory_order_relaxed)) {
+        jit_drain_locked(pool, cpu_qs_quiescent(pool, NULL));
+    }
+    os_unfair_lock_unlock(&jp->lock);
+}
+
+static void jit_retire_segment_locked(cpu_pool_t *pool, uint32_t seg) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    os_unfair_lock_lock(&pool->lock);
+    for (uint32_t b = jp->seg[seg].blocks; b != POOL_NONE; b = jp->blocks[b].seg_next) {
+        cpu_jit_block_t *block = &jp->blocks[b];
+        if (block->state == JIT_BLOCK_PENDING) {
+            block->state = JIT_BLOCK_DEAD;
+        }
+        if (block->state != JIT_BLOCK_LIVE) {
+            continue;
+        }
+        block->state = JIT_BLOCK_DEAD;
+        jit_unhash_block(jp, b);
+        ir_page_t *pg = cpu_pool_live(pool, block->pa_page, block->el, block->world, block->traps);
+        if (pg != NULL) {
+            uint32_t expected = block->offset;
+            if (__atomic_compare_exchange_n(&pg->insns[block->index].fast_offset, &expected, block->orig, false,
+                                            __ATOMIC_RELEASE, __ATOMIC_RELAXED)) {
+                __atomic_store_n(&pg->insns[block->index].heat, JIT_REHEAT, __ATOMIC_RELAXED);
+            }
+        }
+    }
+    os_unfair_lock_unlock(&pool->lock);
+    for (uint32_t p = jp->seg[seg].patches; p != POOL_NONE; p = jp->patches[p].seg_next) {
+        if (jp->patches[p].hashed) {
+            jit_unhash_patch(jp, p);
+        }
+    }
+    jp->seg[seg].gen = ++jp->gen;
+    jp->seg[seg].state = JIT_SEG_RETIRED;
+    jp->seg[seg].retire = cpu_qs_retire_epoch(pool);
+}
+
+static void jit_free_segment_locked(cpu_pool_t *pool, uint32_t seg, uint64_t quiescent) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    jit_drain_locked(pool, quiescent);
+    for (uint32_t b = jp->seg[seg].blocks, next; b != POOL_NONE; b = next) {
+        next = jp->blocks[b].seg_next;
+        jp->blocks[b].state = JIT_BLOCK_FREE;
+        jp->blocks[b].next = jp->block_free;
+        jp->block_free = b;
+        jp->block_avail++;
+    }
+    for (uint32_t p = jp->seg[seg].patches, next; p != POOL_NONE; p = next) {
+        next = jp->patches[p].seg_next;
+        jp->patches[p].next = jp->patch_free;
+        jp->patch_free = p;
+    }
+    jp->seg[seg].blocks = POOL_NONE;
+    jp->seg[seg].patches = POOL_NONE;
+    jp->seg[seg].count = 0;
+    jp->seg[seg].state = JIT_SEG_FREE;
+}
+
+static uint32_t jit_open_segment_locked(cpu_pool_t *pool, uint64_t *wait) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    uint64_t quiescent = cpu_qs_quiescent(pool, NULL);
+    uint32_t pick = POOL_NONE, spare = 0;
+    for (uint32_t s = 0; s < jp->segments; ++s) {
+        cpu_jit_segment_t *seg = &jp->seg[s];
+        if (seg->state == JIT_SEG_RETIRED && seg->retire <= quiescent) {
+            jit_free_segment_locked(pool, s, quiescent);
+        }
+        if (seg->state == JIT_SEG_FREE && pick == POOL_NONE) {
+            pick = s;
+        } else if (seg->state == JIT_SEG_FREE || seg->state == JIT_SEG_RETIRED) {
+            ++spare;
+        }
+    }
+    uint32_t avail = jp->block_avail;
+    for (uint32_t s = 0; s < jp->segments; ++s) {
+        if (jp->seg[s].state == JIT_SEG_RETIRED) {
+            avail += jp->seg[s].count;
+        }
+    }
+    while (spare < JIT_RETIRE_AHEAD || avail < JIT_BLOCK_RESERVE) {
+        uint32_t victim = POOL_NONE;
+        for (uint32_t s = 0; s < jp->segments; ++s) {
+            const cpu_jit_segment_t *seg = &jp->seg[s];
+            if (seg->state == JIT_SEG_FULL && seg->holders == 0 &&
+                (victim == POOL_NONE || seg->seq < jp->seg[victim].seq)) {
+                victim = s;
+            }
+        }
+        if (victim == POOL_NONE) {
+            break;
+        }
+        jit_retire_segment_locked(pool, victim);
+        avail += jp->seg[victim].count;
+        ++spare;
+    }
+    if (pick == POOL_NONE) {
+        for (uint32_t s = 0; s < jp->segments; ++s) {
+            if (jp->seg[s].state == JIT_SEG_RETIRED && (*wait == 0 || jp->seg[s].retire < *wait)) {
+                *wait = jp->seg[s].retire;
+            }
+        }
+        return POOL_NONE;
+    }
+    jp->seg[pick].state = JIT_SEG_OPEN;
+    jp->seg[pick].seq = ++jp->seq;
+    return pick;
+}
+
+static bool jit_chunk_locked(cpu_pool_t *pool, jit_work_t *w, uint64_t *wait) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    if (w->chunk_seg != POOL_NONE) {
+        jp->seg[w->chunk_seg].holders--;
+    }
+    w->chunk_seg = POOL_NONE;
+    if (jp->open != POOL_NONE && jp->carve == JIT_SEGMENT_BYTES) {
+        jp->seg[jp->open].state = JIT_SEG_FULL;
+        jp->open = POOL_NONE;
+    }
+    if (jp->open == POOL_NONE) {
+        jp->open = jit_open_segment_locked(pool, wait);
+        jp->carve = 0;
+    }
+    if (jp->open == POOL_NONE) {
+        return false;
+    }
+    cpu_jit_segment_t *seg = &jp->seg[jp->open];
+    seg->holders++;
+    w->chunk_seg = jp->open;
+    w->chunk_gen = seg->gen;
+    w->chunk_pos = jp->open * JIT_SEGMENT_BYTES + jp->carve;
+    w->chunk_end = w->chunk_pos + JIT_CHUNK_BYTES;
+    jp->carve += JIT_CHUNK_BYTES;
+    return true;
+}
+
+static bool jit_record_locked(cpu_pool_t *pool, jit_t *j, uint32_t entry, uint32_t orig) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    jit_work_t *w = j->w;
+    ir_page_t *pg = j->pg;
+    if (jp->block_free == POOL_NONE) {
+        return false;
+    }
+    uint32_t b = jp->block_free;
+    cpu_jit_block_t *block = &jp->blocks[b];
+    jp->block_free = block->next;
+    jp->block_avail--;
+    *block = (cpu_jit_block_t){
+        .pa_page = pg->pa_page,
+        .hash = pg->hash,
+        .epoch = cpu_qs_retire_epoch(pool),
+        .traps = pg->traps,
+        .pfn_gen = pg->pfn_gen,
+        .code_gen = pg->code_gen,
+        .offset = jp->arena.base_offset + entry,
+        .orig = orig,
+        .next = POOL_NONE,
+        .seg_next = jp->seg[w->chunk_seg].blocks,
+        .pend_next = POOL_NONE,
+        .index = (uint16_t)j->start,
+        .seg = (uint16_t)w->chunk_seg,
         .el = pg->el,
         .world = pg->world,
+        .state = JIT_BLOCK_PENDING,
     };
-    jit_regs_clear(&j.regs);
-    uint32_t words = jit_compile(&j);
-    if (words == 0) {
-        ir->fast_offset = pg->jit->entry[j.start] >> 8;
-        return ir->fast_offset;
+    jp->seg[w->chunk_seg].blocks = b;
+    jp->seg[w->chunk_seg].count++;
+    if (jp->pend_tail == POOL_NONE) {
+        jp->pend_head = b;
+        atomic_store_explicit(&jp->pend_epoch, block->epoch, memory_order_relaxed);
+    } else {
+        jp->blocks[jp->pend_tail].pend_next = b;
     }
-    cpu_jit_arena_write(arena, arena->used, j.w->code, words);
-    arena->used += (words * 4U + 15U) & ~15U;
-    ir->fast_offset = (uint32_t)(j.rx - cpu_fast_base());
-    return ir->fast_offset;
+    jp->pend_tail = b;
+    for (uint32_t s = 0; s < j->sites && jp->patch_free != POOL_NONE; ++s) {
+        uint32_t p = jp->patch_free;
+        cpu_jit_patch_t *patch = &jp->patches[p];
+        jp->patch_free = patch->next;
+        uint32_t *head = &jp->patch_heads[jit_patch_bucket(pg->pa_page, w->sites[s].stub)];
+        *patch = (cpu_jit_patch_t){
+            .pa_page = pg->pa_page,
+            .traps = pg->traps,
+            .pfn_gen = pg->pfn_gen,
+            .code_gen = pg->code_gen,
+            .site = entry + w->sites[s].site * 4U,
+            .next = *head,
+            .seg_next = jp->seg[w->chunk_seg].patches,
+            .index = (uint16_t)w->sites[s].stub,
+            .seg = (uint16_t)w->chunk_seg,
+            .el = pg->el,
+            .world = pg->world,
+            .hashed = true,
+        };
+        *head = p;
+        jp->seg[w->chunk_seg].patches = p;
+    }
+    return true;
+}
+
+static uint32_t jit_build(cpu_pool_t *pool, vcpu_t *self, ir_insn_t *ir) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    cpu_icache_t *ic = (cpu_icache_t *)self->icache;
+    jit_work_t *w = ic->jit_work;
+    ir_page_t *pg = ic->cur_page;
+    uint32_t orig = __atomic_load_n(&ir->fast_offset, __ATOMIC_RELAXED);
+    jit_t j = {.w = w, .pg = pg, .start = (uint32_t)(ir - pg->insns), .el = pg->el, .world = pg->world};
+    for (uint32_t attempt = 0; attempt < 2; ++attempt) {
+        os_unfair_lock_lock(&jp->lock);
+        if (!atomic_load_explicit(&jp->active, memory_order_relaxed) || orig >= jp->arena.base_offset) {
+            os_unfair_lock_unlock(&jp->lock);
+            return 0;
+        }
+        if (w->chunk_seg >= jp->segments || jp->seg[w->chunk_seg].gen != w->chunk_gen) {
+            w->chunk_seg = POOL_NONE;
+        }
+        uint64_t wait = 0;
+        if ((w->chunk_seg == POOL_NONE || w->chunk_end - w->chunk_pos < JIT_CHUNK_BYTES / 16U) &&
+            !jit_chunk_locked(pool, w, &wait)) {
+            os_unfair_lock_unlock(&jp->lock);
+            __atomic_store_n(&ir->heat, JIT_HEAT, __ATOMIC_RELAXED);
+            if (wait == 0) {
+                return 0;
+            }
+            self->pc = cpu_ir_pc(self, ir);
+            cpu_qs_park(self);
+            cpu_qs_wait(pool, self, wait);
+            cpu_qs_unpark(self);
+            return UINT32_MAX;
+        }
+        j.rx = (uintptr_t)jp->arena.rx + w->chunk_pos;
+        j.seg_lo = jp->arena.base_offset + w->chunk_seg * JIT_SEGMENT_BYTES;
+        j.seg_hi = j.seg_lo + JIT_SEGMENT_BYTES;
+        os_unfair_lock_unlock(&jp->lock);
+        j.loop = false;
+        j.self_loop = false;
+        j.used = 0;
+        j.vused = 0;
+        uint32_t words = jit_compile(&j);
+        if (words == 0) {
+            return 0;
+        }
+        uint32_t bytes = (words * 4U + 15U) & ~15U;
+        if (w->chunk_pos + bytes > w->chunk_end) {
+            w->chunk_pos = w->chunk_end;
+            continue;
+        }
+        uint32_t entry = w->chunk_pos;
+        uint32_t offset = 0;
+        os_unfair_lock_lock(&jp->lock);
+        if (atomic_load_explicit(&jp->active, memory_order_relaxed) && jit_record_locked(pool, &j, entry, orig)) {
+            cpu_jit_arena_write(&jp->arena, entry, w->code, words);
+            w->chunk_pos += bytes;
+            offset = jp->arena.base_offset + entry;
+        } else {
+            __atomic_store_n(&ir->heat, JIT_REHEAT, __ATOMIC_RELAXED);
+        }
+        os_unfair_lock_unlock(&jp->lock);
+        return offset;
+    }
+    return 0;
+}
+
+uint32_t cpu_jit_enter(vcpu_t *cpu, ir_insn_t *ir) {
+    cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
+    if (ic->jit_work == NULL) {
+        jit_work_t *w = malloc(sizeof(jit_work_t));
+        w->chunk_seg = POOL_NONE;
+        ic->jit_work = w;
+    }
+    uint32_t offset = jit_build(ic->pool, cpu, ir);
+    if (offset == UINT32_MAX) {
+        return offset;
+    }
+    cpu_jit_publish(ic->pool);
+    return offset != 0 ? offset : __atomic_load_n(&ir->fast_offset, __ATOMIC_ACQUIRE);
 }
 
 bool cpu_jit_native(const ir_insn_t *ir) {
-    return ir->fast_offset == cpu_fast_offsets[FAST_jit_enter] ||
-           (jit_base_offset != 0 && ir->fast_offset >= jit_base_offset);
+    return ir->heat != 0 || (jit_base_offset != 0 && ir->fast_offset >= jit_base_offset);
 }
 
-static void cpu_jit_mark(ir_page_t *pg, ir_insn_t *ir, uint32_t word) {
-    if (pg->jit && jit_classify(word, ir, pg) != JIT_NONE) {
-        uint32_t index = (uint32_t)(ir - pg->insns);
-        pg->jit->entry[index] = ir->fast_offset << 8 | JIT_HEAT;
-        pg->jit->word[index] = word;
-        ir->fast_offset = cpu_fast_offsets[FAST_jit_enter];
+static void jit_pool_activate(cpu_pool_t *pool) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    if (!cpu_jit_arena_acquire(pool->vm, &jp->arena)) {
+        return;
     }
+    jp->segments = jp->arena.size / JIT_SEGMENT_BYTES;
+    jp->open = POOL_NONE;
+    jp->carve = 0;
+    jp->seq = 0;
+    jp->seg = malloc(jp->segments * sizeof(*jp->seg));
+    for (uint32_t i = 0; i < jp->segments; ++i) {
+        jp->seg[i] = (cpu_jit_segment_t){.blocks = POOL_NONE, .patches = POOL_NONE, .gen = ++jp->gen};
+    }
+    jp->blocks = malloc(JIT_BLOCKS * sizeof(*jp->blocks));
+    for (uint32_t i = 0; i < JIT_BLOCKS; ++i) {
+        jp->blocks[i].next = i + 1U < JIT_BLOCKS ? i + 1U : POOL_NONE;
+        jp->blocks[i].state = JIT_BLOCK_FREE;
+    }
+    jp->block_free = 0;
+    jp->block_avail = JIT_BLOCKS;
+    jp->pend_head = POOL_NONE;
+    jp->pend_tail = POOL_NONE;
+    jp->patches = malloc(JIT_PATCHES * sizeof(*jp->patches));
+    for (uint32_t i = 0; i < JIT_PATCHES; ++i) {
+        jp->patches[i].next = i + 1U < JIT_PATCHES ? i + 1U : POOL_NONE;
+    }
+    jp->patch_free = 0;
+    jp->heads = malloc(JIT_BUCKETS * sizeof(*jp->heads));
+    jp->patch_heads = malloc(JIT_BUCKETS * sizeof(*jp->patch_heads));
+    for (uint32_t i = 0; i < JIT_BUCKETS; ++i) {
+        jp->heads[i] = POOL_NONE;
+        jp->patch_heads[i] = POOL_NONE;
+    }
+    jit_base_offset = jp->arena.base_offset;
+    os_unfair_lock_lock(&jp->lock);
+    atomic_store_explicit(&jp->pend_epoch, UINT64_MAX, memory_order_relaxed);
+    atomic_store_explicit(&jp->active, true, memory_order_relaxed);
+    os_unfair_lock_unlock(&jp->lock);
+}
+
+static void jit_pool_deactivate(cpu_pool_t *pool, vcpu_t *self) {
+    cpu_jit_pool_t *jp = &pool->jit;
+    os_unfair_lock_lock(&jp->lock);
+    atomic_store_explicit(&jp->active, false, memory_order_relaxed);
+    uint64_t epoch = 0;
+    for (uint32_t s = 0; s < jp->segments; ++s) {
+        if (jp->seg[s].state != JIT_SEG_FREE && jp->seg[s].state != JIT_SEG_RETIRED) {
+            jit_retire_segment_locked(pool, s);
+        }
+        if (jp->seg[s].retire > epoch) {
+            epoch = jp->seg[s].retire;
+        }
+    }
+    atomic_store_explicit(&jp->pend_epoch, UINT64_MAX, memory_order_relaxed);
+    os_unfair_lock_unlock(&jp->lock);
+    cpu_qs_wait(pool, self, epoch);
+    cpu_jit_arena_release(pool->vm);
+    free(jp->seg);
+    free(jp->blocks);
+    free(jp->patches);
+    free(jp->heads);
+    free(jp->patch_heads);
+    jp->seg = NULL;
+    jp->blocks = NULL;
+    jp->patches = NULL;
+    jp->heads = NULL;
+    jp->patch_heads = NULL;
 }
 
 static void cpu_jit_sync(vcpu_t *cpu) {
     cpu_icache_t *ic = (cpu_icache_t *)cpu->icache;
+    cpu_pool_t *pool = ic->pool;
     ic->jit_generation = atomic_load_explicit(&cpu_jit_generation, memory_order_acquire);
-    if (ic->jit.work == NULL) {
-        if (!cpu_jit_arena_acquire(cpu->vm, cpu->cpu_id, &ic->jit)) {
-            return;
-        }
-        ic->jit.work = malloc(sizeof(jit_work_t));
-        jit_base_offset = ic->jit.base_offset;
-    } else if (swipterm_jit_is_prepared() && swipterm_jit_is_enabled()) {
-        return;
-    } else {
-        free(ic->jit.work);
-        ic->jit = (cpu_jit_arena_t){0};
-        for (uint32_t s = 0; s < ICACHE_SETS; ++s) {
-            for (uint32_t w = 0; w < ICACHE_WAYS; ++w) {
-                ir_page_t *pg = ic->slots[s][w];
-                if (pg) {
-                    free(pg->jit);
-                    pg->jit = NULL;
-                }
-            }
-        }
-        cpu_jit_arena_release(cpu->vm);
+    bool want = swipterm_jit_is_prepared() && swipterm_jit_is_enabled();
+    cpu_qs_park(cpu);
+    os_unfair_lock_lock(&pool->jit.toggle);
+    bool changed = pool->jit.active != want;
+    if (want && !pool->jit.active) {
+        jit_pool_activate(pool);
+    } else if (!want && pool->jit.active) {
+        jit_pool_deactivate(pool, cpu);
     }
-    vcpu_flush_icache_all(cpu);
+    os_unfair_lock_unlock(&pool->jit.toggle);
+    cpu_qs_unpark(cpu);
+    if (changed) {
+        vcpu_flush_icache_all(cpu);
+    }
 }

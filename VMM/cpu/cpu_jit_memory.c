@@ -19,7 +19,8 @@
 #include <unistd.h>
 
 enum : uint32_t {
-    JIT_REGION_SIZE = 16U << 20,
+    JIT_REGION_MAX = 32U << 20,
+    JIT_REGION_MIN = 16U << 20,
     JIT_PAGE_SIZE = 16U << 10,
     JIT_PROBE_STEP = 1U << 20,
     JIT_BRK_F00D = 0xD43E01A0U,
@@ -49,6 +50,7 @@ static struct {
     _Atomic bool prepared;
     _Atomic bool enabled;
     uintptr_t reserved;
+    uint32_t size;
     uint8_t *rx;
     uint8_t *rw;
     os_unfair_lock owner_lock;
@@ -98,9 +100,9 @@ static uintptr_t jit_image_end(void) {
     return (uintptr_t)header + (uintptr_t)(end_vmaddr - text_vmaddr);
 }
 
-static bool jit_in_window(uintptr_t rx) {
+static bool jit_in_window(uintptr_t rx, uint32_t size) {
     uintptr_t base = cpu_fast_base();
-    return rx > base && rx + JIT_REGION_SIZE - base < (1ULL << 32);
+    return rx > base && rx + size - base < (1ULL << 32);
 }
 
 #if JIT_DUAL_MAPPING
@@ -109,14 +111,17 @@ static uintptr_t jit_reserve_va_locked(void) {
         return jit_region.reserved;
     }
     uintptr_t start = (jit_image_end() + JIT_PROBE_STEP - 1) & ~(uintptr_t)(JIT_PROBE_STEP - 1);
-    for (uintptr_t probe = start; start != 0 && jit_in_window(probe); probe += JIT_PROBE_STEP) {
-        vm_address_t address = probe;
-        if (vm_allocate(mach_task_self(), &address, JIT_REGION_SIZE, VM_FLAGS_FIXED) != KERN_SUCCESS) {
-            continue;
+    for (uint32_t size = JIT_REGION_MAX; size >= JIT_REGION_MIN; size /= 2) {
+        for (uintptr_t probe = start; start != 0 && jit_in_window(probe, size); probe += JIT_PROBE_STEP) {
+            vm_address_t address = probe;
+            if (vm_allocate(mach_task_self(), &address, size, VM_FLAGS_FIXED) != KERN_SUCCESS) {
+                continue;
+            }
+            (void)vm_protect(mach_task_self(), address, size, FALSE, VM_PROT_NONE);
+            jit_region.reserved = address;
+            jit_region.size = size;
+            return address;
         }
-        (void)vm_protect(mach_task_self(), address, JIT_REGION_SIZE, FALSE, VM_PROT_NONE);
-        jit_region.reserved = address;
-        return address;
     }
     return 0;
 }
@@ -138,17 +143,20 @@ void cpu_jit_reserve(void) {
 static uintptr_t jit_reserve(char **error_message) {
     uintptr_t start = (jit_image_end() + JIT_PROBE_STEP - 1) & ~(uintptr_t)(JIT_PROBE_STEP - 1);
     int last_errno = 0;
-    for (uintptr_t hint = start; start != 0 && jit_in_window(hint); hint += JIT_PROBE_STEP) {
-        void *address = mmap((void *)hint, JIT_REGION_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
-                             MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
-        if (address == MAP_FAILED) {
-            last_errno = errno;
-            break;
+    for (uint32_t size = JIT_REGION_MAX; size >= JIT_REGION_MIN && last_errno == 0; size /= 2) {
+        for (uintptr_t hint = start; start != 0 && jit_in_window(hint, size); hint += JIT_PROBE_STEP) {
+            void *address = mmap((void *)hint, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                                 MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
+            if (address == MAP_FAILED) {
+                last_errno = errno;
+                break;
+            }
+            if (jit_in_window((uintptr_t)address, size)) {
+                jit_region.size = size;
+                return (uintptr_t)address;
+            }
+            munmap(address, size);
         }
-        if (jit_in_window((uintptr_t)address)) {
-            return (uintptr_t)address;
-        }
-        munmap(address, JIT_REGION_SIZE);
     }
     if (last_errno != 0) {
         jit_set_error(error_message, "mmap(MAP_JIT) failed: %s", strerror(last_errno));
@@ -219,7 +227,7 @@ static bool jit_probe(uint8_t *rx, uint8_t *rw, char **error_message) {
     for (size_t i = 0; i < sizeof(signals) / sizeof(signals[0]); ++i) {
         sigaction(signals[i], &action, &saved[i]);
     }
-    uint32_t last = JIT_REGION_SIZE - JIT_PAGE_SIZE;
+    uint32_t last = jit_region.size - JIT_PAGE_SIZE;
     bool ok = jit_probe_page(rx, rw, "first", error_message) &&
               jit_probe_page(rx + last, rw + last, "last", error_message);
     for (size_t i = 0; i < sizeof(signals) / sizeof(signals[0]); ++i) {
@@ -230,23 +238,24 @@ static bool jit_probe(uint8_t *rx, uint8_t *rw, char **error_message) {
 
 static bool jit_prepare_region(char **error_message) {
     uintptr_t rx = jit_reserve_va_locked();
+    uint32_t size = jit_region.size;
     vm_address_t rw = 0;
     bool ok = rx != 0;
     if (!ok) {
         jit_set_error(error_message, "no 16 MiB virtual address range within 4 GiB of interpreter base");
     }
-    if (ok && mprotect((void *)rx, JIT_REGION_SIZE, PROT_READ | PROT_EXEC) != 0) {
+    if (ok && mprotect((void *)rx, size, PROT_READ | PROT_EXEC) != 0) {
         jit_set_error(error_message, "mprotect(PROT_READ | PROT_EXEC) at %p failed: %s", (void *)rx, strerror(errno));
         ok = false;
     }
     if (ok) {
         vm_prot_t current, maximum;
-        kern_return_t kr = vm_remap(mach_task_self(), &rw, JIT_REGION_SIZE, 0, VM_FLAGS_ANYWHERE, mach_task_self(), rx,
+        kern_return_t kr = vm_remap(mach_task_self(), &rw, size, 0, VM_FLAGS_ANYWHERE, mach_task_self(), rx,
                                     FALSE, &current, &maximum, VM_INHERIT_NONE);
         if (kr != KERN_SUCCESS) {
             jit_set_error(error_message, "vm_remap failed: %s (0x%x)", mach_error_string(kr), kr);
             ok = false;
-        } else if (mprotect((void *)rw, JIT_REGION_SIZE, PROT_READ | PROT_WRITE) != 0) {
+        } else if (mprotect((void *)rw, size, PROT_READ | PROT_WRITE) != 0) {
             jit_set_error(error_message, "mprotect(PROT_READ | PROT_WRITE) at %p failed: %s",
                           (void *)rw, strerror(errno));
             ok = false;
@@ -262,9 +271,9 @@ static bool jit_prepare_region(char **error_message) {
         struct sigaction saved, action = {.sa_sigaction = jit_trap_handler, .sa_flags = SA_SIGINFO};
         sigaction(SIGTRAP, &action, &saved);
         if (ok) {
-            blessed = jit_debugger_prepare((void *)rx, JIT_REGION_SIZE) == (void *)rx;
+            blessed = jit_debugger_prepare((void *)rx, size) == (void *)rx;
             if (!blessed) {
-                jit_set_error(error_message, "debugger refused to prepare 16 MiB region at %p", (void *)rx);
+                jit_set_error(error_message, "debugger refused to prepare %u MiB region at %p", size >> 20, (void *)rx);
             }
         }
         jit_debugger_detach();
@@ -282,17 +291,17 @@ static bool jit_prepare_region(char **error_message) {
     }
 #endif
     if (ok) {
-        (void)mlock((void *)rw, JIT_REGION_SIZE);
+        (void)mlock((void *)rw, size);
         ok = jit_probe((uint8_t *)rx, (uint8_t *)rw, error_message);
     }
     if (!ok) {
         if (rw != 0) {
-            (void)munlock((void *)rw, JIT_REGION_SIZE);
-            vm_deallocate(mach_task_self(), rw, JIT_REGION_SIZE);
+            (void)munlock((void *)rw, size);
+            vm_deallocate(mach_task_self(), rw, size);
         }
         if (rx != 0) {
-            if (mmap((void *)rx, JIT_REGION_SIZE, PROT_NONE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0) == MAP_FAILED) {
-                vm_deallocate(mach_task_self(), rx, JIT_REGION_SIZE);
+            if (mmap((void *)rx, size, PROT_NONE, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0) == MAP_FAILED) {
+                vm_deallocate(mach_task_self(), rx, size);
                 jit_region.reserved = 0;
             }
         }
@@ -344,11 +353,10 @@ bool swipterm_jit_prepare(char **error_message) {
     return prepared;
 }
 
-bool cpu_jit_arena_acquire(vmm_machine_t *vm, uint32_t cpu_id, cpu_jit_arena_t *out) {
+bool cpu_jit_arena_acquire(vmm_machine_t *vm, cpu_jit_arena_t *out) {
     if (!swipterm_jit_is_prepared() || !swipterm_jit_is_enabled()) {
         return false;
     }
-    uint32_t slices = vm->cpu_count != 0 ? vm->cpu_count : VMM_MAX_VCPUS;
     os_unfair_lock_lock(&jit_region.owner_lock);
     bool owned = jit_region.owner == NULL || jit_region.owner == vm;
     if (owned) {
@@ -359,13 +367,11 @@ bool cpu_jit_arena_acquire(vmm_machine_t *vm, uint32_t cpu_id, cpu_jit_arena_t *
     if (!owned) {
         return false;
     }
-    uint32_t size = (JIT_REGION_SIZE / slices) & ~(JIT_PAGE_SIZE - 1U);
     *out = (cpu_jit_arena_t){
-        .rx = jit_region.rx + (size_t)size * cpu_id,
-        .rw = jit_region.rw + (size_t)size * cpu_id,
-        .size = size,
+        .rx = jit_region.rx,
+        .rw = jit_region.rw,
+        .size = jit_region.size,
         .base_offset = (uint32_t)((uintptr_t)jit_region.rx - cpu_fast_base()),
-        .region_size = JIT_REGION_SIZE,
     };
     return true;
 }
@@ -388,4 +394,15 @@ void cpu_jit_arena_write(const cpu_jit_arena_t *arena, uint32_t offset, const ui
     pthread_jit_write_protect_np(1);
 #endif
     sys_icache_invalidate(arena->rx + offset, (size_t)words * 4);
+}
+
+void cpu_jit_arena_patch(const cpu_jit_arena_t *arena, uint32_t offset, uint32_t word) {
+#if JIT_DUAL_MAPPING
+    __atomic_store_n((uint32_t *)(arena->rw + offset), word, __ATOMIC_RELAXED);
+#else
+    pthread_jit_write_protect_np(0);
+    __atomic_store_n((uint32_t *)(arena->rw + offset), word, __ATOMIC_RELAXED);
+    pthread_jit_write_protect_np(1);
+#endif
+    sys_icache_invalidate(arena->rx + offset, 4);
 }

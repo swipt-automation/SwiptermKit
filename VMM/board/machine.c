@@ -1256,13 +1256,14 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
         return NULL;
     }
 
-    vmm_machine_priv_t *priv = calloc(1, sizeof(*priv));
-    if (!priv) {
+    vmm_machine_priv_t *priv;
+    if (posix_memalign((void **)&priv, 128, sizeof(*priv)) != 0) {
         if (err_out) {
             *err_out = ENOMEM;
         }
         return NULL;
     }
+    memset(priv, 0, sizeof(*priv));
 
     priv->priv_magic = VMM_MACHINE_PRIV_MAGIC;
     priv->blk_fd = -1;
@@ -1295,16 +1296,6 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
         return NULL;
     }
     ram_size = (ram_size + (size_t)VMM_RAM_ALIGN - 1) & ~((size_t)VMM_RAM_ALIGN - 1);
-
-    vm->icache_ram_words = ((ram_size >> VMM_PAGE_SHIFT) + 63U) / 64U;
-    vm->icache_ram_bitmap = calloc(vm->icache_ram_words, sizeof(*vm->icache_ram_bitmap));
-    if (!vm->icache_ram_bitmap) {
-        vmm_destroy(vm);
-        if (err_out) {
-            *err_out = ENOMEM;
-        }
-        return NULL;
-    }
 
     cpu_jit_reserve();
 
@@ -1588,8 +1579,7 @@ void vmm_destroy(vmm_machine_t *vm) {
         munmap(vm->ram, vm->ram_size);
         vm->ram = NULL;
     }
-    free((void *)vm->icache_ram_bitmap);
-    vm->icache_ram_bitmap = NULL;
+    cpu_pool_destroy(vm);
     if (priv->blk_fd >= 0) {
         close(priv->blk_fd);
         priv->blk_fd = -1;
