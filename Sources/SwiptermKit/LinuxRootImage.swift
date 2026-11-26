@@ -45,6 +45,17 @@ public struct LinuxRootImage: Sendable {
         return FileManager.default.fileExists(atPath: root.appending(path: diskName).path(percentEncoded: false))
     }
 
+    /// The kernel releases installed in the image at `root`, newest first; the first is what `LinuxRuntime.Configuration.Kernel.installed` boots.
+    public static func installedKernels(at root: URL) throws -> [String] {
+        var releases: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+        var count = 0
+        try root.withUnsafeFileSystemRepresentation { rootPath in
+            try check(swipterm_root_kernels(rootPath, &releases, &count))
+        }
+        defer { swipterm_free_kernels(releases, count) }
+        return (0..<count).map { String(cString: releases![$0]!) }
+    }
+
     /// Replaces an image already installed at `root` once the new one is complete.
     /// `diskSize` is the capacity of the sparse disk the guest sees; the host stores only the blocks in use.
     /// Throws when `root` is used by a running machine.

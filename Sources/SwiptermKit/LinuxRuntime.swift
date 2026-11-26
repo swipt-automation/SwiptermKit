@@ -12,9 +12,10 @@ public final class LinuxRuntime: @unchecked Sendable {
             case managed
         }
 
-        /// Booting throws `LinuxRuntime.KernelUnavailableError` when no kernel matches.
+        /// Booting throws `LinuxRuntime.KernelUnavailableError` when the selected kernel cannot boot this machine;
+        /// no other installed kernel is tried. `LinuxRootImage.installedKernels(at:)` lists the alternatives.
         public enum Kernel: Hashable, Sendable {
-            /// The newest kernel installed in the root that can boot this machine.
+            /// The newest kernel installed in the root.
             case installed
             /// The installed kernel with this release.
             case release(String)
@@ -68,28 +69,15 @@ public final class LinuxRuntime: @unchecked Sendable {
 
     public struct BootedKernel: Hashable, Sendable {
         public let release: String
-        /// Why the newer installed kernels did not boot; `nil` when the newest did.
-        public let fallbackReason: String?
-
-        init(_ info: swipterm_boot_info) {
-            var info = info
-            release = withUnsafeBytes(of: &info.release) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
-            let reason = withUnsafeBytes(of: &info.fallback_reason) {
-                String(cString: $0.bindMemory(to: CChar.self).baseAddress!)
-            }
-            fallbackReason = reason.isEmpty ? nil : reason
-        }
     }
 
     public struct KernelUnavailableError: LocalizedError, Sendable {
-        /// Why each installed kernel that `Configuration.kernel` selects cannot boot this machine; empty when the root has none.
-        public let reasons: [String]
+        /// The release `Configuration.kernel` selected; `nil` when the root has no kernel installed or cannot be read.
+        public let release: String?
+        public let reason: String
 
         public var errorDescription: String? {
-            guard !reasons.isEmpty else {
-                return "No kernel is installed in the root."
-            }
-            return "No installed kernel can boot this machine: " + reasons.joined(separator: "; ")
+            reason.prefix(1).uppercased() + reason.dropFirst() + "."
         }
     }
 
@@ -387,6 +375,7 @@ public final class LinuxRuntime: @unchecked Sendable {
             release = name
         }
         var handle: OpaquePointer?
+        var info = swipterm_boot_info()
         var message: UnsafeMutablePointer<CChar>?
         let code = configuration.root.withUnsafeFileSystemRepresentation { root in
             initramfs.withUnsafeFileSystemRepresentation { initramfsPath in
@@ -408,22 +397,22 @@ public final class LinuxRuntime: @unchecked Sendable {
                                     network: OpaquePointer(bitPattern: Int(network.handle())),
                                     gpu: configuration.gpu?.cValue ?? swipterm_gpu_options()
                                 )
-                                return swipterm_boot(&options, &handle, &message)
+                                return swipterm_boot(&options, &handle, &info, &message)
                             }
                         }
                     }
                 }
             }
         }
+        let bootedRelease = withUnsafeBytes(of: &info.release) {
+            String(cString: $0.bindMemory(to: CChar.self).baseAddress!)
+        }
         if let message {
             defer { free(message) }
-            let reasons = String(cString: message)
-            throw KernelUnavailableError(reasons: reasons.isEmpty ? [] : reasons.components(separatedBy: "\n"))
+            throw KernelUnavailableError(release: bootedRelease.isEmpty ? nil : bootedRelease, reason: String(cString: message))
         }
         try check(code)
-        var info = swipterm_boot_info()
-        swipterm_get_boot_info(handle, &info)
-        return (UnsafeSendable(value: handle!), BootedKernel(info))
+        return (UnsafeSendable(value: handle!), BootedKernel(release: bootedRelease))
     }
 
     public func suspend() {

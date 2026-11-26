@@ -111,7 +111,6 @@ typedef struct {
 
 typedef struct {
     char release[65];
-    char fallback_reason[2048];
 } swipterm_boot_info;
 
 bool swipterm_jit_is_prepared(void);
@@ -123,14 +122,17 @@ uint32_t swipterm_gpu_available_backends(void);
 bool swipterm_gpu_suspend(void);
 void swipterm_gpu_resume(void);
 
-int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, char **error_message);
+int swipterm_root_kernels(const char *root_path, char ***releases_out, size_t *count_out);
+void swipterm_free_kernels(char **releases, size_t count);
+
+int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, swipterm_boot_info *info_out,
+                  char **error_message);
 void swipterm_begin_shutdown(swipterm_runtime *runtime);
 void swipterm_shutdown(swipterm_runtime *runtime);
 int swipterm_start_init(swipterm_runtime *runtime, const char *path,
                         size_t argc, const char *const *argv, const char *const *envp);
 void swipterm_suspend(swipterm_runtime *runtime);
 void swipterm_resume(swipterm_runtime *runtime);
-void swipterm_get_boot_info(swipterm_runtime *runtime, swipterm_boot_info *info_out);
 bool swipterm_gpu_is_active(swipterm_runtime *runtime);
 
 typedef enum {

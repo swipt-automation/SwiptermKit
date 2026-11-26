@@ -200,7 +200,6 @@ struct swipterm_runtime {
     uint32_t guest_caps;
     uint32_t ready_mask;
     swipterm_halt_info halt_info;
-    swipterm_boot_info boot_info;
     bool gpu_active;
 
     pending_req_t *pending_reqs;
@@ -1990,6 +1989,8 @@ static void compute_snapshot_key(const uint8_t initramfs_digest[CC_SHA256_DIGEST
 
 static int host_error(int rc) {
     switch (rc) {
+    case 0:
+        return 0;
     case -ENOEXEC:
         return -LINUX_ENOEXEC;
     case -ENOMEM:
@@ -2148,10 +2149,6 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
             size_t kernel_size = 0;
             size_t modules_size = 0;
             rc = boot_plan_load(plan, &kernel, &kernel_size, &modules, &modules_size);
-            if (rc == -EAGAIN) {
-                restore_snapshot = true;
-                continue;
-            }
             if (rc < 0) {
                 return host_error(rc);
             }
@@ -2181,12 +2178,8 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
                            : err == EINVAL    ? -LINUX_EINVAL
                                               : -LINUX_EIO;
                 }
-                rc = boot_plan_next(plan, "could not be loaded into guest memory");
-                if (rc < 0) {
-                    return host_error(rc);
-                }
-                restore_snapshot = true;
-                continue;
+                boot_plan_fail(plan, "could not be loaded into guest memory");
+                return -LINUX_ENOEXEC;
             }
         }
 
@@ -2212,20 +2205,20 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
             restore_snapshot = false;
             continue;
         }
-        const char *reason = !reached_checkpoint ? "did not reach the boot checkpoint"
-                             : rc == -LINUX_EIO  ? "stopped during initialization"
-                                                 : "timed out during initialization";
-        rc = boot_plan_next(plan, reason);
-        if (rc < 0) {
-            return host_error(rc);
-        }
-        restore_snapshot = true;
+        boot_plan_fail(plan, !reached_checkpoint     ? "did not reach the boot checkpoint"
+                             : rc == -LINUX_EIO ? "stopped during initialization"
+                                                : "timed out during initialization");
+        return -LINUX_ENOEXEC;
     }
 }
 
-int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, char **error_message) {
+int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, swipterm_boot_info *info_out,
+                  char **error_message) {
     if (error_message) {
         *error_message = NULL;
+    }
+    if (info_out) {
+        *info_out = (swipterm_boot_info){0};
     }
     if (!options || !options->root_path || !options->initramfs_path || !options->network || !runtime_out ||
         (options->kernel != SWIPTERM_KERNEL_INSTALLED && options->kernel != SWIPTERM_KERNEL_RELEASE) ||
@@ -2283,31 +2276,23 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
     rt->gpu_active = options->gpu.enabled && gpu_acquire(options->gpu.backend);
 
     boot_plan_t *plan = NULL;
-    int rc = boot_plan_resolve(disk_fd, options->kernel, options->kernel_release, rt->gpu_active, &plan,
-                               error_message);
-    if (rc < 0) {
-        close(disk_fd);
-        swipterm_shutdown(rt);
-        return host_error(rc);
-    }
-
+    int rc = host_error(boot_plan_resolve(disk_fd, options->kernel, options->kernel_release, rt->gpu_active, &plan));
     char cmdline[2048];
     bool has_extra = options->extra_cmdline && options->extra_cmdline[0] != '\0';
-    if (snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1%s%s%s",
+    if (rc == 0 &&
+        snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1%s%s%s",
                  boot_plan_page_size(plan) == KERNEL_PAGE_16K ? " page_reporting.page_reporting_order=7" : "",
                  has_extra ? " " : "", has_extra ? options->extra_cmdline : "") >= (int)sizeof(cmdline)) {
-        boot_plan_free(plan);
-        close(disk_fd);
-        swipterm_shutdown(rt);
-        return -LINUX_EINVAL;
+        rc = -LINUX_EINVAL;
     }
-
-    rc = boot_machine(rt, options, plan, disk_path, cmdline);
     if (rc == 0) {
-        snprintf(rt->boot_info.release, sizeof(rt->boot_info.release), "%s", boot_plan_release(plan));
-        snprintf(rt->boot_info.fallback_reason, sizeof(rt->boot_info.fallback_reason), "%s", boot_plan_reasons(plan));
-    } else if (rc == -LINUX_ENOEXEC && error_message) {
-        *error_message = strdup(boot_plan_reasons(plan));
+        rc = boot_machine(rt, options, plan, disk_path, cmdline);
+    }
+    if (plan && info_out) {
+        snprintf(info_out->release, sizeof(info_out->release), "%s", boot_plan_release(plan));
+    }
+    if (rc == -LINUX_ENOEXEC && error_message) {
+        *error_message = strdup(boot_plan_reason(plan));
     }
     boot_plan_free(plan);
     close(disk_fd);
@@ -2684,11 +2669,25 @@ int swipterm_wait_ready(swipterm_runtime *rt, swipterm_readiness readiness, int 
     return rc;
 }
 
-void swipterm_get_boot_info(swipterm_runtime *rt, swipterm_boot_info *info_out) {
-    if (!rt || !info_out) {
-        return;
+int swipterm_root_kernels(const char *root_path, char ***releases_out, size_t *count_out) {
+    char disk_path[1024];
+    if (snprintf(disk_path, sizeof(disk_path), "%s/root.ext4", root_path) >= (int)sizeof(disk_path)) {
+        return -LINUX_EINVAL;
     }
-    *info_out = rt->boot_info;
+    int disk_fd = open(disk_path, O_RDONLY | O_CLOEXEC);
+    if (disk_fd < 0) {
+        return errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
+    }
+    int rc = boot_list_kernels(disk_fd, releases_out, count_out);
+    close(disk_fd);
+    return host_error(rc);
+}
+
+void swipterm_free_kernels(char **releases, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        free(releases[i]);
+    }
+    free(releases);
 }
 
 bool swipterm_gpu_is_active(swipterm_runtime *rt) {
