@@ -96,7 +96,8 @@ public struct LinuxRootImage: Sendable {
     fileprivate final class ProgressReporter: @unchecked Sendable {
         let report: (@Sendable (Double) -> Void)?
         let cancelled = OSAllocatedUnfairLock(initialState: false)
-        var reported = -1
+        var reported = -1.0
+        var nextReport = ContinuousClock.now
         var stopped = false
 
         init(_ report: (@Sendable (Double) -> Void)?) {
@@ -123,10 +124,13 @@ public struct LinuxRootImage: Sendable {
                             reporter.stopped = true
                             return false
                         }
-                        let percent = Int(fraction * 100)
-                        if let report = reporter.report, percent != reporter.reported {
-                            reporter.reported = percent
-                            report(fraction)
+                        if let report = reporter.report, fraction != reporter.reported {
+                            let now = ContinuousClock.now
+                            if reporter.reported < 0 || fraction >= 1 || now >= reporter.nextReport {
+                                reporter.reported = fraction
+                                reporter.nextReport = now.advanced(by: .milliseconds(100))
+                                report(fraction)
+                            }
                         }
                         return true
                     }, &message)
