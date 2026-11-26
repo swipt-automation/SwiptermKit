@@ -970,8 +970,8 @@ static void exec_at(vcpu_t *cpu, uint64_t va, mmu_access_t acc, uint8_t target_e
 
 static vmm_tlbi_t tlbi_page(uint64_t xt, bool all_asids) {
     return (vmm_tlbi_t){
-        .va = (uint64_t)((int64_t)(xt << 20) >> 8),
-        .pages = 1,
+        .va = (uint64_t)((int64_t)(xt << 20) >> 8) & ~0x3FFFULL,
+        .pages = 0x4000U / VMM_PAGE_SIZE,
         .asid = (uint16_t)(xt >> 48),
         .all_asids = all_asids,
     };

@@ -284,10 +284,10 @@ int swipterm_kernel_check_header(const uint8_t *image, size_t len) {
     }
     uint64_t flags = load_le64(image + 0x18);
     uint64_t page_size = (flags >> 1) & 3U;
-    if ((flags & 1U) != 0 || (page_size != 0 && page_size != 1)) {
+    if ((flags & 1U) != 0 || page_size == 3) {
         return -ENOTSUP;
     }
-    return 0;
+    return page_size == 2 ? KERNEL_PAGE_16K : KERNEL_PAGE_4K;
 }
 
 int swipterm_kernel_probe(const uint8_t *file, size_t len, size_t *needed_out) {

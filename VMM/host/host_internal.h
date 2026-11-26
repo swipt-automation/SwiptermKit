@@ -178,6 +178,11 @@ int archive_stream_open(archive_stream_t *stream, struct archive *a, const archi
 double archive_stream_progress(struct archive *a, const archive_stream_t *stream);
 void archive_stream_close(archive_stream_t *stream);
 
+enum {
+    KERNEL_PAGE_4K = 4 << 10,
+    KERNEL_PAGE_16K = 16 << 10,
+};
+
 int swipterm_decompress(const uint8_t *in, size_t len, size_t limit, uint8_t **out, size_t *out_len);
 int swipterm_kernel_image(const uint8_t *file, size_t len, uint8_t **image_out, size_t *image_len);
 int swipterm_kernel_probe(const uint8_t *file_prefix, size_t len, size_t *payload_offset_out);
@@ -312,6 +317,7 @@ const char *boot_plan_release(const boot_plan_t *plan);
 bool boot_plan_gpu(const boot_plan_t *plan);
 const char *boot_plan_reasons(const boot_plan_t *plan);
 const uint8_t *boot_plan_identity(const boot_plan_t *plan);
+uint32_t boot_plan_page_size(const boot_plan_t *plan);
 int boot_plan_load(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_out,
                    uint8_t **modules_cpio_out, size_t *modules_cpio_size_out);
 int boot_plan_next(boot_plan_t *plan, const char *reason);

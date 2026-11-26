@@ -58,6 +58,7 @@ typedef struct kernel_candidate {
     char *moddir;
     char *image_path;
     ext4_node_t image;
+    uint32_t page_size;
 } kernel_candidate_t;
 
 typedef struct boot_module {
@@ -917,7 +918,7 @@ static int probe_image(boot_plan_t *plan, const kernel_candidate_t *c) {
 static const char *image_error(int rc) {
     switch (rc) {
     case -ENOTSUP:
-        return "is not a little-endian 4K-page arm64 kernel";
+        return "is not a little-endian 4K- or 16K-page arm64 kernel";
     case -ENOEXEC:
     case -EINVAL:
         return "is not a supported arm64 kernel image";
@@ -928,7 +929,7 @@ static const char *image_error(int rc) {
 
 static int select_next(boot_plan_t *plan) {
     while (plan->next_candidate < plan->candidate_count) {
-        const kernel_candidate_t *c = &plan->candidates[plan->next_candidate++];
+        kernel_candidate_t *c = &plan->candidates[plan->next_candidate++];
         if (plan->selection == SWIPTERM_KERNEL_RELEASE && strcmp(c->release, plan->wanted_release) != 0) {
             continue;
         }
@@ -937,6 +938,7 @@ static int select_next(boot_plan_t *plan) {
         if (rc < 0) {
             snprintf(reason, sizeof(reason), "kernel %s image %s %s", c->release, c->image_path, image_error(rc));
         } else {
+            c->page_size = (uint32_t)rc;
             rc = resolve_modules(plan, c, reason, sizeof(reason));
         }
         if (rc == -ENOMEM) {
@@ -1014,6 +1016,10 @@ const char *boot_plan_reasons(const boot_plan_t *plan) {
 
 const uint8_t *boot_plan_identity(const boot_plan_t *plan) {
     return plan->identity;
+}
+
+uint32_t boot_plan_page_size(const boot_plan_t *plan) {
+    return plan->current->page_size;
 }
 
 typedef struct cpio_writer {

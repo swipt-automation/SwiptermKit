@@ -2293,8 +2293,9 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
 
     char cmdline[2048];
     bool has_extra = options->extra_cmdline && options->extra_cmdline[0] != '\0';
-    if (snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1%s%s", has_extra ? " " : "",
-                 has_extra ? options->extra_cmdline : "") >= (int)sizeof(cmdline)) {
+    if (snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1%s%s%s",
+                 boot_plan_page_size(plan) == KERNEL_PAGE_16K ? " page_reporting.page_reporting_order=7" : "",
+                 has_extra ? " " : "", has_extra ? options->extra_cmdline : "") >= (int)sizeof(cmdline)) {
         boot_plan_free(plan);
         close(disk_fd);
         swipterm_shutdown(rt);
