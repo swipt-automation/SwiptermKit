@@ -75,7 +75,32 @@ static int report_progress(export_state_t *st) {
         return 0;
     }
     double frac = st->total > 0 ? (double)st->done / (double)st->total : 0.0;
-    return st->progress(st->context, frac > 0.99 ? 0.99 : frac) ? 0 : -ECANCELED;
+    return st->progress(st->context, 0.99 * frac) ? 0 : -ECANCELED;
+}
+
+static int count_export_entry(void *ctx, const char *path, const ext4_entry_info_t *info) {
+    (void)path;
+    export_state_t *st = ctx;
+    const ext4_node_t *node = &info->node;
+    if (S_ISSOCK(node->mode)) {
+        return report_progress(st);
+    }
+    // Count payload bytes once per inode, plus a tar header for every entry.
+    uint64_t bytes = S_ISREG(node->mode) ? node->size : 0;
+    if (bytes > 0 && node->nlink > 1) {
+        bool found = false;
+        if (!link_map_slot(&st->links, node->ino, &found)) {
+            return -ENOMEM;
+        }
+        if (found) {
+            bytes = 0;
+        }
+    }
+    if (bytes > UINT64_MAX - 512 || st->total > UINT64_MAX - 512 - bytes) {
+        return -EOVERFLOW;
+    }
+    st->total += 512 + bytes;
+    return report_progress(st);
 }
 
 static int write_archive_chunk(void *ctx, const void *data, size_t len) {
@@ -89,6 +114,7 @@ static int write_archive_chunk(void *ctx, const void *data, size_t len) {
         }
         p += n;
         len -= (size_t)n;
+        st->done += (uint64_t)n;
     }
     return report_progress(st);
 }
@@ -250,7 +276,7 @@ static int export_entry(void *ctx, const char *path, const ext4_entry_info_t *in
             return rc;
         }
     }
-    st->done++;
+    st->done += 512;
     return report_progress(st);
 }
 
@@ -307,7 +333,16 @@ bool swipterm_root_export(const char *root_path, const char *archive_path,
         set_error(error_message, "failed to read root disk", strerror(-rc));
         goto out;
     }
-    st.total = ext4_fs_used_inodes(st.fs);
+    if (progress) {
+        // Only read metadata here; file contents are read once, while exporting.
+        rc = ext4_fs_walk(st.fs, count_export_entry, &st);
+        link_map_free(&st.links);
+        st.links = (link_map_t){0};
+        if (rc < 0) {
+            set_error(error_message, "failed to measure root", strerror(-rc));
+            goto out;
+        }
+    }
     st.a = archive_write_new();
     if (!st.a) {
         set_error(error_message, "failed to allocate archive writer", NULL);
