@@ -103,6 +103,7 @@ extern void archive_set_error(struct archive *, int _err, const char *fmt, ...);
 extern struct archive *archive_write_new(void);
 extern int archive_write_add_filter_gzip(struct archive *);
 extern int archive_write_set_format_pax_restricted(struct archive *);
+extern int archive_write_set_format_option(struct archive *, const char *m, const char *o, const char *v);
 extern int archive_write_open_fd(struct archive *, int fd);
 extern int archive_write_header(struct archive *, struct archive_entry *);
 extern la_ssize_t archive_write_data(struct archive *, const void *, size_t);
