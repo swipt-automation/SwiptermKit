@@ -314,7 +314,8 @@ bool swipterm_root_export(const char *root_path, const char *archive_path,
         goto out;
     }
     if (archive_write_add_filter_gzip(st.a) != ARCHIVE_OK ||
-        archive_write_set_format_pax_restricted(st.a) != ARCHIVE_OK) {
+        archive_write_set_format_pax_restricted(st.a) != ARCHIVE_OK ||
+        archive_write_set_format_option(st.a, "pax", "hdrcharset", "BINARY") != ARCHIVE_OK) {
         set_error(error_message, "failed to create archive", archive_error_string(st.a));
         goto out;
     }
