@@ -77,14 +77,13 @@ struct boot_plan {
 
     kernel_candidate_t *candidates;
     size_t candidate_count;
-    size_t next_candidate;
 
     const kernel_candidate_t *current;
     boot_module_t *modules;
     size_t module_count;
     uint8_t identity[CC_SHA256_DIGEST_LENGTH];
     char release[RELEASE_MAX + 1];
-    char reasons[2048];
+    char reason[512];
 };
 
 static char *path_join(const char *a, const char *b) {
@@ -100,15 +99,10 @@ static char *path_join(const char *a, const char *b) {
     return out;
 }
 
-static void record_reason(boot_plan_t *plan, const char *fmt, ...) {
-    size_t len = strlen(plan->reasons);
-    if (len > 0 && len + 1 < sizeof(plan->reasons)) {
-        plan->reasons[len++] = '\n';
-        plan->reasons[len] = '\0';
-    }
+static void set_reason(boot_plan_t *plan, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(plan->reasons + len, sizeof(plan->reasons) - len, fmt, ap);
+    vsnprintf(plan->reason, sizeof(plan->reason), fmt, ap);
     va_end(ap);
 }
 
@@ -926,40 +920,68 @@ static const char *image_error(int rc) {
     }
 }
 
-static int select_next(boot_plan_t *plan) {
-    while (plan->next_candidate < plan->candidate_count) {
-        kernel_candidate_t *c = &plan->candidates[plan->next_candidate++];
-        if (plan->selection == SWIPTERM_KERNEL_RELEASE && strcmp(c->release, plan->wanted_release) != 0) {
-            continue;
+static int select_kernel(boot_plan_t *plan) {
+    kernel_candidate_t *c = NULL;
+    for (size_t i = 0; i < plan->candidate_count && !c; i++) {
+        if (plan->selection == SWIPTERM_KERNEL_INSTALLED ||
+            strcmp(plan->candidates[i].release, plan->wanted_release) == 0) {
+            c = &plan->candidates[i];
         }
-        char reason[256] = {0};
-        int rc = probe_image(plan, c);
-        if (rc < 0) {
-            snprintf(reason, sizeof(reason), "kernel %s image %s %s", c->release, c->image_path, image_error(rc));
-        } else {
-            c->page_size = (uint32_t)rc;
-            rc = resolve_modules(plan, c, reason, sizeof(reason));
-        }
-        if (rc == -ENOMEM) {
-            return rc;
-        }
-        if (rc < 0) {
-            record_reason(plan, "%s", reason);
-            continue;
-        }
-        plan->current = c;
-        snprintf(plan->release, sizeof(plan->release), "%s", c->release);
-        return 0;
     }
-    if (plan->selection == SWIPTERM_KERNEL_RELEASE) {
-        record_reason(plan, "kernel %s is not installed", plan->wanted_release);
+    if (!c && plan->selection == SWIPTERM_KERNEL_RELEASE) {
+        snprintf(plan->release, sizeof(plan->release), "%s", plan->wanted_release);
+        set_reason(plan, "kernel %s is not installed", plan->wanted_release);
+        return -ENOEXEC;
     }
-    plan->current = NULL;
-    return -ENOEXEC;
+    if (!c) {
+        set_reason(plan, "no kernel is installed in the root");
+        return -ENOEXEC;
+    }
+    snprintf(plan->release, sizeof(plan->release), "%s", c->release);
+    int rc = probe_image(plan, c);
+    if (rc >= 0) {
+        c->page_size = (uint32_t)rc;
+        rc = resolve_modules(plan, c, plan->reason, sizeof(plan->reason));
+    } else {
+        set_reason(plan, "kernel %s image %s %s", c->release, c->image_path, image_error(rc));
+    }
+    if (rc < 0) {
+        return rc == -ENOMEM ? rc : -ENOEXEC;
+    }
+    plan->current = c;
+    return 0;
+}
+
+static int discover_kernels(boot_plan_t *plan, int disk_fd) {
+    int rc = ext4_fs_open(disk_fd, &plan->fs);
+    if (rc == 0) {
+        rc = discover_nixos(plan);
+    }
+    if (rc == 0 && plan->candidate_count == 0) {
+        rc = discover_module_dirs(plan);
+    }
+    if (rc < 0 && rc != -ENOMEM) {
+        set_reason(plan, "the root disk cannot be read (%s)", strerror(-rc));
+        return -ENOEXEC;
+    }
+    if (rc == 0) {
+        qsort(plan->candidates, plan->candidate_count, sizeof(*plan->candidates), compare_candidates_desc);
+        size_t unique = 0;
+        for (size_t i = 0; i < plan->candidate_count; i++) {
+            if (unique > 0 && strcmp(plan->candidates[unique - 1].release, plan->candidates[i].release) == 0) {
+                free(plan->candidates[i].moddir);
+                free(plan->candidates[i].image_path);
+            } else {
+                plan->candidates[unique++] = plan->candidates[i];
+            }
+        }
+        plan->candidate_count = unique;
+    }
+    return rc;
 }
 
 int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, bool gpu,
-                      boot_plan_t **plan_out, char **error_message) {
+                      boot_plan_t **plan_out) {
     *plan_out = NULL;
     if (selection == SWIPTERM_KERNEL_RELEASE && (!release || release[0] == '\0')) {
         return -EINVAL;
@@ -971,34 +993,50 @@ int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const ch
     plan->selection = selection;
     plan->gpu = gpu;
     plan->wanted_release = release ? strdup(release) : NULL;
-    int rc = release && !plan->wanted_release ? -ENOMEM : ext4_fs_open(disk_fd, &plan->fs);
+    int rc = release && !plan->wanted_release ? -ENOMEM : discover_kernels(plan, disk_fd);
     if (rc == 0) {
-        rc = discover_nixos(plan);
+        rc = select_kernel(plan);
     }
-    if (rc == 0 && plan->candidate_count == 0) {
-        rc = discover_module_dirs(plan);
-    }
-    if (rc < 0 && rc != -ENOMEM) {
-        record_reason(plan, "the root disk cannot be read (%s)", strerror(-rc));
-        rc = -ENOEXEC;
-    } else if (rc == 0) {
-        qsort(plan->candidates, plan->candidate_count, sizeof(*plan->candidates), compare_candidates_desc);
-        rc = select_next(plan);
-    }
-    if (rc == -ENOEXEC && error_message) {
-        *error_message = strdup(plan->reasons);
-    }
-    if (rc < 0) {
+    if (rc < 0 && rc != -ENOEXEC) {
         boot_plan_free(plan);
         return rc;
     }
     *plan_out = plan;
-    return 0;
+    return rc;
 }
 
-int boot_plan_next(boot_plan_t *plan, const char *reason) {
-    record_reason(plan, "kernel %s %s", plan->release, reason);
-    return select_next(plan);
+int boot_list_kernels(int disk_fd, char ***releases_out, size_t *count_out) {
+    *releases_out = NULL;
+    *count_out = 0;
+    boot_plan_t *plan = calloc(1, sizeof(*plan));
+    if (!plan) {
+        return -ENOMEM;
+    }
+    int rc = discover_kernels(plan, disk_fd);
+    char **releases = NULL;
+    if (rc == 0 && plan->candidate_count > 0) {
+        releases = calloc(plan->candidate_count, sizeof(*releases));
+        rc = releases ? 0 : -ENOMEM;
+    }
+    for (size_t i = 0; i < plan->candidate_count && rc == 0; i++) {
+        releases[i] = strdup(plan->candidates[i].release);
+        rc = releases[i] ? 0 : -ENOMEM;
+    }
+    if (rc == 0) {
+        *releases_out = releases;
+        *count_out = plan->candidate_count;
+    } else if (releases) {
+        for (size_t i = 0; i < plan->candidate_count; i++) {
+            free(releases[i]);
+        }
+        free(releases);
+    }
+    boot_plan_free(plan);
+    return rc == -ENOEXEC ? -EIO : rc;
+}
+
+void boot_plan_fail(boot_plan_t *plan, const char *reason) {
+    set_reason(plan, "kernel %s %s", plan->release, reason);
 }
 
 const char *boot_plan_release(const boot_plan_t *plan) {
@@ -1009,8 +1047,8 @@ bool boot_plan_gpu(const boot_plan_t *plan) {
     return plan->gpu_driver;
 }
 
-const char *boot_plan_reasons(const boot_plan_t *plan) {
-    return plan->reasons;
+const char *boot_plan_reason(const boot_plan_t *plan) {
+    return plan->reason;
 }
 
 const uint8_t *boot_plan_identity(const boot_plan_t *plan) {
@@ -1200,14 +1238,11 @@ int boot_plan_load(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_
             *kernel_size_out = 0;
         }
     }
-    if (rc == -ENOMEM) {
-        return rc;
+    if (rc < 0 && rc != -ENOMEM) {
+        boot_plan_fail(plan, reason);
+        return -ENOEXEC;
     }
-    if (rc < 0) {
-        rc = boot_plan_next(plan, reason);
-        return rc < 0 ? rc : -EAGAIN;
-    }
-    return 0;
+    return rc;
 }
 
 void boot_plan_free(boot_plan_t *plan) {

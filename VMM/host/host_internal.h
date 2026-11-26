@@ -313,15 +313,16 @@ int module_index_build(ext4_writer_t *w, vfs_node_t *root);
 typedef struct boot_plan boot_plan_t;
 
 int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, bool gpu,
-                      boot_plan_t **plan_out, char **error_message);
+                      boot_plan_t **plan_out);
+int boot_list_kernels(int disk_fd, char ***releases_out, size_t *count_out);
 const char *boot_plan_release(const boot_plan_t *plan);
 bool boot_plan_gpu(const boot_plan_t *plan);
-const char *boot_plan_reasons(const boot_plan_t *plan);
+const char *boot_plan_reason(const boot_plan_t *plan);
 const uint8_t *boot_plan_identity(const boot_plan_t *plan);
 uint32_t boot_plan_page_size(const boot_plan_t *plan);
 int boot_plan_load(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_out,
                    uint8_t **modules_cpio_out, size_t *modules_cpio_size_out);
-int boot_plan_next(boot_plan_t *plan, const char *reason);
+void boot_plan_fail(boot_plan_t *plan, const char *reason);
 void boot_plan_free(boot_plan_t *plan);
 
 #endif
