@@ -21,7 +21,7 @@ enum {
     MODULE_FILE_LIMIT = 64 << 20,
     KERNEL_FILE_LIMIT = 256 << 20,
     KERNEL_PROBE_PREFIX = 1 << 20,
-    KERNEL_PROBE_LIMIT = 32 << 20,
+    KERNEL_PROBE_LIMIT = KERNEL_FILE_LIMIT,
     VISIT_MAX_DEPTH = 64,
     MAX_BOOT_MODULES = 999,
 };
@@ -893,7 +893,7 @@ static int prefix_collect(void *ctx, const void *data, size_t len) {
 
 static int probe_image(boot_plan_t *plan, const kernel_candidate_t *c) {
     size_t want = c->image.size < KERNEL_PROBE_PREFIX ? (size_t)c->image.size : KERNEL_PROBE_PREFIX;
-    for (int attempt = 0; attempt < 2; attempt++) {
+    for (;;) {
         prefix_buffer_t b = {.data = malloc(want > 0 ? want : 1), .cap = want};
         if (!b.data) {
             return -ENOMEM;
@@ -907,12 +907,11 @@ static int probe_image(boot_plan_t *plan, const kernel_candidate_t *c) {
         if (rc != -EAGAIN) {
             return rc;
         }
-        if (needed > KERNEL_PROBE_LIMIT || needed > c->image.size) {
+        if (needed <= want || needed > KERNEL_PROBE_LIMIT || needed > c->image.size) {
             return -ENOEXEC;
         }
         want = needed;
     }
-    return -ENOEXEC;
 }
 
 static const char *image_error(int rc) {
