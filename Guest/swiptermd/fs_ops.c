@@ -325,7 +325,7 @@ void fs_handle_read(uint32_t req_id, const uint8_t *body, uint32_t len) {
         return;
     }
 
-    int fd = fs_open_in_root(to_rel_path(path), O_RDONLY, 0);
+    int fd = fs_open_in_root(to_rel_path(path), O_RDONLY | O_NONBLOCK, 0);
     if (fd < 0) {
         ctrl_send_err_reply(SWIPTERMD_OP_FS_READ, req_id, fd);
         return;
@@ -341,6 +341,11 @@ void fs_handle_read(uint32_t req_id, const uint8_t *body, uint32_t len) {
     if (S_ISDIR(st.st_mode)) {
         close(fd);
         ctrl_send_err_reply(SWIPTERMD_OP_FS_READ, req_id, -EISDIR);
+        return;
+    }
+    if (!S_ISREG(st.st_mode)) {
+        close(fd);
+        ctrl_send_err_reply(SWIPTERMD_OP_FS_READ, req_id, -EINVAL);
         return;
     }
 
