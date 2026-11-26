@@ -275,10 +275,16 @@ func (r *dnsResolver) handleReply(operation uint32, queryID uint64, data []byte)
 			}
 		}
 	case mdnsResponderAsyncErrorReply:
-		flags = binary.BigEndian.Uint32(data[0:4])
+		reader := replyReader{data: data}
+		flags = reader.uint32()
+		reader.uint32() // interfaceIndex
+		errorCode := int32(reader.uint32())
+		if reader.err != nil {
+			return reader.err
+		}
 		if loaded {
 			delete(r.queries, queryID)
-			pending.complete(int32(binary.BigEndian.Uint32(data[8:12])))
+			pending.complete(errorCode)
 		}
 	default:
 		return nil
