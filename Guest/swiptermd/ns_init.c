@@ -516,7 +516,8 @@ static int container_init_entry(void *arg) {
 
     extern char **environ;
     environ = a->envp;
-    if (setenv("container", "lxc", 1) < 0 || setenv("NOTIFY_SOCKET", GUEST_NOTIFY_SOCKET, 1) < 0)
+    if (setenv("container", "lxc", 1) < 0 || setenv("NOTIFY_SOCKET", GUEST_NOTIFY_SOCKET, 1) < 0 ||
+        (g_daemon.gpu && setenv("VN_DEBUG", "no_abort", 0) < 0))
         child_fail(a->err_wr, -errno);
     umask(0022);
     execve(a->path, a->argv, environ);

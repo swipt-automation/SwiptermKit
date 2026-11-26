@@ -22,6 +22,7 @@
 #define SESSIONS_ANCHOR_COMMAND "sessions-anchor"
 #define MANAGED_INIT_NAME "init"
 #define TRUSTED_PATH "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin"
+#define GPU_VENUS_ENV "VN_DEBUG=no_abort"
 #define LOGIN_USER_CAP 33
 
 typedef struct ev_node ev_node_t;
@@ -48,6 +49,7 @@ typedef struct daemon_state {
     char host_cmd_dir[512];
 
     bool init_started;
+    bool gpu;
     bool halted;
     bool stopping;
     bool shutdown_requested;

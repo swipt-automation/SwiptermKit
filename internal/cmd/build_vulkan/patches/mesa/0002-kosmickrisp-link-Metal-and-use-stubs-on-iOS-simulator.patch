@@ -1,0 +1,31 @@
+diff --git a/src/kosmickrisp/bridge/meson.build b/src/kosmickrisp/bridge/meson.build
+index 03ba43b4248..68b02555be6 100644
+--- a/src/kosmickrisp/bridge/meson.build
++++ b/src/kosmickrisp/bridge/meson.build
+@@ -8,7 +8,12 @@ mtl_bridge_files = files(
+   'mtl_format.h',
+ )
+ 
+-if host_machine.system() == 'darwin'
++# The iOS Simulator SDK has no Metal 4 API, so the simulator build uses the
++# stubs and exposes no physical device.
++with_mtl_bridge = (host_machine.system() == 'darwin' and
++                   host_machine.subsystem() != 'ios-simulator')
++
++if with_mtl_bridge
+   mtl_bridge_files += files(
+     'mtl_argument_table.m',
+     'mtl_bridge.m',
+@@ -51,10 +56,10 @@ mtl_bridge_dependencies = [
+   idep_vulkan_util
+ ]
+ 
+-if host_machine.system() == 'darwin'
++if with_mtl_bridge
+   mtl_bridge_dependencies += dependency(
+     'appleframeworks',
+-    modules : ['Foundation']
++    modules : ['Foundation', 'Metal']
+   )
+ endif
+ 

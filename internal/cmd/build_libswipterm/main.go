@@ -31,6 +31,7 @@ const (
 	slicesPath     = buildPath + "/frameworks"
 	outputPath     = "Frameworks/" + frameworkName + ".xcframework"
 	archivePath    = buildPath + "/" + frameworkName + ".xcframework.zip"
+	virglPath      = "VMM/deps/virglrenderer"
 )
 
 type platform struct {
@@ -159,6 +160,15 @@ func buildLibraries() error {
 	if err != nil {
 		return err
 	}
+	objcSources, err := glob("VMM/host/*.m")
+	if err != nil {
+		return err
+	}
+	virglSources, err := glob(virglPath+"/src/*.c", virglPath+"/src/venus/*.c", virglPath+"/src/proxy/*.c",
+		virglPath+"/src/mesa/util/*.c", virglPath+"/server/*.c")
+	if err != nil {
+		return err
+	}
 	zstdSources, err := glob("VMM/deps/zstd/lib/common/*.c", "VMM/deps/zstd/lib/decompress/*.c")
 	if err != nil {
 		return err
@@ -189,26 +199,38 @@ func buildLibraries() error {
 		if err != nil {
 			return err
 		}
-		base := []string{
-			"-target", platform.target, "-mcpu=" + platform.cpu, "-isysroot", sdkPath, "-O3", "-g", "-fno-common",
+		target := []string{"-target", platform.target, "-mcpu=" + platform.cpu, "-isysroot", sdkPath, "-O3", "-g", "-fno-common"}
+		base := append(slices.Clone(target),
 			"-IVMM/include/CSwiptermKit", "-IVMM/deps/zstd/lib", "-IVMM/deps/zstd/lib/common", "-IVMM/deps/xz/src/liblzma/api",
 			"-DZSTD_LEGACY_SUPPORT=0", "-DXXH_NAMESPACE=swipterm_zstd_", statistics,
-		}
-		vmmFlags := append(slices.Clone(base), "-std=gnu2x", "-Wall", "-Wextra", "-Werror")
+		)
+		vmmFlags := append(slices.Clone(base), "-I"+virglPath+"/src", "-I"+virglPath+"/include",
+			"-std=gnu2x", "-Wall", "-Wextra", "-Werror")
+		objcFlags := append(slices.Clone(vmmFlags), "-fobjc-arc")
+		virglFlags := append(slices.Clone(target), "-std=gnu11", "-w", "-fvisibility=hidden", "-fno-strict-aliasing",
+			"-DNDEBUG", "-imacros", virglPath+"/generated/config.h", "-DHAVE_CONFIG_H=1",
+			"-DVK_USE_PLATFORM_METAL_EXT", "-DVK_ENABLE_BETA_EXTENSIONS",
+			"-I"+virglPath+"/generated", "-I"+virglPath+"/generated/venus-protocol", "-I"+virglPath+"/src",
+			"-I"+virglPath+"/include", "-I"+virglPath+"/src/venus", "-I"+virglPath+"/src/drm",
+			"-I"+virglPath+"/src/drm/drm-uapi", "-I"+virglPath+"/src/mesa", "-I"+virglPath+"/src/mesa/compat",
+			"-I"+virglPath+"/src/mesa/pipe", "-I"+virglPath+"/src/mesa/util", "-I"+virglPath,
+		)
 		zstdFlags := append(slices.Clone(base), "-std=gnu11", "-w")
 		xzFlags := append(slices.Clone(base), "-std=gnu11", "-w", "-fvisibility=hidden", "-DHAVE_CONFIG_H", "-DNDEBUG",
 			"-IVMM/deps/xz", "-IVMM/deps/xz/src/common", "-IVMM/deps/xz/src/liblzma/common", "-IVMM/deps/xz/src/liblzma/check",
 			"-IVMM/deps/xz/src/liblzma/lz", "-IVMM/deps/xz/src/liblzma/rangecoder", "-IVMM/deps/xz/src/liblzma/lzma",
 			"-IVMM/deps/xz/src/liblzma/delta", "-IVMM/deps/xz/src/liblzma/simple",
 		)
-		flags[index] = strings.Join(slices.Concat(vmmFlags, zstdFlags, xzFlags), "\n")
+		flags[index] = strings.Join(slices.Concat(vmmFlags, objcFlags, zstdFlags, xzFlags, virglFlags), "\n")
 		flagFiles[index] = filepath.Join(buildPath, platform.sdk, "flags")
 		previous, _ := os.ReadFile(flagFiles[index])
 		rebuild := string(previous) != flags[index]
 		for _, unit := range []struct{ sources, arguments []string }{
 			{sources, vmmFlags},
+			{objcSources, objcFlags},
 			{zstdSources, zstdFlags},
 			{xzSources, xzFlags},
+			{virglSources, virglFlags},
 		} {
 			for _, source := range unit.sources {
 				object := filepath.Join(buildPath, platform.sdk, source+".o")

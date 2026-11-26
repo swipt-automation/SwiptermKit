@@ -21,21 +21,18 @@ import (
 	F "github.com/sagernet/sing/common/format"
 )
 
-const (
-	manifestPath  = "Package.swift"
-	archivePath   = "build/LibSwipterm.xcframework.zip"
-	frameworkPath = "Frameworks/LibSwipterm.xcframework"
-)
+const manifestPath = "Package.swift"
 
 var (
 	binaryInputs = []string{
 		"VMM", "Guest/swiptermd/protocol.h", "Guest/swiptermd/wire_format.h", "go.mod", "go.sum", "internal", "libswipterm",
-		":(exclude)internal/cmd/build_guest", ":(exclude)internal/cmd/release",
+		":(exclude)internal/cmd/build_guest", ":(exclude)internal/cmd/build_vulkan", ":(exclude)internal/cmd/release",
 	}
-	versionPattern  = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
-	binaryLocation  = regexp.MustCompile(`(?m)^([ \t]*)(?:path: "` + regexp.QuoteMeta(frameworkPath) + `"|url: "[^"\n]*",\n[ \t]*checksum: "[^"\n]*")$`)
-	errUsage        = E.New("usage: release resolve [VERSION] | release manifest [-repository OWNER/NAME -tag BINARY_TAG]")
-	errMissingMatch = E.New(manifestPath, " must declare the LibSwipterm binary target by exactly one path or url and checksum")
+	vulkanInputs     = []string{"internal/cmd/build_vulkan"}
+	binaryFrameworks = []string{"LibSwipterm"}
+	vulkanFrameworks = []string{"KosmicKrisp", "MoltenVK"}
+	versionPattern   = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
+	errUsage         = E.New("usage: release resolve [VERSION] | release manifest [-repository OWNER/NAME -binary-tag BINARY_TAG -vulkan-tag VULKAN_TAG]")
 )
 
 type version [3]int64
@@ -97,28 +94,37 @@ func resolve(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	files, err := output("git", append([]string{"ls-files", "-s", "--"}, binaryInputs...)...)
-	if err != nil {
-		return err
+	var result strings.Builder
+	result.WriteString(F.ToString("version=", nextVersion, "\n"))
+	for _, artifact := range []struct {
+		name   string
+		inputs []string
+	}{
+		{"binary", binaryInputs},
+		{"vulkan", vulkanInputs},
+	} {
+		files, err := output("git", append([]string{"ls-files", "-s", "--"}, artifact.inputs...)...)
+		if err != nil {
+			return err
+		}
+		hash := sha1.New()
+		hash.Write([]byte(F.ToString("blob ", len(files), "\x00", files)))
+		tag := artifact.name + "." + hex.EncodeToString(hash.Sum(nil))[:12]
+		result.WriteString(F.ToString(
+			artifact.name, "-tag=", tag, "\n",
+			artifact.name, "-exists=", exec.Command("gh", "release", "view", tag, "--json", "tagName").Run() == nil, "\n",
+		))
 	}
-	hash := sha1.New()
-	hash.Write([]byte(F.ToString("blob ", len(files), "\x00", files)))
-	binaryTag := "binary." + hex.EncodeToString(hash.Sum(nil))[:12]
-	result := F.ToString(
-		"version=", nextVersion, "\n",
-		"binary-tag=", binaryTag, "\n",
-		"binary-exists=", exec.Command("gh", "release", "view", binaryTag, "--json", "tagName").Run() == nil, "\n",
-	)
 	path := os.Getenv("GITHUB_OUTPUT")
 	if path == "" {
-		_, err = os.Stdout.WriteString(result)
+		_, err = os.Stdout.WriteString(result.String())
 		return err
 	}
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
-	_, err = file.WriteString(result)
+	_, err = file.WriteString(result.String())
 	return E.Errors(err, file.Close())
 }
 
@@ -169,40 +175,55 @@ func compareVersions(left version, right version) int {
 
 func manifest(arguments []string) error {
 	flags := flag.NewFlagSet("manifest", flag.ContinueOnError)
-	repository := flags.String("repository", "", "GitHub repository that publishes the binary")
-	tag := flags.String("tag", "", "release tag of the binary")
+	repository := flags.String("repository", "", "GitHub repository that publishes the binaries")
+	binaryTag := flags.String("binary-tag", "", "release tag of LibSwipterm")
+	vulkanTag := flags.String("vulkan-tag", "", "release tag of the Vulkan backends")
 	err := flags.Parse(arguments)
 	if err != nil {
 		return err
 	}
-	if flags.NArg() != 0 || (*repository == "") != (*tag == "") {
+	if flags.NArg() != 0 || (*repository == "") != (*binaryTag == "") || (*binaryTag == "") != (*vulkanTag == "") {
 		return errUsage
 	}
 	content, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return err
 	}
-	if len(binaryLocation.FindAllIndex(content, -1)) != 1 {
-		return errMissingMatch
-	}
-	replacement := `${1}path: "` + frameworkPath + `"`
-	if *repository != "" {
-		archive, err := os.Open(archivePath)
-		if err != nil {
-			return err
+	for _, release := range []struct {
+		tag        string
+		frameworks []string
+	}{
+		{*binaryTag, binaryFrameworks},
+		{*vulkanTag, vulkanFrameworks},
+	} {
+		for _, name := range release.frameworks {
+			frameworkPath := "Frameworks/" + name + ".xcframework"
+			location := regexp.MustCompile(`(?m)^([ \t]*)(?:path: "` + regexp.QuoteMeta(frameworkPath) + `"|url: "[^"\n]*/` +
+				regexp.QuoteMeta(name) + `\.xcframework\.zip",\n[ \t]*checksum: "[^"\n]*")$`)
+			if len(location.FindAllIndex(content, -1)) != 1 {
+				return E.New(manifestPath, " must declare the ", name, " binary target by exactly one path or url and checksum")
+			}
+			replacement := `${1}path: "` + frameworkPath + `"`
+			if *repository != "" {
+				archive, err := os.Open("build/" + name + ".xcframework.zip")
+				if err != nil {
+					return err
+				}
+				hash := sha256.New()
+				_, err = io.Copy(hash, archive)
+				archive.Close()
+				if err != nil {
+					return err
+				}
+				replacement = F.ToString(
+					`${1}url: "https://github.com/`, *repository, "/releases/download/", release.tag, "/", name, `.xcframework.zip",`, "\n",
+					`${1}checksum: "`, hex.EncodeToString(hash.Sum(nil)), `"`,
+				)
+			}
+			content = location.ReplaceAll(content, []byte(replacement))
 		}
-		hash := sha256.New()
-		_, err = io.Copy(hash, archive)
-		archive.Close()
-		if err != nil {
-			return err
-		}
-		replacement = F.ToString(
-			`${1}url: "https://github.com/`, *repository, "/releases/download/", *tag, `/LibSwipterm.xcframework.zip",`, "\n",
-			`${1}checksum: "`, hex.EncodeToString(hash.Sum(nil)), `"`,
-		)
 	}
-	return os.WriteFile(manifestPath, binaryLocation.ReplaceAll(content, []byte(replacement)), 0o644)
+	return os.WriteFile(manifestPath, content, 0o644)
 }
 
 func output(name string, arguments ...string) (string, error) {

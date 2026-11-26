@@ -28,6 +28,8 @@ public final class LinuxRuntime: @unchecked Sendable {
         public var memorySize: UInt64?
         public var cpuCount: Int?
         public var extraKernelArguments: String?
+        /// `nil` boots without a GPU.
+        public var gpu: GPUConfiguration?
         public var consoleOutput: (@Sendable (Data) -> Void)?
         public var panicHandler: (@Sendable (String) -> Void)?
         public var haltHandler: (@Sendable (HaltReason) -> Void)?
@@ -42,6 +44,7 @@ public final class LinuxRuntime: @unchecked Sendable {
             memorySize: UInt64? = nil,
             cpuCount: Int? = nil,
             extraKernelArguments: String? = nil,
+            gpu: GPUConfiguration? = nil,
             consoleOutput: (@Sendable (Data) -> Void)? = nil,
             panicHandler: (@Sendable (String) -> Void)? = nil,
             haltHandler: (@Sendable (HaltReason) -> Void)? = nil,
@@ -55,6 +58,7 @@ public final class LinuxRuntime: @unchecked Sendable {
             self.memorySize = memorySize
             self.cpuCount = cpuCount
             self.extraKernelArguments = extraKernelArguments
+            self.gpu = gpu
             self.consoleOutput = consoleOutput
             self.panicHandler = panicHandler
             self.haltHandler = haltHandler
@@ -401,7 +405,8 @@ public final class LinuxRuntime: @unchecked Sendable {
                                     kernel: selection,
                                     kernel_release: release,
                                     extra_cmdline: extraCmdline,
-                                    network: OpaquePointer(bitPattern: Int(network.handle()))
+                                    network: OpaquePointer(bitPattern: Int(network.handle())),
+                                    gpu: configuration.gpu?.cValue ?? swipterm_gpu_options()
                                 )
                                 return swipterm_boot(&options, &handle, &message)
                             }

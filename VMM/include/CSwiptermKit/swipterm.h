@@ -83,6 +83,17 @@ typedef enum {
     SWIPTERM_KERNEL_RELEASE = 1,
 } swipterm_kernel_selection;
 
+typedef enum {
+    SWIPTERM_GPU_BACKEND_AUTOMATIC = 0,
+    SWIPTERM_GPU_BACKEND_MOLTENVK = 1,
+    SWIPTERM_GPU_BACKEND_KOSMICKRISP = 2,
+} swipterm_gpu_backend;
+
+typedef struct {
+    bool enabled;
+    swipterm_gpu_backend backend;
+} swipterm_gpu_options;
+
 typedef struct {
     const char *root_path;
     const char *hostname;
@@ -95,6 +106,7 @@ typedef struct {
     const char *kernel_release;
     const char *extra_cmdline;
     swipterm_network *network;
+    swipterm_gpu_options gpu;
 } swipterm_options;
 
 typedef struct {
@@ -107,6 +119,10 @@ bool swipterm_jit_is_enabled(void);
 void swipterm_jit_set_enabled(bool enabled);
 bool swipterm_jit_prepare(char **error_message);
 
+uint32_t swipterm_gpu_available_backends(void);
+bool swipterm_gpu_suspend(void);
+void swipterm_gpu_resume(void);
+
 int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, char **error_message);
 void swipterm_begin_shutdown(swipterm_runtime *runtime);
 void swipterm_shutdown(swipterm_runtime *runtime);
@@ -115,6 +131,7 @@ int swipterm_start_init(swipterm_runtime *runtime, const char *path,
 void swipterm_suspend(swipterm_runtime *runtime);
 void swipterm_resume(swipterm_runtime *runtime);
 void swipterm_get_boot_info(swipterm_runtime *runtime, swipterm_boot_info *info_out);
+bool swipterm_gpu_is_active(swipterm_runtime *runtime);
 
 typedef enum {
     SWIPTERM_READY_LOGIN = 1,

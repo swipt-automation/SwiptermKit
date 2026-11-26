@@ -35,6 +35,8 @@ typedef struct boot_requirement {
     bool required;
 } boot_requirement_t;
 
+static const char GPU_MODULE[] = "virtio_gpu";
+
 static const boot_requirement_t BOOT_MODULES[] = {
     {"crc32c_generic", false},
     {"crc32c", false},
@@ -68,6 +70,8 @@ typedef struct boot_module {
 struct boot_plan {
     ext4_fs_t *fs;
     swipterm_kernel_selection selection;
+    bool gpu;
+    bool gpu_driver;
     char *wanted_release;
 
     kernel_candidate_t *candidates;
@@ -804,6 +808,12 @@ static int resolve_modules(boot_plan_t *plan, const kernel_candidate_t *c, char 
     for (size_t i = 0; i < sizeof(BOOT_MODULES) / sizeof(BOOT_MODULES[0]) && rc == 0; i++) {
         rc = visit_name(&t, BOOT_MODULES[i].name, strlen(BOOT_MODULES[i].name), BOOT_MODULES[i].required, 0);
     }
+    plan->gpu_driver = false;
+    if (rc == 0 && plan->gpu) {
+        const size_t order_count = t.order_count;
+        rc = visit_name(&t, GPU_MODULE, strlen(GPU_MODULE), false, 0);
+        plan->gpu_driver = rc == 0 && (is_builtin(&t, GPU_MODULE) || t.order_count > order_count);
+    }
     if (rc == -ENOENT && t.missing[0] != '\0') {
         snprintf(reason, reason_size, "kernel %s has no %s module", c->release, t.missing);
     } else if (rc < 0) {
@@ -947,8 +957,8 @@ static int select_next(boot_plan_t *plan) {
     return -ENOEXEC;
 }
 
-int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, boot_plan_t **plan_out,
-                      char **error_message) {
+int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, bool gpu,
+                      boot_plan_t **plan_out, char **error_message) {
     *plan_out = NULL;
     if (selection == SWIPTERM_KERNEL_RELEASE && (!release || release[0] == '\0')) {
         return -EINVAL;
@@ -958,6 +968,7 @@ int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const ch
         return -ENOMEM;
     }
     plan->selection = selection;
+    plan->gpu = gpu;
     plan->wanted_release = release ? strdup(release) : NULL;
     int rc = release && !plan->wanted_release ? -ENOMEM : ext4_fs_open(disk_fd, &plan->fs);
     if (rc == 0) {
@@ -991,6 +1002,10 @@ int boot_plan_next(boot_plan_t *plan, const char *reason) {
 
 const char *boot_plan_release(const boot_plan_t *plan) {
     return plan->release;
+}
+
+bool boot_plan_gpu(const boot_plan_t *plan) {
+    return plan->gpu_driver;
 }
 
 const char *boot_plan_reasons(const boot_plan_t *plan) {

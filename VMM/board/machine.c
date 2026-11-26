@@ -1237,6 +1237,18 @@ static int attach_default_virtio(vmm_machine_priv_t *priv, const vmm_config_t *c
             return -ENOMEM;
         }
     }
+    if (config->gpu) {
+        vm->gpu_shm.pages = calloc(VMM_GPU_SHM_SIZE >> VMM_PAGE_SHIFT, sizeof(*vm->gpu_shm.pages));
+        if (!vm->gpu_shm.pages) {
+            return -ENOMEM;
+        }
+        vm->gpu_shm.base = VMM_GPU_SHM_BASE;
+        vm->gpu_shm.size = VMM_GPU_SHM_SIZE;
+        vm->virtio_devs[VMM_VIRTIO_SLOT_GPU] = virtio_gpu_create(vm, VMM_VIRTIO_SLOT_GPU);
+        if (!vm->virtio_devs[VMM_VIRTIO_SLOT_GPU]) {
+            return -ENOMEM;
+        }
+    }
     return 0;
 }
 
@@ -1559,6 +1571,8 @@ void vmm_destroy(vmm_machine_t *vm) {
             vm->virtio_devs[i] = NULL;
         }
     }
+    free(vm->gpu_shm.pages);
+    vm->gpu_shm = (vmm_shm_window_t){0};
 
     gicv2_destroy(vm->gic);
     vm->gic = NULL;

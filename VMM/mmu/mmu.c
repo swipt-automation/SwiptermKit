@@ -282,6 +282,64 @@ void *mmu_gpa_to_hva(const vmm_machine_t *vm, uint64_t gpa, size_t len) {
     return NULL;
 }
 
+static void *mmu_shm_hva(const vmm_machine_t *vm, uint64_t pa) {
+    uint64_t off = pa - vm->gpu_shm.base;
+    if (off >= vm->gpu_shm.size) {
+        return NULL;
+    }
+    uintptr_t page = atomic_load_explicit(&vm->gpu_shm.pages[off >> VMM_PAGE_SHIFT], memory_order_acquire);
+    return page ? (void *)(page + (off & VMM_PAGE_MASK)) : NULL;
+}
+
+void mmu_shm_map(vmm_machine_t *vm, uint64_t offset, void *hva, uint64_t size) {
+    uint64_t first = offset >> VMM_PAGE_SHIFT;
+    uint64_t count = (size + VMM_PAGE_MASK) >> VMM_PAGE_SHIFT;
+    for (uint64_t i = 0; i < count; i++) {
+        atomic_store_explicit(&vm->gpu_shm.pages[first + i], (uintptr_t)hva + (i << VMM_PAGE_SHIFT),
+                              memory_order_release);
+    }
+}
+
+void mmu_shm_unmap(vmm_machine_t *vm, uint64_t offset, uint64_t size) {
+    uint64_t first = offset >> VMM_PAGE_SHIFT;
+    uint64_t count = (size + VMM_PAGE_MASK) >> VMM_PAGE_SHIFT;
+    for (uint64_t i = 0; i < count; i++) {
+        atomic_store_explicit(&vm->gpu_shm.pages[first + i], 0, memory_order_release);
+    }
+}
+
+void mmu_host_flush(vmm_machine_t *vm) {
+    static const vmm_tlbi_t ops[] = {
+        {.all_asids = true, .target = VMM_TLBI_HOST},
+        {.all_asids = true, .target = VMM_TLBI_GUEST_ALL},
+    };
+    os_unfair_lock_lock(&vm->tlb_lock);
+    uint64_t target = atomic_load_explicit(&vm->tlb_epoch, memory_order_relaxed);
+    for (size_t i = 0; i < sizeof(ops) / sizeof(ops[0]); i++) {
+        ++target;
+        vm->tlb_ring[target & (VMM_TLB_RING - 1U)] = ops[i];
+    }
+    atomic_store_explicit(&vm->tlb_epoch, target, memory_order_seq_cst);
+    os_unfair_lock_unlock(&vm->tlb_lock);
+    vmm_host_sev();
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
+        vcpu_t *cpu = vm->cpus[i];
+        if (!cpu) {
+            continue;
+        }
+        uint32_t spins = 0;
+        while (__atomic_load_n(&cpu->tlb_epoch_local, __ATOMIC_ACQUIRE) < target &&
+               !cpu_qs_parked(vm->cpu_pool, i)) {
+            atomic_store_explicit(&cpu->shootdown, 1, memory_order_seq_cst);
+            if (++spins < 128) {
+                __asm__ __volatile__("yield");
+            } else {
+                sched_yield();
+            }
+        }
+    }
+}
+
 static uint32_t mmu_pa_bits(uint64_t ps) {
     static const uint8_t table[8] = {32, 36, 40, 42, 44, 48, 48, 48};
     return table[ps & 7ULL];
@@ -470,6 +528,9 @@ static void mmu_walk_output(vcpu_t *cpu, walk_detail_t *out, uint64_t ipa, mmu_a
     }
     out->res.pa = pa;
     void *hva = mmu_gpa_to_hva(cpu->vm, pa, 1);
+    if (!hva && access != MMU_ACCESS_EXEC) {
+        hva = mmu_shm_hva(cpu->vm, pa);
+    }
     if (hva) {
         out->res.hva = (uintptr_t)hva;
         out->res.ok = true;
@@ -740,6 +801,9 @@ static void mmu_tlb_fill(vcpu_t *cpu, uint64_t va, uint8_t el, const walk_detail
 
     uint64_t page_pa = w->res.pa & ~(uint64_t)VMM_PAGE_MASK;
     void *page_hva = mmu_gpa_to_hva(cpu->vm, page_pa, VMM_PAGE_SIZE);
+    if (!page_hva) {
+        page_hva = mmu_shm_hva(cpu->vm, page_pa);
+    }
     if (!page_hva) {
         return;
     }

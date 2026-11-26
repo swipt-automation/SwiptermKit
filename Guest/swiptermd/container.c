@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <limits.h>
 #include <linux/bpf.h>
 #include <sched.h>
@@ -195,6 +196,34 @@ static int make_device(const char *path, mode_t mode, unsigned major_number, uns
     return mknod(path, mode, makedev(major_number, minor_number)) < 0 ? -errno : 0;
 }
 
+static int assemble_dri(void) {
+    DIR *dir = opendir("/sys/class/drm");
+    if (!dir)
+        return -errno;
+    int rc = mkdir(GUEST_ROOT "/dev/dri", 0755) < 0 ? -errno : 0;
+    struct dirent *entry;
+    while (rc == 0 && (entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "renderD", 7) != 0)
+            continue;
+        char path[PATH_MAX];
+        snprintf(path, sizeof(path), "/sys/class/drm/%s/dev", entry->d_name);
+        FILE *dev = fopen(path, "re");
+        unsigned major_number;
+        unsigned minor_number;
+        bool parsed = dev && fscanf(dev, "%u:%u", &major_number, &minor_number) == 2;
+        if (dev)
+            fclose(dev);
+        if (!parsed)
+            continue;
+        snprintf(path, sizeof(path), GUEST_ROOT "/dev/dri/%s", entry->d_name);
+        rc = make_device(path, S_IFCHR | 0666, major_number, minor_number);
+        if (rc == 0)
+            rc = device_permit(major_number, minor_number);
+    }
+    closedir(dir);
+    return rc;
+}
+
 static int assemble_dev(void) {
     static const struct {
         const char *path;
@@ -259,7 +288,7 @@ static int assemble_dev(void) {
               "newinstance,ptmxmode=0666,mode=0620,gid=5") < 0 ||
         mount("tmpfs", GUEST_ROOT "/dev/shm", "tmpfs", MS_NOSUID | MS_NODEV, "mode=1777") < 0)
         return -errno;
-    return 0;
+    return g_daemon.gpu ? assemble_dri() : 0;
 }
 
 static int assemble_sys(void) {
@@ -293,6 +322,8 @@ static int assemble_run(void) {
         {SYSTEMD_CONTROL "/multi-user.target.wants", 0755},
         {SYSTEMD_CONTROL "/rescue.target.wants", 0755},
         {SYSTEMD_CONTROL "/emergency.target.wants", 0755},
+        {GUEST_ROOT "/run/systemd/system.conf.d", 0755},
+        {GUEST_ROOT "/run/systemd/user.conf.d", 0755},
     };
     for (size_t i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
         if (mkdir(dirs[i].path, dirs[i].mode) < 0)
@@ -327,6 +358,14 @@ static int assemble_run(void) {
         rc = write_file(AT_FDCWD, GUEST_ROOT GUEST_RUN_HOST "/swiptermd", "", create, 0755);
     if (rc == 0)
         rc = write_file(AT_FDCWD, SYSTEMD_CONTROL "/" SESSIONS_UNIT, sessions_unit, create, 0644);
+    if (rc == 0 && g_daemon.gpu) {
+        static const char gpu_environment[] = "[Manager]\nDefaultEnvironment=" GPU_VENUS_ENV "\n";
+        rc = write_file(AT_FDCWD, GUEST_ROOT "/run/systemd/system.conf.d/swipterm-gpu.conf", gpu_environment, create,
+                        0644);
+        if (rc == 0)
+            rc = write_file(AT_FDCWD, GUEST_ROOT "/run/systemd/user.conf.d/swipterm-gpu.conf", gpu_environment,
+                            create, 0644);
+    }
     if (rc == 0)
         rc = write_file(AT_FDCWD, GUEST_ROOT "/run/systemd/network/99-swipterm-eth0.network", fallback_network,
                         create, 0644);

@@ -62,8 +62,16 @@ uint64_t virtio_mmio_read(virtio_dev_t *dev, uint32_t offset, uint32_t size) {
     case VIRTIO_MMIO_SHM_LEN_LOW:
     case VIRTIO_MMIO_SHM_LEN_HIGH:
     case VIRTIO_MMIO_SHM_BASE_LOW:
-    case VIRTIO_MMIO_SHM_BASE_HIGH:
-        return 0xFFFFFFFFU;
+    case VIRTIO_MMIO_SHM_BASE_HIGH: {
+        uint64_t base = 0;
+        uint64_t len = 0;
+        if (!dev->ops || !dev->ops->shm_region || !dev->ops->shm_region(dev, dev->shm_sel, &base, &len)) {
+            return 0xFFFFFFFFU;
+        }
+        uint64_t value = offset == VIRTIO_MMIO_SHM_LEN_LOW || offset == VIRTIO_MMIO_SHM_LEN_HIGH ? len : base;
+        return offset == VIRTIO_MMIO_SHM_LEN_LOW || offset == VIRTIO_MMIO_SHM_BASE_LOW ? (uint32_t)value
+                                                                                       : (uint32_t)(value >> 32);
+    }
     case VIRTIO_MMIO_QUEUE_RESET:
         return 0;
     case VIRTIO_MMIO_CONFIG_GENERATION:
@@ -101,6 +109,9 @@ void virtio_mmio_write(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64
         break;
     case VIRTIO_MMIO_QUEUE_SEL:
         dev->queue_sel = v;
+        break;
+    case VIRTIO_MMIO_SHM_SEL:
+        dev->shm_sel = v;
         break;
     case VIRTIO_MMIO_QUEUE_NUM:
         if (dev->queue_sel < dev->num_queues) {

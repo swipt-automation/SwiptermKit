@@ -536,6 +536,25 @@ static char **decode_strv_spawn(swiptermd_buf_r_t *r) {
     return vec;
 }
 
+static char **gpu_environment(char **envp) {
+    if (!envp || !g_daemon.gpu)
+        return envp;
+    size_t count = 0;
+    for (; envp[count]; count++) {
+        if (strncmp(envp[count], "VN_DEBUG=", 9) == 0)
+            return envp;
+    }
+    char *entry = strdup(GPU_VENUS_ENV);
+    char **grown = entry ? realloc(envp, (count + 2) * sizeof(*envp)) : NULL;
+    if (!grown) {
+        free(entry);
+        return envp;
+    }
+    grown[count] = entry;
+    grown[count + 1] = NULL;
+    return grown;
+}
+
 static void free_strv_spawn(char **vec) {
     if (!vec)
         return;
@@ -938,7 +957,7 @@ void proc_handle_spawn(uint32_t req_id, const uint8_t *body, uint32_t len) {
         return;
     }
     char **argv = decode_strv_spawn(&r);
-    char **envp = argv ? decode_strv_spawn(&r) : NULL;
+    char **envp = argv ? gpu_environment(decode_strv_spawn(&r)) : NULL;
     int32_t pid = 0;
     int err = -EINVAL;
     if (argv && envp && spec.process_id != 0) {

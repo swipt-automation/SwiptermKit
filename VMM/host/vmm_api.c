@@ -1,6 +1,7 @@
 #define _DARWIN_C_SOURCE
 
 #include "../../Guest/swiptermd/wire_format.h"
+#include "gpu.h"
 #include "host_internal.h"
 #include "rpc_codec.h"
 #include "../board/machine.h"
@@ -200,6 +201,7 @@ struct swipterm_runtime {
     uint32_t ready_mask;
     swipterm_halt_info halt_info;
     swipterm_boot_info boot_info;
+    bool gpu_active;
 
     pending_req_t *pending_reqs;
     stream_route_t *routes;
@@ -2126,6 +2128,7 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
         const char *snapshot_path = boot_snapshot_path(options, snapshot_buf, sizeof(snapshot_buf));
         const char *save_path = save_snapshots ? snapshot_path : NULL;
         vmm_config_t cfg = base;
+        cfg.gpu = rt->gpu_active && boot_plan_gpu(plan);
         int err = 0;
         bool restored = false;
         if (snapshot_path && restore_snapshot) {
@@ -2193,6 +2196,7 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
             rc = connect_guest(rt);
         }
         if (rc == 0) {
+            rt->gpu_active = cfg.gpu;
             atomic_store(&rt->booting, false);
             return 0;
         }
@@ -2276,8 +2280,11 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
         swipterm_shutdown(rt);
         return rc;
     }
+    rt->gpu_active = options->gpu.enabled && gpu_acquire(options->gpu.backend);
+
     boot_plan_t *plan = NULL;
-    int rc = boot_plan_resolve(disk_fd, options->kernel, options->kernel_release, &plan, error_message);
+    int rc = boot_plan_resolve(disk_fd, options->kernel, options->kernel_release, rt->gpu_active, &plan,
+                               error_message);
     if (rc < 0) {
         close(disk_fd);
         swipterm_shutdown(rt);
@@ -2681,6 +2688,10 @@ void swipterm_get_boot_info(swipterm_runtime *rt, swipterm_boot_info *info_out) 
         return;
     }
     *info_out = rt->boot_info;
+}
+
+bool swipterm_gpu_is_active(swipterm_runtime *rt) {
+    return rt->gpu_active;
 }
 
 void swipterm_get_halt_info(swipterm_runtime *rt, swipterm_halt_info *info_out) {

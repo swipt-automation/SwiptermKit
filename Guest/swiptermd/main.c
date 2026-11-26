@@ -1,5 +1,6 @@
 #include "swiptermd.h"
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -499,6 +500,18 @@ static int bind_boot_virtio(unsigned addr) {
     return rc;
 }
 
+static bool has_render_node(void) {
+    DIR *dir = opendir("/sys/class/drm");
+    if (!dir)
+        return false;
+    bool found = false;
+    struct dirent *entry;
+    while (!found && (entry = readdir(dir)) != NULL)
+        found = strncmp(entry->d_name, "renderD", 7) == 0;
+    closedir(dir);
+    return found;
+}
+
 static int reseed_boot_random(void) {
     int fd = open("/dev/hwrng", O_RDONLY | O_CLOEXEC);
     if (fd < 0)
@@ -547,6 +560,7 @@ static int setup_boot_devices(void) {
         if (rc < 0)
             return rc;
     }
+    g_daemon.gpu = bind_boot_virtio(0x0a001a00) == 0 && has_render_node();
     return 0;
 }
 

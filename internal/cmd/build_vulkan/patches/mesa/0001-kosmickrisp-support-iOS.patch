@@ -1,0 +1,69 @@
+diff --git a/src/kosmickrisp/bridge/mtl_device.m b/src/kosmickrisp/bridge/mtl_device.m
+index b02191c5aea..d8c79d6d333 100644
+--- a/src/kosmickrisp/bridge/mtl_device.m
++++ b/src/kosmickrisp/bridge/mtl_device.m
+@@ -21,6 +21,16 @@
+    mtl_device *device = nil;
+ 
+    @autoreleasepool {
++#if TARGET_OS_IPHONE
++      /* iOS has a single GPU and MTLCopyAllDevices is only available from
++       * iOS 18. The Metal 4 classes the driver uses are weakly imported, so
++       * report no device on systems older than iOS 26. */
++      if (@available(iOS 26, *)) {
++         id<MTLDevice> dev = [MTLCreateSystemDefaultDevice() autorelease];
++         if ([dev supportsFamily:MTLGPUFamilyMetal4])
++            device = (mtl_device *)[dev retain];
++      }
++#else
+       NSArray<id<MTLDevice>> *devs = [MTLCopyAllDevices() autorelease];
+       uint32_t device_count = [devs count];
+       
+@@ -30,6 +40,7 @@
+             break;
+          }
+       }
++#endif
+    }
+ 
+    return device;
+diff --git a/src/kosmickrisp/bridge/mtl_texture.m b/src/kosmickrisp/bridge/mtl_texture.m
+index d19adf02c56..fdcc04e4046 100644
+--- a/src/kosmickrisp/bridge/mtl_texture.m
++++ b/src/kosmickrisp/bridge/mtl_texture.m
+@@ -89,8 +89,9 @@
+                                                       mtl_texture_swizzle(layout->swizzle.blue),
+                                                       mtl_texture_swizzle(layout->swizzle.alpha));
+       }
+-#if defined(MAC_OS_VERSION_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_VERSION_27_0
+-      if (@available(macOS 27, *)) {
++#if (defined(MAC_OS_VERSION_27_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_VERSION_27_0) || \
++    (defined(__IPHONE_27_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_0)
++      if (@available(macOS 27, iOS 27, *)) {
+          desc.minLOD = layout->min_lod_clamp;
+       }
+ #endif
+diff --git a/src/kosmickrisp/vulkan/kk_bo.c b/src/kosmickrisp/vulkan/kk_bo.c
+index e12ee6b01c3..f54325cdb13 100644
+--- a/src/kosmickrisp/vulkan/kk_bo.c
++++ b/src/kosmickrisp/vulkan/kk_bo.c
+@@ -14,8 +14,19 @@
+ #include "util/u_memory.h"
+ 
+ #if DETECT_OS_APPLE
++#include <TargetConditionals.h>
+ #include <mach/mach_init.h>
++#if TARGET_OS_IPHONE
++/* mach_vm.h is unavailable on iOS. vm_map.h has the same calls with
++ * pointer-sized addresses, which are 64-bit on every iOS target. */
++#include <mach/vm_map.h>
++#define mach_vm_address_t  vm_address_t
++#define mach_vm_remap      vm_remap
++#define mach_vm_map        vm_map
++#define mach_vm_deallocate vm_deallocate
++#else
+ #include <mach/mach_vm.h>
++#endif
+ #endif /* DETECT_OS_APPLE */
+ 
+ VkResult

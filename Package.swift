@@ -13,6 +13,14 @@ let package = Package(
             name: "LibSwipterm",
             path: "Frameworks/LibSwipterm.xcframework"
         ),
+        .binaryTarget(
+            name: "KosmicKrisp",
+            path: "Frameworks/KosmicKrisp.xcframework"
+        ),
+        .binaryTarget(
+            name: "MoltenVK",
+            path: "Frameworks/MoltenVK.xcframework"
+        ),
         .target(
             name: "CSwiptermKit",
             dependencies: ["LibSwipterm"],
@@ -21,11 +29,18 @@ let package = Package(
             linkerSettings: [
                 .linkedLibrary("archive"),
                 .linkedLibrary("z"),
+                .linkedFramework("Foundation"),
+                .linkedFramework("Metal"),
             ]
         ),
         .target(
             name: "SwiptermKit",
-            dependencies: ["CSwiptermKit", "LibSwipterm"],
+            dependencies: [
+                "CSwiptermKit",
+                "LibSwipterm",
+                .target(name: "KosmicKrisp", condition: .when(platforms: [.iOS])),
+                .target(name: "MoltenVK", condition: .when(platforms: [.iOS])),
+            ],
             resources: [
                 .copy("Resources/initramfs.cpio.gz"),
             ]

@@ -29,6 +29,9 @@ formatters:
   enable:
     - gci
     - gofumpt
+  exclusions:
+    paths:
+      - ^build/
   settings:
     gci:
       sections:
