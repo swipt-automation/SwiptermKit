@@ -15,6 +15,7 @@ enum {
     KERNEL_PROBE_INPUT = 1U << 20,
     DECOMPRESS_INITIAL_CAP = 1U << 20,
     ZBOOT_HEADER_SIZE = 64,
+    PE_SECTION_HEADER_SIZE = 40,
 };
 
 typedef enum codec {
@@ -23,6 +24,10 @@ typedef enum codec {
     CODEC_ZSTD,
     CODEC_XZ,
 } codec_t;
+
+static uint16_t load_le16(const uint8_t *p) {
+    return (uint16_t)(p[0] | (p[1] << 8));
+}
 
 static uint32_t load_le32(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
@@ -278,6 +283,39 @@ static int zboot_parse(const uint8_t *file, zboot_payload_t *payload) {
     return 0;
 }
 
+static int stub_linux_section(const uint8_t *file, size_t len, size_t *offset_out, size_t *size_out,
+                              size_t *needed_out) {
+    if (len < ARM64_IMAGE_HEADER_SIZE || file[0] != 'M' || file[1] != 'Z') {
+        return -ENOEXEC;
+    }
+    size_t pe = load_le32(file + 0x3C);
+    if (pe > len || len - pe < 24) {
+        *needed_out = pe + 24;
+        return -EAGAIN;
+    }
+    if (memcmp(file + pe, "PE\0\0", 4) != 0) {
+        return -ENOEXEC;
+    }
+    size_t table = pe + 24 + load_le16(file + pe + 20);
+    size_t count = load_le16(file + pe + 6);
+    if (table + count * PE_SECTION_HEADER_SIZE > len) {
+        *needed_out = table + count * PE_SECTION_HEADER_SIZE;
+        return -EAGAIN;
+    }
+    for (size_t i = 0; i < count; i++) {
+        const uint8_t *section = file + table + i * PE_SECTION_HEADER_SIZE;
+        if (memcmp(section, ".linux\0\0", 8) != 0) {
+            continue;
+        }
+        uint32_t virtual_size = load_le32(section + 8);
+        uint32_t raw_size = load_le32(section + 16);
+        *offset_out = load_le32(section + 20);
+        *size_out = virtual_size != 0 && virtual_size < raw_size ? virtual_size : raw_size;
+        return *size_out == 0 || *offset_out < ARM64_IMAGE_HEADER_SIZE ? -ENOEXEC : 0;
+    }
+    return -ENOEXEC;
+}
+
 int swipterm_kernel_check_header(const uint8_t *image, size_t len) {
     if (len < ARM64_IMAGE_HEADER_SIZE || load_le32(image + 0x38) != ARM64_IMAGE_MAGIC) {
         return -ENOEXEC;
@@ -292,6 +330,25 @@ int swipterm_kernel_check_header(const uint8_t *image, size_t len) {
 
 int swipterm_kernel_probe(const uint8_t *file, size_t len, size_t *needed_out) {
     *needed_out = 0;
+    size_t stub_offset = 0;
+    size_t stub_size = 0;
+    int stub = stub_linux_section(file, len, &stub_offset, &stub_size, needed_out);
+    if (stub == -EAGAIN) {
+        return stub;
+    }
+    if (stub == 0) {
+        size_t want = stub_size < KERNEL_PROBE_INPUT ? stub_size : KERNEL_PROBE_INPUT;
+        if (stub_offset > len || len - stub_offset < want) {
+            *needed_out = stub_offset + want;
+            return -EAGAIN;
+        }
+        size_t avail = len - stub_offset < stub_size ? len - stub_offset : stub_size;
+        stub = swipterm_kernel_probe(file + stub_offset, avail, needed_out);
+        if (stub == -EAGAIN) {
+            *needed_out += stub_offset;
+        }
+        return stub;
+    }
     codec_t codec = detect_codec(file, len);
     const uint8_t *payload = file;
     size_t payload_len = len;
@@ -324,6 +381,16 @@ int swipterm_kernel_probe(const uint8_t *file, size_t len, size_t *needed_out) {
 }
 
 int swipterm_kernel_image(const uint8_t *file, size_t len, uint8_t **image_out, size_t *image_len) {
+    size_t stub_offset = 0;
+    size_t stub_size = 0;
+    size_t needed = 0;
+    int stub = stub_linux_section(file, len, &stub_offset, &stub_size, &needed);
+    if (stub == -EAGAIN || (stub == 0 && (stub_offset > len || len - stub_offset < stub_size))) {
+        return -ENOEXEC;
+    }
+    if (stub == 0) {
+        return swipterm_kernel_image(file + stub_offset, stub_size, image_out, image_len);
+    }
     uint8_t *image = NULL;
     size_t size = 0;
     int rc;
