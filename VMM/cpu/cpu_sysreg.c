@@ -1342,6 +1342,10 @@ void cpu_op_hlt(vcpu_t *cpu, const ir_insn_t *ir,
     (void)tlb_r;
     (void)tlb_w;
     cpu->pc = cpu_ir_pc(cpu, ir);
+    if (cpu->el == 0) {
+        vcpu_raise_undef(cpu, cpu->pc);
+        return;
+    }
     cpu->stop_reason = VCPU_STOP_HALT;
     atomic_store_explicit(&cpu->stop_requested, true, memory_order_release);
 }

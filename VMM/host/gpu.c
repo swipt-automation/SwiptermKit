@@ -113,6 +113,15 @@ void gpu_set_retire(void *owner, gpu_retire_fn retire) {
     pthread_mutex_unlock(&g_retire_lock);
 }
 
+void gpu_clear_retire(void *owner) {
+    pthread_mutex_lock(&g_retire_lock);
+    if (g_retire_owner == owner) {
+        g_retire_owner = NULL;
+        g_retire = NULL;
+    }
+    pthread_mutex_unlock(&g_retire_lock);
+}
+
 bool swipterm_gpu_suspend(void) {
     return vkr_swipterm_suspend(GPU_SUSPEND_TIMEOUT_MS);
 }

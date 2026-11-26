@@ -310,15 +310,23 @@ void cpu_op_ldst_exclp(vcpu_t *cpu, const ir_insn_t *ir,
     if (is_load) {
         int mo = ordered ? __ATOMIC_ACQUIRE : __ATOMIC_RELAXED;
         __uint128_t val = 0;
-        if (is_64) {
+        if (tr.is_mmio) {
+            cpu_fp_leave_guest(cpu);
+            val = vmm_mmio_read(cpu->vm, cpu, tr.pa, 8U);
+            if (is_64) {
+                val |= (__uint128_t)vmm_mmio_read(cpu->vm, cpu, tr.pa + 8U, 8U) << 64;
+            }
+        } else if (is_64) {
             val = __atomic_load_n((__uint128_t *)tr.hva, mo);
+        } else {
+            val = __atomic_load_n((uint64_t *)tr.hva, mo);
+        }
+        if (is_64) {
             cpu_set_x(cpu, rt, (uint64_t)val);
             cpu_set_x(cpu, rt2, (uint64_t)(val >> 64));
         } else {
-            uint64_t v64 = __atomic_load_n((uint64_t *)tr.hva, mo);
-            val = v64;
-            cpu_set_x(cpu, rt, (uint32_t)v64);
-            cpu_set_x(cpu, rt2, (uint32_t)(v64 >> 32));
+            cpu_set_x(cpu, rt, (uint32_t)val);
+            cpu_set_x(cpu, rt2, (uint32_t)(val >> 32));
         }
         cpu->excl_valid = true;
         cpu->excl_pa = tr.pa;
@@ -329,16 +337,22 @@ void cpu_op_ldst_exclp(vcpu_t *cpu, const ir_insn_t *ir,
         bool ok = false;
         if (cpu->excl_valid && cpu->excl_pa == tr.pa && cpu->excl_size == bytes) {
             int succ = ordered ? __ATOMIC_ACQ_REL : __ATOMIC_RELAXED;
-            if (is_64) {
+            __uint128_t nv = is_64 ? (__uint128_t)cpu_get_x(cpu, rt) | ((__uint128_t)cpu_get_x(cpu, rt2) << 64)
+                                   : (uint64_t)(uint32_t)cpu_get_x(cpu, rt) |
+                                         ((uint64_t)(uint32_t)cpu_get_x(cpu, rt2) << 32);
+            if (tr.is_mmio) {
+                cpu_fp_leave_guest(cpu);
+                vmm_mmio_write(cpu->vm, cpu, tr.pa, 8U, (uint64_t)nv);
+                if (is_64) {
+                    vmm_mmio_write(cpu->vm, cpu, tr.pa + 8U, 8U, (uint64_t)(nv >> 64));
+                }
+                ok = true;
+            } else if (is_64) {
                 __uint128_t exp = cpu->excl_val;
-                __uint128_t nv = (__uint128_t)cpu_get_x(cpu, rt) |
-                                 ((__uint128_t)cpu_get_x(cpu, rt2) << 64);
                 ok = __atomic_compare_exchange_n((__uint128_t *)tr.hva, &exp, nv, false, succ, __ATOMIC_RELAXED);
             } else {
                 uint64_t exp = (uint64_t)cpu->excl_val;
-                uint64_t nv = (uint64_t)(uint32_t)cpu_get_x(cpu, rt) |
-                              ((uint64_t)(uint32_t)cpu_get_x(cpu, rt2) << 32);
-                ok = __atomic_compare_exchange_n((uint64_t *)tr.hva, &exp, nv, false, succ, __ATOMIC_RELAXED);
+                ok = __atomic_compare_exchange_n((uint64_t *)tr.hva, &exp, (uint64_t)nv, false, succ, __ATOMIC_RELAXED);
             }
             if (ok && !tr.is_mmio) {
                 cpu_notify_wfe_write(cpu, tr.hva);
@@ -449,6 +463,8 @@ void cpu_op_lse_casp(vcpu_t *cpu, const ir_insn_t *ir,
     uint64_t va = cpu_get_xsp(cpu, rn);
     uint32_t bytes = is_64 ? 16U : 8U;
     uintptr_t hva = 0;
+    bool is_mmio = false;
+    uint64_t pa = 0;
     if ((va & (bytes - 1U)) != 0) {
         vcpu_raise_data_abort(cpu, va, NULL, true, elr);
         return;
@@ -459,27 +475,49 @@ void cpu_op_lse_casp(vcpu_t *cpu, const ir_insn_t *ir,
             return;
         }
         hva = tr.hva;
+        pa = tr.pa;
+        is_mmio = tr.is_mmio;
     }
     int mo = lse_mem_order(acq, rel);
     int fmo = acq ? __ATOMIC_ACQUIRE : __ATOMIC_RELAXED;
+    __uint128_t exp, nv;
     if (is_64) {
-        __uint128_t exp = (__uint128_t)cpu_get_x(cpu, rs) |
-                          ((__uint128_t)cpu_get_x(cpu, rs + 1U) << 64);
-        __uint128_t nv = (__uint128_t)cpu_get_x(cpu, rt) |
-                         ((__uint128_t)cpu_get_x(cpu, rt + 1U) << 64);
+        exp = (__uint128_t)cpu_get_x(cpu, rs) | ((__uint128_t)cpu_get_x(cpu, rs + 1U) << 64);
+        nv = (__uint128_t)cpu_get_x(cpu, rt) | ((__uint128_t)cpu_get_x(cpu, rt + 1U) << 64);
+    } else {
+        exp = (uint64_t)(uint32_t)cpu_get_x(cpu, rs) | ((uint64_t)(uint32_t)cpu_get_x(cpu, rs + 1U) << 32);
+        nv = (uint64_t)(uint32_t)cpu_get_x(cpu, rt) | ((uint64_t)(uint32_t)cpu_get_x(cpu, rt + 1U) << 32);
+    }
+    if (is_mmio) {
+        cpu_fp_leave_guest(cpu);
+        __uint128_t old = vmm_mmio_read(cpu->vm, cpu, pa, 8U);
+        if (is_64) {
+            old |= (__uint128_t)vmm_mmio_read(cpu->vm, cpu, pa + 8U, 8U) << 64;
+        }
+        if (old == exp) {
+            vmm_mmio_write(cpu->vm, cpu, pa, 8U, (uint64_t)nv);
+            if (is_64) {
+                vmm_mmio_write(cpu->vm, cpu, pa + 8U, 8U, (uint64_t)(nv >> 64));
+            }
+        }
+        exp = old;
+    } else if (is_64) {
         __atomic_compare_exchange_n((__uint128_t *)hva, &exp, nv, false, mo, fmo);
+    } else {
+        uint64_t exp64 = (uint64_t)exp;
+        __atomic_compare_exchange_n((uint64_t *)hva, &exp64, (uint64_t)nv, false, mo, fmo);
+        exp = exp64;
+    }
+    if (is_64) {
         cpu_set_x(cpu, rs, (uint64_t)exp);
         cpu_set_x(cpu, rs + 1U, (uint64_t)(exp >> 64));
     } else {
-        uint64_t exp = (uint64_t)(uint32_t)cpu_get_x(cpu, rs) |
-                       ((uint64_t)(uint32_t)cpu_get_x(cpu, rs + 1U) << 32);
-        uint64_t nv = (uint64_t)(uint32_t)cpu_get_x(cpu, rt) |
-                      ((uint64_t)(uint32_t)cpu_get_x(cpu, rt + 1U) << 32);
-        __atomic_compare_exchange_n((uint64_t *)hva, &exp, nv, false, mo, fmo);
         cpu_set_x(cpu, rs, (uint32_t)exp);
         cpu_set_x(cpu, rs + 1U, (uint32_t)(exp >> 32));
     }
-    cpu_notify_wfe_write(cpu, hva);
+    if (!is_mmio) {
+        cpu_notify_wfe_write(cpu, hva);
+    }
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
 }
 

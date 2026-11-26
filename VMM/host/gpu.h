@@ -14,6 +14,7 @@ void gpu_lock(void);
 void gpu_unlock(void);
 
 void gpu_set_retire(void *owner, gpu_retire_fn retire);
+void gpu_clear_retire(void *owner);
 
 bool gpu_metal4_supported(void);
 bool gpu_framework_embedded(const char *name);
