@@ -1115,7 +1115,7 @@ static void virtio_gpu_destroy(virtio_dev_t *dev) {
         pthread_mutex_unlock(&gpu->lock);
         pthread_join(gpu->worker, NULL);
     }
-    gpu_set_retire(NULL, NULL);
+    gpu_clear_retire(gpu);
     for (gpu_retired_t *retired = gpu->retired; retired;) {
         gpu_retired_t *next = retired->next;
         free(retired);
