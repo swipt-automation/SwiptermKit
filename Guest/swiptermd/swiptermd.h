@@ -204,6 +204,10 @@ int disk_sandbox_open(uint32_t disk_id, const char *hostname, launch_target_t *t
 void disk_sandbox_close(disk_sandbox_t *sandbox);
 void disk_shutdown(void);
 
+void usage_setup(void);
+void usage_shutdown(void);
+void usage_handle_read(uint32_t req_id);
+
 int host_cmd_setup(const char *guest_dir);
 int host_cmd_borrow_stdio(uint32_t invocation_id, int fds[3]);
 void host_cmd_cuse_shutdown(void);

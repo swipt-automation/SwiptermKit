@@ -60,6 +60,8 @@ typedef enum swiptermd_opcode {
     SWIPTERMD_OP_DISK_MOUNT = 0x0092,
     SWIPTERMD_OP_DISK_UNMOUNT = 0x0093,
     SWIPTERMD_OP_DISK_SPAWN = 0x0094,
+
+    SWIPTERMD_OP_READ_USAGE = 0x00A0,
 } swiptermd_opcode_t;
 
 typedef enum swiptermd_stream_role {
@@ -80,6 +82,7 @@ enum {
     SWIPTERMD_CAP_DEVICES = 1U << 0,
     SWIPTERMD_CAP_VIRTIOFS = 1U << 1,
     SWIPTERMD_CAP_CLIPBOARD = 1U << 2,
+    SWIPTERMD_CAP_USAGE = 1U << 3,
 };
 
 enum {

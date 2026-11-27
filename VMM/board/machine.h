@@ -76,6 +76,7 @@ void vmm_mmio_write(vcpu_t *cpu, uint64_t gpa, uint32_t size, uint64_t val);
 
 uint64_t vmm_timer_ticks(void);
 uint64_t vmm_timer_cntvct(const vmm_machine_t *vm);
+uint64_t vmm_sample_cpu_time_ns(vmm_machine_t *vm);
 bool vmm_timer_native(void);
 void vmm_timer_write(vcpu_t *cpu, uint64_t *reg, uint64_t value);
 void vmm_vcpu_wfi(vcpu_t *cpu);

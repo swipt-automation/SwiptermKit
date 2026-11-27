@@ -98,6 +98,8 @@ typedef struct vmm_machine_priv {
 
     pthread_t threads[VMM_MAX_VCPUS];
     bool thread_started[VMM_MAX_VCPUS];
+    bool thread_exited[VMM_MAX_VCPUS];
+    uint64_t retired_vcpu_time_ns;
     _Atomic bool cpu_online[VMM_MAX_VCPUS];
 
     pthread_mutex_t wfi_lock[VMM_MAX_VCPUS];
