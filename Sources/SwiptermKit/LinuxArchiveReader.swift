@@ -1,23 +1,13 @@
 import CSwiptermKit
 import Foundation
 
-public struct LinuxArchiveError: LocalizedError, Sendable {
-    public let message: String
-
-    public var errorDescription: String? {
-        message
-    }
-}
-
-/// Reads the regular files of a tar archive, or a single file that is not an archive, optionally compressed with
-/// gzip, bzip2, xz or zstd.
 public final class LinuxArchiveReader {
     private let handle: OpaquePointer
 
     public init(contentsOf url: URL) throws {
         var message: UnsafeMutablePointer<CChar>?
         guard let handle = url.withUnsafeFileSystemRepresentation({ swipterm_archive_open($0, &message) }) else {
-            throw Self.error(message)
+            throw MessageError(consuming: message)
         }
         self.handle = handle
     }
@@ -26,7 +16,6 @@ public final class LinuxArchiveReader {
         swipterm_archive_close(handle)
     }
 
-    /// The path of the next regular file, or `nil` after the last; a file that is not an archive is one file named `data`.
     public func next() throws -> String? {
         var name: UnsafePointer<CChar>?
         var message: UnsafeMutablePointer<CChar>?
@@ -36,11 +25,10 @@ public final class LinuxArchiveReader {
         case 1:
             return String(cString: name!)
         default:
-            throw Self.error(message)
+            throw MessageError(consuming: message)
         }
     }
 
-    /// Up to `count` bytes of the current file; empty at its end.
     public func read(upToCount count: Int) throws -> Data {
         var data = Data(count: count)
         var message: UnsafeMutablePointer<CChar>?
@@ -48,7 +36,7 @@ public final class LinuxArchiveReader {
             swipterm_archive_read(handle, buffer.baseAddress, count, &message)
         }
         guard read >= 0 else {
-            throw Self.error(message)
+            throw MessageError(consuming: message)
         }
         data.count = read
         return data
@@ -63,10 +51,5 @@ public final class LinuxArchiveReader {
             }
             contents.append(chunk)
         }
-    }
-
-    private static func error(_ message: UnsafeMutablePointer<CChar>?) -> LinuxArchiveError {
-        defer { free(message) }
-        return LinuxArchiveError(message: message.map { String(cString: $0) } ?? "")
     }
 }

@@ -4,7 +4,6 @@
 #include <arm_neon.h>
 #include <math.h>
 
-__attribute__((target("crc")))
 void cpu_op_crc32(vcpu_t *cpu, const ir_insn_t *ir,
                   softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
     uint32_t acc = (uint32_t)cpu_get_x(cpu, ir->rn);
@@ -19,7 +18,6 @@ void cpu_op_crc32(vcpu_t *cpu, const ir_insn_t *ir,
     case SUBOP_CRC32CH: res = __crc32ch(acc, (uint16_t)val); break;
     case SUBOP_CRC32CW: res = __crc32cw(acc, (uint32_t)val); break;
     case SUBOP_CRC32CX: res = __crc32cd(acc, val); break;
-    default: break;
     }
     cpu_set_x(cpu, ir->rd, (uint64_t)res);
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
@@ -818,7 +816,6 @@ static uint64_t hw_fp_across(uint32_t fop, uint32_t fsz, bool q, const uint8_t *
     return out;
 }
 
-__attribute__((target("fullfp16")))
 static uint16_t hw_f32_to_f16(float f) {
     float16_t h;
     __asm__("fcvt %h0, %s1" : "=w"(h) : "w"(f));
@@ -827,31 +824,12 @@ static uint16_t hw_f32_to_f16(float f) {
     return out;
 }
 
-__attribute__((target("fullfp16")))
-static uint16_t hw_f64_to_f16(double d) {
-    float16_t h;
-    __asm__("fcvt %h0, %d1" : "=w"(h) : "w"(d));
-    uint16_t out;
-    memcpy(&out, &h, 2);
-    return out;
-}
-
-__attribute__((target("fullfp16")))
 static float hw_f16_to_f32(uint16_t a) {
     float16_t h;
     float f;
     memcpy(&h, &a, 2);
     __asm__("fcvt %s0, %h1" : "=w"(f) : "w"(h));
     return f;
-}
-
-__attribute__((target("fullfp16")))
-static double hw_f16_to_f64(uint16_t a) {
-    float16_t h;
-    double d;
-    memcpy(&h, &a, 2);
-    __asm__("fcvt %d0, %h1" : "=w"(d) : "w"(h));
-    return d;
 }
 
 void cpu_op_fp_scalar(vcpu_t *cpu, const ir_insn_t *ir,
@@ -886,13 +864,21 @@ void cpu_op_fp_scalar(vcpu_t *cpu, const ir_insn_t *ir,
                 __asm__("fcvt %s0, %d1" : "=w"(s) : "w"(d));
                 v_set_f32(cpu, rd, s);
             } else if (ftype == 1U && opc == 7U) {
-                v_set_u16(cpu, rd, hw_f64_to_f16(v_get_f64(cpu, rn)));
+                float16_t h;
+                double d = v_get_f64(cpu, rn);
+                __asm__("fcvt %h0, %d1" : "=w"(h) : "w"(d));
+                cpu->v[rd] = 0;
+                memcpy(&cpu->v[rd], &h, 2);
             } else if (ftype == 3U && opc == 4U) {
                 v_set_f32(cpu, rd, hw_f16_to_f32(v_get_u16(cpu, rn)));
             } else if (ftype == 3U && opc == 5U) {
-                v_set_f64(cpu, rd, hw_f16_to_f64(v_get_u16(cpu, rn)));
+                float16_t h;
+                double d;
+                memcpy(&h, &cpu->v[rn], 2);
+                __asm__("fcvt %d0, %h1" : "=w"(d) : "w"(h));
+                v_set_f64(cpu, rd, d);
             } else {
-                vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+                vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
                 return;
             }
         } else if (ftype == 0U) {
@@ -902,7 +888,7 @@ void cpu_op_fp_scalar(vcpu_t *cpu, const ir_insn_t *ir,
         } else if (ftype == 3U) {
             v_set_u16(cpu, rd, hw_f16_unary(opc, v_get_u16(cpu, rn)));
         } else {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         break;
@@ -916,7 +902,7 @@ void cpu_op_fp_scalar(vcpu_t *cpu, const ir_insn_t *ir,
         } else if (ftype == 3U) {
             v_set_u16(cpu, rd, hw_f16_binary(opc, v_get_u16(cpu, rn), v_get_u16(cpu, rm)));
         } else {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         break;
@@ -940,7 +926,7 @@ void cpu_op_fp_scalar(vcpu_t *cpu, const ir_insn_t *ir,
         } else if (ftype == 3U) {
             v_set_u16(cpu, rd, hw_f16_ternary(op, v_get_u16(cpu, rn), v_get_u16(cpu, rm), v_get_u16(cpu, ra)));
         } else {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         break;
@@ -1112,9 +1098,6 @@ void cpu_op_fp_scalar(vcpu_t *cpu, const ir_insn_t *ir,
         }
         break;
     }
-    default:
-        vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
-        return;
     }
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
 }
@@ -1140,11 +1123,6 @@ static inline uint64_t poly_mul8(uint8_t a, uint8_t b) {
         if ((b >> i) & 1U) r ^= ((uint64_t)a << i);
     }
     return r;
-}
-
-__attribute__((target("aes")))
-static __uint128_t hw_pmull64(uint64_t a, uint64_t b) {
-    return (__uint128_t)vmull_p64((poly64_t)a, (poly64_t)b);
 }
 
 typedef int8_t simd_s8 __attribute__((vector_size(16)));
@@ -1229,14 +1207,6 @@ static uint64_t shift_signed_round(vcpu_t *cpu, int64_t a, int32_t sh, uint32_t 
     }
     uint32_t rsh = (uint32_t)(-sh);
     if (rsh >= bits) {
-        if (rounding && rsh == bits) {
-            int64_t r = (a < 0) ? 0 : 0;
-            if (a < 0) {
-                __int128 tmp = (__int128)a + ((__int128)1 << (rsh - 1U));
-                return (uint64_t)(tmp >> rsh);
-            }
-            return (uint64_t)r;
-        }
         return a < 0 ? (rounding ? 0ULL : UINT64_MAX) : 0ULL;
     }
     __int128 num = (__int128)a + (rounding ? ((__int128)1 << (rsh - 1U)) : 0);
@@ -1493,19 +1463,8 @@ static void exec_simd_same(vcpu_t *cpu, uint32_t word, bool scalar, bool fp16_on
         uint32_t fsz = fp16_only ? 1U : ((size & 1U) ? 3U : 2U);
         uint32_t ebytes = 1U << fsz;
         uint32_t elems = scalar ? 1U : ((q ? 16U : 8U) / ebytes);
-        uint32_t fop = fp16_only ? (((word >> 23) & 1U) << 5 | (u << 4) | (opc & 0xFU))
-                                 : (((size >> 1) << 5) | (u << 4) | (opc - 24U));
-        bool pairwise = (!scalar) && (
-            (!fp16_only && (
-                (u == 0 && (size >> 1) == 0 && (opc == 24U || opc == 26U || opc == 30U)) ||
-                (u == 1 && (size >> 1) == 0 && (opc == 24U || opc == 26U || opc == 30U)) ||
-                (u == 1 && (size >> 1) == 1 && (opc == 24U || opc == 30U))
-            ))
-        );
         uint32_t sz_hi = fp16_only ? ((word >> 23) & 1U) : (size >> 1);
         uint32_t o_low = fp16_only ? (opc & 7U) : (opc - 24U);
-        (void)fop;
-        (void)pairwise;
 
         bool is_pair = (!scalar) && (
             (u == 1U && sz_hi == 0U && (o_low == 0U || o_low == 2U || o_low == 6U)) ||
@@ -1717,16 +1676,6 @@ static void exec_simd_same2(vcpu_t *cpu, uint32_t word, bool scalar) {
     memcpy(&cpu->v[rd], out, 16);
 }
 
-static uint32_t hw_urecpe_u32(uint32_t x) {
-    uint32x2_t v = vdup_n_u32(x);
-    return vget_lane_u32(vrecpe_u32(v), 0);
-}
-
-static uint32_t hw_ursqrte_u32(uint32_t x) {
-    uint32x2_t v = vdup_n_u32(x);
-    return vget_lane_u32(vrsqrte_u32(v), 0);
-}
-
 static void exec_simd_misc(vcpu_t *cpu, uint32_t word, bool scalar, bool fp16_only) {
     bool q = scalar ? false : (((word >> 30) & 1U) != 0);
     uint32_t u = (word >> 29) & 1U;
@@ -1809,14 +1758,16 @@ static void exec_simd_misc(vcpu_t *cpu, uint32_t word, bool scalar, bool fp16_on
         }
         if (!fp16_only && !scalar && opc == 28U && sz_hi == 1U && u == 0U) {
             for (uint32_t i = 0; i < elems; ++i) {
-                cpu_lane_set(out, i, 4U, hw_urecpe_u32((uint32_t)cpu_lane_get_u(vn, i, 4U)));
+                uint32x2_t v = vdup_n_u32((uint32_t)cpu_lane_get_u(vn, i, 4U));
+                cpu_lane_set(out, i, 4U, vget_lane_u32(vrecpe_u32(v), 0));
             }
             memcpy(&cpu->v[rd], out, 16);
             return;
         }
         if (!fp16_only && !scalar && opc == 28U && sz_hi == 1U && u == 1U) {
             for (uint32_t i = 0; i < elems; ++i) {
-                cpu_lane_set(out, i, 4U, hw_ursqrte_u32((uint32_t)cpu_lane_get_u(vn, i, 4U)));
+                uint32x2_t v = vdup_n_u32((uint32_t)cpu_lane_get_u(vn, i, 4U));
+                cpu_lane_set(out, i, 4U, vget_lane_u32(vrsqrte_u32(v), 0));
             }
             memcpy(&cpu->v[rd], out, 16);
             return;
@@ -1996,7 +1947,7 @@ static bool exec_simd_shf(vcpu_t *cpu, uint32_t word, bool scalar) {
     uint32_t rd = word & 31U;
 
     bool wide = (immh & 8U) != 0;
-    if (immh == 0U || ((opc == 28U || opc == 31U) && immh == 1U)) {
+    if ((opc == 28U || opc == 31U) && immh == 1U) {
         return false;
     }
     if (opc >= 16U && opc <= 20U) {
@@ -2159,7 +2110,7 @@ static bool exec_simd_diff(vcpu_t *cpu, uint32_t word, bool scalar) {
         } else {
             uint64_t a = cpu_lane_get_u(vn, q ? 1U : 0U, 8U);
             uint64_t b = cpu_lane_get_u(vm, q ? 1U : 0U, 8U);
-            cpu->v[rd] = hw_pmull64(a, b);
+            cpu->v[rd] = (__uint128_t)vmull_p64(a, b);
         }
         return true;
     }
@@ -2492,7 +2443,7 @@ void cpu_op_simd_dp(vcpu_t *cpu, const ir_insn_t *ir,
             }
         }
         if (reserved) {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         uint32_t ebytes = 1U << tz;
@@ -2520,7 +2471,7 @@ void cpu_op_simd_dp(vcpu_t *cpu, const ir_insn_t *ir,
         uint32_t imm5 = (word >> 16) & 0x1FU;
         uint32_t tz = (uint32_t)__builtin_ctz(imm5 | 16U);
         if (tz > 3U) {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         uint32_t ebytes = 1U << tz;
@@ -2533,7 +2484,7 @@ void cpu_op_simd_dp(vcpu_t *cpu, const ir_insn_t *ir,
         bool q = ((word >> 30) & 1U) != 0;
         uint32_t imm4 = (word >> 11) & 15U;
         if (!q && (imm4 & 8U) != 0U) {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         uint8x16_t n = vld1q_u8((const uint8_t *)&cpu->v[rn]);
@@ -2549,7 +2500,7 @@ void cpu_op_simd_dp(vcpu_t *cpu, const ir_insn_t *ir,
         uint32_t size = (word >> 22) & 3U;
         uint32_t opc = (word >> 12) & 7U;
         if (size == 3U && !q) {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         uint32_t ebytes = 1U << size;
@@ -2617,14 +2568,14 @@ void cpu_op_simd_dp(vcpu_t *cpu, const ir_insn_t *ir,
     case SUBOP_SIMD_SHF:
     case SUBOP_SISD_SHF:
         if (!exec_simd_shf(cpu, word, ir->op == SUBOP_SISD_SHF)) {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         break;
     case SUBOP_SIMD_DIFF:
     case SUBOP_SISD_DIFF:
         if (!exec_simd_diff(cpu, word, ir->op == SUBOP_SISD_DIFF)) {
-            vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+            vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
             return;
         }
         break;
@@ -2690,18 +2641,12 @@ void cpu_op_simd_dp(vcpu_t *cpu, const ir_insn_t *ir,
             bool is_min = ((size >> 1) & 1U) != 0;
             uint32_t fb = 1U << fsz;
             uint64_t a = cpu_lane_get_u(vn, 0, fb), b = cpu_lane_get_u(vn, 1, fb);
-            uint32_t fop = 2U;
-            if (opc == 13U) fop = 2U;
-            else if (opc == 12U) fop = is_min ? 7U : 6U;
-            else fop = is_min ? 5U : 4U;
+            uint32_t fop = opc == 13U ? 2U : opc == 12U ? (is_min ? 7U : 6U) : (is_min ? 5U : 4U);
             uint64_t r = fp_lane_binop(fop, fsz, a, b);
             cpu_lane_set((uint8_t *)&cpu->v[rd], 0, fb, r);
         }
         break;
     }
-    default:
-        vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
-        return;
     }
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
 }

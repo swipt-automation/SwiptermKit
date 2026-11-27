@@ -46,16 +46,11 @@ typedef struct virtio_net {
     virtio_iov_t rx_iov[VIRTIO_NET_QUEUE_SIZE];
 } virtio_net_t;
 
-static bool net_queue_ready(virtio_dev_t *dev, virtqueue_t *vq) {
-    return atomic_load_explicit(&vq->ready, memory_order_acquire) &&
-           (atomic_load_explicit(&dev->status, memory_order_acquire) & VIRTIO_STATUS_DRIVER_OK);
-}
-
 size_t virtio_net_pop_tx(virtio_dev_t *dev, uint8_t *arena, size_t capacity, uint32_t *lengths, size_t max_frames) {
     virtio_net_t *net = dev->priv;
     virtqueue_t *vq = &dev->queues[VIRTIO_NET_VQ_TX];
     pthread_mutex_lock(&net->tx_lock);
-    if (!net_queue_ready(dev, vq)) {
+    if (!virtqueue_active(dev, vq)) {
         pthread_mutex_unlock(&net->tx_lock);
         return 0;
     }
@@ -64,12 +59,10 @@ size_t virtio_net_pop_tx(virtio_dev_t *dev, uint8_t *arena, size_t capacity, uin
     size_t offset = 0;
     while (count < max_frames && capacity - offset >= SWIPTERM_NETWORK_MAX_FRAME) {
         uint16_t head = 0;
-        size_t out_count = 0;
-        size_t in_count = 0;
-        if (virtqueue_pop(dev, vq, net->tx_iov, VIRTIO_NET_MAX_IOV, &head, &out_count, &in_count) <= 0) {
+        size_t iov_count = 0;
+        if (virtqueue_pop(dev, vq, net->tx_iov, VIRTIO_NET_MAX_IOV, &head, &iov_count) <= 0) {
             break;
         }
-        size_t iov_count = out_count + in_count;
         size_t length = virtio_iov_total(net->tx_iov, iov_count, false);
         if (length > SWIPTERM_NETWORK_HEADER_SIZE && length <= SWIPTERM_NETWORK_MAX_FRAME) {
             virtio_iov_read(net->tx_iov, iov_count, 0, arena + offset, length);
@@ -100,16 +93,14 @@ static int net_deliver_single_locked(virtio_net_t *net, const uint8_t *frame, si
     virtqueue_t *vq = &dev->queues[VIRTIO_NET_VQ_RX];
     uint16_t saved_avail = vq->last_avail_idx;
     uint16_t head = 0;
-    size_t out_count = 0;
-    size_t in_count = 0;
-    int popped = virtqueue_pop(dev, vq, net->rx_iov, VIRTIO_NET_QUEUE_SIZE, &head, &out_count, &in_count);
+    size_t iov_count = 0;
+    int popped = virtqueue_pop(dev, vq, net->rx_iov, VIRTIO_NET_QUEUE_SIZE, &head, &iov_count);
     if (popped == 0) {
         return -EAGAIN;
     }
     if (popped < 0) {
         return 0;
     }
-    size_t iov_count = out_count + in_count;
     if (virtio_iov_total(net->rx_iov, iov_count, true) < length) {
         virtqueue_rewind(dev, vq, saved_avail);
         return 0;
@@ -129,15 +120,12 @@ static int net_deliver_mergeable_locked(virtio_net_t *net, const uint8_t *frame,
     int popped = 1;
     while (capacity < length && buffer_count < VIRTIO_NET_MAX_MRG_BUFS && iov_used < VIRTIO_NET_QUEUE_SIZE) {
         virtio_net_rx_buf_t *buffer = &net->rx_bufs[buffer_count];
-        size_t out_count = 0;
-        size_t in_count = 0;
         popped = virtqueue_pop(dev, vq, net->rx_iov + iov_used, VIRTIO_NET_QUEUE_SIZE - iov_used, &buffer->head,
-                               &out_count, &in_count);
+                               &buffer->iov_count);
         if (popped <= 0) {
             break;
         }
         buffer->iov_offset = iov_used;
-        buffer->iov_count = out_count + in_count;
         buffer->capacity = virtio_iov_total(net->rx_iov + iov_used, buffer->iov_count, true);
         iov_used += buffer->iov_count;
         capacity += buffer->capacity;
@@ -178,7 +166,7 @@ int virtio_net_push_rx(virtio_dev_t *dev, const uint8_t *frame, size_t length, b
     virtio_net_t *net = dev->priv;
     virtqueue_t *vq = &dev->queues[VIRTIO_NET_VQ_RX];
     pthread_mutex_lock(&net->rx_lock);
-    if (!net_queue_ready(dev, vq)) {
+    if (!virtqueue_active(dev, vq)) {
         net->rx_batch_open = false;
         pthread_mutex_unlock(&net->rx_lock);
         return 0;
@@ -251,15 +239,11 @@ static void virtio_net_reset(virtio_dev_t *dev) {
 
 static void virtio_net_destroy(virtio_dev_t *dev) {
     virtio_net_t *net = dev->priv;
-    if (!net) {
-        return;
-    }
     swipterm_network_detach_device(net->network, dev);
     swipterm_network_release(net->network);
     pthread_mutex_destroy(&net->tx_lock);
     pthread_mutex_destroy(&net->rx_lock);
     free(net);
-    dev->priv = NULL;
 }
 
 static const virtio_dev_ops_t virtio_net_ops = {

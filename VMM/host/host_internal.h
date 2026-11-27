@@ -2,6 +2,7 @@
 #define VMM_HOST_INTERNAL_H
 
 #include "../../Guest/swiptermd/protocol.h"
+#include "../common/linux_errno.h"
 #include "../include/CSwiptermKit/swipterm.h"
 #include "../virtio/virtio_mmio.h"
 
@@ -12,33 +13,6 @@
 #include <sys/types.h>
 #include <time.h>
 #include <zstd.h>
-
-enum {
-    LINUX_EPERM = 1,
-    LINUX_ENOENT = 2,
-    LINUX_ESRCH = 3,
-    LINUX_EINTR = 4,
-    LINUX_EIO = 5,
-    LINUX_ENXIO = 6,
-    LINUX_ENOEXEC = 8,
-    LINUX_EBADF = 9,
-    LINUX_EAGAIN = 11,
-    LINUX_ENOMEM = 12,
-    LINUX_EACCES = 13,
-    LINUX_EBUSY = 16,
-    LINUX_EEXIST = 17,
-    LINUX_ENODEV = 19,
-    LINUX_ENOTDIR = 20,
-    LINUX_EISDIR = 21,
-    LINUX_EINVAL = 22,
-    LINUX_ENOSPC = 28,
-    LINUX_EROFS = 30,
-    LINUX_EPIPE = 32,
-    LINUX_ENOSYS = 38,
-    LINUX_ENOTEMPTY = 39,
-    LINUX_ETIMEDOUT = 110,
-    LINUX_ECANCELED = 125,
-};
 
 void swipterm_network_set_runtime(swipterm_network *network, virtio_dev_t *vsock);
 void swipterm_network_set_session(swipterm_network *network, uint64_t session_nonce);
@@ -56,9 +30,7 @@ struct archive_entry;
 enum {
     ARCHIVE_EOF = 1,
     ARCHIVE_OK = 0,
-    ARCHIVE_RETRY = -10,
     ARCHIVE_WARN = -20,
-    ARCHIVE_FAILED = -25,
     ARCHIVE_FATAL = -30,
     ARCHIVE_ERRNO_MISC = -1,
 };
@@ -90,8 +62,6 @@ extern int archive_read_support_format_cpio(struct archive *);
 extern int archive_read_support_format_raw(struct archive *);
 extern int archive_read_open(struct archive *, void *_client_data, archive_open_callback *,
                              archive_read_callback *, archive_close_callback *);
-extern int archive_read_open_filename(struct archive *, const char *filename, size_t block_size);
-extern int archive_read_open_memory(struct archive *, const void *buff, size_t size);
 extern int archive_read_next_header(struct archive *, struct archive_entry **);
 extern int archive_read_data_block(struct archive *, const void **buff, size_t *size, la_int64_t *offset);
 extern la_ssize_t archive_read_data(struct archive *, void *, size_t);
@@ -147,11 +117,10 @@ extern void archive_entry_set_symlink(struct archive_entry *, const char *);
 extern void archive_entry_set_hardlink(struct archive_entry *, const char *);
 extern void archive_entry_sparse_add_entry(struct archive_entry *, la_int64_t offset, la_int64_t length);
 
-typedef struct archive_input {
+typedef struct {
     int fd;
     uint64_t offset;
     uint64_t size;
-    const uint8_t *data;
     struct archive *entry;
 } archive_input_t;
 
@@ -187,8 +156,6 @@ enum {
 int swipterm_decompress(const uint8_t *in, size_t len, size_t limit, uint8_t **out, size_t *out_len);
 int swipterm_kernel_image(const uint8_t *file, size_t len, uint8_t **image_out, size_t *image_len);
 int swipterm_kernel_probe(const uint8_t *file_prefix, size_t len, size_t *payload_offset_out);
-int swipterm_kernel_check_header(const uint8_t *image, size_t len);
-bool swipterm_kernel_find_release(const uint8_t *image, size_t len, char *release, size_t release_size);
 
 typedef struct ext4_fs ext4_fs_t;
 
@@ -200,8 +167,10 @@ typedef struct ext4_node {
     uint32_t nlink;
     uint32_t generation;
     uint64_t size;
-    int64_t mtime_ns;
-    int64_t ctime_ns;
+    int64_t mtime;
+    uint32_t mtime_nsec;
+    int64_t ctime;
+    uint32_t ctime_nsec;
 } ext4_node_t;
 
 typedef struct ext4_xattr_info {
@@ -214,8 +183,6 @@ typedef struct ext4_entry_info {
     ext4_node_t node;
     uint64_t rdev_major;
     uint64_t rdev_minor;
-    int64_t mtime;
-    uint32_t mtime_nsec;
     const char *symlink_target;
     const ext4_xattr_info_t *xattrs;
     size_t xattr_count;
@@ -228,12 +195,9 @@ typedef int (*ext4_walk_cb)(void *ctx, const char *path, const ext4_entry_info_t
 
 int ext4_fs_open(int fd, ext4_fs_t **fs_out);
 void ext4_fs_close(ext4_fs_t *fs);
-uint64_t ext4_fs_used_inodes(const ext4_fs_t *fs);
-int ext4_fs_stat(ext4_fs_t *fs, uint32_t ino, ext4_node_t *node_out);
-int ext4_fs_resolve(ext4_fs_t *fs, const char *path, bool follow_final, ext4_node_t *node_out);
+int ext4_fs_resolve(ext4_fs_t *fs, const char *path, ext4_node_t *node_out);
 int ext4_fs_list(ext4_fs_t *fs, const ext4_node_t *dir, ext4_list_cb cb, void *ctx);
-int ext4_fs_stream(ext4_fs_t *fs, const ext4_node_t *node, uint64_t offset, uint64_t length,
-                   ext4_data_cb cb, void *ctx);
+int ext4_fs_stream(ext4_fs_t *fs, const ext4_node_t *node, uint64_t length, ext4_data_cb cb, void *ctx);
 int ext4_fs_read(ext4_fs_t *fs, const ext4_node_t *node, size_t limit, uint8_t **data_out, size_t *size_out);
 int ext4_fs_map(ext4_fs_t *fs, const ext4_node_t *node, ext4_extent_cb cb, void *ctx);
 int ext4_fs_walk(ext4_fs_t *fs, ext4_walk_cb cb, void *ctx);
@@ -302,10 +266,10 @@ int ext4_writer_create(int fd, uint64_t disk_size, ext4_writer_t **writer_out);
 int ext4_writer_write(ext4_writer_t *w, vfs_node_t *file, uint64_t offset, const void *data, size_t length);
 int ext4_writer_end_file(ext4_writer_t *w, vfs_node_t *file, uint64_t size);
 int ext4_writer_finish(ext4_writer_t *w, vfs_node_t *root);
-int ext4_writer_read(ext4_writer_t *w, const vfs_node_t *file, uint64_t offset, void *buf, size_t len);
+int ext4_writer_read(ext4_writer_t *w, const vfs_node_t *file, void *buf);
 void ext4_writer_free(ext4_writer_t *w);
 
-vfs_node_t *vfs_find(vfs_node_t *root, const char *path, bool follow_final);
+vfs_node_t *vfs_find(vfs_node_t *root, const char *path);
 int vfs_write_file(ext4_writer_t *w, vfs_node_t *dir, const char *name, size_t name_len, const void *data,
                    size_t size, uint32_t mode);
 int module_index_build(ext4_writer_t *w, vfs_node_t *root);
@@ -315,7 +279,6 @@ typedef struct boot_plan boot_plan_t;
 int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, bool gpu,
                       boot_plan_t **plan_out);
 int boot_list_kernels(int disk_fd, char ***releases_out, size_t *count_out);
-const char *boot_plan_release(const boot_plan_t *plan);
 bool boot_plan_gpu(const boot_plan_t *plan);
 const char *boot_plan_reason(const boot_plan_t *plan);
 const uint8_t *boot_plan_identity(const boot_plan_t *plan);

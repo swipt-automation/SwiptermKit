@@ -110,6 +110,10 @@ static listen_start_t g_pending[MIRROR_PENDING_CAP];
 static size_t g_pending_count;
 static int g_settle_attempt = -1;
 
+static const uint8_t any_addr[16];
+static const uint8_t loopback4[4] = {127, 0, 0, 1};
+static const uint8_t loopback6[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+
 static int listener_cmp(const void *a, const void *b) {
     const listener_key_t *x = a;
     const listener_key_t *y = b;
@@ -129,16 +133,14 @@ static bool is_mirrorable_addr(uint8_t family, const uint8_t addr[16]) {
         return addr[0] == 10 && addr[1] == 0 && addr[2] == 2 && addr[3] == 15;
     }
     if (family == SWIPTERMD_MIRROR_AF_INET6) {
-        static const uint8_t any6[16] = {0};
-        static const uint8_t loop6[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
         static const uint8_t guest6[16] = {0xfd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x15};
-        return memcmp(addr, any6, 16) == 0 || memcmp(addr, loop6, 16) == 0 || memcmp(addr, guest6, 16) == 0;
+        return memcmp(addr, any_addr, 16) == 0 || memcmp(addr, loopback6, 16) == 0 || memcmp(addr, guest6, 16) == 0;
     }
     return false;
 }
 
-static bool scan_family(int af, uint8_t wire_family, listener_set_t *out) {
-
+static bool scan_family(int af, listener_set_t *out) {
+    uint8_t wire_family = af == AF_INET ? SWIPTERMD_MIRROR_AF_INET : SWIPTERMD_MIRROR_AF_INET6;
     struct {
         struct nlmsghdr nlh;
         struct inet_diag_req_v2 req;
@@ -210,8 +212,7 @@ void sock_mirror_scan_now(void) {
         return;
 
     listener_set_t cur = {0};
-    if (!scan_family(AF_INET, SWIPTERMD_MIRROR_AF_INET, &cur) ||
-        !scan_family(AF_INET6, SWIPTERMD_MIRROR_AF_INET6, &cur)) {
+    if (!scan_family(AF_INET, &cur) || !scan_family(AF_INET6, &cur)) {
         free(cur.items);
         return;
     }
@@ -231,7 +232,7 @@ void sock_mirror_scan_now(void) {
         free(cur.items);
         return;
     }
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(wire, wire_cap);
+    swiptermd_buf_w_t w = {.data = wire, .cap = wire_cap};
     swiptermd_w_u32(&w, 0);
     uint32_t diff_count = 0;
     bool added = false;
@@ -456,10 +457,8 @@ void sock_mirror_init(void) {
 static void tcp_proxy_destroy(tcp_proxy_t *p) {
     ev_del(&p->vsock_ev);
     ev_del(&p->tcp_ev);
-    if (p->vsock_fd >= 0)
-        close(p->vsock_fd);
-    if (p->tcp_fd >= 0)
-        close(p->tcp_fd);
+    close(p->vsock_fd);
+    close(p->tcp_fd);
     free(p);
 }
 
@@ -485,6 +484,34 @@ static void tcp_proxy_update_events(tcp_proxy_t *p) {
     ev_mod(&p->tcp_ev, tev);
 }
 
+static bool tcp_proxy_pump(int src_fd, int dst_fd, uint8_t *buf, size_t *off, size_t *len, bool *eof) {
+    for (;;) {
+        while (*off < *len) {
+            ssize_t w = send(dst_fd, buf + *off, *len - *off, MSG_NOSIGNAL);
+            if (w < 0) {
+                if (errno == EINTR)
+                    continue;
+                return errno == EAGAIN || errno == EWOULDBLOCK;
+            }
+            *off += (size_t)w;
+        }
+        *off = *len = 0;
+        if (*eof)
+            return true;
+        ssize_t n = recv(src_fd, buf, MIRROR_BUF_CAP, 0);
+        if (n < 0 && errno == EINTR)
+            continue;
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            return true;
+        if (n <= 0) {
+            *eof = true;
+            shutdown(dst_fd, SHUT_WR);
+            return true;
+        }
+        *len = (size_t)n;
+    }
+}
+
 static void on_tcp_proxy_event(ev_node_t *node, uint32_t events) {
     tcp_proxy_t *p = node->ctx;
 
@@ -498,120 +525,10 @@ static void on_tcp_proxy_event(ev_node_t *node, uint32_t events) {
         p->connecting = false;
     }
 
-    if (events & EPOLLERR) {
-        tcp_proxy_destroy(p);
-        return;
-    }
-
-    while (p->v2t_off < p->v2t_len) {
-        ssize_t w = send(p->tcp_fd, p->v2t_buf + p->v2t_off,
-                         p->v2t_len - p->v2t_off, MSG_NOSIGNAL);
-        if (w < 0) {
-            if (errno == EINTR)
-                continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                break;
-            tcp_proxy_destroy(p);
-            return;
-        }
-        p->v2t_off += (size_t)w;
-    }
-    if (p->v2t_off == p->v2t_len)
-        p->v2t_off = p->v2t_len = 0;
-
-    if (!p->vsock_eof && p->v2t_len == 0) {
-        for (;;) {
-            ssize_t n = recv(p->vsock_fd, p->v2t_buf, sizeof(p->v2t_buf), 0);
-            if (n < 0) {
-                if (errno == EINTR)
-                    continue;
-                if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    break;
-                p->vsock_eof = true;
-                shutdown(p->tcp_fd, SHUT_WR);
-                break;
-            }
-            if (n == 0) {
-                p->vsock_eof = true;
-                shutdown(p->tcp_fd, SHUT_WR);
-                break;
-            }
-            p->v2t_off = 0;
-            p->v2t_len = (size_t)n;
-            while (p->v2t_off < p->v2t_len) {
-                ssize_t w = send(p->tcp_fd, p->v2t_buf + p->v2t_off,
-                                 p->v2t_len - p->v2t_off, MSG_NOSIGNAL);
-                if (w < 0) {
-                    if (errno == EINTR)
-                        continue;
-                    if (errno == EAGAIN || errno == EWOULDBLOCK)
-                        break;
-                    tcp_proxy_destroy(p);
-                    return;
-                }
-                p->v2t_off += (size_t)w;
-            }
-            if (p->v2t_off < p->v2t_len)
-                break;
-            p->v2t_off = p->v2t_len = 0;
-        }
-    }
-
-    while (p->t2v_off < p->t2v_len) {
-        ssize_t w = send(p->vsock_fd, p->t2v_buf + p->t2v_off,
-                         p->t2v_len - p->t2v_off, MSG_NOSIGNAL);
-        if (w < 0) {
-            if (errno == EINTR)
-                continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                break;
-            tcp_proxy_destroy(p);
-            return;
-        }
-        p->t2v_off += (size_t)w;
-    }
-    if (p->t2v_off == p->t2v_len)
-        p->t2v_off = p->t2v_len = 0;
-
-    if (!p->tcp_eof && p->t2v_len == 0) {
-        for (;;) {
-            ssize_t n = recv(p->tcp_fd, p->t2v_buf, sizeof(p->t2v_buf), 0);
-            if (n < 0) {
-                if (errno == EINTR)
-                    continue;
-                if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    break;
-                p->tcp_eof = true;
-                shutdown(p->vsock_fd, SHUT_WR);
-                break;
-            }
-            if (n == 0) {
-                p->tcp_eof = true;
-                shutdown(p->vsock_fd, SHUT_WR);
-                break;
-            }
-            p->t2v_off = 0;
-            p->t2v_len = (size_t)n;
-            while (p->t2v_off < p->t2v_len) {
-                ssize_t w = send(p->vsock_fd, p->t2v_buf + p->t2v_off,
-                                 p->t2v_len - p->t2v_off, MSG_NOSIGNAL);
-                if (w < 0) {
-                    if (errno == EINTR)
-                        continue;
-                    if (errno == EAGAIN || errno == EWOULDBLOCK)
-                        break;
-                    tcp_proxy_destroy(p);
-                    return;
-                }
-                p->t2v_off += (size_t)w;
-            }
-            if (p->t2v_off < p->t2v_len)
-                break;
-            p->t2v_off = p->t2v_len = 0;
-        }
-    }
-
-    if (p->vsock_eof && p->tcp_eof && p->v2t_len == 0 && p->t2v_len == 0) {
+    if ((events & EPOLLERR) ||
+        !tcp_proxy_pump(p->vsock_fd, p->tcp_fd, p->v2t_buf, &p->v2t_off, &p->v2t_len, &p->vsock_eof) ||
+        !tcp_proxy_pump(p->tcp_fd, p->vsock_fd, p->t2v_buf, &p->t2v_off, &p->t2v_len, &p->tcp_eof) ||
+        (p->vsock_eof && p->tcp_eof && p->v2t_len == 0 && p->t2v_len == 0)) {
         tcp_proxy_destroy(p);
         return;
     }
@@ -628,54 +545,49 @@ void sock_mirror_handle_incoming(int vsock_fd, uint32_t resource_id) {
         return;
     }
 
-    int af = (family == SWIPTERMD_MIRROR_AF_INET6) ? AF_INET6 : AF_INET;
-    int tfd = guest_socket(af, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    union {
+        struct sockaddr sa;
+        struct sockaddr_in in;
+        struct sockaddr_in6 in6;
+    } addr;
+    memset(&addr, 0, sizeof(addr));
+    socklen_t addr_len;
+    uint8_t *target;
+    size_t target_len;
+    const uint8_t *loopback;
+    if (family == SWIPTERMD_MIRROR_AF_INET6) {
+        addr.in6.sin6_family = AF_INET6;
+        addr.in6.sin6_port = htons(port);
+        addr_len = sizeof(addr.in6);
+        target = addr.in6.sin6_addr.s6_addr;
+        target_len = sizeof(addr.in6.sin6_addr);
+        loopback = loopback6;
+    } else {
+        addr.in.sin_family = AF_INET;
+        addr.in.sin_port = htons(port);
+        addr_len = sizeof(addr.in);
+        target = (uint8_t *)&addr.in.sin_addr;
+        target_len = sizeof(addr.in.sin_addr);
+        loopback = loopback4;
+    }
+    memcpy(target, loopback, target_len);
+    for (size_t i = 0; i < g_listeners.count; i++) {
+        const listener_key_t *l = &g_listeners.items[i];
+        if (l->family != family || l->port != port)
+            continue;
+        if (memcmp(l->addr, any_addr, target_len) == 0 || memcmp(l->addr, loopback, target_len) == 0) {
+            memcpy(target, loopback, target_len);
+            break;
+        }
+        memcpy(target, l->addr, target_len);
+    }
+
+    int tfd = guest_socket(addr.sa.sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     if (tfd < 0) {
         close(vsock_fd);
         return;
     }
-
-    int r;
-    if (af == AF_INET) {
-        struct sockaddr_in sa;
-        memset(&sa, 0, sizeof(sa));
-        sa.sin_family = AF_INET;
-        sa.sin_port = htons(port);
-        sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        for (size_t i = 0; i < g_listeners.count; i++) {
-            const listener_key_t *l = &g_listeners.items[i];
-            if (l->family != SWIPTERMD_MIRROR_AF_INET || l->port != port)
-                continue;
-            uint32_t bound;
-            memcpy(&bound, l->addr, sizeof(bound));
-            if (bound == htonl(INADDR_ANY) || bound == htonl(INADDR_LOOPBACK)) {
-                sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-                break;
-            }
-            sa.sin_addr.s_addr = bound;
-        }
-        r = connect(tfd, (struct sockaddr *)&sa, sizeof(sa));
-    } else {
-        struct sockaddr_in6 sa6;
-        memset(&sa6, 0, sizeof(sa6));
-        sa6.sin6_family = AF_INET6;
-        sa6.sin6_port = htons(port);
-        sa6.sin6_addr = in6addr_loopback;
-        for (size_t i = 0; i < g_listeners.count; i++) {
-            const listener_key_t *l = &g_listeners.items[i];
-            if (l->family != SWIPTERMD_MIRROR_AF_INET6 || l->port != port)
-                continue;
-            struct in6_addr bound;
-            memcpy(&bound, l->addr, sizeof(bound));
-            if (IN6_IS_ADDR_UNSPECIFIED(&bound) || IN6_IS_ADDR_LOOPBACK(&bound)) {
-                sa6.sin6_addr = in6addr_loopback;
-                break;
-            }
-            sa6.sin6_addr = bound;
-        }
-        r = connect(tfd, (struct sockaddr *)&sa6, sizeof(sa6));
-    }
-
+    int r = connect(tfd, &addr.sa, addr_len);
     if (r < 0 && errno != EINPROGRESS) {
         close(tfd);
         close(vsock_fd);
@@ -692,6 +604,7 @@ void sock_mirror_handle_incoming(int vsock_fd, uint32_t resource_id) {
     p->tcp_fd = tfd;
     p->connecting = (r < 0);
 
-    ev_add(&p->vsock_ev, vsock_fd, p->connecting ? 0 : EPOLLIN, on_tcp_proxy_event, p);
-    ev_add(&p->tcp_ev, tfd, p->connecting ? EPOLLOUT : EPOLLIN, on_tcp_proxy_event, p);
+    if (ev_add(&p->vsock_ev, vsock_fd, p->connecting ? 0 : EPOLLIN, on_tcp_proxy_event, p) < 0 ||
+        ev_add(&p->tcp_ev, tfd, p->connecting ? EPOLLOUT : EPOLLIN, on_tcp_proxy_event, p) < 0)
+        tcp_proxy_destroy(p);
 }

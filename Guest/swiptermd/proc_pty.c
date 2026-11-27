@@ -75,11 +75,9 @@ typedef struct tty_bridge {
 typedef struct proc_entry {
     uint32_t process_id;
     pid_t outer_pid;
-    pid_t container_pid;
     pid_t helper_pid;
     int exit_fd;
     ev_node_t exit_ev;
-    bool exited;
     uint32_t bound_pty_ids[3];
     int bound_pty_count;
     void (*exit_handler)(int status);
@@ -91,16 +89,10 @@ typedef struct proc_entry {
 typedef struct spawn_sync_msg {
     int32_t err;
     int32_t outer_pid;
-    int32_t container_pid;
 } spawn_sync_msg_t;
 
 static pty_session_t *g_ptys;
 static proc_entry_t *g_procs;
-
-void proc_pty_init(void) {
-    g_ptys = NULL;
-    g_procs = NULL;
-}
 
 static void pty_release_guard(pty_session_t *p) {
     if (p->guard_fd >= 0) {
@@ -175,7 +167,9 @@ static void pty_close_streams(pty_session_t *p) {
     p->in_off = p->in_len = 0;
 }
 
-static void pty_pump(pty_session_t *p) {
+static void on_pty_event(ev_node_t *node, uint32_t events) {
+    (void)events;
+    pty_session_t *p = node->ctx;
     if (p->master_fd >= 0 && p->in_off < p->in_len) {
         while (p->in_off < p->in_len) {
             ssize_t n = write(p->master_fd, p->in_buf + p->in_off, p->in_len - p->in_off);
@@ -280,10 +274,28 @@ static void pty_pump(pty_session_t *p) {
     pty_update_events(p);
 }
 
-static void on_pty_event(ev_node_t *node, uint32_t events) {
-    (void)events;
-    pty_session_t *p = node->ctx;
-    pty_pump(p);
+int pty_open_master(int *pts_num_out) {
+    int master = open(GUEST_ROOT "/dev/pts/ptmx", O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+    if (master < 0)
+        return -errno;
+    int unlock = 0;
+    if (ioctl(master, TIOCSPTLCK, &unlock) < 0 || ioctl(master, TIOCGPTN, pts_num_out) < 0) {
+        int err = -errno;
+        close(master);
+        return err;
+    }
+    return master;
+}
+
+static void pty_destroy(pty_session_t *p) {
+    for (pty_session_t **pp = &g_ptys; *pp; pp = &(*pp)->next) {
+        if (*pp == p) {
+            *pp = p->next;
+            break;
+        }
+    }
+    pty_close_streams(p);
+    free(p);
 }
 
 void pty_handle_create(uint32_t req_id, const uint8_t *body, uint32_t len) {
@@ -291,68 +303,39 @@ void pty_handle_create(uint32_t req_id, const uint8_t *body, uint32_t len) {
     uint16_t cols, rows;
     uint64_t token;
     if (!swiptermd_dec_pty_create_req(body, len, &pty_id, &cols, &rows, &token)) {
-        uint8_t out[SWIPTERMD_PTY_CREATE_REPLY_SIZE];
-        swiptermd_enc_pty_create_reply(out, -EINVAL, 0);
-        ctrl_send_frame((uint16_t)(SWIPTERMD_OP_PTY_CREATE | SWIPTERMD_OP_REPLY_FLAG),
-                        req_id, out, sizeof(out));
+        ctrl_send_err_reply(SWIPTERMD_OP_PTY_CREATE, req_id, -EINVAL);
         return;
     }
 
-    int mfd = open(GUEST_ROOT "/dev/pts/ptmx", O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
-    if (mfd < 0) {
-        uint8_t out[SWIPTERMD_PTY_CREATE_REPLY_SIZE];
-        swiptermd_enc_pty_create_reply(out, -errno, 0);
-        ctrl_send_frame((uint16_t)(SWIPTERMD_OP_PTY_CREATE | SWIPTERMD_OP_REPLY_FLAG),
-                        req_id, out, sizeof(out));
-        return;
-    }
-
-    int unlock = 0;
     int pts_num = -1;
-    if (ioctl(mfd, TIOCSPTLCK, &unlock) < 0 || ioctl(mfd, TIOCGPTN, &pts_num) < 0) {
-        int err = -errno;
-        close(mfd);
-        uint8_t out[SWIPTERMD_PTY_CREATE_REPLY_SIZE];
-        swiptermd_enc_pty_create_reply(out, err, 0);
-        ctrl_send_frame((uint16_t)(SWIPTERMD_OP_PTY_CREATE | SWIPTERMD_OP_REPLY_FLAG),
-                        req_id, out, sizeof(out));
+    int mfd = pty_open_master(&pts_num);
+    if (mfd < 0) {
+        ctrl_send_err_reply(SWIPTERMD_OP_PTY_CREATE, req_id, mfd);
         return;
     }
-
     struct winsize ws = {.ws_row = rows ? rows : 24, .ws_col = cols ? cols : 80};
     (void)ioctl(mfd, TIOCSWINSZ, &ws);
 
+    int err = 0;
+    int vfd = -1;
+    pty_session_t *p = NULL;
     int guard = ioctl(mfd, TIOCGPTPEER, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
-    if (guard < 0) {
-        int err = -errno;
-        close(mfd);
-        uint8_t out[SWIPTERMD_PTY_CREATE_REPLY_SIZE];
-        swiptermd_enc_pty_create_reply(out, err, 0);
-        ctrl_send_frame((uint16_t)(SWIPTERMD_OP_PTY_CREATE | SWIPTERMD_OP_REPLY_FLAG),
-                        req_id, out, sizeof(out));
-        return;
+    if (guard < 0)
+        err = -errno;
+    if (err == 0) {
+        vfd = vsock_connect_stream(SWIPTERMD_STREAM_PTY, pty_id, token);
+        if (vfd < 0)
+            err = vfd;
     }
-
-    int vfd = vsock_connect_stream(SWIPTERMD_STREAM_PTY, pty_id, token);
-    if (vfd < 0) {
-        close(guard);
+    if (err == 0 && !(p = calloc(1, sizeof(*p))))
+        err = -ENOMEM;
+    if (err < 0) {
+        if (vfd >= 0)
+            close(vfd);
+        if (guard >= 0)
+            close(guard);
         close(mfd);
-        uint8_t out[SWIPTERMD_PTY_CREATE_REPLY_SIZE];
-        swiptermd_enc_pty_create_reply(out, vfd, 0);
-        ctrl_send_frame((uint16_t)(SWIPTERMD_OP_PTY_CREATE | SWIPTERMD_OP_REPLY_FLAG),
-                        req_id, out, sizeof(out));
-        return;
-    }
-
-    pty_session_t *p = calloc(1, sizeof(*p));
-    if (!p) {
-        close(vfd);
-        close(guard);
-        close(mfd);
-        uint8_t out[SWIPTERMD_PTY_CREATE_REPLY_SIZE];
-        swiptermd_enc_pty_create_reply(out, -ENOMEM, 0);
-        ctrl_send_frame((uint16_t)(SWIPTERMD_OP_PTY_CREATE | SWIPTERMD_OP_REPLY_FLAG),
-                        req_id, out, sizeof(out));
+        ctrl_send_err_reply(SWIPTERMD_OP_PTY_CREATE, req_id, err);
         return;
     }
 
@@ -366,11 +349,7 @@ void pty_handle_create(uint32_t req_id, const uint8_t *body, uint32_t len) {
 
     ev_add(&p->master_ev, mfd, 0, on_pty_event, p);
     ev_add(&p->vsock_ev, vfd, EPOLLIN, on_pty_event, p);
-
-    uint8_t out[SWIPTERMD_PTY_CREATE_REPLY_SIZE];
-    swiptermd_enc_pty_create_reply(out, 0, (uint32_t)pts_num);
-    ctrl_send_frame((uint16_t)(SWIPTERMD_OP_PTY_CREATE | SWIPTERMD_OP_REPLY_FLAG),
-                    req_id, out, sizeof(out));
+    ctrl_send_err_reply(SWIPTERMD_OP_PTY_CREATE, req_id, 0);
 }
 
 void pty_handle_resize(uint32_t req_id, const uint8_t *body, uint32_t len) {
@@ -381,7 +360,7 @@ void pty_handle_resize(uint32_t req_id, const uint8_t *body, uint32_t len) {
         return;
     }
     pty_session_t *p = pty_find(pty_id);
-    if (!p || p->closed || p->master_fd < 0) {
+    if (!p || p->master_fd < 0) {
         ctrl_send_err_reply(SWIPTERMD_OP_PTY_RESIZE, req_id, -EIO);
         return;
     }
@@ -392,14 +371,16 @@ void pty_handle_resize(uint32_t req_id, const uint8_t *body, uint32_t len) {
 
 void pty_handle_close(uint32_t req_id, const uint8_t *body, uint32_t len) {
     uint32_t pty_id;
-    if (!swiptermd_dec_pty_close(body, len, &pty_id)) {
+    if (!swiptermd_dec_u32(body, len, &pty_id)) {
         ctrl_send_err_reply(SWIPTERMD_OP_PTY_CLOSE, req_id, -EINVAL);
         return;
     }
     pty_session_t *p = pty_find(pty_id);
-    if (p) {
+    if (p && p->in_use) {
         p->closed = true;
         pty_close_streams(p);
+    } else if (p) {
+        pty_destroy(p);
     }
     ctrl_send_err_reply(SWIPTERMD_OP_PTY_CLOSE, req_id, 0);
 }
@@ -536,19 +517,16 @@ static int tty_bridge_open(int terminal_fd, tty_bridge_t **bridge_out) {
         free(bridge);
         return err;
     }
-    int unlock = 0;
     struct itimerspec interval = {.it_interval = {.tv_nsec = 250 * 1000 * 1000}, .it_value = {.tv_nsec = 1}};
     struct termios raw = bridge->saved;
     cfmakeraw(&raw);
     int input_dst = -1;
     int output_src = -1;
     int output_dst = -1;
-    bridge->master_fd = open(GUEST_ROOT "/dev/pts/ptmx", O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+    bridge->master_fd = pty_open_master(&bridge->pts_num);
     bridge->timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     int input_src = fcntl(bridge->tty_fd, F_DUPFD_CLOEXEC, 0);
     if (bridge->master_fd < 0 || bridge->timer_fd < 0 || input_src < 0 ||
-        ioctl(bridge->master_fd, TIOCSPTLCK, &unlock) < 0 ||
-        ioctl(bridge->master_fd, TIOCGPTN, &bridge->pts_num) < 0 ||
         (input_dst = fcntl(bridge->master_fd, F_DUPFD_CLOEXEC, 0)) < 0 ||
         (output_src = fcntl(bridge->master_fd, F_DUPFD_CLOEXEC, 0)) < 0 ||
         (output_dst = fcntl(bridge->tty_fd, F_DUPFD_CLOEXEC, 0)) < 0 ||
@@ -585,7 +563,6 @@ static void on_proc_exit_event(ev_node_t *node, uint32_t events) {
     ev_del(&proc->exit_ev);
     close(proc->exit_fd);
     proc->exit_fd = -1;
-    proc->exited = true;
 
     if (proc->sandbox) {
         int helper_status;
@@ -597,9 +574,11 @@ static void on_proc_exit_event(ev_node_t *node, uint32_t events) {
 
     for (int i = 0; i < proc->bound_pty_count; i++) {
         pty_session_t *p = pty_find(proc->bound_pty_ids[i]);
-        if (p) {
+        if (p && p->closed) {
+            pty_destroy(p);
+        } else if (p) {
             p->in_use = false;
-            pty_pump(p);
+            on_pty_event(&p->vsock_ev, 0);
             pty_release_guard(p);
         }
     }
@@ -617,60 +596,10 @@ static void on_proc_exit_event(ev_node_t *node, uint32_t events) {
         proc->exit_handler(status);
     } else {
         uint8_t msg[SWIPTERMD_PROCESS_EXIT_SIZE];
-        swiptermd_enc_process_exit(msg, proc->process_id, proc->container_pid, status);
+        swiptermd_enc_process_exit(msg, proc->process_id, status);
         ctrl_send_frame(SWIPTERMD_OP_PROCESS_EXIT, 0, msg, sizeof(msg));
     }
     free(proc);
-}
-
-static char **decode_strv_spawn(swiptermd_buf_r_t *r) {
-    uint32_t count = swiptermd_r_u32(r);
-    if (r->underflow || count > (r->len - r->pos) / sizeof(uint32_t))
-        return NULL;
-    char **vec = calloc((size_t)count + 1, sizeof(char *));
-    if (!vec)
-        return NULL;
-    for (uint32_t i = 0; i < count; i++) {
-        swiptermd_slice_t s = swiptermd_r_bytes(r);
-        vec[i] = r->underflow ? NULL : malloc((size_t)s.len + 1);
-        if (!vec[i]) {
-            for (uint32_t j = 0; j < i; j++)
-                free(vec[j]);
-            free(vec);
-            return NULL;
-        }
-        if (s.len > 0)
-            memcpy(vec[i], s.ptr, s.len);
-        vec[i][s.len] = '\0';
-    }
-    return vec;
-}
-
-static char **gpu_environment(char **envp) {
-    if (!envp || !g_daemon.gpu)
-        return envp;
-    size_t count = 0;
-    for (; envp[count]; count++) {
-        if (strncmp(envp[count], "VN_DEBUG=", 9) == 0)
-            return envp;
-    }
-    char *entry = strdup(GPU_VENUS_ENV);
-    char **grown = entry ? realloc(envp, (count + 2) * sizeof(*envp)) : NULL;
-    if (!grown) {
-        free(entry);
-        return envp;
-    }
-    grown[count] = entry;
-    grown[count + 1] = NULL;
-    return grown;
-}
-
-static void free_strv_spawn(char **vec) {
-    if (!vec)
-        return;
-    for (size_t i = 0; vec[i]; i++)
-        free(vec[i]);
-    free(vec);
 }
 
 void close_other_fds(const int *keep, int nkeep) {
@@ -698,9 +627,9 @@ void close_other_fds(const int *keep, int nkeep) {
     closedir(d);
 }
 
-static void send_spawn_reply(uint16_t opcode, uint32_t req_id, int32_t err, int32_t pid) {
+static void send_spawn_reply(uint16_t opcode, uint32_t req_id, int32_t err) {
     uint8_t out[SWIPTERMD_SPAWN_REPLY_SIZE];
-    swiptermd_enc_spawn_reply(out, err, pid);
+    swiptermd_enc_spawn_reply(out, err);
     ctrl_send_frame((uint16_t)(opcode | SWIPTERMD_OP_REPLY_FLAG), req_id, out, sizeof(out));
 }
 
@@ -744,11 +673,6 @@ void launch_target_close(launch_target_t *target) {
     }
 }
 
-static void child_report(int fd, int32_t err) {
-    (void)write(fd, &err, sizeof(err));
-    _exit(127);
-}
-
 static void launch_payload_exec(const launch_spec_t *spec, const int child_pipe_fds[3],
                                 const int pts_nums[3], int primary_pts, int err_fd) {
     sigset_t empty;
@@ -758,7 +682,7 @@ static void launch_payload_exec(const launch_spec_t *spec, const int child_pipe_
 
     const char *target_cwd = spec->cwd && spec->cwd[0] ? spec->cwd : "/";
     if (chdir(target_cwd) < 0)
-        child_report(err_fd, -errno);
+        child_exit_error(err_fd, -errno);
 
     int pty_fd = -1;
     if (primary_pts >= 0) {
@@ -767,7 +691,7 @@ static void launch_payload_exec(const launch_spec_t *spec, const int child_pipe_
         snprintf(pts_path, sizeof(pts_path), "/dev/pts/%d", primary_pts);
         pty_fd = open(pts_path, O_RDWR);
         if (pty_fd < 0 || ioctl(pty_fd, TIOCSCTTY, 0) < 0)
-            child_report(err_fd, -errno);
+            child_exit_error(err_fd, -errno);
     } else {
         (void)setpgid(0, 0);
     }
@@ -775,9 +699,8 @@ static void launch_payload_exec(const launch_spec_t *spec, const int child_pipe_
     int null_fd = -1;
     for (int i = 0; i < 3; i++) {
         if (spec->stdio_mode[i] == SWIPTERMD_STDIO_PIPE || spec->stdio_mode[i] == LAUNCH_STDIO_FD) {
-            int fl = spec->stdio_mode[i] == SWIPTERMD_STDIO_PIPE ? fcntl(child_pipe_fds[i], F_GETFL, 0) : -1;
-            if (fl >= 0)
-                fcntl(child_pipe_fds[i], F_SETFL, fl & ~O_NONBLOCK);
+            if (spec->stdio_mode[i] == SWIPTERMD_STDIO_PIPE)
+                (void)set_nonblock(child_pipe_fds[i], false);
             if (child_pipe_fds[i] != i)
                 dup2(child_pipe_fds[i], i);
         } else if (spec->stdio_mode[i] == SWIPTERMD_STDIO_PTY || spec->stdio_mode[i] == LAUNCH_STDIO_BRIDGE) {
@@ -788,7 +711,7 @@ static void launch_payload_exec(const launch_spec_t *spec, const int child_pipe_
                 sfd = open(pts_path, O_RDWR | O_NOCTTY);
             }
             if (sfd < 0)
-                child_report(err_fd, -errno);
+                child_exit_error(err_fd, -errno);
             if (sfd != i)
                 dup2(sfd, i);
             if (sfd != pty_fd && sfd > 2)
@@ -817,19 +740,19 @@ static void launch_payload_exec(const launch_spec_t *spec, const int child_pipe_
                 setenv("PATH", *entry + 5, 1);
         }
         execvpe(spec->path, spec->argv, spec->envp);
-        child_report(err_fd, -errno);
+        child_exit_error(err_fd, -errno);
         break;
     case LAUNCH_LOGIN:
-        child_report(err_fd, login_exec(spec->user, spec->envp, g_daemon.init_mode == SWIPTERMD_INIT_MANAGED));
+        child_exit_error(err_fd, login_exec(spec->user, spec->envp, g_daemon.init_mode == SWIPTERMD_INIT_MANAGED));
         break;
     case LAUNCH_SHELL:
-        child_report(err_fd, shell_exec(spec->user, spec->envp));
+        child_exit_error(err_fd, shell_exec(spec->user, spec->envp));
         break;
     case LAUNCH_COMMAND: {
         static char path_env[] = "PATH=" TRUSTED_PATH;
         char *const env[] = {path_env, NULL};
         execvpe(spec->argv[0], spec->argv, env);
-        child_report(err_fd, -errno);
+        child_exit_error(err_fd, -errno);
         break;
     }
     }
@@ -856,8 +779,7 @@ static void launch_helper(const launch_spec_t *spec, const launch_target_t *targ
             msg.err = -errno;
     }
     int err_pipe[2] = {-1, -1};
-    int pid_pipe[2] = {-1, -1};
-    if (msg.err == 0 && (pipe2(err_pipe, O_CLOEXEC) < 0 || pipe2(pid_pipe, O_CLOEXEC) < 0))
+    if (msg.err == 0 && pipe2(err_pipe, O_CLOEXEC) < 0)
         msg.err = -errno;
     pid_t child = msg.err == 0 ? fork() : -1;
     if (msg.err == 0 && child < 0)
@@ -869,26 +791,21 @@ static void launch_helper(const launch_spec_t *spec, const launch_target_t *targ
 
     if (child == 0) {
         close(err_pipe[0]);
-        close(pid_pipe[0]);
         close(sync_fd);
         close(exit_fd);
         if (write(procs_fd, "0", 1) != 1)
-            child_report(err_pipe[1], -errno);
+            child_exit_error(err_pipe[1], -errno);
         close(procs_fd);
         if (setns(cgroup_ns_fd, CLONE_NEWCGROUP) < 0)
-            child_report(err_pipe[1], -errno);
+            child_exit_error(err_pipe[1], -errno);
         close(cgroup_ns_fd);
         for (size_t i = 0; i < sizeof(ns_fds) / sizeof(ns_fds[0]); i++)
             close(ns_fds[i]);
-        int32_t cpid = (int32_t)getpid();
-        (void)write_all_blocking(pid_pipe[1], &cpid, sizeof(cpid));
-        close(pid_pipe[1]);
         launch_payload_exec(spec, child_pipe_fds, pts_nums, primary_pts, err_pipe[1]);
         _exit(127);
     }
 
     close(err_pipe[1]);
-    close(pid_pipe[1]);
     close(procs_fd);
     close(cgroup_ns_fd);
     for (size_t i = 0; i < sizeof(ns_fds) / sizeof(ns_fds[0]); i++)
@@ -897,10 +814,6 @@ static void launch_helper(const launch_spec_t *spec, const launch_target_t *targ
         if (child_pipe_fds[i] >= 0)
             close(child_pipe_fds[i]);
     }
-
-    int32_t container_pid = 0;
-    (void)read_all_blocking(pid_pipe[0], &container_pid, sizeof(container_pid));
-    close(pid_pipe[0]);
 
     int32_t child_err = 0;
     ssize_t en = read(err_pipe[0], &child_err, sizeof(child_err));
@@ -915,7 +828,6 @@ static void launch_helper(const launch_spec_t *spec, const launch_target_t *targ
     }
 
     msg.outer_pid = (int32_t)child;
-    msg.container_pid = container_pid;
     (void)write_all_blocking(sync_fd, &msg, sizeof(msg));
     close(sync_fd);
 
@@ -927,7 +839,7 @@ static void launch_helper(const launch_spec_t *spec, const launch_target_t *targ
 }
 
 static int container_target(launch_target_t *target) {
-    if (!g_daemon.init_started || g_daemon.halted || g_daemon.container_pid_ns_fd < 0)
+    if (g_daemon.container_pid_ns_fd < 0)
         return -ESRCH;
     *target = (launch_target_t){
         .net_ns_fd = fcntl(network_guest_fd(), F_DUPFD_CLOEXEC, 0),
@@ -946,7 +858,7 @@ static int container_target(launch_target_t *target) {
     return 0;
 }
 
-static int launch(const launch_spec_t *spec, launch_target_t *target, int32_t *container_pid_out) {
+static int launch(const launch_spec_t *spec, launch_target_t *target) {
     pty_session_t *bound_ptys[3] = {NULL, NULL, NULL};
     int bound_count = 0;
     int pts_nums[3] = {-1, -1, -1};
@@ -962,7 +874,7 @@ static int launch(const launch_spec_t *spec, launch_target_t *target, int32_t *c
         if (spec->stdio_mode[i] != SWIPTERMD_STDIO_PTY)
             continue;
         pty_session_t *p = pty_find(spec->stdio_pty_id[i]);
-        if (!p || p->closed || p->master_fd < 0) {
+        if (!p || p->master_fd < 0) {
             err = -EIO;
             break;
         }
@@ -1079,7 +991,6 @@ static int launch(const launch_spec_t *spec, launch_target_t *target, int32_t *c
     if (proc) {
         proc->process_id = spec->process_id;
         proc->outer_pid = (pid_t)sync_msg.outer_pid;
-        proc->container_pid = (pid_t)sync_msg.container_pid;
         proc->helper_pid = helper_pid;
         proc->exit_fd = exit_pipe[0];
         proc->exit_handler = spec->exit_handler;
@@ -1088,14 +999,13 @@ static int launch(const launch_spec_t *spec, launch_target_t *target, int32_t *c
         proc->bound_pty_count = bound_count;
         for (int j = 0; j < bound_count; j++)
             proc->bound_pty_ids[j] = bound_ptys[j]->pty_id;
-        (void)set_nonblock(exit_pipe[0]);
+        (void)set_nonblock(exit_pipe[0], true);
         proc->next = g_procs;
         g_procs = proc;
         ev_add(&proc->exit_ev, exit_pipe[0], EPOLLIN, on_proc_exit_event, proc);
     } else {
         close(exit_pipe[0]);
     }
-    *container_pid_out = sync_msg.container_pid;
     return 0;
 }
 
@@ -1104,45 +1014,21 @@ static bool decode_spawn(swiptermd_buf_r_t *r, launch_spec_t *spec, char path[PA
     spec->process_id = swiptermd_r_u32(r);
     for (int i = 0; i < 3; i++)
         spec->stdio_mode[i] = swiptermd_r_u8(r);
-    (void)swiptermd_r_u8(r);
     for (int i = 0; i < 3; i++)
         spec->stdio_pty_id[i] = swiptermd_r_u32(r);
     for (int i = 0; i < 3; i++)
         spec->stdio_token[i] = swiptermd_r_u64(r);
     if (!swiptermd_r_str_copy(r, path, PATH_MAX) || !swiptermd_r_str_copy(r, cwd, PATH_MAX))
         return false;
-    *argv_out = decode_strv_spawn(r);
-    *envp_out = *argv_out ? decode_strv_spawn(r) : NULL;
+    *argv_out = strv_decode(r);
+    *envp_out = *argv_out ? strv_decode(r) : NULL;
     spec->path = path;
     spec->cwd = cwd;
     return *argv_out && *envp_out && spec->process_id != 0;
 }
 
-void proc_handle_spawn(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
-    launch_spec_t spec = {.payload = LAUNCH_EXEC};
-    char path[PATH_MAX];
-    char cwd[PATH_MAX];
-    char **argv = NULL;
-    char **envp = NULL;
-    int32_t pid = 0;
-    int err = -EINVAL;
-    if (decode_spawn(&r, &spec, path, cwd, &argv, &envp)) {
-        envp = gpu_environment(envp);
-        spec.argv = argv;
-        spec.envp = envp;
-        launch_target_t target;
-        err = container_target(&target);
-        if (err == 0)
-            err = launch(&spec, &target, &pid);
-    }
-    free_strv_spawn(argv);
-    free_strv_spawn(envp);
-    send_spawn_reply(SWIPTERMD_OP_SPAWN, req_id, err, err == 0 ? pid : 0);
-}
-
 void proc_handle_disk_spawn(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     uint32_t disk_id = swiptermd_r_u32(&r);
     uint32_t invocation_id = swiptermd_r_u32(&r);
     uint32_t flags = swiptermd_r_u32(&r);
@@ -1152,7 +1038,6 @@ void proc_handle_disk_spawn(uint32_t req_id, const uint8_t *body, uint32_t len) 
     char cwd[PATH_MAX];
     char **argv = NULL;
     char **envp = NULL;
-    int32_t pid = 0;
     int err = -EINVAL;
     if (swiptermd_r_str_copy(&r, hostname, sizeof(hostname)) && decode_spawn(&r, &spec, path, cwd, &argv, &envp)) {
         size_t envc = 0;
@@ -1189,22 +1074,22 @@ void proc_handle_disk_spawn(uint32_t req_id, const uint8_t *body, uint32_t len) 
         }
         launch_target_t target;
         if (err == 0)
-            err = disk_sandbox_open(disk_id, hostname, &target, &spec.sandbox);
+            err = disk_id == 0 ? container_target(&target) : disk_sandbox_open(disk_id, hostname, &target, &spec.sandbox);
         if (err == 0) {
-            err = launch(&spec, &target, &pid);
-            if (err < 0)
+            err = launch(&spec, &target);
+            if (err < 0 && spec.sandbox)
                 disk_sandbox_close(spec.sandbox);
         }
         if (err < 0 && spec.bridge)
             tty_bridge_close(spec.bridge);
     }
-    free_strv_spawn(argv);
-    free_strv_spawn(envp);
-    send_spawn_reply(SWIPTERMD_OP_DISK_SPAWN, req_id, err, err == 0 ? pid : 0);
+    strv_free(argv);
+    strv_free(envp);
+    send_spawn_reply(SWIPTERMD_OP_DISK_SPAWN, req_id, err);
 }
 
 void proc_handle_login(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     launch_spec_t spec = {.payload = LAUNCH_LOGIN};
     spec.process_id = swiptermd_r_u32(&r);
     uint32_t pty_id = swiptermd_r_u32(&r);
@@ -1214,8 +1099,7 @@ void proc_handle_login(uint32_t req_id, const uint8_t *body, uint32_t len) {
     }
     char user[LOGIN_USER_CAP];
     bool user_ok = swiptermd_r_str_copy(&r, user, sizeof(user)) && login_name_valid(user);
-    char **envp = user_ok ? decode_strv_spawn(&r) : NULL;
-    int32_t pid = 0;
+    char **envp = user_ok ? strv_decode(&r) : NULL;
     int err = -EINVAL;
     if (envp && spec.process_id != 0) {
         spec.user = user;
@@ -1223,10 +1107,10 @@ void proc_handle_login(uint32_t req_id, const uint8_t *body, uint32_t len) {
         launch_target_t target;
         err = container_target(&target);
         if (err == 0)
-            err = launch(&spec, &target, &pid);
+            err = launch(&spec, &target);
     }
-    free_strv_spawn(envp);
-    send_spawn_reply(SWIPTERMD_OP_LOGIN, req_id, err, err == 0 ? pid : 0);
+    strv_free(envp);
+    send_spawn_reply(SWIPTERMD_OP_LOGIN, req_id, err);
 }
 
 int proc_run_in_container(char *const argv[], void (*exit_handler)(int status)) {
@@ -1237,15 +1121,13 @@ int proc_run_in_container(char *const argv[], void (*exit_handler)(int status)) 
     };
     launch_target_t target;
     int err = container_target(&target);
-    int32_t pid = 0;
-    return err < 0 ? err : launch(&spec, &target, &pid);
+    return err < 0 ? err : launch(&spec, &target);
 }
 
 void proc_handle_signal(uint32_t req_id, const uint8_t *body, uint32_t len) {
     uint32_t process_id;
     int32_t sig;
-    bool to_group;
-    if (!swiptermd_dec_process_signal(body, len, &process_id, &sig, &to_group)) {
+    if (!swiptermd_dec_process_signal(body, len, &process_id, &sig)) {
         ctrl_send_err_reply(SWIPTERMD_OP_PROCESS_SIGNAL, req_id, -EINVAL);
         return;
     }
@@ -1256,11 +1138,10 @@ void proc_handle_signal(uint32_t req_id, const uint8_t *body, uint32_t len) {
             break;
         }
     }
-    if (!proc || proc->exited) {
+    if (!proc) {
         ctrl_send_err_reply(SWIPTERMD_OP_PROCESS_SIGNAL, req_id, -ESRCH);
         return;
     }
-    pid_t target = to_group ? -proc->outer_pid : proc->outer_pid;
-    int err = kill(target, sig) < 0 ? -errno : 0;
+    int err = kill(proc->outer_pid, sig) < 0 ? -errno : 0;
     ctrl_send_err_reply(SWIPTERMD_OP_PROCESS_SIGNAL, req_id, err);
 }

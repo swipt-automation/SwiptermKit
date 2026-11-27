@@ -9,22 +9,17 @@
 #include <string.h>
 
 enum {
-    SWIPTERMD_STAT_WIRE_SIZE = 88,
     SWIPTERMD_MIRROR_ENTRY_WIRE_SIZE = 20,
-    SWIPTERMD_HELLO_REQ_SIZE = 16,
+    SWIPTERMD_HELLO_REQ_SIZE = 12,
     SWIPTERMD_ERR_REPLY_SIZE = 4,
-    SWIPTERMD_HALT_REQ_SIZE = 4,
+    SWIPTERMD_U32_MSG_SIZE = 4,
     SWIPTERMD_HALT_NOTIFY_SIZE = 8,
     SWIPTERMD_RESUME_REQ_SIZE = 8,
-    SWIPTERMD_READY_NOTIFY_SIZE = 4,
-    SWIPTERMD_STOPPED_NOTIFY_SIZE = 4,
-    SWIPTERMD_SPAWN_REPLY_SIZE = 8,
-    SWIPTERMD_PROCESS_EXIT_SIZE = 12,
-    SWIPTERMD_PROCESS_SIGNAL_REQ_SIZE = 9,
+    SWIPTERMD_SPAWN_REPLY_SIZE = 4,
+    SWIPTERMD_PROCESS_EXIT_SIZE = 8,
+    SWIPTERMD_PROCESS_SIGNAL_REQ_SIZE = 8,
     SWIPTERMD_PTY_CREATE_REQ_SIZE = 16,
-    SWIPTERMD_PTY_CREATE_REPLY_SIZE = 8,
     SWIPTERMD_PTY_RESIZE_REQ_SIZE = 8,
-    SWIPTERMD_PTY_CLOSE_REQ_SIZE = 4,
     SWIPTERMD_CMD_CANCEL_SIZE = 8,
     SWIPTERMD_CMD_FINISH_SIZE = 8,
     SWIPTERMD_DEV_OPEN_REQ_SIZE = 8,
@@ -33,7 +28,6 @@ enum {
     SWIPTERMD_DEV_WRITE_REPLY_SIZE = 8,
     SWIPTERMD_DEV_CLOSE_REQ_SIZE = 12,
     SWIPTERMD_DISK_ATTACH_REQ_SIZE = 9,
-    SWIPTERMD_DISK_DETACH_REQ_SIZE = 4,
 };
 
 enum {
@@ -66,16 +60,6 @@ typedef struct swiptermd_slice {
     uint32_t len;
 } swiptermd_slice_t;
 
-static inline swiptermd_buf_w_t swiptermd_buf_w_init(uint8_t *data, size_t cap) {
-    swiptermd_buf_w_t w = {data, cap, 0, false};
-    return w;
-}
-
-static inline swiptermd_buf_r_t swiptermd_buf_r_init(const uint8_t *data, size_t len) {
-    swiptermd_buf_r_t r = {data, len, 0, false};
-    return r;
-}
-
 static inline bool swiptermd_w_reserve(swiptermd_buf_w_t *w, size_t n) {
     if (w->overflow || n > w->cap - w->len) {
         w->overflow = true;
@@ -104,19 +88,11 @@ static inline void swiptermd_w_u32(swiptermd_buf_w_t *w, uint32_t v) {
     w->len += 4;
 }
 
-static inline void swiptermd_w_i32(swiptermd_buf_w_t *w, int32_t v) {
-    swiptermd_w_u32(w, (uint32_t)v);
-}
-
 static inline void swiptermd_w_u64(swiptermd_buf_w_t *w, uint64_t v) {
     if (!swiptermd_w_reserve(w, 8))
         return;
     swiptermd_put_be64(w->data + w->len, v);
     w->len += 8;
-}
-
-static inline void swiptermd_w_i64(swiptermd_buf_w_t *w, int64_t v) {
-    swiptermd_w_u64(w, (uint64_t)v);
 }
 
 static inline void swiptermd_w_raw(swiptermd_buf_w_t *w, const void *src, size_t len) {
@@ -173,20 +149,12 @@ static inline uint32_t swiptermd_r_u32(swiptermd_buf_r_t *r) {
     return v;
 }
 
-static inline int32_t swiptermd_r_i32(swiptermd_buf_r_t *r) {
-    return (int32_t)swiptermd_r_u32(r);
-}
-
 static inline uint64_t swiptermd_r_u64(swiptermd_buf_r_t *r) {
     if (!swiptermd_r_avail(r, 8))
         return 0;
     uint64_t v = swiptermd_get_be64(r->data + r->pos);
     r->pos += 8;
     return v;
-}
-
-static inline int64_t swiptermd_r_i64(swiptermd_buf_r_t *r) {
-    return (int64_t)swiptermd_r_u64(r);
 }
 
 static inline void swiptermd_r_raw(swiptermd_buf_r_t *r, void *dst, size_t len) {
@@ -220,38 +188,6 @@ static inline bool swiptermd_r_str_copy(swiptermd_buf_r_t *r, char *dst, size_t 
     return true;
 }
 
-static inline void swiptermd_stat_encode(swiptermd_buf_w_t *w, const swiptermd_stat_wire_t *st) {
-    swiptermd_w_u32(w, st->mode);
-    swiptermd_w_u32(w, st->uid);
-    swiptermd_w_u32(w, st->gid);
-    swiptermd_w_u32(w, st->nlink);
-    swiptermd_w_u64(w, st->size);
-    swiptermd_w_u64(w, st->inode);
-    swiptermd_w_u64(w, st->rdev);
-    swiptermd_w_i64(w, st->atime_sec);
-    swiptermd_w_i64(w, st->atime_nsec);
-    swiptermd_w_i64(w, st->mtime_sec);
-    swiptermd_w_i64(w, st->mtime_nsec);
-    swiptermd_w_i64(w, st->ctime_sec);
-    swiptermd_w_i64(w, st->ctime_nsec);
-}
-
-static inline void swiptermd_stat_decode(swiptermd_buf_r_t *r, swiptermd_stat_wire_t *st) {
-    st->mode = swiptermd_r_u32(r);
-    st->uid = swiptermd_r_u32(r);
-    st->gid = swiptermd_r_u32(r);
-    st->nlink = swiptermd_r_u32(r);
-    st->size = swiptermd_r_u64(r);
-    st->inode = swiptermd_r_u64(r);
-    st->rdev = swiptermd_r_u64(r);
-    st->atime_sec = swiptermd_r_i64(r);
-    st->atime_nsec = swiptermd_r_i64(r);
-    st->mtime_sec = swiptermd_r_i64(r);
-    st->mtime_nsec = swiptermd_r_i64(r);
-    st->ctime_sec = swiptermd_r_i64(r);
-    st->ctime_nsec = swiptermd_r_i64(r);
-}
-
 static inline void swiptermd_mirror_entry_encode(swiptermd_buf_w_t *w,
                                                  const swiptermd_mirror_entry_t *e) {
     swiptermd_w_u8(w, e->family);
@@ -281,19 +217,17 @@ static inline void swiptermd_mirror_unpack_resource_id(uint32_t resource_id,
 
 static inline size_t swiptermd_enc_hello(uint8_t out[SWIPTERMD_HELLO_REQ_SIZE],
                                          uint64_t session_nonce, uint32_t caps) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_HELLO_REQ_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_HELLO_REQ_SIZE};
     swiptermd_w_u64(&w, session_nonce);
     swiptermd_w_u32(&w, caps);
-    swiptermd_w_u32(&w, 0);
     return w.len;
 }
 
 static inline bool swiptermd_dec_hello(const uint8_t *in, size_t len,
                                        uint64_t *session_nonce, uint32_t *caps) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *session_nonce = swiptermd_r_u64(&r);
     *caps = swiptermd_r_u32(&r);
-    (void)swiptermd_r_u32(&r);
     return !r.underflow;
 }
 
@@ -309,9 +243,8 @@ static inline bool swiptermd_dec_err(const uint8_t *in, size_t len, int32_t *err
     return true;
 }
 
-static inline bool swiptermd_enc_configure_init(swiptermd_buf_w_t *w, uint32_t init_mode,
-                                                const char *hostname, const char *host_commands_dir) {
-    swiptermd_w_u32(w, init_mode);
+static inline bool swiptermd_enc_configure_init(swiptermd_buf_w_t *w, const char *hostname,
+                                                const char *host_commands_dir) {
     swiptermd_w_str(w, hostname);
     swiptermd_w_str(w, host_commands_dir);
     return !w->overflow;
@@ -331,31 +264,19 @@ static inline bool swiptermd_enc_start_init(swiptermd_buf_w_t *w, uint32_t init_
     return !w->overflow;
 }
 
-static inline size_t swiptermd_enc_halt_req(uint8_t out[SWIPTERMD_HALT_REQ_SIZE], uint32_t flags) {
-    swiptermd_put_be32(out, flags);
-    return SWIPTERMD_HALT_REQ_SIZE;
-}
-
-static inline bool swiptermd_dec_halt_req(const uint8_t *in, size_t len, uint32_t *flags) {
-    if (len < SWIPTERMD_HALT_REQ_SIZE)
-        return false;
-    *flags = swiptermd_get_be32(in);
-    return true;
-}
-
 static inline size_t swiptermd_enc_halt_notify(uint8_t out[SWIPTERMD_HALT_NOTIFY_SIZE],
                                                uint32_t reason, int32_t status) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_HALT_NOTIFY_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_HALT_NOTIFY_SIZE};
     swiptermd_w_u32(&w, reason);
-    swiptermd_w_i32(&w, status);
+    swiptermd_w_u32(&w, (uint32_t)status);
     return w.len;
 }
 
 static inline bool swiptermd_dec_halt_notify(const uint8_t *in, size_t len,
                                              uint32_t *reason, int32_t *status) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *reason = swiptermd_r_u32(&r);
-    *status = swiptermd_r_i32(&r);
+    *status = (int32_t)swiptermd_r_u32(&r);
     return !r.underflow;
 }
 
@@ -371,13 +292,13 @@ static inline bool swiptermd_dec_resume_req(const uint8_t *buf, size_t len, int6
     return true;
 }
 
-static inline size_t swiptermd_enc_u32_notify(uint8_t out[4], uint32_t value) {
+static inline size_t swiptermd_enc_u32(uint8_t out[SWIPTERMD_U32_MSG_SIZE], uint32_t value) {
     swiptermd_put_be32(out, value);
-    return 4;
+    return SWIPTERMD_U32_MSG_SIZE;
 }
 
-static inline bool swiptermd_dec_u32_notify(const uint8_t *in, size_t len, uint32_t *value) {
-    if (len < 4)
+static inline bool swiptermd_dec_u32(const uint8_t *in, size_t len, uint32_t *value) {
+    if (len < SWIPTERMD_U32_MSG_SIZE)
         return false;
     *value = swiptermd_get_be32(in);
     return true;
@@ -403,7 +324,6 @@ static inline bool swiptermd_enc_spawn_req(swiptermd_buf_w_t *w, uint32_t proces
     swiptermd_w_u8(w, stdio_mode[0]);
     swiptermd_w_u8(w, stdio_mode[1]);
     swiptermd_w_u8(w, stdio_mode[2]);
-    swiptermd_w_u8(w, 0);
     for (int i = 0; i < 3; i++)
         swiptermd_w_u32(w, stdio_pty_id[i]);
     for (int i = 0; i < 3; i++)
@@ -417,7 +337,7 @@ static inline bool swiptermd_enc_spawn_req(swiptermd_buf_w_t *w, uint32_t proces
 
 static inline size_t swiptermd_enc_disk_attach_req(uint8_t out[SWIPTERMD_DISK_ATTACH_REQ_SIZE], uint32_t disk_id,
                                                    uint32_t slot, bool read_only) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_DISK_ATTACH_REQ_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_DISK_ATTACH_REQ_SIZE};
     swiptermd_w_u32(&w, disk_id);
     swiptermd_w_u32(&w, slot);
     swiptermd_w_u8(&w, read_only ? 1 : 0);
@@ -428,7 +348,7 @@ static inline bool swiptermd_dec_disk_attach_req(const uint8_t *in, size_t len, 
                                                  bool *read_only) {
     if (len < SWIPTERMD_DISK_ATTACH_REQ_SIZE)
         return false;
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *disk_id = swiptermd_r_u32(&r);
     *slot = swiptermd_r_u32(&r);
     *read_only = swiptermd_r_u8(&r) != 0;
@@ -450,62 +370,53 @@ static inline bool swiptermd_enc_disk_spawn_prefix(swiptermd_buf_w_t *w, uint32_
     return !w->overflow;
 }
 
-static inline size_t swiptermd_enc_spawn_reply(uint8_t out[SWIPTERMD_SPAWN_REPLY_SIZE],
-                                               int32_t err, int32_t pid) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_SPAWN_REPLY_SIZE);
-    swiptermd_w_i32(&w, err);
-    swiptermd_w_i32(&w, pid);
+static inline size_t swiptermd_enc_spawn_reply(uint8_t out[SWIPTERMD_SPAWN_REPLY_SIZE], int32_t err) {
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_SPAWN_REPLY_SIZE};
+    swiptermd_w_u32(&w, (uint32_t)err);
     return w.len;
 }
 
-static inline bool swiptermd_dec_spawn_reply(const uint8_t *in, size_t len,
-                                             int32_t *err, int32_t *pid) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
-    *err = swiptermd_r_i32(&r);
-    *pid = swiptermd_r_i32(&r);
+static inline bool swiptermd_dec_spawn_reply(const uint8_t *in, size_t len, int32_t *err) {
+    swiptermd_buf_r_t r = {.data = in, .len = len};
+    *err = (int32_t)swiptermd_r_u32(&r);
     return !r.underflow;
 }
 
 static inline size_t swiptermd_enc_process_exit(uint8_t out[SWIPTERMD_PROCESS_EXIT_SIZE],
-                                                uint32_t process_id, int32_t pid, int32_t status) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_PROCESS_EXIT_SIZE);
+                                                uint32_t process_id, int32_t status) {
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_PROCESS_EXIT_SIZE};
     swiptermd_w_u32(&w, process_id);
-    swiptermd_w_i32(&w, pid);
-    swiptermd_w_i32(&w, status);
+    swiptermd_w_u32(&w, (uint32_t)status);
     return w.len;
 }
 
 static inline bool swiptermd_dec_process_exit(const uint8_t *in, size_t len,
-                                              uint32_t *process_id, int32_t *pid, int32_t *status) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+                                              uint32_t *process_id, int32_t *status) {
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *process_id = swiptermd_r_u32(&r);
-    *pid = swiptermd_r_i32(&r);
-    *status = swiptermd_r_i32(&r);
+    *status = (int32_t)swiptermd_r_u32(&r);
     return !r.underflow;
 }
 
 static inline size_t swiptermd_enc_process_signal(uint8_t out[SWIPTERMD_PROCESS_SIGNAL_REQ_SIZE],
-                                                  uint32_t process_id, int32_t sig, bool to_group) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_PROCESS_SIGNAL_REQ_SIZE);
+                                                  uint32_t process_id, int32_t sig) {
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_PROCESS_SIGNAL_REQ_SIZE};
     swiptermd_w_u32(&w, process_id);
-    swiptermd_w_i32(&w, sig);
-    swiptermd_w_u8(&w, to_group ? 1 : 0);
+    swiptermd_w_u32(&w, (uint32_t)sig);
     return w.len;
 }
 
-static inline bool swiptermd_dec_process_signal(const uint8_t *in, size_t len,
-                                                uint32_t *process_id, int32_t *sig, bool *to_group) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+static inline bool swiptermd_dec_process_signal(const uint8_t *in, size_t len, uint32_t *process_id, int32_t *sig) {
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *process_id = swiptermd_r_u32(&r);
-    *sig = swiptermd_r_i32(&r);
-    *to_group = swiptermd_r_u8(&r) != 0;
+    *sig = (int32_t)swiptermd_r_u32(&r);
     return !r.underflow;
 }
 
 static inline size_t swiptermd_enc_pty_create_req(uint8_t out[SWIPTERMD_PTY_CREATE_REQ_SIZE],
                                                   uint32_t pty_id, uint16_t cols, uint16_t rows,
                                                   uint64_t stream_token) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_PTY_CREATE_REQ_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_PTY_CREATE_REQ_SIZE};
     swiptermd_w_u32(&w, pty_id);
     swiptermd_w_u16(&w, cols);
     swiptermd_w_u16(&w, rows);
@@ -516,7 +427,7 @@ static inline size_t swiptermd_enc_pty_create_req(uint8_t out[SWIPTERMD_PTY_CREA
 static inline bool swiptermd_dec_pty_create_req(const uint8_t *in, size_t len,
                                                 uint32_t *pty_id, uint16_t *cols, uint16_t *rows,
                                                 uint64_t *stream_token) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *pty_id = swiptermd_r_u32(&r);
     *cols = swiptermd_r_u16(&r);
     *rows = swiptermd_r_u16(&r);
@@ -524,25 +435,9 @@ static inline bool swiptermd_dec_pty_create_req(const uint8_t *in, size_t len,
     return !r.underflow;
 }
 
-static inline size_t swiptermd_enc_pty_create_reply(uint8_t out[SWIPTERMD_PTY_CREATE_REPLY_SIZE],
-                                                    int32_t err, uint32_t pts_num) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_PTY_CREATE_REPLY_SIZE);
-    swiptermd_w_i32(&w, err);
-    swiptermd_w_u32(&w, pts_num);
-    return w.len;
-}
-
-static inline bool swiptermd_dec_pty_create_reply(const uint8_t *in, size_t len,
-                                                  int32_t *err, uint32_t *pts_num) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
-    *err = swiptermd_r_i32(&r);
-    *pts_num = swiptermd_r_u32(&r);
-    return !r.underflow;
-}
-
 static inline size_t swiptermd_enc_pty_resize(uint8_t out[SWIPTERMD_PTY_RESIZE_REQ_SIZE],
                                               uint32_t pty_id, uint16_t cols, uint16_t rows) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_PTY_RESIZE_REQ_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_PTY_RESIZE_REQ_SIZE};
     swiptermd_w_u32(&w, pty_id);
     swiptermd_w_u16(&w, cols);
     swiptermd_w_u16(&w, rows);
@@ -551,31 +446,11 @@ static inline size_t swiptermd_enc_pty_resize(uint8_t out[SWIPTERMD_PTY_RESIZE_R
 
 static inline bool swiptermd_dec_pty_resize(const uint8_t *in, size_t len,
                                             uint32_t *pty_id, uint16_t *cols, uint16_t *rows) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *pty_id = swiptermd_r_u32(&r);
     *cols = swiptermd_r_u16(&r);
     *rows = swiptermd_r_u16(&r);
     return !r.underflow;
-}
-
-static inline size_t swiptermd_enc_pty_close(uint8_t out[SWIPTERMD_PTY_CLOSE_REQ_SIZE],
-                                             uint32_t pty_id) {
-    swiptermd_put_be32(out, pty_id);
-    return SWIPTERMD_PTY_CLOSE_REQ_SIZE;
-}
-
-static inline bool swiptermd_dec_pty_close(const uint8_t *in, size_t len, uint32_t *pty_id) {
-    if (len < SWIPTERMD_PTY_CLOSE_REQ_SIZE)
-        return false;
-    *pty_id = swiptermd_get_be32(in);
-    return true;
-}
-
-static inline bool swiptermd_enc_fs_stat_req(swiptermd_buf_w_t *w, bool follow_symlinks,
-                                             const char *path) {
-    swiptermd_w_u8(w, follow_symlinks ? 1 : 0);
-    swiptermd_w_str(w, path);
-    return !w->overflow;
 }
 
 static inline bool swiptermd_enc_fs_read_req(swiptermd_buf_w_t *w, const char *path,
@@ -589,8 +464,8 @@ static inline bool swiptermd_enc_fs_read_req(swiptermd_buf_w_t *w, const char *p
 static inline bool swiptermd_dec_fs_read_reply(const uint8_t *in, size_t len,
                                                int32_t *err, bool *eof,
                                                swiptermd_slice_t *data) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
-    *err = swiptermd_r_i32(&r);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
+    *err = (int32_t)swiptermd_r_u32(&r);
     if (r.underflow)
         return false;
     if (*err < 0) {
@@ -602,19 +477,6 @@ static inline bool swiptermd_dec_fs_read_reply(const uint8_t *in, size_t len,
     *eof = swiptermd_r_u8(&r) != 0;
     *data = swiptermd_r_bytes(&r);
     return !r.underflow;
-}
-
-static inline void swiptermd_fs_list_entry_encode(swiptermd_buf_w_t *w,
-                                                  uint32_t mode, const char *name) {
-    swiptermd_w_u32(w, mode);
-    swiptermd_w_str(w, name);
-}
-
-static inline bool swiptermd_fs_list_entry_decode(swiptermd_buf_r_t *r,
-                                                  uint32_t *mode, swiptermd_slice_t *name) {
-    *mode = swiptermd_r_u32(r);
-    *name = swiptermd_r_bytes(r);
-    return !r->underflow;
 }
 
 static inline bool swiptermd_enc_fs_write_req(swiptermd_buf_w_t *w, uint32_t mode, uint32_t flags,
@@ -634,66 +496,43 @@ static inline bool swiptermd_enc_fs_mkdir_req(swiptermd_buf_w_t *w, uint32_t mod
     return !w->overflow;
 }
 
-static inline bool swiptermd_enc_fs_remove_req(swiptermd_buf_w_t *w, bool recursive,
-                                               const char *path) {
-    swiptermd_w_u8(w, recursive ? 1 : 0);
-    swiptermd_w_str(w, path);
-    return !w->overflow;
-}
-
-static inline bool swiptermd_enc_fs_mount_virtiofs_req(swiptermd_buf_w_t *w, bool read_only,
-                                                       bool is_directory, const char *tag,
+static inline bool swiptermd_enc_fs_mount_virtiofs_req(swiptermd_buf_w_t *w, bool read_only, const char *tag,
                                                        const char *guest_path) {
     swiptermd_w_u8(w, read_only ? 1 : 0);
-    swiptermd_w_u8(w, is_directory ? 1 : 0);
     swiptermd_w_str(w, tag);
     swiptermd_w_str(w, guest_path);
     return !w->overflow;
 }
 
-static inline bool swiptermd_enc_cmd_start(swiptermd_buf_w_t *w, uint32_t invocation_id,
-                                           uint64_t stream_token, const char *name,
-                                           const char *working_dir,
-                                           const char *const *argv, uint32_t argc,
-                                           const char *const *envp, uint32_t envc) {
-    swiptermd_w_u32(w, invocation_id);
-    swiptermd_w_u64(w, stream_token);
-    swiptermd_w_str(w, name);
-    swiptermd_w_str(w, working_dir);
-    swiptermd_w_strv(w, argv, argc);
-    swiptermd_w_strv(w, envp, envc);
-    return !w->overflow;
-}
-
 static inline size_t swiptermd_enc_cmd_cancel(uint8_t out[SWIPTERMD_CMD_CANCEL_SIZE],
                                               uint32_t invocation_id, int32_t sig) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_CMD_CANCEL_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_CMD_CANCEL_SIZE};
     swiptermd_w_u32(&w, invocation_id);
-    swiptermd_w_i32(&w, sig);
+    swiptermd_w_u32(&w, (uint32_t)sig);
     return w.len;
 }
 
 static inline bool swiptermd_dec_cmd_cancel(const uint8_t *in, size_t len,
                                             uint32_t *invocation_id, int32_t *sig) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *invocation_id = swiptermd_r_u32(&r);
-    *sig = swiptermd_r_i32(&r);
+    *sig = (int32_t)swiptermd_r_u32(&r);
     return !r.underflow;
 }
 
 static inline size_t swiptermd_enc_cmd_finish(uint8_t out[SWIPTERMD_CMD_FINISH_SIZE],
                                               uint32_t invocation_id, int32_t status) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_CMD_FINISH_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_CMD_FINISH_SIZE};
     swiptermd_w_u32(&w, invocation_id);
-    swiptermd_w_i32(&w, status);
+    swiptermd_w_u32(&w, (uint32_t)status);
     return w.len;
 }
 
 static inline bool swiptermd_dec_cmd_finish(const uint8_t *in, size_t len,
                                             uint32_t *invocation_id, int32_t *status) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *invocation_id = swiptermd_r_u32(&r);
-    *status = swiptermd_r_i32(&r);
+    *status = (int32_t)swiptermd_r_u32(&r);
     return !r.underflow;
 }
 
@@ -706,7 +545,7 @@ static inline bool swiptermd_enc_register_device(swiptermd_buf_w_t *w, uint32_t 
 
 static inline size_t swiptermd_enc_dev_open_req(uint8_t out[SWIPTERMD_DEV_OPEN_REQ_SIZE],
                                                 uint32_t device_id, uint32_t flags) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_DEV_OPEN_REQ_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_DEV_OPEN_REQ_SIZE};
     swiptermd_w_u32(&w, device_id);
     swiptermd_w_u32(&w, flags);
     return w.len;
@@ -714,7 +553,7 @@ static inline size_t swiptermd_enc_dev_open_req(uint8_t out[SWIPTERMD_DEV_OPEN_R
 
 static inline bool swiptermd_dec_dev_open_req(const uint8_t *in, size_t len,
                                               uint32_t *device_id, uint32_t *flags) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *device_id = swiptermd_r_u32(&r);
     *flags = swiptermd_r_u32(&r);
     return !r.underflow;
@@ -722,16 +561,16 @@ static inline bool swiptermd_dec_dev_open_req(const uint8_t *in, size_t len,
 
 static inline size_t swiptermd_enc_dev_open_reply(uint8_t out[SWIPTERMD_DEV_OPEN_REPLY_SIZE],
                                                   int32_t err, uint64_t fh) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_DEV_OPEN_REPLY_SIZE);
-    swiptermd_w_i32(&w, err);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_DEV_OPEN_REPLY_SIZE};
+    swiptermd_w_u32(&w, (uint32_t)err);
     swiptermd_w_u64(&w, fh);
     return w.len;
 }
 
 static inline bool swiptermd_dec_dev_open_reply(const uint8_t *in, size_t len,
                                                 int32_t *err, uint64_t *fh) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
-    *err = swiptermd_r_i32(&r);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
+    *err = (int32_t)swiptermd_r_u32(&r);
     *fh = swiptermd_r_u64(&r);
     return !r.underflow;
 }
@@ -739,7 +578,7 @@ static inline bool swiptermd_dec_dev_open_reply(const uint8_t *in, size_t len,
 static inline size_t swiptermd_enc_dev_read_req(uint8_t out[SWIPTERMD_DEV_READ_REQ_SIZE],
                                                 uint32_t device_id, uint64_t fh,
                                                 uint32_t max_len) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_DEV_READ_REQ_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_DEV_READ_REQ_SIZE};
     swiptermd_w_u32(&w, device_id);
     swiptermd_w_u64(&w, fh);
     swiptermd_w_u32(&w, max_len);
@@ -749,7 +588,7 @@ static inline size_t swiptermd_enc_dev_read_req(uint8_t out[SWIPTERMD_DEV_READ_R
 static inline bool swiptermd_dec_dev_read_req(const uint8_t *in, size_t len,
                                               uint32_t *device_id, uint64_t *fh,
                                               uint32_t *max_len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *device_id = swiptermd_r_u32(&r);
     *fh = swiptermd_r_u64(&r);
     *max_len = swiptermd_r_u32(&r);
@@ -758,7 +597,7 @@ static inline bool swiptermd_dec_dev_read_req(const uint8_t *in, size_t len,
 
 static inline bool swiptermd_enc_dev_read_reply(swiptermd_buf_w_t *w, int32_t err,
                                                 const void *data, uint32_t len) {
-    swiptermd_w_i32(w, err);
+    swiptermd_w_u32(w, (uint32_t)err);
     if (err >= 0)
         swiptermd_w_bytes(w, data, len);
     return !w->overflow;
@@ -766,8 +605,8 @@ static inline bool swiptermd_enc_dev_read_reply(swiptermd_buf_w_t *w, int32_t er
 
 static inline bool swiptermd_dec_dev_read_reply(const uint8_t *in, size_t len,
                                                 int32_t *err, swiptermd_slice_t *data) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
-    *err = swiptermd_r_i32(&r);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
+    *err = (int32_t)swiptermd_r_u32(&r);
     if (r.underflow)
         return false;
     if (*err < 0) {
@@ -790,7 +629,7 @@ static inline bool swiptermd_enc_dev_write_req(swiptermd_buf_w_t *w, uint32_t de
 static inline bool swiptermd_dec_dev_write_req(const uint8_t *in, size_t len,
                                                uint32_t *device_id, uint64_t *fh,
                                                swiptermd_slice_t *data) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *device_id = swiptermd_r_u32(&r);
     *fh = swiptermd_r_u64(&r);
     *data = swiptermd_r_bytes(&r);
@@ -799,23 +638,23 @@ static inline bool swiptermd_dec_dev_write_req(const uint8_t *in, size_t len,
 
 static inline size_t swiptermd_enc_dev_write_reply(uint8_t out[SWIPTERMD_DEV_WRITE_REPLY_SIZE],
                                                    int32_t err, uint32_t written) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_DEV_WRITE_REPLY_SIZE);
-    swiptermd_w_i32(&w, err);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_DEV_WRITE_REPLY_SIZE};
+    swiptermd_w_u32(&w, (uint32_t)err);
     swiptermd_w_u32(&w, written);
     return w.len;
 }
 
 static inline bool swiptermd_dec_dev_write_reply(const uint8_t *in, size_t len,
                                                  int32_t *err, uint32_t *written) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
-    *err = swiptermd_r_i32(&r);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
+    *err = (int32_t)swiptermd_r_u32(&r);
     *written = swiptermd_r_u32(&r);
     return !r.underflow;
 }
 
 static inline size_t swiptermd_enc_dev_close_req(uint8_t out[SWIPTERMD_DEV_CLOSE_REQ_SIZE],
                                                  uint32_t device_id, uint64_t fh) {
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_DEV_CLOSE_REQ_SIZE);
+    swiptermd_buf_w_t w = {.data = out, .cap = SWIPTERMD_DEV_CLOSE_REQ_SIZE};
     swiptermd_w_u32(&w, device_id);
     swiptermd_w_u64(&w, fh);
     return w.len;
@@ -823,7 +662,7 @@ static inline size_t swiptermd_enc_dev_close_req(uint8_t out[SWIPTERMD_DEV_CLOSE
 
 static inline bool swiptermd_dec_dev_close_req(const uint8_t *in, size_t len,
                                                uint32_t *device_id, uint64_t *fh) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    swiptermd_buf_r_t r = {.data = in, .len = len};
     *device_id = swiptermd_r_u32(&r);
     *fh = swiptermd_r_u64(&r);
     return !r.underflow;

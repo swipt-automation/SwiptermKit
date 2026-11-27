@@ -1,6 +1,8 @@
 #define _DARWIN_C_SOURCE
 
+#include "ext4_format.h"
 #include "host_internal.h"
+#include "host_util.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -11,58 +13,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-typedef struct link_map {
-    struct link_slot {
-        uint32_t ino;
-        char *path;
-    } *slots;
-    size_t cap;
-    size_t count;
-} link_map_t;
-
-static char **link_map_slot(link_map_t *m, uint32_t ino, bool *found) {
-    if ((m->count + 1) * 2 > m->cap) {
-        size_t cap = m->cap ? m->cap * 2 : 256;
-        struct link_slot *slots = calloc(cap, sizeof(*slots));
-        if (!slots) {
-            return NULL;
-        }
-        for (size_t i = 0; i < m->cap; i++) {
-            if (m->slots[i].ino != 0) {
-                size_t pos = (m->slots[i].ino * 2654435761U) & (cap - 1);
-                while (slots[pos].ino != 0) {
-                    pos = (pos + 1) & (cap - 1);
-                }
-                slots[pos] = m->slots[i];
-            }
-        }
-        free(m->slots);
-        m->slots = slots;
-        m->cap = cap;
-    }
-    size_t pos = (ino * 2654435761U) & (m->cap - 1);
-    while (m->slots[pos].ino != 0 && m->slots[pos].ino != ino) {
-        pos = (pos + 1) & (m->cap - 1);
-    }
-    *found = m->slots[pos].ino == ino;
-    if (!*found) {
-        m->slots[pos].ino = ino;
-        m->count++;
-    }
-    return &m->slots[pos].path;
-}
-
-static void link_map_free(link_map_t *m) {
-    for (size_t i = 0; i < m->cap; i++) {
-        free(m->slots[i].path);
-    }
-    free(m->slots);
-}
-
 typedef struct export_state {
     struct archive *a;
     ext4_fs_t *fs;
-    link_map_t links;
+    ino_map_t links;
     uint64_t total;
     uint64_t done;
     void *context;
@@ -85,11 +39,10 @@ static int count_export_entry(void *ctx, const char *path, const ext4_entry_info
     if (S_ISSOCK(node->mode)) {
         return report_progress(st);
     }
-    // Count payload bytes once per inode, plus a tar header for every entry.
     uint64_t bytes = S_ISREG(node->mode) ? node->size : 0;
     if (bytes > 0 && node->nlink > 1) {
         bool found = false;
-        if (!link_map_slot(&st->links, node->ino, &found)) {
+        if (!ino_map_slot(&st->links, node->ino, &found)) {
             return -ENOMEM;
         }
         if (found) {
@@ -166,28 +119,20 @@ static int describe_holes(export_state_t *st, const ext4_node_t *node, struct ar
     return rc;
 }
 
-static uint16_t get_le16(const uint8_t *p) {
-    return (uint16_t)(p[0] | (p[1] << 8));
-}
-
-static uint32_t get_le32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
 static int add_posix_acl(struct archive_entry *entry, int type, const ext4_xattr_info_t *xattr) {
     const uint8_t *value = xattr->value;
-    if (xattr->size < 4 || get_le32(value) != 2 || (xattr->size - 4) % 8 != 0) {
+    if (xattr->size < 4 || get_le32(value) != POSIX_ACL_XATTR_VERSION || (xattr->size - 4) % 8 != 0) {
         return -EIO;
     }
     for (size_t off = 4; off < xattr->size; off += 8) {
         int tag;
         switch (get_le16(value + off)) {
-        case 0x01: tag = ARCHIVE_ENTRY_ACL_USER_OBJ; break;
-        case 0x02: tag = ARCHIVE_ENTRY_ACL_USER; break;
-        case 0x04: tag = ARCHIVE_ENTRY_ACL_GROUP_OBJ; break;
-        case 0x08: tag = ARCHIVE_ENTRY_ACL_GROUP; break;
-        case 0x10: tag = ARCHIVE_ENTRY_ACL_MASK; break;
-        case 0x20: tag = ARCHIVE_ENTRY_ACL_OTHER; break;
+        case EXT4_ACL_USER_OBJ: tag = ARCHIVE_ENTRY_ACL_USER_OBJ; break;
+        case EXT4_ACL_USER: tag = ARCHIVE_ENTRY_ACL_USER; break;
+        case EXT4_ACL_GROUP_OBJ: tag = ARCHIVE_ENTRY_ACL_GROUP_OBJ; break;
+        case EXT4_ACL_GROUP: tag = ARCHIVE_ENTRY_ACL_GROUP; break;
+        case EXT4_ACL_MASK: tag = ARCHIVE_ENTRY_ACL_MASK; break;
+        case EXT4_ACL_OTHER: tag = ARCHIVE_ENTRY_ACL_OTHER; break;
         default: return -EIO;
         }
         uint16_t perm = get_le16(value + off + 2);
@@ -215,7 +160,7 @@ static int export_entry(void *ctx, const char *path, const ext4_entry_info_t *in
     archive_entry_set_mode(entry, (mode_t)node->mode);
     archive_entry_set_uid(entry, node->uid);
     archive_entry_set_gid(entry, node->gid);
-    archive_entry_set_mtime(entry, (time_t)info->mtime, (long)info->mtime_nsec);
+    archive_entry_set_mtime(entry, (time_t)node->mtime, (long)node->mtime_nsec);
     for (size_t i = 0; i < info->xattr_count; i++) {
         const ext4_xattr_info_t *xattr = &info->xattrs[i];
         int rc = 0;
@@ -235,7 +180,7 @@ static int export_entry(void *ctx, const char *path, const ext4_entry_info_t *in
     bool hardlink = false;
     if (!S_ISDIR(node->mode) && node->nlink > 1) {
         bool found = false;
-        char **slot = link_map_slot(&st->links, node->ino, &found);
+        char **slot = ino_map_slot(&st->links, node->ino, &found);
         if (!slot) {
             archive_entry_free(entry);
             return -ENOMEM;
@@ -258,7 +203,7 @@ static int export_entry(void *ctx, const char *path, const ext4_entry_info_t *in
                 return rc;
             }
         } else if (S_ISLNK(node->mode)) {
-            archive_entry_set_symlink(entry, info->symlink_target ? info->symlink_target : "");
+            archive_entry_set_symlink(entry, info->symlink_target);
         } else if (S_ISCHR(node->mode) || S_ISBLK(node->mode)) {
             archive_entry_set_rdevmajor(entry, (unsigned int)info->rdev_major);
             archive_entry_set_rdevminor(entry, (unsigned int)info->rdev_minor);
@@ -271,7 +216,7 @@ static int export_entry(void *ctx, const char *path, const ext4_entry_info_t *in
         return -EIO;
     }
     if (!hardlink && S_ISREG(node->mode) && node->size > 0) {
-        int rc = ext4_fs_stream(st->fs, node, 0, node->size, write_archive_chunk, st);
+        int rc = ext4_fs_stream(st->fs, node, node->size, write_archive_chunk, st);
         if (rc < 0) {
             return rc;
         }
@@ -280,47 +225,35 @@ static int export_entry(void *ctx, const char *path, const ext4_entry_info_t *in
     return report_progress(st);
 }
 
-static void set_error(char **error_message, const char *what, const char *detail) {
-    if (error_message && !*error_message) {
-        char buf[512];
-        snprintf(buf, sizeof(buf), "%s: %s", what, detail ? detail : "unknown error");
-        *error_message = strdup(buf);
-    }
-}
-
 bool swipterm_root_export(const char *root_path, const char *archive_path,
                           void *context, swipterm_progress_handler progress, char **error_message) {
     if (error_message) {
         *error_message = NULL;
     }
-    if (!root_path || !archive_path) {
-        set_error(error_message, "invalid arguments", NULL);
-        return false;
-    }
     char disk_path[1024];
     if (snprintf(disk_path, sizeof(disk_path), "%s/root.ext4", root_path) >= (int)sizeof(disk_path)) {
-        set_error(error_message, "invalid root path", strerror(ENAMETOOLONG));
+        set_error_detail(error_message, "invalid root path", strerror(ENAMETOOLONG));
         return false;
     }
     char partial_path[1024];
     if (snprintf(partial_path, sizeof(partial_path), "%s.partial.XXXXXX", archive_path) >= (int)sizeof(partial_path)) {
-        set_error(error_message, "invalid archive path", strerror(ENAMETOOLONG));
+        set_error_detail(error_message, "invalid archive path", strerror(ENAMETOOLONG));
         return false;
     }
     int root_fd = open(root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (root_fd < 0) {
-        set_error(error_message, "failed to open root", strerror(errno));
+        set_error_detail(error_message, "failed to open root", strerror(errno));
         return false;
     }
     if (flock(root_fd, LOCK_SH | LOCK_NB) != 0) {
-        set_error(error_message, "failed to lock root",
-                  errno == EWOULDBLOCK ? "the root is used by a running machine" : strerror(errno));
+        set_error_detail(error_message, "failed to lock root",
+                         errno == EWOULDBLOCK ? "the root is used by a running machine" : strerror(errno));
         close(root_fd);
         return false;
     }
     int disk_fd = open(disk_path, O_RDONLY | O_CLOEXEC);
     if (disk_fd < 0) {
-        set_error(error_message, "failed to open root disk", strerror(errno));
+        set_error_detail(error_message, "failed to open root disk", strerror(errno));
         close(root_fd);
         return false;
     }
@@ -330,28 +263,26 @@ bool swipterm_root_export(const char *root_path, const char *archive_path,
     int archive_fd = -1;
     int rc = ext4_fs_open(disk_fd, &st.fs);
     if (rc < 0) {
-        set_error(error_message, "failed to read root disk", strerror(-rc));
+        set_error_detail(error_message, "failed to read root disk", strerror(-rc));
         goto out;
     }
     if (progress) {
-        // Only read metadata here; file contents are read once, while exporting.
         rc = ext4_fs_walk(st.fs, count_export_entry, &st);
-        link_map_free(&st.links);
-        st.links = (link_map_t){0};
+        ino_map_free(&st.links);
         if (rc < 0) {
-            set_error(error_message, "failed to measure root", strerror(-rc));
+            set_error_detail(error_message, "failed to measure root", strerror(-rc));
             goto out;
         }
     }
     st.a = archive_write_new();
     if (!st.a) {
-        set_error(error_message, "failed to allocate archive writer", NULL);
+        set_error_detail(error_message, "failed to allocate archive writer", NULL);
         goto out;
     }
     if (archive_write_add_filter_gzip(st.a) != ARCHIVE_OK ||
         archive_write_set_format_pax_restricted(st.a) != ARCHIVE_OK ||
         archive_write_set_format_option(st.a, "pax", "hdrcharset", "BINARY") != ARCHIVE_OK) {
-        set_error(error_message, "failed to create archive", archive_error_string(st.a));
+        set_error_detail(error_message, "failed to create archive", archive_error_string(st.a));
         goto out;
     }
     bool staged = true;
@@ -363,25 +294,26 @@ bool swipterm_root_export(const char *root_path, const char *archive_path,
         archive_fd = open(archive_path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0666);
     }
     if (archive_fd < 0) {
-        set_error(error_message, "failed to create archive", strerror(errno));
+        set_error_detail(error_message, "failed to create archive", strerror(errno));
         goto out;
     }
     if (archive_write_open_fd(st.a, archive_fd) != ARCHIVE_OK) {
-        set_error(error_message, "failed to create archive", archive_error_string(st.a));
+        set_error_detail(error_message, "failed to create archive", archive_error_string(st.a));
     } else if ((rc = ext4_fs_walk(st.fs, export_entry, &st)) != 0) {
-        set_error(error_message, "failed to export root", st.archive_failed ? archive_error_string(st.a) : strerror(-rc));
+        set_error_detail(error_message, "failed to export root",
+                         st.archive_failed ? archive_error_string(st.a) : strerror(-rc));
         archive_write_fail(st.a);
     } else if (archive_write_close(st.a) != ARCHIVE_OK) {
-        set_error(error_message, "failed to write archive", archive_error_string(st.a));
+        set_error_detail(error_message, "failed to write archive", archive_error_string(st.a));
     } else if ((rc = report_progress(&st)) != 0) {
-        set_error(error_message, "failed to export root", strerror(-rc));
+        set_error_detail(error_message, "failed to export root", strerror(-rc));
     } else if (fsync(archive_fd) != 0) {
-        set_error(error_message, "failed to write archive", strerror(errno));
+        set_error_detail(error_message, "failed to write archive", strerror(errno));
     } else {
         int closed = close(archive_fd);
         archive_fd = -1;
         if (closed != 0 || (staged && rename(partial_path, archive_path) != 0)) {
-            set_error(error_message, "failed to write archive", strerror(errno));
+            set_error_detail(error_message, "failed to write archive", strerror(errno));
         } else {
             ok = true;
         }
@@ -399,7 +331,7 @@ out:
     if (archive_fd >= 0) {
         close(archive_fd);
     }
-    link_map_free(&st.links);
+    ino_map_free(&st.links);
     ext4_fs_close(st.fs);
     close(disk_fd);
     close(root_fd);

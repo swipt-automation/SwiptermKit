@@ -2,37 +2,18 @@ import CSwiptermKit
 import Foundation
 import os
 
-public struct LinuxRootImageError: LocalizedError, Sendable {
-    public let message: String
-
-    public var errorDescription: String? {
-        message
-    }
-}
-
 public struct LinuxRootImage: Sendable {
-    fileprivate enum Source: Sendable {
-        case file(URL)
-        case data(Data)
-    }
-
     private struct Metadata: Decodable {
         let version: Int
     }
 
-    public static let defaultDiskSize: UInt64 = 64 << 30
-
     private static let metadataName = "swipterm.json"
     fileprivate static let diskName = "root.ext4"
 
-    fileprivate let source: Source
+    fileprivate let url: URL
 
     public static func archive(at url: URL) -> LinuxRootImage {
-        LinuxRootImage(source: .file(url))
-    }
-
-    public static func archive(data: Data) -> LinuxRootImage {
-        LinuxRootImage(source: .data(data))
+        LinuxRootImage(url: url)
     }
 
     public static func isInstalled(at root: URL) -> Bool {
@@ -45,7 +26,6 @@ public struct LinuxRootImage: Sendable {
         return FileManager.default.fileExists(atPath: root.appending(path: diskName).path(percentEncoded: false))
     }
 
-    /// The kernel releases installed in the image at `root`, newest first; the first is what `LinuxRuntime.Configuration.Kernel.installed` boots.
     public static func installedKernels(at root: URL) throws -> [String] {
         var releases: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
         var count = 0
@@ -53,11 +33,9 @@ public struct LinuxRootImage: Sendable {
             try check(swipterm_root_kernels(rootPath, &releases, &count))
         }
         defer { swipterm_free_strings(releases, count) }
-        return (0..<count).map { String(cString: releases![$0]!) }
+        return (0 ..< count).map { String(cString: releases![$0]!) }
     }
 
-    /// The contents of the regular file at `path` in the image at `root`, following symbolic links; `nil` when nothing
-    /// exists there. Throws `LinuxError.EBUSY` while the image is booted, attached or being built.
     public static func contents(of path: String, at root: URL) throws -> Data? {
         var data: UnsafeMutableRawPointer?
         var size = 0
@@ -69,33 +47,7 @@ public struct LinuxRootImage: Sendable {
         return Data(bytesNoCopy: data!, count: size, deallocator: .free)
     }
 
-    /// The type of the file at `path` in the image at `root`, following symbolic links; `nil` when nothing exists there.
-    /// Throws `LinuxError.EBUSY` while the image is booted, attached or being built.
-    public static func fileType(of path: String, at root: URL) throws -> LinuxFileType? {
-        var mode: UInt32 = 0
-        let code = root.withUnsafeFileSystemRepresentation { swipterm_root_stat($0, path, &mode) }
-        if code == -LinuxError.ENOENT.rawValue {
-            return nil
-        }
-        try check(code)
-        return LinuxFileType(mode: mode)
-    }
-
-    /// Replaces an image already installed at `root` once the new one is complete.
-    /// `diskSize` is the capacity of the sparse disk the guest sees; the host stores only the blocks in use.
-    /// Throws when `root` is used by a running machine.
-    public func install(
-        to root: URL,
-        diskSize: UInt64 = defaultDiskSize,
-        progress: (@Sendable (Double) -> Void)? = nil
-    ) async throws {
-        let builder = try LinuxRootImageBuilder(root: root, diskSize: diskSize)
-        try await builder.add(self) { progress?($0 * 0.9) }
-        try await builder.finish()
-        progress?(1)
-    }
-
-    public static func export(from root: URL, to archive: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws {
+    public static func export(from root: URL, to archive: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
         try await run(progress) { context, report, message in
             root.withUnsafeFileSystemRepresentation { rootPath in
                 archive.withUnsafeFileSystemRepresentation { archivePath in
@@ -111,27 +63,27 @@ public struct LinuxRootImage: Sendable {
         var url = url
         try url.setResourceValues(values)
         #if os(iOS)
-        try FileManager.default.setAttributes(
-            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-            ofItemAtPath: url.path(percentEncoded: false)
-        )
+            try FileManager.default.setAttributes(
+                [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                ofItemAtPath: url.path(percentEncoded: false)
+            )
         #endif
     }
 
     fileprivate final class ProgressReporter: @unchecked Sendable {
-        let report: (@Sendable (Double) -> Void)?
+        let report: @Sendable (Double) -> Void
         let cancelled = OSAllocatedUnfairLock(initialState: false)
         var reported = -1.0
         var nextReport = ContinuousClock.now
         var stopped = false
 
-        init(_ report: (@Sendable (Double) -> Void)?) {
+        init(_ report: @escaping @Sendable (Double) -> Void) {
             self.report = report
         }
     }
 
     fileprivate static func run(
-        _ progress: (@Sendable (Double) -> Void)?,
+        _ progress: @escaping @Sendable (Double) -> Void,
         _ body: @escaping @Sendable (
             UnsafeMutableRawPointer?,
             swipterm_progress_handler?,
@@ -149,23 +101,23 @@ public struct LinuxRootImage: Sendable {
                             reporter.stopped = true
                             return false
                         }
-                        if let report = reporter.report, fraction != reporter.reported {
+                        if fraction != reporter.reported {
                             let now = ContinuousClock.now
                             if reporter.reported < 0 || fraction >= 1 || now >= reporter.nextReport {
                                 reporter.reported = fraction
                                 reporter.nextReport = now.advanced(by: .milliseconds(100))
-                                report(fraction)
+                                reporter.report(fraction)
                             }
                         }
                         return true
                     }, &message)
                 }
                 guard succeeded else {
-                    defer { free(message) }
+                    let error = MessageError(consuming: message)
                     if reporter.stopped {
                         throw CancellationError()
                     }
-                    throw LinuxRootImageError(message: message.map { String(cString: $0) } ?? "")
+                    throw error
                 }
             }
         } onCancel: {
@@ -174,23 +126,18 @@ public struct LinuxRootImage: Sendable {
     }
 }
 
-/// The image is installed by `finish()`, replacing an image already installed at `root`; a builder that is released
-/// before then leaves `root` unchanged. A later archive or package replaces the entries of earlier ones.
-/// A module directory under `/lib/modules` or `/usr/lib/modules` whose `modules.dep` is missing or names a module file
-/// it does not contain gets `modules.dep`, `modules.softdep` and `modules.alias` generated from its modules, and loses
-/// its `.bin` indexes.
 public final class LinuxRootImageBuilder: @unchecked Sendable {
+    private static let diskSize: UInt64 = 64 << 30
+
     private let root: URL
     private let handle: OpaquePointer
 
-    /// Throws when `root` is used by a running machine.
-    public init(root: URL, diskSize: UInt64 = LinuxRootImage.defaultDiskSize) throws {
+    public init(root: URL) throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try LinuxRootImage.protect(root)
         var message: UnsafeMutablePointer<CChar>?
-        guard let handle = root.withUnsafeFileSystemRepresentation({ swipterm_root_builder_create($0, diskSize, &message) }) else {
-            defer { free(message) }
-            throw LinuxRootImageError(message: message.map { String(cString: $0) } ?? "")
+        guard let handle = root.withUnsafeFileSystemRepresentation({ swipterm_root_builder_create($0, Self.diskSize, &message) }) else {
+            throw MessageError(consuming: message)
         }
         self.root = root
         self.handle = handle
@@ -200,27 +147,18 @@ public final class LinuxRootImageBuilder: @unchecked Sendable {
         swipterm_root_builder_free(handle)
     }
 
-    public func add(_ image: LinuxRootImage, progress: (@Sendable (Double) -> Void)? = nil) async throws {
-        let source = image.source
+    public func add(_ image: LinuxRootImage, progress: @escaping @Sendable (Double) -> Void) async throws {
+        let url = image.url
         try await LinuxRootImage.run(progress) { context, report, message in
             withExtendedLifetime(self) {
-                switch source {
-                case .file(let url):
-                    url.withUnsafeFileSystemRepresentation { path in
-                        swipterm_root_builder_add_file(self.handle, path, context, report, message)
-                    }
-                case .data(let data):
-                    data.withUnsafeBytes { buffer in
-                        swipterm_root_builder_add_memory(self.handle, buffer.baseAddress, buffer.count, context, report, message)
-                    }
+                url.withUnsafeFileSystemRepresentation { path in
+                    swipterm_root_builder_add_file(self.handle, path, context, report, message)
                 }
             }
         }
     }
 
-    /// Installs the files of a Debian, RPM or tar-based package such as a pacman, APK or XBPS package, without running
-    /// its scripts. The top-level files of a tar-based package are its metadata and are not installed.
-    public func addPackage(at url: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws -> LinuxPackageContents {
+    public func addPackage(at url: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> LinuxPackageContents {
         let collector = PackageCollector()
         try await LinuxRootImage.run(progress) { context, report, message in
             collector.reportContext = context
@@ -229,7 +167,7 @@ public final class LinuxRootImageBuilder: @unchecked Sendable {
                 context: Unmanaged.passUnretained(collector).toOpaque(),
                 progress: { context, fraction in
                     let collector = Unmanaged<PackageCollector>.fromOpaque(context!).takeUnretainedValue()
-                    return collector.report?(collector.reportContext, fraction) ?? true
+                    return collector.report!(collector.reportContext, fraction)
                 },
                 metadata: { context, name, data, size in
                     let collector = Unmanaged<PackageCollector>.fromOpaque(context!).takeUnretainedValue()
@@ -254,7 +192,6 @@ public final class LinuxRootImageBuilder: @unchecked Sendable {
         return LinuxPackageContents(metadata: collector.metadata, entries: collector.entries)
     }
 
-    /// The contents of the regular file at `path`, following symbolic links; `nil` when nothing exists there.
     public func contents(of path: String) throws -> Data? {
         var data: UnsafeMutableRawPointer?
         var size = 0
@@ -266,7 +203,6 @@ public final class LinuxRootImageBuilder: @unchecked Sendable {
         return Data(bytesNoCopy: data!, count: size, deallocator: .free)
     }
 
-    /// The names in the directory at `path`, following symbolic links; `nil` when nothing exists there.
     public func contentsOfDirectory(at path: String) throws -> [String]? {
         var names: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
         var count = 0
@@ -276,10 +212,9 @@ public final class LinuxRootImageBuilder: @unchecked Sendable {
         }
         try check(code)
         defer { swipterm_free_strings(names, count) }
-        return (0..<count).map { String(cString: names![$0]!) }
+        return (0 ..< count).map { String(cString: names![$0]!) }
     }
 
-    /// Creates missing parent directories.
     public func write(_ contents: Data, to path: String, permissions: UInt32 = 0o644) throws {
         let code = contents.withUnsafeBytes { buffer in
             swipterm_root_builder_write(handle, path, buffer.baseAddress, buffer.count, permissions)
@@ -292,8 +227,7 @@ public final class LinuxRootImageBuilder: @unchecked Sendable {
             try withExtendedLifetime(self) {
                 var message: UnsafeMutablePointer<CChar>?
                 guard swipterm_root_builder_finish(self.handle, &message) else {
-                    defer { free(message) }
-                    throw LinuxRootImageError(message: message.map { String(cString: $0) } ?? "")
+                    throw MessageError(consuming: message)
                 }
             }
         }
@@ -310,17 +244,12 @@ public final class LinuxRootImageBuilder: @unchecked Sendable {
 
 public struct LinuxPackageContents: Sendable {
     public struct Entry: Hashable, Sendable {
-        /// An absolute path; `/` is the package root.
         public let path: String
         public let type: LinuxFileType
         public let permissions: UInt32
-        /// The SHA-1 digest of a symbolic link's target, or of the contents a regular file or hard link entry carries; `nil` for a
-        /// hard link entry that carries none.
         public let sha1: Data?
     }
 
-    /// The members of a Debian package's control archive, or the top-level files of a tar-based package, by name.
     public let metadata: [String: Data]
-    /// The installed entries in archive order.
     public let entries: [Entry]
 }

@@ -67,17 +67,11 @@ func NewNetwork() (*Network, error) {
 			return nil, E.Cause(err, "duplicate network wake descriptor")
 		}
 		unix.CloseOnExec(fd)
-		err = unix.SetNonblock(fd, true)
-		if err != nil {
-			unix.Close(fd)
-			network.Close()
-			return nil, E.Cause(err, "set network wake descriptor non-blocking")
-		}
 		network.wakes[wake] = os.NewFile(uintptr(fd), "swipterm-network")
 		network.raws[wake], err = network.wakes[wake].SyscallConn()
 		if err != nil {
 			network.Close()
-			return nil, err
+			return nil, E.Cause(err, "access network wake descriptor")
 		}
 	}
 	return network, nil
@@ -163,7 +157,11 @@ func (n *Network) CloseWakes() {
 	}
 }
 
+func (n *Network) Release() {
+	C.swipterm_network_release(n.handle)
+}
+
 func (n *Network) Close() {
 	n.CloseWakes()
-	C.swipterm_network_release(n.handle)
+	n.Release()
 }

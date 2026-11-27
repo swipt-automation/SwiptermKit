@@ -6,7 +6,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 enum : uint64_t {
     MMU_SALT_MMU_OFF = 1ULL << 2,
@@ -45,21 +44,12 @@ mmu_translation_t mmu_translate(vcpu_t *cpu, uint64_t va, mmu_access_t access, u
 bool mmu_translate_and_fill(vcpu_t *cpu, uint64_t va, mmu_access_t access, uint8_t el,
                             mmu_translation_t *out, bool *is_device_out);
 bool mmu_translate_exec(vcpu_t *cpu, uint64_t va_page, uint8_t el, mmu_translation_t *out, bool *cacheable_out);
-bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va, uint64_t *pa_out);
+bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va_page, uint64_t *pa_out);
 
-bool mmu_read_8_slow(vcpu_t *cpu, uint64_t va, uint8_t *out);
-bool mmu_read_16_slow(vcpu_t *cpu, uint64_t va, uint16_t *out);
-bool mmu_read_32_slow(vcpu_t *cpu, uint64_t va, uint32_t *out);
-bool mmu_read_64_slow(vcpu_t *cpu, uint64_t va, uint64_t *out);
+bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out);
 bool mmu_read_pair_64_slow(vcpu_t *cpu, uint64_t va, uint64_t *out1, uint64_t *out2);
-bool mmu_read_128_slow(vcpu_t *cpu, uint64_t va, __uint128_t *out);
-
-bool mmu_write_8_slow(vcpu_t *cpu, uint64_t va, uint8_t val);
-bool mmu_write_16_slow(vcpu_t *cpu, uint64_t va, uint16_t val);
-bool mmu_write_32_slow(vcpu_t *cpu, uint64_t va, uint32_t val);
-bool mmu_write_64_slow(vcpu_t *cpu, uint64_t va, uint64_t val);
+bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void *in);
 bool mmu_write_pair_64_slow(vcpu_t *cpu, uint64_t va, uint64_t val1, uint64_t val2);
-bool mmu_write_128_slow(vcpu_t *cpu, uint64_t va, __uint128_t val);
 
 static inline bool mmu_tlb_lookup_aligned(const softtlb_entry_t *bank, uint64_t asid_salt,
                                           uint64_t va, uintptr_t *hva_out) {

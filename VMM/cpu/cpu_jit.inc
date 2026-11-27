@@ -29,8 +29,6 @@ enum : uint32_t {
 
 static const uint8_t jit_pool[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15};
 
-static uint32_t jit_base_offset;
-
 typedef enum jit_kind : uint8_t {
     JIT_NONE,
     JIT_NOP,
@@ -150,8 +148,6 @@ typedef struct jit {
     uint32_t k;
     int32_t cold;
     uint8_t fp;
-    uint8_t el;
-    uint8_t world;
     bool loop;
     bool self_loop;
     uint32_t sites;
@@ -191,8 +187,8 @@ static inline uint32_t A_ADDR(uint32_t rd, uint32_t rn, uint32_t rm, uint32_t ls
 static inline uint32_t A_SUBR(uint32_t rd, uint32_t rn, uint32_t rm) {
     return 0xCB000000U | (rm << 16) | (rn << 5) | rd;
 }
-static inline uint32_t A_SUBI(uint32_t rd, uint32_t rn, uint32_t imm) {
-    return 0xD1000000U | (imm << 10) | (rn << 5) | rd;
+static inline uint32_t A_SUBI(uint32_t rd, uint32_t rn, uint32_t imm, uint32_t lsl12) {
+    return 0xD1000000U | (lsl12 << 22) | (imm << 10) | (rn << 5) | rd;
 }
 static inline uint32_t A_ADDX(uint32_t rd, uint32_t rn, uint32_t rm, uint32_t option, uint32_t amount) {
     return 0x8B200000U | (rm << 16) | (option << 13) | (amount << 10) | (rn << 5) | rd;
@@ -201,7 +197,7 @@ static inline uint32_t A_ORR(uint32_t rd, uint32_t rn, uint32_t rm, uint32_t lsl
     return 0xAA000000U | (rm << 16) | (lsl << 10) | (rn << 5) | rd;
 }
 static inline uint32_t A_MOV(uint32_t rd, uint32_t rm) {
-    return A_ORR(rd, X_ZR, rm, 0);
+    return 0xAA0003E0U | (rm << 16) | rd;
 }
 static inline uint32_t A_MOVW(uint32_t rd, uint32_t rm) {
     return 0x2A000000U | (rm << 16) | (X_ZR << 5) | rd;
@@ -244,9 +240,6 @@ static inline uint32_t A_MOVK(uint32_t rd, uint32_t imm, uint32_t hw) {
 }
 static inline uint32_t A_MOVZW(uint32_t rd, uint32_t imm) {
     return 0x52800000U | (imm << 5) | rd;
-}
-static inline uint32_t A_MOVKW(uint32_t rd, uint32_t imm, uint32_t hw) {
-    return 0x72800000U | (hw << 21) | (imm << 5) | rd;
 }
 static inline uint32_t A_LDRX(uint32_t rt, uint32_t rn, uint32_t offset) {
     return 0xF9400000U | ((offset >> 3) << 10) | (rn << 5) | rt;
@@ -398,10 +391,6 @@ static void jit_emit(jit_t *j, uint32_t word) {
     }
 }
 
-static uintptr_t jit_pc(const jit_t *j) {
-    return j->rx + (uintptr_t)j->n * 4U;
-}
-
 static void jit_patch(jit_t *j, uint32_t site, uint32_t target) {
     int32_t offset = (int32_t)target - (int32_t)site;
     uint32_t word = j->w->code[site];
@@ -443,7 +432,6 @@ static void jit_mov_imm(jit_t *j, uint32_t rd, uint64_t value) {
 
 static void jit_add_imm(jit_t *j, uint32_t rd, uint32_t rn, int64_t imm) {
     uint64_t magnitude = imm < 0 ? (uint64_t)-imm : (uint64_t)imm;
-    uint32_t op = imm < 0 ? 0xD1000000U : 0x91000000U;
     if (magnitude == 0) {
         if (rd != rn) {
             jit_emit(j, A_MOV(rd, rn));
@@ -456,16 +444,18 @@ static void jit_add_imm(jit_t *j, uint32_t rd, uint32_t rn, int64_t imm) {
         return;
     }
     if (magnitude >> 12) {
-        jit_emit(j, op | (1U << 22) | ((uint32_t)(magnitude >> 12) << 10) | (rn << 5) | rd);
+        uint32_t high = (uint32_t)(magnitude >> 12);
+        jit_emit(j, imm < 0 ? A_SUBI(rd, rn, high, 1) : A_ADDI(rd, rn, high, 1));
         rn = rd;
     }
     if (magnitude & 0xFFFU) {
-        jit_emit(j, op | ((uint32_t)(magnitude & 0xFFFU) << 10) | (rn << 5) | rd);
+        uint32_t low = (uint32_t)(magnitude & 0xFFFU);
+        jit_emit(j, imm < 0 ? A_SUBI(rd, rn, low, 0) : A_ADDI(rd, rn, low, 0));
     }
 }
 
 static void jit_jump(jit_t *j, uintptr_t target, bool link) {
-    intptr_t delta = (intptr_t)target - (intptr_t)jit_pc(j);
+    intptr_t delta = (intptr_t)target - (intptr_t)(j->rx + (uintptr_t)j->n * 4U);
     if (delta >= -(1LL << 27) && delta < (1LL << 27)) {
         jit_emit(j, link ? A_BL((int32_t)(delta >> 2)) : A_B((int32_t)(delta >> 2)));
         return;
@@ -474,12 +464,8 @@ static void jit_jump(jit_t *j, uintptr_t target, bool link) {
     jit_emit(j, link ? A_BLR(X_ADDR) : A_BR(X_ADDR));
 }
 
-static void jit_interp(jit_t *j, cpu_fast_op_t op) {
-    jit_jump(j, cpu_fast_base() + cpu_fast_offsets[op], false);
-}
-
-static void jit_call(jit_t *j, const void *fn) {
-    jit_jump(j, (uintptr_t)fn, true);
+static void jit_interp(jit_t *j, cpu_fast_op_t op, bool link) {
+    jit_jump(j, cpu_fast_base() + cpu_fast_offsets[op], link);
 }
 
 static void jit_regs_clear(jit_regs_t *regs) {
@@ -573,14 +559,7 @@ static uint32_t jit_slot(jit_t *j, uint32_t slot, bool load) {
     return (uint32_t)host;
 }
 
-static uint32_t jit_read(jit_t *j, uint32_t reg, bool sp) {
-    if (reg == 31 && !sp) {
-        return X_ZR;
-    }
-    return jit_slot(j, reg == 31 ? SLOT_SP : reg, true);
-}
-
-static uint32_t jit_write(jit_t *j, uint32_t reg, bool sp, bool load) {
+static uint32_t jit_reg(jit_t *j, uint32_t reg, bool sp, bool load) {
     if (reg == 31 && !sp) {
         return X_ZR;
     }
@@ -680,10 +659,6 @@ static void jit_reload(jit_t *j, const jit_regs_t *regs) {
     jit_vector_spill(j, regs->vloaded, true);
 }
 
-static void jit_set_ir(jit_t *j, uint32_t index) {
-    jit_add_imm(j, X_IR, X_PAGE, (int64_t)index * IR_SIZE);
-}
-
 static void jit_dispatch(jit_t *j) {
     jit_emit(j, A_LDRW(X_ADDR, X_IR, IR_OFFSET));
     jit_emit(j, A_ADDX(X_ADDR, X_FAST, X_ADDR, 2, 0));
@@ -699,7 +674,7 @@ static void jit_commit(jit_t *j) {
     jit_emit(j, A_MRS_NZCV(X_TMP));
     jit_emit(j, A_STRW(X_TMP, X_CPU, CPU_NZCV));
     jit_emit(j, A_LDRX(X_TMP, X_CPU, CPU_FAST_SP));
-    if (j->el == 0) {
+    if (j->pg->el == 0) {
         jit_emit(j, A_STRX(X_TMP, X_CPU, CPU_SP));
     } else {
         jit_sp_index(j);
@@ -712,7 +687,7 @@ static void jit_commit(jit_t *j) {
 static void jit_restore(jit_t *j) {
     jit_emit(j, A_LDRW(X_TMP, X_CPU, CPU_NZCV));
     jit_emit(j, A_MSR_NZCV(X_TMP));
-    if (j->el == 0) {
+    if (j->pg->el == 0) {
         jit_emit(j, A_LDRX(X_TMP, X_CPU, CPU_SP));
     } else {
         jit_sp_index(j);
@@ -728,7 +703,7 @@ static void jit_helper_call(jit_t *j) {
     jit_add_imm(j, 1, X_PAGE, (int64_t)j->k * IR_SIZE);
     jit_emit(j, A_MOV(2, X_TLB_R));
     jit_emit(j, A_MOV(3, X_TLB_W));
-    jit_jump(j, cpu_fast_base() + cpu_fast_offsets[FAST_jit_helper], true);
+    jit_interp(j, FAST_jit_helper, true);
     jit_add_imm(j, X_ADDR, X_PAGE, (int64_t)(j->k + 1U) * IR_SIZE);
     jit_emit(j, A_EOR(X_ADDR, X_ADDR, 0));
     jit_to_stub(j, A_CBZ(X_ADDR, true, true, 0), jit_stub(j, JIT_STUB_RETURN, 0));
@@ -759,7 +734,7 @@ static void jit_exit_insn(jit_t *j, uint32_t index) {
         }
         jit_emit(j, A_NOP);
     }
-    jit_set_ir(j, index);
+    jit_add_imm(j, X_IR, X_PAGE, (int64_t)index * IR_SIZE);
     jit_dispatch(j);
 }
 
@@ -793,8 +768,8 @@ static void jit_loop_back(jit_t *j, const jit_regs_t *regs) {
     jit_patch(j, zero, j->n);
     jit_patch(j, negative, j->n);
     jit_flush(j, head);
-    jit_set_ir(j, j->start);
-    jit_interp(j, FAST_poll);
+    jit_add_imm(j, X_IR, X_PAGE, (int64_t)j->start * IR_SIZE);
+    jit_interp(j, FAST_poll, false);
 }
 
 static void jit_goto(jit_t *j, int64_t rel, const jit_regs_t *regs) {
@@ -817,13 +792,13 @@ static void jit_goto(jit_t *j, int64_t rel, const jit_regs_t *regs) {
         jit_exit_insn(j, index);
         jit_patch(j, zero, j->n);
         jit_patch(j, negative, j->n);
-        jit_set_ir(j, index);
-        jit_interp(j, FAST_poll);
+        jit_add_imm(j, X_IR, X_PAGE, (int64_t)index * IR_SIZE);
+        jit_interp(j, FAST_poll, false);
         return;
     }
     jit_flush(j, regs);
     jit_add_imm(j, X_TARGET, X_VA, rel);
-    jit_interp(j, FAST_cross_page);
+    jit_interp(j, FAST_cross_page, false);
 }
 
 static void jit_push_return(jit_t *j) {
@@ -858,12 +833,12 @@ static void jit_sp_check(jit_t *j, uint32_t base) {
     jit_emit(j, A_ANDI(X_TMP2, base, 15));
     jit_emit(j, A_CBZ(X_TMP2, true, false, 4));
     jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_SCTLR));
-    jit_emit(j, A_TBZ(X_TMP2, j->el == 0 ? 4 : 3, false, 2));
+    jit_emit(j, A_TBZ(X_TMP2, j->pg->el == 0 ? 4 : 3, false, 2));
     jit_to_stub(j, A_B(0), cold);
 }
 
 static void jit_el0_check(jit_t *j, uint32_t offset, uint32_t bit) {
-    if (j->el == 0) {
+    if (j->pg->el == 0) {
         jit_emit(j, A_LDRX(X_TMP2, X_CPU, offset));
         jit_cold_unless_bit(j, X_TMP2, bit, true);
     }
@@ -888,9 +863,9 @@ static void jit_tlb(jit_t *j, uint32_t bank, uint32_t bytes, uint32_t align, boo
     }
     jit_emit(j, A_LSRI(X_LR, X_ADDR, 48));
     uint32_t split = j->n;
-    jit_emit(j, A_CBZ(X_LR, true, j->el == 0, 0));
+    jit_emit(j, A_CBZ(X_LR, true, j->pg->el == 0, 0));
     for (uint32_t pass = 0; pass < 2; ++pass) {
-        bool user = (pass == 0) == (j->el == 0);
+        bool user = (pass == 0) == (j->pg->el == 0);
         if (user) {
             jit_emit(j, A_EOR_LSR(X_TMP2, X_SALT, X_ADDR, 12));
             jit_emit(j, A_ANDI(X_TMP, X_ADDR, 0x0000FFFFFFFFF000ULL));
@@ -1245,22 +1220,6 @@ static jit_sysop_t jit_sysop(uint32_t word, const ir_page_t *pg) {
     }
 }
 
-static const cpu_pt_leaf_t *jit_pt(uint32_t word, uint32_t *offset) {
-    int32_t index = cpu_pt_find(word);
-    if (index < 0) {
-        return nullptr;
-    }
-    const cpu_pt_leaf_t *leaf = &cpu_pt_leaves[index];
-    uint32_t stub = leaf->base;
-    for (uint32_t mask = leaf->var_mask, bit = 1; mask != 0; mask &= mask - 1U, bit <<= 1) {
-        if (word & mask & -mask) {
-            stub += bit;
-        }
-    }
-    *offset = cpu_pt_offsets[stub];
-    return *offset != 0 ? leaf : nullptr;
-}
-
 static uint32_t jit_multi_regs(uint32_t word) {
     static const uint8_t regs[16] = {[0] = 4, [2] = 4, [4] = 3, [6] = 3, [7] = 1, [8] = 2, [10] = 2};
     return regs[(word >> 12) & 15U];
@@ -1313,11 +1272,11 @@ static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, const ir_page
     case A64_DEC_LDST_EXCLP: return JIT_EXCLP;
     case A64_DEC_LSE_MEMOP:
     case A64_DEC_LSE_CAS: {
-        const cpu_pt_leaf_t *leaf = jit_pt(word, &offset);
+        const cpu_pt_leaf_t *leaf = cpu_pt_lookup(word, &offset);
         return !leaf ? JIT_NONE : (leaf->features & ~cpu_host_features()) ? JIT_HELPER : JIT_ATOMIC;
     }
     case A64_DEC_LSE_CASP:
-        if ((word & (1U << 16)) || (word & 1U) || !jit_pt(word, &offset)) {
+        if ((word & (1U << 16)) || (word & 1U) || !cpu_pt_lookup(word, &offset)) {
             return JIT_NONE;
         }
         return (cpu_host_features() & CPU_HOST_FEAT_LSE) ? JIT_CASP : JIT_HELPER;
@@ -1381,7 +1340,7 @@ static jit_kind_t jit_classify(uint32_t word, const ir_insn_t *ir, const ir_page
     case A64_DEC_FLOATDP3:
     case A64_DEC_FLOATIMM:
     case A64_DEC_FLOATSEL: {
-        const cpu_pt_leaf_t *leaf = jit_pt(word, &offset);
+        const cpu_pt_leaf_t *leaf = cpu_pt_lookup(word, &offset);
         return !leaf ? JIT_NONE : (leaf->features & ~cpu_host_features()) ? JIT_HELPER : JIT_SIMD;
     }
     case A64_DEC_HINTS_SEV: return JIT_HELPER;
@@ -1410,16 +1369,16 @@ static void jit_dp(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     jit_dp_fields(dec, &f, &keep);
     uint32_t rd = word & 31U;
     if (f.rn) {
-        word = jit_field(word, 5, 5, jit_read(j, (word >> 5) & 31U, f.rn == F_SP));
+        word = jit_field(word, 5, 5, jit_reg(j, (word >> 5) & 31U, f.rn == F_SP, true));
     }
     if (f.rm) {
-        word = jit_field(word, 16, 5, jit_read(j, (word >> 16) & 31U, f.rm == F_SP));
+        word = jit_field(word, 16, 5, jit_reg(j, (word >> 16) & 31U, false, true));
     }
     if (f.ra) {
-        word = jit_field(word, 10, 5, jit_read(j, (word >> 10) & 31U, false));
+        word = jit_field(word, 10, 5, jit_reg(j, (word >> 10) & 31U, false, true));
     }
     if (f.rd) {
-        word = jit_field(word, 0, 5, jit_write(j, rd, f.rd == F_SP, keep));
+        word = jit_field(word, 0, 5, jit_reg(j, rd, f.rd == F_SP, keep));
     }
     jit_emit(j, word);
     if (f.rd) {
@@ -1434,7 +1393,7 @@ static void jit_adr(jit_t *j, uint32_t word) {
     }
     int64_t imm = cpu_sext((((word >> 5) & 0x7FFFFULL) << 2) | ((word >> 29) & 3ULL), 21);
     int64_t rel = (word >> 31) ? (int64_t)((uint64_t)imm << 12) : (int64_t)j->k * 4 + imm;
-    jit_add_imm(j, jit_write(j, rd, false, false), X_VA, rel);
+    jit_add_imm(j, jit_reg(j, rd, false, false), X_VA, rel);
     jit_dirty(j, rd, false);
 }
 
@@ -1459,7 +1418,7 @@ static void jit_branch_reg(jit_t *j, uint32_t word, jit_kind_t kind) {
         jit_emit(j, A_STRX(X_TMP2, X_CPU, 30 * 8));
         jit_push_return(j);
     }
-    jit_interp(j, kind == JIT_RET ? FAST_ret_target : FAST_cross_page);
+    jit_interp(j, kind == JIT_RET ? FAST_ret_target : FAST_cross_page, false);
 }
 
 static void jit_ldst(jit_t *j, uint32_t word, a64_dec_op_t dec) {
@@ -1470,9 +1429,9 @@ static void jit_ldst(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     uint32_t scale = vector ? size | ((opc & 2U) << 1) : size;
     bool load = vector ? (opc & 1U) != 0 : opc != 0;
     uint32_t bytes = 1U << scale;
-    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
-    uint32_t index = dec == A64_DEC_LDST_REGOFF ? jit_read(j, (word >> 16) & 31U, false) : X_ZR;
-    uint32_t data = vector ? rt : load ? jit_write(j, rt, false, false) : jit_read(j, rt, false);
+    uint32_t base = jit_reg(j, rn, true, true);
+    uint32_t index = dec == A64_DEC_LDST_REGOFF ? jit_reg(j, (word >> 16) & 31U, false, true) : X_ZR;
+    uint32_t data = vector ? rt : load ? jit_reg(j, rt, false, false) : jit_reg(j, rt, false, true);
     if (vector) {
         jit_fp(j, 1);
     }
@@ -1513,7 +1472,7 @@ static void jit_ldst(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     }
     if (dec == A64_DEC_LDST_IMMPRE || dec == A64_DEC_LDST_IMMPOST) {
         jit_add_imm(j, base, base, imm);
-        j->regs.dirty |= 1ULL << (rn == 31 ? SLOT_SP : rn);
+        jit_dirty(j, rn, true);
     }
     if (!vector && load) {
         jit_dirty(j, rt, false);
@@ -1527,15 +1486,15 @@ static void jit_pair(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     uint32_t rt = word & 31U, rn = (word >> 5) & 31U, rt2 = (word >> 10) & 31U;
     uint32_t scale = vector ? 2U + opc : 2U + (opc >> 1);
     int64_t imm = cpu_sext((word >> 15) & 0x7FU, 7) * (int64_t)(1U << scale);
-    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
+    uint32_t base = jit_reg(j, rn, true, true);
     uint32_t first = rt, second = rt2;
     if (!vector) {
         if (load) {
-            first = jit_write(j, rt, false, false);
-            second = rt2 == rt ? X_TMP2 : jit_write(j, rt2, false, false);
+            first = jit_reg(j, rt, false, false);
+            second = rt2 == rt ? X_TMP2 : jit_reg(j, rt2, false, false);
         } else {
-            first = jit_read(j, rt, false);
-            second = jit_read(j, rt2, false);
+            first = jit_reg(j, rt, false, true);
+            second = jit_reg(j, rt2, false, true);
         }
     }
     if (vector) {
@@ -1563,7 +1522,7 @@ static void jit_pair(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     }
     if (dec == A64_DEC_LDST_PAIR_PRE || dec == A64_DEC_LDST_PAIR_POST) {
         jit_add_imm(j, base, base, imm);
-        j->regs.dirty |= 1ULL << (rn == 31 ? SLOT_SP : rn);
+        jit_dirty(j, rn, true);
     }
     if (!vector && load) {
         jit_dirty(j, rt, false);
@@ -1577,7 +1536,7 @@ static void jit_literal(jit_t *j, uint32_t word) {
     static const uint8_t bytes[2][3] = {{4, 8, 4}, {4, 8, 16}};
     uint32_t opc = word >> 30, rt = word & 31U;
     bool vector = ((word >> 26) & 1U) != 0;
-    uint32_t data = vector ? rt : jit_write(j, rt, false, false);
+    uint32_t data = vector ? rt : jit_reg(j, rt, false, false);
     if (vector) {
         jit_fp(j, 1);
     }
@@ -1592,20 +1551,19 @@ static void jit_literal(jit_t *j, uint32_t word) {
     }
 }
 
-static uint32_t jit_atomic_base(jit_t *j, uint32_t rn, uint32_t base, bool write, uint32_t bytes) {
+static void jit_atomic_base(jit_t *j, uint32_t rn, uint32_t base, bool write, uint32_t bytes) {
     if (rn == 31) {
         jit_sp_check(j, base);
     }
     jit_emit(j, A_MOV(X_ADDR, base));
     jit_tlb(j, write ? X_TLB_W : X_TLB_R, bytes, bytes, true);
-    return bytes;
 }
 
 static void jit_ordered(jit_t *j, uint32_t word) {
     uint32_t rt = word & 31U, rn = (word >> 5) & 31U;
     bool load = ((word >> 22) & 1U) != 0;
-    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
-    uint32_t data = load ? jit_write(j, rt, false, false) : jit_read(j, rt, false);
+    uint32_t base = jit_reg(j, rn, true, true);
+    uint32_t data = load ? jit_reg(j, rt, false, false) : jit_reg(j, rt, false, true);
     jit_atomic_base(j, rn, base, !load, 1U << (word >> 30));
     jit_emit(j, (word & ~0x3FFU) | (1U << 15) | (X_ADDR << 5) | data);
     if (load) {
@@ -1622,8 +1580,8 @@ static void jit_rcpc(jit_t *j, uint32_t word) {
     };
     uint32_t rt = word & 31U, rn = (word >> 5) & 31U, opc = (word >> 22) & 3U, size = word >> 30;
     bool load = opc != 0U;
-    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
-    uint32_t data = load ? jit_write(j, rt, false, false) : jit_read(j, rt, false);
+    uint32_t base = jit_reg(j, rn, true, true);
+    uint32_t data = load ? jit_reg(j, rt, false, false) : jit_reg(j, rt, false, true);
     if (rn == 31) {
         jit_sp_check(j, base);
     }
@@ -1642,7 +1600,7 @@ static void jit_rcpc(jit_t *j, uint32_t word) {
 
 static void jit_exclusive_status(jit_t *j, uint32_t rs, uint32_t status) {
     jit_emit(j, A_STRB(X_ZR, X_CPU, CPU_EXCL_VALID));
-    jit_emit(j, A_STRX(X_ZR, X_LR, CPU_EXCL_HVA));
+    jit_emit(j, A_STRX(X_ZR, X_CPU, CPU_EXCL_HVA));
     jit_emit(j, A_MOV(status, X_TMP));
     jit_dirty(j, rs, false);
     uint32_t skip = j->n;
@@ -1652,7 +1610,6 @@ static void jit_exclusive_status(jit_t *j, uint32_t rs, uint32_t status) {
 }
 
 static void jit_exclusive_check(jit_t *j, uint32_t bytes, uint32_t fail[3]) {
-    jit_emit(j, A_ADDI(X_LR, X_CPU, CPU_EXCL_HVA_PAGE, 1));
     jit_emit(j, A_LDRB(X_TMP2, X_CPU, CPU_EXCL_VALID));
     fail[0] = j->n;
     jit_emit(j, A_CBZ(X_TMP2, false, false, 0));
@@ -1660,7 +1617,7 @@ static void jit_exclusive_check(jit_t *j, uint32_t bytes, uint32_t fail[3]) {
     jit_emit(j, A_EORWI(X_TMP2, X_TMP2, bytes));
     fail[1] = j->n;
     jit_emit(j, A_CBZ(X_TMP2, false, true, 0));
-    jit_emit(j, A_LDRX(X_TMP2, X_LR, CPU_EXCL_HVA));
+    jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_EXCL_HVA));
     jit_emit(j, A_EOR(X_TMP2, X_TMP2, X_ADDR));
     fail[2] = j->n;
     jit_emit(j, A_CBZ(X_TMP2, true, true, 0));
@@ -1684,17 +1641,16 @@ static void jit_exclusive_load_state(jit_t *j, uint32_t bytes) {
     jit_emit(j, A_STRB(X_TMP, X_CPU, CPU_EXCL_VALID));
     jit_emit(j, A_MOVZW(X_TMP, bytes));
     jit_emit(j, A_STRB(X_TMP, X_CPU, CPU_EXCL_SIZE));
-    jit_emit(j, A_ADDI(X_TMP, X_CPU, CPU_EXCL_HVA_PAGE, 1));
-    jit_emit(j, A_STRX(X_ADDR, X_TMP, CPU_EXCL_HVA));
+    jit_emit(j, A_STRX(X_ADDR, X_CPU, CPU_EXCL_HVA));
 }
 
 static void jit_exclusive(jit_t *j, uint32_t word) {
     uint32_t size = word >> 30, bytes = 1U << size;
     uint32_t rt = word & 31U, rn = (word >> 5) & 31U, rs = (word >> 16) & 31U;
     bool load = ((word >> 22) & 1U) != 0, ordered = ((word >> 15) & 1U) != 0;
-    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
-    uint32_t data = load ? jit_write(j, rt, false, false) : jit_read(j, rt, false);
-    uint32_t status = load ? X_ZR : jit_write(j, rs, false, false);
+    uint32_t base = jit_reg(j, rn, true, true);
+    uint32_t data = load ? jit_reg(j, rt, false, false) : jit_reg(j, rt, false, true);
+    uint32_t status = load ? X_ZR : jit_reg(j, rs, false, false);
     jit_atomic_base(j, rn, base, !load, bytes);
     if (load) {
         static const uint32_t plain[4] = {0x39400000U, 0x79400000U, 0xB9400000U, 0xF9400000U};
@@ -1728,15 +1684,15 @@ static void jit_exclusive_pair(jit_t *j, uint32_t word) {
     if (!load && wide) {
         jit_reserve(j, 0xFU);
     }
-    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
+    uint32_t base = jit_reg(j, rn, true, true);
     uint32_t first, second, status = X_ZR;
     if (load) {
-        first = jit_write(j, rt, false, false);
-        second = jit_write(j, rt2, false, false);
+        first = jit_reg(j, rt, false, false);
+        second = jit_reg(j, rt2, false, false);
     } else {
-        first = jit_read(j, rt, false);
-        second = jit_read(j, rt2, false);
-        status = jit_write(j, rs, false, false);
+        first = jit_reg(j, rt, false, true);
+        second = jit_reg(j, rt2, false, true);
+        status = jit_reg(j, rs, false, false);
     }
     jit_atomic_base(j, rn, base, !load, bytes);
     if (load) {
@@ -1787,7 +1743,7 @@ static void jit_exclusive_pair(jit_t *j, uint32_t word) {
 
 static void jit_atomic(jit_t *j, uint32_t word) {
     uint32_t offset;
-    const cpu_pt_leaf_t *leaf = jit_pt(word, &offset);
+    const cpu_pt_leaf_t *leaf = cpu_pt_lookup(word, &offset);
     uint32_t host[4] = {0};
     uint32_t regs[4] = {0};
     bool writes = false;
@@ -1795,17 +1751,17 @@ static void jit_atomic(jit_t *j, uint32_t word) {
     for (uint32_t i = 0; i < 4; ++i) {
         regs[i] = (word >> leaf->slots[i].start) & ((1U << leaf->slots[i].width) - 1U);
         if (leaf->slots[i].kind == CPU_PT_XR) {
-            host[i] = jit_read(j, regs[i], false);
+            host[i] = jit_reg(j, regs[i], false, true);
             writes = true;
         }
     }
     for (uint32_t i = 0; i < 4; ++i) {
         if (leaf->slots[i].kind == CPU_PT_XB) {
             rn = regs[i];
-            base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
+            base = jit_reg(j, rn, true, true);
             host[i] = X_ADDR;
         } else if (leaf->slots[i].kind == CPU_PT_XW) {
-            host[i] = jit_write(j, regs[i], false, false);
+            host[i] = jit_reg(j, regs[i], false, false);
         }
     }
     jit_atomic_base(j, rn, base, writes, 1U << (word >> 30));
@@ -1828,7 +1784,7 @@ static void jit_atomic(jit_t *j, uint32_t word) {
 static void jit_compare_swap_pair(jit_t *j, uint32_t word) {
     uint32_t rt = word & 31U, rn = (word >> 5) & 31U, rs = (word >> 16) & 31U;
     jit_reserve(j, 0xFU);
-    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
+    uint32_t base = jit_reg(j, rn, true, true);
     jit_read_into(j, 0, rs);
     jit_read_into(j, 1, rs + 1U);
     jit_read_into(j, 2, rt);
@@ -1856,8 +1812,8 @@ static void jit_vector_structure(jit_t *j, uint32_t word, bool single) {
         align = 1U << ((word >> 10) & 3U);
         bytes = count * (((word >> 30) & 1U) ? 16U : 8U);
     }
-    uint32_t base = jit_slot(j, rn == 31 ? SLOT_SP : rn, true);
-    uint32_t index = post && rm != 31 ? jit_read(j, rm, false) : X_ZR;
+    uint32_t base = jit_reg(j, rn, true, true);
+    uint32_t index = post && rm != 31 ? jit_reg(j, rm, false, true) : X_ZR;
     jit_fp(j, 1);
     if (rn == 31) {
         jit_sp_check(j, base);
@@ -1882,13 +1838,13 @@ static void jit_vector_structure(jit_t *j, uint32_t word, bool single) {
         } else {
             jit_emit(j, A_ADDR(base, base, index, 0));
         }
-        j->regs.dirty |= 1ULL << (rn == 31 ? SLOT_SP : rn);
+        jit_dirty(j, rn, true);
     }
 }
 
 static void jit_simd(jit_t *j, uint32_t word) {
     uint32_t offset;
-    const cpu_pt_leaf_t *leaf = jit_pt(word, &offset);
+    const cpu_pt_leaf_t *leaf = cpu_pt_lookup(word, &offset);
     bool wide = (offset & CPU_PT_WIDE_RM) != 0;
     uint32_t regs[4] = {0}, host[4] = {0};
     for (uint32_t i = 0; i < 4; ++i) {
@@ -1897,12 +1853,12 @@ static void jit_simd(jit_t *j, uint32_t word) {
             regs[i] |= ((word >> 20) & 1U) << 4;
         }
         if (leaf->slots[i].kind == CPU_PT_XR) {
-            host[i] = jit_read(j, regs[i], false);
+            host[i] = jit_reg(j, regs[i], false, true);
         }
     }
     for (uint32_t i = 0; i < 4; ++i) {
         if (leaf->slots[i].kind == CPU_PT_XW) {
-            host[i] = jit_write(j, regs[i], false, false);
+            host[i] = jit_reg(j, regs[i], false, false);
         }
     }
     jit_fp(j, 2);
@@ -1949,19 +1905,19 @@ static void jit_mops(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     uint32_t stage = copy ? (word >> 22) & 3U : (word >> 14) & 3U;
     uint32_t unprivileged = (word >> 12) & (copy ? 3U : 1U);
     uint32_t rd = word & 31U, rn = (word >> 5) & 31U, rs = (word >> 16) & 31U;
-    uint32_t xn = jit_read(j, rn, false);
+    uint32_t xn = jit_reg(j, rn, false, true);
     jit_el0_check(j, CPU_SCTLR, 33);
     if (stage != 0) {
         jit_to_stub(j, A_CBZ(xn, true, true, 0), jit_cold(j));
         return;
     }
-    if (unprivileged != 0 && j->el != 0) {
+    if (unprivileged != 0 && j->pg->el != 0) {
         jit_helper(j);
         return;
     }
-    uint32_t xd = jit_read(j, rd, false), xs = jit_read(j, rs, false);
+    uint32_t xd = jit_reg(j, rd, false, true), xs = jit_reg(j, rs, false, true);
     uint32_t cold = jit_cold(j);
-    jit_emit(j, A_SUBI(X_TMP1, xn, 1));
+    jit_emit(j, A_SUBI(X_TMP1, xn, 1, 0));
     jit_emit(j, A_LSRI(X_TMP2, X_TMP1, 12));
     jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
     for (uint32_t i = 0; i < (copy ? 2U : 1U); ++i) {
@@ -1973,7 +1929,7 @@ static void jit_mops(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     if (copy) {
         jit_emit(j, A_SUBR(X_TMP2, xd, xs));
         jit_emit(j, A_ANDI(X_TMP2, X_TMP2, 0x00FFFFFFFFFFFFFFULL));
-        jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1));
+        jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1, 0));
         jit_emit(j, A_LSRI(X_TMP, X_TMP2, 12));
         jit_emit(j, A_CBZ(X_TMP, true, true, 3));
         jit_emit(j, A_SUBR(X_TMP2, X_TMP2, X_TMP1));
@@ -1998,7 +1954,7 @@ static void jit_mops(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     } else {
         jit_emit(j, A_STPX_POST(X_TMP, X_TMP, X_ADDR, 16));
     }
-    jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1));
+    jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1, 0));
     jit_emit(j, A_CBZ(X_TMP2, true, true, copy ? -3 : -2));
     jit_emit(j, A_ANDI(X_TMP2, xn, 15));
     jit_emit(j, A_CBZ(X_TMP2, true, false, copy ? 5 : 4));
@@ -2006,7 +1962,7 @@ static void jit_mops(jit_t *j, uint32_t word, a64_dec_op_t dec) {
         jit_emit(j, A_LDRB_POST(X_TMP, X_TMP1, 1));
     }
     jit_emit(j, A_STRB_POST(X_TMP, X_ADDR, 1));
-    jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1));
+    jit_emit(j, A_SUBI(X_TMP2, X_TMP2, 1, 0));
     jit_emit(j, A_CBZ(X_TMP2, true, true, copy ? -3 : -2));
     jit_emit(j, A_ADDR(xd, xd, xn, 0));
     if (copy) {
@@ -2036,11 +1992,6 @@ static void jit_daif(jit_t *j, uint32_t word) {
     jit_emit(j, A_STRW(X_TMP2, X_CPU, CPU_DAIF));
 }
 
-static void jit_fpsr_mask(jit_t *j) {
-    jit_emit(j, A_MOVZW(X_TMP, CPU_FPSR_MASK & 0xFFFFU));
-    jit_emit(j, A_MOVKW(X_TMP, CPU_FPSR_MASK >> 16, 1));
-}
-
 static void jit_mrs(jit_t *j, uint32_t word) {
     uint32_t offset = 0, rt = word & 31U;
     jit_sysreg_t kind = jit_sysreg(word, j->pg, &offset);
@@ -2052,8 +2003,8 @@ static void jit_mrs(jit_t *j, uint32_t word) {
         jit_el0_check(j, CPU_CNTKCTL, kind == JIT_SR_CNTVCT ? 1 : 0);
         uint32_t base = kind == JIT_SR_CNTVCT ? CPU_CNTV_BASE : CPU_CNTP_BASE;
         if (vmm_timer_native()) {
-            uint32_t data = jit_write(j, rt, false, false);
-            jit_jump(j, cpu_fast_base() + cpu_fast_offsets[FAST_cntvct_read], true);
+            uint32_t data = jit_reg(j, rt, false, false);
+            jit_interp(j, FAST_cntvct_read, true);
             jit_emit(j, A_LDRX(X_TMP, X_CPU, base));
             jit_emit(j, A_SUBR(data, X_TMP2, X_TMP));
             jit_dirty(j, rt, false);
@@ -2063,7 +2014,7 @@ static void jit_mrs(jit_t *j, uint32_t word) {
         jit_regs_clear(&j->regs);
         jit_emit(j, A_MRS_NZCV(X_TMP));
         jit_emit(j, A_STRW(X_TMP, X_CPU, CPU_NZCV));
-        jit_call(j, (const void *)vmm_timer_ticks);
+        jit_jump(j, (uintptr_t)vmm_timer_ticks, true);
         jit_emit(j, A_LDRX(X_TMP, X_CPU, base));
         jit_emit(j, A_SUBR(0, 0, X_TMP));
         jit_emit(j, A_LDRW(X_TMP, X_CPU, CPU_NZCV));
@@ -2073,7 +2024,7 @@ static void jit_mrs(jit_t *j, uint32_t word) {
         }
         return;
     }
-    uint32_t data = rt == 31 ? X_TMP1 : jit_write(j, rt, false, false);
+    uint32_t data = rt == 31 ? X_TMP1 : jit_reg(j, rt, false, false);
     switch (kind) {
     case JIT_SR_NZCV:
         jit_emit(j, A_MRS_NZCV(data));
@@ -2087,7 +2038,7 @@ static void jit_mrs(jit_t *j, uint32_t word) {
         jit_emit(j, A_MRS_FPSR | X_TMP2);
         jit_emit(j, A_LDRW(X_TMP, X_CPU, CPU_FPSR));
         jit_emit(j, A_ORRW(X_TMP2, X_TMP2, X_TMP));
-        jit_fpsr_mask(j);
+        jit_mov_imm(j, X_TMP, CPU_FPSR_MASK);
         jit_emit(j, A_ANDW(X_TMP2, X_TMP2, X_TMP));
         jit_emit(j, A_STRW(X_TMP2, X_CPU, CPU_FPSR));
         jit_emit(j, A_MOV(data, X_TMP2));
@@ -2103,16 +2054,16 @@ static void jit_mrs(jit_t *j, uint32_t word) {
         jit_emit(j, A_LDRX(data, X_CPU, CPU_SP));
         break;
     case JIT_SR_CNTFRQ:
-        if (j->el == 0) {
+        if (j->pg->el == 0) {
             jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_CNTKCTL));
             jit_emit(j, A_ANDI(X_TMP2, X_TMP2, 3));
             jit_to_stub(j, A_CBZ(X_TMP2, true, false, 0), jit_cold(j));
         }
-        jit_mov_imm(j, data, vmm_timer_cntfrq());
+        jit_mov_imm(j, data, VMM_TIMER_FREQ);
         break;
     case JIT_SR_DCZID:
         jit_emit(j, A_MOVZW(data, VMM_DCZID_BS));
-        if (j->el == 0) {
+        if (j->pg->el == 0) {
             jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_SCTLR));
             jit_emit(j, A_UBFX(X_TMP2, X_TMP2, 14, 1));
             jit_emit(j, A_EORWI(X_TMP2, X_TMP2, 1));
@@ -2120,7 +2071,7 @@ static void jit_mrs(jit_t *j, uint32_t word) {
         }
         break;
     case JIT_SR_CURRENTEL:
-        jit_mov_imm(j, data, (uint64_t)(j->el != 0 && j->world != VCPU_WORLD_GUEST ? 2U : j->el) << 2);
+        jit_mov_imm(j, data, (uint64_t)(j->pg->el != 0 && j->pg->world != VCPU_WORLD_GUEST ? 2U : j->pg->el) << 2);
         break;
     default:
         jit_emit(j, A_LDRX(data, X_CPU, offset));
@@ -2136,7 +2087,7 @@ static void jit_msr(jit_t *j, uint32_t word) {
         jit_helper(j);
         return;
     }
-    uint32_t data = jit_read(j, word & 31U, false);
+    uint32_t data = jit_reg(j, word & 31U, false, true);
     switch (kind) {
     case JIT_SR_NZCV:
         jit_emit(j, A_MSR_NZCV(data));
@@ -2144,12 +2095,7 @@ static void jit_msr(jit_t *j, uint32_t word) {
     case JIT_SR_FPCR:
     case JIT_SR_FPSR:
         jit_fp(j, 2);
-        if (kind == JIT_SR_FPCR) {
-            jit_emit(j, A_MOVZW(X_TMP, CPU_FPCR_MASK & 0xFFFFU));
-            jit_emit(j, A_MOVKW(X_TMP, CPU_FPCR_MASK >> 16, 1));
-        } else {
-            jit_fpsr_mask(j);
-        }
+        jit_mov_imm(j, X_TMP, kind == JIT_SR_FPCR ? CPU_FPCR_MASK : CPU_FPSR_MASK);
         jit_emit(j, A_ANDW(X_TMP2, data, X_TMP));
         jit_emit(j, A_STRW(X_TMP2, X_CPU, kind == JIT_SR_FPCR ? CPU_FPCR : CPU_FPSR));
         jit_emit(j, (kind == JIT_SR_FPCR ? A_MSR_FPCR : A_MSR_FPSR) | X_TMP2);
@@ -2178,9 +2124,9 @@ static void jit_msr(jit_t *j, uint32_t word) {
 }
 
 static void jit_sys(jit_t *j, uint32_t word) {
-    uint32_t data = jit_read(j, word & 31U, false);
     switch (jit_sysop(word, j->pg)) {
     case JIT_SYS_ZVA: {
+        uint32_t data = jit_reg(j, word & 31U, false, true);
         jit_el0_check(j, CPU_SCTLR, 14);
         jit_emit(j, A_MOVN(X_TMP2, (4U << VMM_DCZID_BS) - 1U, 0));
         jit_emit(j, A_AND(X_ADDR, data, X_TMP2));
@@ -2222,7 +2168,7 @@ static void jit_barrier(jit_t *j, uint32_t word, a64_dec_op_t dec) {
     jit_emit(j, A_EOR(X_TMP2, X_TMP2, X_TMP));
     jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
     jit_emit(j, A_LDRX(X_TMP2, X_TMP1, IC_CUR_GEN));
-    jit_emit(j, A_SUBI(X_TMP, X_PAGE, PAGE_INSNS));
+    jit_emit(j, A_SUBI(X_TMP, X_PAGE, PAGE_INSNS, 0));
     jit_emit(j, A_LDRW(X_TMP, X_TMP, PAGE_GEN));
     jit_emit(j, A_EOR(X_TMP2, X_TMP2, X_TMP));
     jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
@@ -2247,7 +2193,7 @@ static bool jit_insn(jit_t *j, uint32_t word, const ir_insn_t *ir, bool *ended) 
         *ended = true;
         break;
     case JIT_BL: {
-        uint32_t lr = jit_write(j, 30, false, false);
+        uint32_t lr = jit_reg(j, 30, false, false);
         jit_add_imm(j, lr, X_VA, (int64_t)(j->k + 1U) * 4);
         jit_dirty(j, 30, false);
         jit_push_return(j);
@@ -2266,13 +2212,13 @@ static bool jit_insn(jit_t *j, uint32_t word, const ir_insn_t *ir, bool *ended) 
         break;
     }
     case JIT_CB: {
-        uint32_t reg = jit_read(j, word & 31U, false);
+        uint32_t reg = jit_reg(j, word & 31U, false, true);
         jit_to_stub(j, A_CBZ(reg, (word >> 31) != 0, ((word >> 24) & 1U) != 0, 0),
                     jit_stub(j, JIT_STUB_GOTO, (uint64_t)jit_branch_target(j, word, dec)));
         break;
     }
     case JIT_TB: {
-        uint32_t reg = jit_read(j, word & 31U, false);
+        uint32_t reg = jit_reg(j, word & 31U, false, true);
         uint32_t bit = ((word >> 31) << 5) | ((word >> 19) & 31U);
         jit_emit(j, A_TBZ(reg, bit, ((word >> 24) & 1U) == 0, 2));
         jit_to_stub(j, A_B(0), jit_stub(j, JIT_STUB_GOTO, (uint64_t)jit_branch_target(j, word, dec)));
@@ -2342,8 +2288,7 @@ static bool jit_insn(jit_t *j, uint32_t word, const ir_insn_t *ir, bool *ended) 
         break;
     case JIT_CLREX:
         jit_emit(j, A_STRB(X_ZR, X_CPU, CPU_EXCL_VALID));
-        jit_emit(j, A_ADDI(X_TMP2, X_CPU, CPU_EXCL_HVA_PAGE, 1));
-        jit_emit(j, A_STRX(X_ZR, X_TMP2, CPU_EXCL_HVA));
+        jit_emit(j, A_STRX(X_ZR, X_CPU, CPU_EXCL_HVA));
         break;
     case JIT_DAIF:
         jit_daif(j, word);
@@ -2366,14 +2311,14 @@ static void jit_emit_stub(jit_t *j, const jit_stub_t *stub) {
     switch (stub->kind) {
     case JIT_STUB_COLD:
         jit_flush(j, &stub->regs);
-        jit_set_ir(j, stub->insn);
-        jit_interp(j, FAST_cold);
+        jit_add_imm(j, X_IR, X_PAGE, (int64_t)stub->insn * IR_SIZE);
+        jit_interp(j, FAST_cold, false);
         break;
     case JIT_STUB_GOTO:
         jit_goto(j, (int64_t)stub->target, &stub->regs);
         break;
     case JIT_STUB_RETURN:
-        jit_interp(j, FAST_cold_return);
+        jit_interp(j, FAST_cold_return, false);
         break;
     case JIT_STUB_WAKE:
     case JIT_STUB_FP:
@@ -2383,10 +2328,10 @@ static void jit_emit_stub(jit_t *j, const jit_stub_t *stub) {
         if (stub->kind == JIT_STUB_WAKE) {
             jit_emit(j, A_LDRX(0, X_CPU, CPU_VM));
             jit_emit(j, A_MOV(1, X_ADDR));
-            jit_call(j, (const void *)vmm_vcpu_wfe_notify_write);
+            jit_jump(j, (uintptr_t)vmm_vcpu_wfe_notify_write, true);
         } else {
             jit_emit(j, A_MOV(0, X_CPU));
-            jit_call(j, (const void *)cpu_fp_enter_guest_slow);
+            jit_jump(j, (uintptr_t)cpu_fp_enter_guest_slow, true);
         }
         jit_emit(j, A_LDRW(X_TMP, X_CPU, CPU_NZCV));
         jit_emit(j, A_MSR_NZCV(X_TMP));
@@ -2770,7 +2715,7 @@ static uint32_t jit_build(cpu_pool_t *pool, vcpu_t *self, ir_insn_t *ir) {
     jit_work_t *w = ic->jit_work;
     ir_page_t *pg = ic->cur_page;
     uint32_t orig = __atomic_load_n(&ir->fast_offset, __ATOMIC_RELAXED);
-    jit_t j = {.w = w, .pg = pg, .start = (uint32_t)(ir - pg->insns), .el = pg->el, .world = pg->world};
+    jit_t j = {.w = w, .pg = pg, .start = (uint32_t)(ir - pg->insns)};
     for (uint32_t attempt = 0; attempt < 2; ++attempt) {
         os_unfair_lock_lock(&jp->lock);
         if (!atomic_load_explicit(&jp->active, memory_order_relaxed) || orig >= jp->arena.base_offset) {
@@ -2842,10 +2787,6 @@ uint32_t cpu_jit_enter(vcpu_t *cpu, ir_insn_t *ir) {
     return offset != 0 ? offset : __atomic_load_n(&ir->fast_offset, __ATOMIC_ACQUIRE);
 }
 
-bool cpu_jit_native(const ir_insn_t *ir) {
-    return ir->heat != 0 || (jit_base_offset != 0 && ir->fast_offset >= jit_base_offset);
-}
-
 static void jit_pool_activate(cpu_pool_t *pool) {
     cpu_jit_pool_t *jp = &pool->jit;
     if (!cpu_jit_arena_acquire(pool->vm, &jp->arena)) {
@@ -2879,7 +2820,6 @@ static void jit_pool_activate(cpu_pool_t *pool) {
         jp->heads[i] = POOL_NONE;
         jp->patch_heads[i] = POOL_NONE;
     }
-    jit_base_offset = jp->arena.base_offset;
     os_unfair_lock_lock(&jp->lock);
     atomic_store_explicit(&jp->pend_epoch, UINT64_MAX, memory_order_relaxed);
     atomic_store_explicit(&jp->active, true, memory_order_relaxed);

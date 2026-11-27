@@ -1,11 +1,105 @@
 #include "virtio_internal.h"
 
-#include <stdatomic.h>
+#include <errno.h>
+#include <unistd.h>
+
+enum : uint32_t {
+    VIRTIO_MMIO_MAGIC_VALUE = 0x000,
+    VIRTIO_MMIO_VERSION = 0x004,
+    VIRTIO_MMIO_DEVICE_ID = 0x008,
+    VIRTIO_MMIO_VENDOR_ID = 0x00c,
+    VIRTIO_MMIO_DEVICE_FEATURES = 0x010,
+    VIRTIO_MMIO_DEVICE_FEATURES_SEL = 0x014,
+    VIRTIO_MMIO_DRIVER_FEATURES = 0x020,
+    VIRTIO_MMIO_DRIVER_FEATURES_SEL = 0x024,
+    VIRTIO_MMIO_QUEUE_SEL = 0x030,
+    VIRTIO_MMIO_QUEUE_NUM_MAX = 0x034,
+    VIRTIO_MMIO_QUEUE_NUM = 0x038,
+    VIRTIO_MMIO_QUEUE_READY = 0x044,
+    VIRTIO_MMIO_QUEUE_NOTIFY = 0x050,
+    VIRTIO_MMIO_INTERRUPT_STATUS = 0x060,
+    VIRTIO_MMIO_INTERRUPT_ACK = 0x064,
+    VIRTIO_MMIO_STATUS = 0x070,
+    VIRTIO_MMIO_QUEUE_DESC_LOW = 0x080,
+    VIRTIO_MMIO_QUEUE_DESC_HIGH = 0x084,
+    VIRTIO_MMIO_QUEUE_DRIVER_LOW = 0x090,
+    VIRTIO_MMIO_QUEUE_DRIVER_HIGH = 0x094,
+    VIRTIO_MMIO_QUEUE_DEVICE_LOW = 0x0a0,
+    VIRTIO_MMIO_QUEUE_DEVICE_HIGH = 0x0a4,
+    VIRTIO_MMIO_SHM_SEL = 0x0ac,
+    VIRTIO_MMIO_SHM_LEN_LOW = 0x0b0,
+    VIRTIO_MMIO_SHM_LEN_HIGH = 0x0b4,
+    VIRTIO_MMIO_SHM_BASE_LOW = 0x0b8,
+    VIRTIO_MMIO_SHM_BASE_HIGH = 0x0bc,
+    VIRTIO_MMIO_QUEUE_RESET = 0x0c0,
+    VIRTIO_MMIO_CONFIG_GENERATION = 0x0fc,
+    VIRTIO_MMIO_CONFIG = 0x100,
+};
+
+#define VIRTIO_MMIO_MAGIC 0x74726976U
+#define VIRTIO_MMIO_VERSION_2 2U
+#define VIRTIO_VENDOR_SWIPTERM 0x53574950U
+
+#define VIRTIO_F_INDIRECT_DESC (1ULL << 28)
+#define VIRTIO_F_RING_EVENT_IDX (1ULL << 29)
+#define VIRTIO_F_VERSION_1 (1ULL << 32)
+
+enum : uint16_t {
+    VRING_DESC_F_NEXT = 1,
+    VRING_DESC_F_WRITE = 2,
+    VRING_DESC_F_INDIRECT = 4,
+};
+
+typedef struct vring_desc {
+    uint64_t addr;
+    uint32_t len;
+    uint16_t flags;
+    uint16_t next;
+} vring_desc_t;
+
+typedef struct vring_avail {
+    uint16_t flags;
+    uint16_t idx;
+    uint16_t ring[];
+} vring_avail_t;
+
+typedef struct vring_used_elem {
+    uint32_t id;
+    uint32_t len;
+} vring_used_elem_t;
+
+typedef struct vring_used {
+    uint16_t flags;
+    uint16_t idx;
+    vring_used_elem_t ring[];
+} vring_used_t;
+
+virtio_dev_t *virtio_dev_alloc(vmm_machine_t *vm, uint32_t slot, uint32_t device_id, uint32_t num_queues,
+                               const uint32_t *queue_sizes, const virtio_dev_ops_t *ops, void *priv) {
+    virtio_dev_t *dev = calloc(1, sizeof(*dev));
+    if (!dev) {
+        return NULL;
+    }
+    dev->queues = calloc(num_queues, sizeof(*dev->queues));
+    if (!dev->queues) {
+        free(dev);
+        return NULL;
+    }
+    dev->vm = vm;
+    dev->device_id = device_id;
+    dev->irq_intid = VMM_IRQ_VIRTIO_BASE + slot;
+    dev->num_queues = num_queues;
+    pthread_mutex_init(&dev->irq_lock, NULL);
+    dev->ops = ops;
+    dev->priv = priv;
+    for (uint32_t i = 0; i < num_queues; i++) {
+        dev->queues[i].num_max = queue_sizes[i];
+    }
+    return dev;
+}
 
 static uint64_t virtio_offered_features(virtio_dev_t *dev) {
-    uint64_t feats = (dev->ops && dev->ops->get_features)
-                         ? dev->ops->get_features(dev)
-                         : dev->device_features;
+    uint64_t feats = dev->ops->get_features ? dev->ops->get_features(dev) : 0;
     return feats | VIRTIO_F_VERSION_1 | VIRTIO_F_INDIRECT_DESC | VIRTIO_F_RING_EVENT_IDX;
 }
 
@@ -20,11 +114,8 @@ static void virtqueue_reset_state(virtqueue_t *vq) {
 }
 
 uint64_t virtio_mmio_read(virtio_dev_t *dev, uint32_t offset, uint32_t size) {
-    if (!dev) {
-        return 0;
-    }
     if (offset >= VIRTIO_MMIO_CONFIG) {
-        if (dev->ops && dev->ops->read_config) {
+        if (dev->ops->read_config) {
             return dev->ops->read_config(dev, offset - VIRTIO_MMIO_CONFIG, size);
         }
         return 0;
@@ -38,7 +129,7 @@ uint64_t virtio_mmio_read(virtio_dev_t *dev, uint32_t offset, uint32_t size) {
     case VIRTIO_MMIO_DEVICE_ID:
         return dev->device_id;
     case VIRTIO_MMIO_VENDOR_ID:
-        return dev->vendor_id;
+        return VIRTIO_VENDOR_SWIPTERM;
     case VIRTIO_MMIO_DEVICE_FEATURES: {
         uint64_t feats = virtio_offered_features(dev);
         if (dev->device_features_sel == 0) {
@@ -65,28 +156,21 @@ uint64_t virtio_mmio_read(virtio_dev_t *dev, uint32_t offset, uint32_t size) {
     case VIRTIO_MMIO_SHM_BASE_HIGH: {
         uint64_t base = 0;
         uint64_t len = 0;
-        if (!dev->ops || !dev->ops->shm_region || !dev->ops->shm_region(dev, dev->shm_sel, &base, &len)) {
+        if (!dev->ops->shm_region || !dev->ops->shm_region(dev, dev->shm_sel, &base, &len)) {
             return 0xFFFFFFFFU;
         }
         uint64_t value = offset == VIRTIO_MMIO_SHM_LEN_LOW || offset == VIRTIO_MMIO_SHM_LEN_HIGH ? len : base;
         return offset == VIRTIO_MMIO_SHM_LEN_LOW || offset == VIRTIO_MMIO_SHM_BASE_LOW ? (uint32_t)value
                                                                                        : (uint32_t)(value >> 32);
     }
-    case VIRTIO_MMIO_QUEUE_RESET:
-        return 0;
-    case VIRTIO_MMIO_CONFIG_GENERATION:
-        return dev->config_generation;
     default:
         return 0;
     }
 }
 
 void virtio_mmio_write(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64_t val) {
-    if (!dev) {
-        return;
-    }
     if (offset >= VIRTIO_MMIO_CONFIG) {
-        if (dev->ops && dev->ops->write_config) {
+        if (dev->ops->write_config) {
             dev->ops->write_config(dev, offset - VIRTIO_MMIO_CONFIG, size, val);
         }
         return;
@@ -133,17 +217,14 @@ void virtio_mmio_write(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64
         }
         break;
     case VIRTIO_MMIO_QUEUE_NOTIFY:
-        if (v < dev->num_queues &&
-            atomic_load_explicit(&dev->queues[v].ready, memory_order_acquire) &&
-            (atomic_load_explicit(&dev->status, memory_order_acquire) & VIRTIO_STATUS_DRIVER_OK) &&
-            dev->ops && dev->ops->queue_notify) {
+        if (v < dev->num_queues && virtqueue_active(dev, &dev->queues[v])) {
             dev->ops->queue_notify(dev, v);
         }
         break;
     case VIRTIO_MMIO_INTERRUPT_ACK: {
         pthread_mutex_lock(&dev->irq_lock);
         uint32_t prev = atomic_fetch_and_explicit(&dev->interrupt_status, ~v, memory_order_acq_rel);
-        if ((prev & ~v) == 0 && dev->vm) {
+        if ((prev & ~v) == 0) {
             gicv2_set_irq(dev->vm, dev->irq_intid, false);
         }
         pthread_mutex_unlock(&dev->irq_lock);
@@ -155,7 +236,7 @@ void virtio_mmio_write(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64
             for (uint32_t i = 0; i < dev->num_queues; i++) {
                 atomic_store_explicit(&dev->queues[i].ready, 0, memory_order_release);
             }
-            if (dev->ops && dev->ops->reset) {
+            if (dev->ops->reset) {
                 dev->ops->reset(dev);
             }
             dev->device_features_sel = 0;
@@ -164,9 +245,7 @@ void virtio_mmio_write(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64
             dev->queue_sel = 0;
             pthread_mutex_lock(&dev->irq_lock);
             atomic_store_explicit(&dev->interrupt_status, 0, memory_order_release);
-            if (dev->vm) {
-                gicv2_set_irq(dev->vm, dev->irq_intid, false);
-            }
+            gicv2_set_irq(dev->vm, dev->irq_intid, false);
             pthread_mutex_unlock(&dev->irq_lock);
             for (uint32_t i = 0; i < dev->num_queues; i++) {
                 virtqueue_reset_state(&dev->queues[i]);
@@ -183,7 +262,7 @@ void virtio_mmio_write(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64
             }
         }
         atomic_store_explicit(&dev->status, v, memory_order_release);
-        if (features_ok && dev->ops && dev->ops->set_features) {
+        if (features_ok && dev->ops->set_features) {
             dev->ops->set_features(dev, dev->driver_features);
         }
         break;
@@ -234,12 +313,9 @@ void virtio_mmio_write(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64
 }
 
 void virtio_raise_irq(virtio_dev_t *dev, uint32_t isr_bits) {
-    if (!dev || isr_bits == 0) {
-        return;
-    }
     pthread_mutex_lock(&dev->irq_lock);
     uint32_t old_status = atomic_fetch_or_explicit(&dev->interrupt_status, isr_bits, memory_order_release);
-    if (old_status == 0 && dev->vm) {
+    if (old_status == 0) {
         gicv2_set_irq(dev->vm, dev->irq_intid, true);
     }
     pthread_mutex_unlock(&dev->irq_lock);
@@ -283,10 +359,8 @@ static int virtqueue_fail(virtio_dev_t *dev) {
 }
 
 int virtqueue_pop(virtio_dev_t *dev, virtqueue_t *vq, virtio_iov_t *iov, size_t max_iov,
-                  uint16_t *head_out, size_t *out_count, size_t *in_count) {
-    if (!dev || !dev->vm || !vq ||
-        !atomic_load_explicit(&vq->ready, memory_order_acquire) ||
-        vq->num == 0 || vq->num > vq->num_max) {
+                  uint16_t *head_out, size_t *count_out) {
+    if (!atomic_load_explicit(&vq->ready, memory_order_acquire) || vq->num == 0) {
         return 0;
     }
     if (atomic_load_explicit(&dev->status, memory_order_acquire) & VIRTIO_STATUS_DEVICE_NEEDS_RESET) {
@@ -379,22 +453,13 @@ int virtqueue_pop(virtio_dev_t *dev, virtqueue_t *vq, virtio_iov_t *iov, size_t 
         }
     }
 
-    if (head_out) {
-        *head_out = head;
-    }
-    if (out_count) {
-        *out_count = out_cnt;
-    }
-    if (in_count) {
-        *in_count = in_cnt;
-    }
+    *head_out = head;
+    *count_out = out_cnt + in_cnt;
     return 1;
 }
 
 void virtqueue_push(virtio_dev_t *dev, virtqueue_t *vq, uint16_t head, uint32_t len) {
-    if (!dev || !dev->vm || !vq ||
-        !atomic_load_explicit(&vq->ready, memory_order_acquire) ||
-        vq->num == 0) {
+    if (!atomic_load_explicit(&vq->ready, memory_order_acquire) || vq->num == 0) {
         return;
     }
     size_t used_sz = sizeof(vring_used_t) + (size_t)vq->num * sizeof(vring_used_elem_t);
@@ -411,9 +476,7 @@ void virtqueue_push(virtio_dev_t *dev, virtqueue_t *vq, uint16_t head, uint32_t 
 }
 
 bool virtqueue_should_notify(virtio_dev_t *dev, virtqueue_t *vq, uint16_t old_used) {
-    if (!dev || !dev->vm || !vq ||
-        !atomic_load_explicit(&vq->ready, memory_order_acquire) ||
-        vq->num == 0) {
+    if (!atomic_load_explicit(&vq->ready, memory_order_acquire) || vq->num == 0) {
         return false;
     }
     atomic_thread_fence(memory_order_seq_cst);
@@ -437,12 +500,8 @@ bool virtqueue_should_notify(virtio_dev_t *dev, virtqueue_t *vq, uint16_t old_us
 }
 
 void virtqueue_rewind(virtio_dev_t *dev, virtqueue_t *vq, uint16_t saved_avail) {
-    if (!dev || !vq) {
-        return;
-    }
     vq->last_avail_idx = saved_avail;
-    if (dev->vm &&
-        atomic_load_explicit(&vq->ready, memory_order_acquire) &&
+    if (atomic_load_explicit(&vq->ready, memory_order_acquire) &&
         vq->num > 0 && (dev->driver_features & VIRTIO_F_RING_EVENT_IDX)) {
         size_t off = sizeof(vring_used_t) + (size_t)vq->num * sizeof(vring_used_elem_t);
         uint16_t *avail_event = mmu_gpa_to_hva(dev->vm, vq->used_gpa + off, sizeof(uint16_t));
@@ -469,14 +528,117 @@ bool virtqueue_request_avail(virtio_dev_t *dev, virtqueue_t *vq) {
     return atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire) != idx;
 }
 
-void virtio_dev_destroy(virtio_dev_t *dev) {
-    if (!dev) {
-        return;
+bool virtqueue_has_avail(virtio_dev_t *dev, virtqueue_t *vq) {
+    uint32_t status = atomic_load_explicit(&dev->status, memory_order_acquire);
+    if (!atomic_load_explicit(&vq->ready, memory_order_acquire) ||
+        vq->num == 0 ||
+        (status & (VIRTIO_STATUS_DRIVER_OK | VIRTIO_STATUS_DEVICE_NEEDS_RESET)) != VIRTIO_STATUS_DRIVER_OK) {
+        return false;
     }
-    if (dev->ops && dev->ops->destroy) {
+    size_t avail_sz = sizeof(vring_avail_t) + (size_t)vq->num * sizeof(uint16_t);
+    const vring_avail_t *avail = mmu_gpa_to_hva(dev->vm, vq->avail_gpa, avail_sz);
+    if (!avail) {
+        return false;
+    }
+    atomic_thread_fence(memory_order_seq_cst);
+    uint16_t avail_idx = atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire);
+    return avail_idx != vq->last_avail_idx;
+}
+
+void virtio_dev_destroy(virtio_dev_t *dev) {
+    if (dev->ops->destroy) {
         dev->ops->destroy(dev);
     }
     pthread_mutex_destroy(&dev->irq_lock);
     free(dev->queues);
     free(dev);
+}
+
+static void *virtio_worker_main(void *arg) {
+    virtio_worker_t *worker = arg;
+    pthread_mutex_lock(&worker->lock);
+    for (;;) {
+        while (!worker->pending && !worker->stop) {
+            pthread_cond_wait(&worker->work_cond, &worker->lock);
+        }
+        if (!worker->pending && worker->stop) {
+            break;
+        }
+        worker->pending = false;
+        worker->busy = true;
+        pthread_mutex_unlock(&worker->lock);
+
+        worker->run(worker->ctx);
+
+        pthread_mutex_lock(&worker->lock);
+        worker->busy = false;
+        if (!worker->pending) {
+            pthread_cond_broadcast(&worker->idle_cond);
+        }
+    }
+    pthread_mutex_unlock(&worker->lock);
+    return NULL;
+}
+
+void virtio_worker_init(virtio_worker_t *worker, void (*run)(void *ctx), void *ctx) {
+    pthread_mutex_init(&worker->lock, NULL);
+    pthread_cond_init(&worker->work_cond, NULL);
+    pthread_cond_init(&worker->idle_cond, NULL);
+    worker->run = run;
+    worker->ctx = ctx;
+}
+
+int virtio_worker_start(virtio_worker_t *worker) {
+    if (pthread_create(&worker->thread, NULL, virtio_worker_main, worker) != 0) {
+        return -1;
+    }
+    worker->started = true;
+    return 0;
+}
+
+void virtio_worker_kick(virtio_worker_t *worker) {
+    pthread_mutex_lock(&worker->lock);
+    if (!worker->stop) {
+        worker->pending = true;
+        pthread_cond_signal(&worker->work_cond);
+    }
+    pthread_mutex_unlock(&worker->lock);
+}
+
+void virtio_worker_wait_idle(virtio_worker_t *worker) {
+    pthread_mutex_lock(&worker->lock);
+    while (worker->pending || worker->busy) {
+        pthread_cond_wait(&worker->idle_cond, &worker->lock);
+    }
+    pthread_mutex_unlock(&worker->lock);
+}
+
+void virtio_worker_destroy(virtio_worker_t *worker) {
+    pthread_mutex_lock(&worker->lock);
+    worker->stop = true;
+    pthread_cond_signal(&worker->work_cond);
+    pthread_mutex_unlock(&worker->lock);
+    if (worker->started) {
+        pthread_join(worker->thread, NULL);
+    }
+    pthread_cond_destroy(&worker->idle_cond);
+    pthread_cond_destroy(&worker->work_cond);
+    pthread_mutex_destroy(&worker->lock);
+}
+
+int virtio_write_zeros(int fd, off_t offset, off_t length) {
+    static const uint8_t zeros[65536];
+    while (length > 0) {
+        size_t chunk = length < (off_t)sizeof(zeros) ? (size_t)length : sizeof(zeros);
+        ssize_t n = pwrite(fd, zeros, chunk, offset);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n <= 0) {
+            return -1;
+        }
+        offset += n;
+        length -= n;
+    }
+    return 0;
 }

@@ -32,7 +32,6 @@ static cpu_pool_t *pool_create(vmm_machine_t *vm) {
     for (uint32_t i = 0; i < POOL_SLOTS; ++i) {
         pool->slot_link[i] = i + 1U < POOL_SLOTS ? i + 1U : POOL_NONE;
     }
-    pool->free_head = 0;
     pool->retire_head = POOL_NONE;
     pool->retire_tail = POOL_NONE;
     for (uint32_t i = 0; i < POOL_BUCKETS; ++i) {
@@ -124,9 +123,7 @@ void cpu_qs_wait(cpu_pool_t *pool, vcpu_t *self, uint64_t target) {
         while (!atomic_load_explicit(&qs->parked, memory_order_seq_cst) &&
                atomic_load_explicit(&qs->qs, memory_order_seq_cst) < target) {
             atomic_store_explicit(&other->shootdown, 1, memory_order_seq_cst);
-            if (self != NULL) {
-                mmu_poll_shootdown(self);
-            }
+            mmu_poll_shootdown(self);
             if (++spins < 128) {
                 __asm__ __volatile__("yield");
             } else {
@@ -161,7 +158,7 @@ static void pool_unlink(cpu_pool_t *pool, uint32_t slot) {
 }
 
 static void pool_retire(cpu_pool_t *pool, uint32_t slot) {
-    pool->slot_state[slot] = POOL_SLOT_RETIRED;
+    pool->slot_live[slot] = false;
     atomic_store_explicit(&pool_page(pool, slot)->gen, ++pool->slot_gen[slot], memory_order_seq_cst);
     pool->slot_link[slot] = POOL_NONE;
     if (pool->retire_tail == POOL_NONE) {
@@ -185,7 +182,6 @@ static uint64_t pool_retire_stamp(cpu_pool_t *pool, uint32_t prev_tail) {
 }
 
 static void pool_free(cpu_pool_t *pool, uint32_t slot, bool reusable) {
-    pool->slot_state[slot] = POOL_SLOT_FREE;
     pool->slot_reusable[slot] = reusable;
     pool->slot_link[slot] = pool->free_head;
     pool->free_head = slot;
@@ -229,7 +225,7 @@ static void pool_evict(cpu_pool_t *pool) {
     for (uint32_t scanned = 0; scanned < 2U * POOL_SLOTS && count < POOL_EVICT_BATCH; ++scanned) {
         uint32_t slot = pool->clock;
         pool->clock = slot + 1U < POOL_SLOTS ? slot + 1U : 0;
-        if (pool->slot_state[slot] != POOL_SLOT_LIVE) {
+        if (!pool->slot_live[slot]) {
             continue;
         }
         ir_page_t *pg = pool_page(pool, slot);
@@ -254,14 +250,12 @@ ir_page_t *cpu_pool_alloc(cpu_pool_t *pool, vcpu_t *self) {
             if (pool->retire_head == POOL_NONE) {
                 pool->retire_tail = POOL_NONE;
             }
-            pool->slot_state[slot] = POOL_SLOT_BUSY;
             os_unfair_lock_unlock(&pool->lock);
             return pool_page(pool, slot);
         }
         slot = pool->free_head;
         if (slot != POOL_NONE) {
             pool->free_head = pool->slot_link[slot];
-            pool->slot_state[slot] = POOL_SLOT_BUSY;
             bool reusable = pool->slot_reusable[slot];
             os_unfair_lock_unlock(&pool->lock);
             ir_page_t *pg = pool_page(pool, slot);
@@ -343,7 +337,7 @@ void cpu_pool_publish(cpu_pool_t *pool, ir_page_t *pg) {
         pg->next = *head;
         *head = slot;
         atomic_store_explicit(&pg->ref, 1, memory_order_relaxed);
-        pool->slot_state[slot] = POOL_SLOT_LIVE;
+        pool->slot_live[slot] = true;
         atomic_store_explicit(&pg->gen, ++pool->slot_gen[slot], memory_order_release);
     }
     os_unfair_lock_unlock(&pool->lock);

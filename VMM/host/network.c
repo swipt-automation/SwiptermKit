@@ -23,7 +23,6 @@ struct swipterm_network {
 
     pthread_mutex_t state_lock;
     uint64_t session_nonce;
-    uint64_t next_token;
     bool listeners_reset;
     swipterm_network_listener *listeners;
     size_t listener_count;
@@ -87,7 +86,7 @@ int swipterm_network_wake_fd(swipterm_network *network, swipterm_network_wake wa
     return network->wake_pipes[wake][0];
 }
 
-void swipterm_network_signal(swipterm_network *network, int wake) {
+void swipterm_network_signal(swipterm_network *network, swipterm_network_wake wake) {
     if (!atomic_exchange_explicit(&network->armed[wake], false, memory_order_seq_cst)) {
         return;
     }
@@ -219,7 +218,6 @@ int swipterm_network_bridge(swipterm_network *network, bool inet6, int fd, uint1
         .session_nonce = network->session_nonce,
         .role = SWIPTERMD_STREAM_TCP_MIRROR,
         .resource_id = swiptermd_mirror_pack_resource_id(inet6 ? SWIPTERMD_MIRROR_AF_INET6 : SWIPTERMD_MIRROR_AF_INET, port),
-        .token = ++network->next_token,
     };
     pthread_mutex_unlock(&network->state_lock);
     uint8_t prefix[SWIPTERMD_ATTACH_HEADER_SIZE];

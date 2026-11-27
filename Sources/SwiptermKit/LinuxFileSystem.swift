@@ -25,47 +25,6 @@ public enum LinuxFileType: Hashable, Sendable {
     }
 }
 
-public struct LinuxFileStat: Hashable, Sendable {
-    public var type: LinuxFileType
-    public var permissions: UInt32
-    public var userID: UInt32
-    public var groupID: UInt32
-    public var linkCount: UInt32
-    public var size: UInt64
-    public var inode: UInt64
-    public var deviceID: UInt64
-    public var accessDate: Date
-    public var modificationDate: Date
-    public var changeDate: Date
-
-    init(_ stat: swipterm_stat) {
-        func date(_ time: timespec) -> Date {
-            Date(timeIntervalSince1970: TimeInterval(time.tv_sec) + TimeInterval(time.tv_nsec) / 1_000_000_000)
-        }
-        type = LinuxFileType(mode: stat.mode)
-        permissions = stat.mode & 0o7777
-        userID = stat.uid
-        groupID = stat.gid
-        linkCount = stat.nlink
-        size = stat.size
-        inode = stat.inode
-        deviceID = stat.rdev
-        accessDate = date(stat.access_time)
-        modificationDate = date(stat.modification_time)
-        changeDate = date(stat.change_time)
-    }
-}
-
-public struct LinuxDirectoryEntry: Hashable, Sendable {
-    public var name: String
-    public var type: LinuxFileType
-
-    public init(name: String, type: LinuxFileType) {
-        self.name = name
-        self.type = type
-    }
-}
-
 public struct LinuxFileSystem: Sendable {
     private let runtime: LinuxRuntime
 
@@ -73,11 +32,11 @@ public struct LinuxFileSystem: Sendable {
         self.runtime = runtime
     }
 
-    public func stat(_ path: String, followSymlinks: Bool = true) async throws -> LinuxFileStat {
+    public func stat(_ path: String) async throws -> LinuxFileType {
         try await runtime.withActiveHandleBlocking { runtimeHandle in
-            var stat = swipterm_stat()
-            try check(swipterm_stat_path(runtimeHandle, path, followSymlinks, &stat))
-            return LinuxFileStat(stat)
+            var mode: UInt32 = 0
+            try check(swipterm_stat_path(runtimeHandle, path, &mode))
+            return LinuxFileType(mode: mode)
         }
     }
 
@@ -101,31 +60,13 @@ public struct LinuxFileSystem: Sendable {
         }
     }
 
-    public func listDirectory(_ path: String) async throws -> [LinuxDirectoryEntry] {
-        try await runtime.withActiveHandleBlocking { runtimeHandle in
-            var entries: UnsafeMutablePointer<swipterm_directory_entry>?
-            var count = 0
-            try check(swipterm_list_directory(runtimeHandle, path, &entries, &count))
-            defer { swipterm_free_directory_entries(entries, count) }
-            return (0..<count).map {
-                LinuxDirectoryEntry(name: String(cString: entries![$0].name), type: LinuxFileType(mode: entries![$0].mode))
-            }
-        }
-    }
-
     public func createDirectory(
         _ path: String,
         permissions: UInt32 = 0o755,
-        withIntermediateDirectories: Bool = false
+        withIntermediateDirectories: Bool
     ) async throws {
         try await runtime.withActiveHandleBlocking { runtimeHandle in
             try check(swipterm_create_directory(runtimeHandle, path, permissions, withIntermediateDirectories))
-        }
-    }
-
-    public func removeItem(_ path: String, recursive: Bool = false) async throws {
-        try await runtime.withActiveHandleBlocking { runtimeHandle in
-            try check(swipterm_remove(runtimeHandle, path, recursive))
         }
     }
 }

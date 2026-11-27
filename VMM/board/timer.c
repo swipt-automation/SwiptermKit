@@ -1,6 +1,5 @@
 #include "board_internal.h"
 #include "../cpu/cpu_fast_layout.h"
-#include "machine.h"
 
 #include <errno.h>
 #include <mach/mach_time.h>
@@ -26,14 +25,14 @@ static uint64_t gcd_u64(uint64_t a, uint64_t b) {
 static void init_timebase(void) {
     mach_timebase_info_data_t info;
     mach_timebase_info(&info);
-    uint64_t num = (uint64_t)info.numer * 24ULL;
-    uint64_t den = (uint64_t)info.denom * 1000ULL;
+    uint64_t num = (uint64_t)info.numer * VMM_TIMER_FREQ;
+    uint64_t den = (uint64_t)info.denom * 1000000000ULL;
     uint64_t g = gcd_u64(num, den);
     g_tb_num = num / g;
     g_tb_den = den / g;
 }
 
-static uint64_t host_ticks_24mhz(void) {
+uint64_t vmm_timer_ticks(void) {
     uint64_t raw = mach_absolute_time();
     if (g_tb_num == 1 && g_tb_den == 1) {
         return raw;
@@ -41,17 +40,8 @@ static uint64_t host_ticks_24mhz(void) {
     return (uint64_t)(((__uint128_t)raw * g_tb_num) / g_tb_den);
 }
 
-uint64_t vmm_timer_cntfrq(void) {
-    return VMM_TIMER_FREQ;
-}
-
-uint64_t vmm_timer_ticks(void) {
-    return host_ticks_24mhz();
-}
-
 uint64_t vmm_timer_cntvct(const vmm_machine_t *vm) {
-    uint64_t now = host_ticks_24mhz();
-    return vm ? now - atomic_load_explicit(&vm->timer_base, memory_order_relaxed) : now;
+    return vmm_timer_ticks() - atomic_load_explicit(&vm->timer_base, memory_order_relaxed);
 }
 
 bool vmm_timer_native(void) {
@@ -60,7 +50,6 @@ bool vmm_timer_native(void) {
 }
 
 void vmm_timer_sample_realtime(const vmm_machine_t *vm, uint64_t *realtime_ns, uint64_t *cntvct) {
-    // Darwin's CLOCK_REALTIME comes from the commpage gettimeofday and only advances in whole microseconds.
     uint64_t prev = clock_gettime_nsec_np(CLOCK_REALTIME);
     uint64_t counter;
     uint64_t now;
@@ -73,7 +62,7 @@ void vmm_timer_sample_realtime(const vmm_machine_t *vm, uint64_t *realtime_ns, u
 }
 
 void vmm_timer_set_cntvct(vmm_machine_t *vm, uint64_t cntvct) {
-    atomic_store_explicit(&vm->timer_base, host_ticks_24mhz() - cntvct, memory_order_release);
+    atomic_store_explicit(&vm->timer_base, vmm_timer_ticks() - cntvct, memory_order_release);
     for (uint32_t i = 0; i < vm->cpu_count; i++) {
         if (vm->cpus[i]) {
             vcpu_update_counter_bases(vm->cpus[i]);
@@ -117,8 +106,7 @@ static void vmm_timer_sync_locked(vmm_machine_priv_t *priv, vcpu_t *cpu) {
     }
 
     uint64_t new_deadline = UINT64_MAX;
-    if (atomic_load_explicit(&ts->active, memory_order_acquire) &&
-        atomic_load_explicit(&cpu->vm->running, memory_order_acquire) &&
+    if (atomic_load_explicit(&cpu->vm->running, memory_order_acquire) &&
         !atomic_load_explicit(&cpu->vm->suspended, memory_order_acquire) &&
         min_delta != UINT64_MAX) {
         const uint64_t max_ticks = 3600ULL * VMM_TIMER_FREQ;
@@ -159,7 +147,7 @@ static void *timer_thread_main(void *ctx) {
             }
             if (d <= now) {
                 ts->deadlines[i] = UINT64_MAX;
-                if (atomic_load_explicit(&ts->active, memory_order_acquire) && priv->pub.cpus[i]) {
+                if (priv->pub.cpus[i]) {
                     vmm_timer_sync_locked(priv, priv->pub.cpus[i]);
                 }
                 fired = true;
@@ -175,7 +163,7 @@ static void *timer_thread_main(void *ctx) {
             pthread_cond_wait(&ts->cond, &ts->lock);
         } else {
             uint64_t delta_ticks = earliest - now;
-            uint64_t ns = (uint64_t)(((__uint128_t)delta_ticks * 1000ULL) / 24ULL);
+            uint64_t ns = (uint64_t)(((__uint128_t)delta_ticks * 1000000000ULL) / VMM_TIMER_FREQ);
             if (ns < 1000ULL) {
                 ns = 1000ULL;
             }
@@ -194,7 +182,6 @@ int vmm_timer_init(vmm_machine_priv_t *priv) {
     vmm_timer_state_t *ts = &priv->timer;
     pthread_once(&g_tb_once, init_timebase);
     vmm_timer_set_cntvct(&priv->pub, 0);
-    atomic_store_explicit(&ts->active, true, memory_order_release);
     ts->stop = false;
     for (uint32_t i = 0; i < VMM_MAX_VCPUS; i++) {
         ts->deadlines[i] = UINT64_MAX;
@@ -239,7 +226,6 @@ void vmm_timer_sync_all(vmm_machine_priv_t *priv) {
 
 void vmm_timer_destroy(vmm_machine_priv_t *priv) {
     vmm_timer_state_t *ts = &priv->timer;
-    atomic_store_explicit(&ts->active, false, memory_order_release);
     if (!ts->initialized) {
         return;
     }
@@ -261,17 +247,8 @@ void vmm_timer_destroy(vmm_machine_priv_t *priv) {
 }
 
 void vmm_timer_sync(vcpu_t *cpu) {
-    if (!cpu || !cpu->vm) {
-        return;
-    }
     vmm_machine_priv_t *priv = vmm_priv(cpu->vm);
-    if (!priv || cpu->cpu_id >= priv->pub.cpu_count) {
-        return;
-    }
     vmm_timer_state_t *ts = &priv->timer;
-    if (!ts->initialized) {
-        return;
-    }
     pthread_mutex_lock(&ts->lock);
     vmm_timer_sync_locked(priv, cpu);
     pthread_mutex_unlock(&ts->lock);
@@ -279,11 +256,6 @@ void vmm_timer_sync(vcpu_t *cpu) {
 
 void vmm_timer_write(vcpu_t *cpu, uint64_t *reg, uint64_t value) {
     vmm_machine_priv_t *priv = vmm_priv(cpu->vm);
-    if (!priv || !priv->timer.initialized) {
-        *reg = value;
-        return;
-    }
-
     pthread_mutex_lock(&priv->timer.lock);
     *reg = value;
     vmm_timer_sync_locked(priv, cpu);

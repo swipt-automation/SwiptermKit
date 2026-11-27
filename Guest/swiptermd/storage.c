@@ -219,7 +219,7 @@ static int unmount_guest_children(void) {
     }
 }
 
-bool storage_teardown(void) {
+void storage_teardown(void) {
     int children = unmount_guest_children();
     int root_fd = open(GUEST_ROOT, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     int flush = root_fd < 0 ? -errno : (syncfs(root_fd) < 0 ? -errno : 0);
@@ -235,5 +235,4 @@ bool storage_teardown(void) {
         (void)mount(NULL, GUEST_ROOT, NULL, MS_REMOUNT | MS_RDONLY, NULL);
     }
     sync();
-    return children == 0 && flush == 0 && root == 0;
 }

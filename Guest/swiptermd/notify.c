@@ -55,7 +55,7 @@ static void on_notify(ev_node_t *node, uint32_t events) {
         data[n] = '\0';
         if (cred.pid > 0 && cred.pid == g_daemon.container_init_pid)
             handle_init_message(data);
-        else if (cred.uid == 0 && strcmp(data, "X_SWIPTERM_SESSIONS=1") == 0)
+        else if (cred.uid == 0 && strcmp(data, SESSIONS_READY_MESSAGE) == 0)
             sessions_register(cred.pid);
     }
 }

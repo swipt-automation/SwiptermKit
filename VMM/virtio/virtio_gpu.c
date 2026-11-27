@@ -93,7 +93,7 @@ typedef struct gpu_mem_entry {
     uint32_t padding;
 } gpu_mem_entry_t;
 
-typedef struct gpu_resource_unref {
+typedef struct gpu_resource_cmd {
     gpu_ctrl_hdr_t hdr;
     uint32_t resource_id;
     uint32_t padding;
@@ -272,6 +272,8 @@ typedef struct virtio_gpu {
     uint8_t response[GPU_MAX_RESPONSE];
 } virtio_gpu_t;
 
+static pthread_mutex_t g_renderer_lock = PTHREAD_MUTEX_INITIALIZER;
+
 static gpu_resource_t **gpu_resource_slot(virtio_gpu_t *gpu, uint32_t id) {
     gpu_resource_t **link = &gpu->resources[id % GPU_RESOURCE_BUCKETS];
     while (*link && (*link)->id != id) {
@@ -302,10 +304,10 @@ static void gpu_on_retire(void *owner, uint32_t ctx_id, uint32_t ring_idx, uint6
     pthread_mutex_unlock(&gpu->lock);
 }
 
-static int gpu_pop(virtio_gpu_t *gpu, uint32_t queue, uint16_t *head, size_t *out_count, size_t *in_count) {
+static int gpu_pop(virtio_gpu_t *gpu, uint32_t queue, uint16_t *head, size_t *count) {
     pthread_mutex_lock(&gpu->vq_lock);
     int rc = gpu->generation == gpu->seen_generation
-                 ? virtqueue_pop(gpu->dev, &gpu->dev->queues[queue], gpu->iov, GPU_MAX_IOV, head, out_count, in_count)
+                 ? virtqueue_pop(gpu->dev, &gpu->dev->queues[queue], gpu->iov, GPU_MAX_IOV, head, count)
                  : 0;
     pthread_mutex_unlock(&gpu->vq_lock);
     return rc;
@@ -369,7 +371,7 @@ static void gpu_retire(virtio_gpu_t *gpu, gpu_batch_t *batch, uint32_t ctx_id, u
 }
 
 static struct iovec *gpu_build_iov(virtio_gpu_t *gpu, const uint8_t *entries, uint32_t count) {
-    struct iovec *iov = calloc(count ? count : 1, sizeof(*iov));
+    struct iovec *iov = calloc(count, sizeof(*iov));
     if (!iov) {
         return NULL;
     }
@@ -387,38 +389,38 @@ static struct iovec *gpu_build_iov(virtio_gpu_t *gpu, const uint8_t *entries, ui
 }
 
 static void gpu_resource_unmap(gpu_resource_t *res) {
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     virgl_renderer_resource_unmap(res->id);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     res->mapped = false;
 }
 
 static void gpu_resource_free(gpu_resource_t *res) {
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     virgl_renderer_resource_unref(res->id);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     free(res->iov);
     free(res);
 }
 
 static void gpu_context_free(gpu_context_t *ctx) {
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     virgl_renderer_context_destroy(ctx->id);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     free(ctx);
 }
 
+static void gpu_free_pending(gpu_pending_t *pending) {
+    while (pending) {
+        gpu_pending_t *next = pending->next;
+        free(pending);
+        pending = next;
+    }
+}
+
 static void gpu_reset_state(virtio_gpu_t *gpu) {
-    for (gpu_pending_t *pending = gpu->timeline; pending;) {
-        gpu_pending_t *next = pending->next;
-        free(pending);
-        pending = next;
-    }
-    for (gpu_pending_t *pending = gpu->fifo; pending;) {
-        gpu_pending_t *next = pending->next;
-        free(pending);
-        pending = next;
-    }
+    gpu_free_pending(gpu->timeline);
+    gpu_free_pending(gpu->fifo);
     gpu->timeline = NULL;
     gpu->fifo = NULL;
 
@@ -452,7 +454,6 @@ static void gpu_reset_state(virtio_gpu_t *gpu) {
             gpu_resource_free(res);
         }
     }
-    gpu->config.events_read = 0;
 }
 
 static uint32_t gpu_nodata(uint8_t *response, uint32_t type) {
@@ -478,9 +479,9 @@ static uint32_t gpu_cmd_get_capset_info(const uint8_t *request, size_t len, uint
     }
     uint32_t max_version = 0;
     uint32_t max_size = 0;
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     virgl_renderer_get_cap_set(GPU_CAPSET_VENUS, &max_version, &max_size);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     gpu_resp_capset_info_t resp = {
         .hdr.type = VIRTIO_GPU_RESP_OK_CAPSET_INFO,
         .capset_id = GPU_CAPSET_VENUS,
@@ -499,16 +500,16 @@ static uint32_t gpu_cmd_get_capset(const uint8_t *request, size_t len, uint8_t *
     memcpy(&cmd, request, sizeof(cmd));
     uint32_t max_version = 0;
     uint32_t max_size = 0;
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     virgl_renderer_get_cap_set(cmd.capset_id, &max_version, &max_size);
     if (cmd.capset_id != GPU_CAPSET_VENUS || max_size == 0 ||
         max_size > GPU_MAX_RESPONSE - sizeof(gpu_ctrl_hdr_t)) {
-        gpu_unlock();
+        pthread_mutex_unlock(&g_renderer_lock);
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_INVALID_PARAMETER);
     }
     memset(response + sizeof(gpu_ctrl_hdr_t), 0, max_size);
     virgl_renderer_fill_caps(cmd.capset_id, cmd.capset_version, response + sizeof(gpu_ctrl_hdr_t));
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     gpu_nodata(response, VIRTIO_GPU_RESP_OK_CAPSET);
     return (uint32_t)sizeof(gpu_ctrl_hdr_t) + max_size;
 }
@@ -532,9 +533,9 @@ static uint32_t gpu_cmd_ctx_create(virtio_gpu_t *gpu, const uint8_t *request, si
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_OUT_OF_MEMORY);
     }
     ctx->id = cmd.hdr.ctx_id;
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     int rc = virgl_renderer_context_create_with_flags(ctx->id, GPU_CAPSET_VENUS, cmd.nlen, cmd.debug_name);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     if (rc != 0) {
         free(ctx);
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_UNSPEC);
@@ -570,13 +571,13 @@ static uint32_t gpu_cmd_ctx_resource(virtio_gpu_t *gpu, const uint8_t *request, 
     if (!res) {
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_INVALID_RESOURCE_ID);
     }
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     if (attach) {
         virgl_renderer_ctx_attach_resource((int)ctx->id, (int)res->id);
     } else {
         virgl_renderer_ctx_detach_resource((int)ctx->id, (int)res->id);
     }
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     return gpu_nodata(response, VIRTIO_GPU_RESP_OK_NODATA);
 }
 
@@ -609,9 +610,9 @@ static uint32_t gpu_cmd_resource_create_3d(virtio_gpu_t *gpu, const uint8_t *req
         .nr_samples = cmd.nr_samples,
         .flags = cmd.flags,
     };
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     int rc = virgl_renderer_resource_create(&args, NULL, 0);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     if (rc != 0) {
         free(res);
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_UNSPEC);
@@ -666,9 +667,9 @@ static uint32_t gpu_cmd_resource_create_blob(virtio_gpu_t *gpu, const uint8_t *r
         .iovecs = res->iov,
         .num_iovs = res->iov_count,
     };
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     int rc = virgl_renderer_resource_create_blob(&args);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     if (rc != 0) {
         free(res->iov);
         free(res);
@@ -717,9 +718,9 @@ static uint32_t gpu_cmd_attach_backing(virtio_gpu_t *gpu, const uint8_t *request
     if (!iov) {
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_INVALID_PARAMETER);
     }
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     int rc = virgl_renderer_resource_attach_iov((int)res->id, iov, (int)cmd.nr_entries);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     if (rc != 0) {
         free(iov);
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_UNSPEC);
@@ -739,9 +740,9 @@ static uint32_t gpu_cmd_detach_backing(virtio_gpu_t *gpu, const uint8_t *request
     if (!res) {
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_INVALID_RESOURCE_ID);
     }
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     virgl_renderer_resource_detach_iov((int)res->id, NULL, NULL);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     free(res->iov);
     res->iov = NULL;
     res->iov_count = 0;
@@ -761,12 +762,12 @@ static uint32_t gpu_cmd_transfer_3d(virtio_gpu_t *gpu, const uint8_t *request, s
     }
     gpu_context_t *ctx = *gpu_context_slot(gpu, cmd.hdr.ctx_id);
     uint32_t host_ctx = ctx ? ctx->id : 0;
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     int rc = to_host ? virgl_renderer_transfer_write_iov(res->id, host_ctx, (int)cmd.level, cmd.stride,
                                                          cmd.layer_stride, &cmd.box, cmd.offset, NULL, 0)
                      : virgl_renderer_transfer_read_iov(res->id, host_ctx, cmd.level, cmd.stride,
                                                         cmd.layer_stride, &cmd.box, cmd.offset, NULL, 0);
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     return gpu_nodata(response, rc == 0 ? VIRTIO_GPU_RESP_OK_NODATA : VIRTIO_GPU_RESP_ERR_UNSPEC);
 }
 
@@ -783,9 +784,9 @@ static uint32_t gpu_cmd_submit_3d(virtio_gpu_t *gpu, uint8_t *request, size_t le
     if (!ctx) {
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_INVALID_CONTEXT_ID);
     }
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     int rc = virgl_renderer_submit_cmd(request + sizeof(cmd), (int)ctx->id, (int)(cmd.size / 4));
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     return gpu_nodata(response, rc == 0 ? VIRTIO_GPU_RESP_OK_NODATA : VIRTIO_GPU_RESP_ERR_UNSPEC);
 }
 
@@ -806,14 +807,14 @@ static uint32_t gpu_cmd_map_blob(virtio_gpu_t *gpu, const uint8_t *request, size
     void *map = NULL;
     uint64_t size = 0;
     uint32_t map_info = 0;
-    gpu_lock();
+    pthread_mutex_lock(&g_renderer_lock);
     int rc = virgl_renderer_resource_map(res->id, &map, &size);
     if (rc == 0 && (virgl_renderer_resource_get_map_info(res->id, &map_info) != 0 ||
                     size > window->size - cmd.offset)) {
         virgl_renderer_resource_unmap(res->id);
         rc = -1;
     }
-    gpu_unlock();
+    pthread_mutex_unlock(&g_renderer_lock);
     if (rc != 0) {
         return gpu_nodata(response, VIRTIO_GPU_RESP_ERR_UNSPEC);
     }
@@ -908,10 +909,10 @@ static void gpu_fence(virtio_gpu_t *gpu, gpu_batch_t *batch, const gpu_ctrl_hdr_
     if (hdr->flags & VIRTIO_GPU_FLAG_INFO_RING_IDX) {
         int rc = -1;
         if (ctx) {
-            gpu_lock();
+            pthread_mutex_lock(&g_renderer_lock);
             rc = virgl_renderer_context_create_fence(ctx->id, VIRGL_RENDERER_FENCE_FLAG_MERGEABLE,
                                                      hdr->ring_idx, hdr->fence_id);
-            gpu_unlock();
+            pthread_mutex_unlock(&g_renderer_lock);
         }
         if (rc != 0) {
             free(pending);
@@ -927,10 +928,10 @@ static void gpu_fence(virtio_gpu_t *gpu, gpu_batch_t *batch, const gpu_ctrl_hdr_
 
     pending->signaled = true;
     if (hdr->type == VIRTIO_GPU_CMD_SUBMIT_3D && ctx) {
-        gpu_lock();
+        pthread_mutex_lock(&g_renderer_lock);
         int rc = virgl_renderer_context_create_fence(ctx->id, VIRGL_RENDERER_FENCE_FLAG_MERGEABLE, 0,
                                                      hdr->fence_id);
-        gpu_unlock();
+        pthread_mutex_unlock(&g_renderer_lock);
         if (rc == 0) {
             pending->ctx_id = ctx->id;
             pending->signaled = false;
@@ -947,12 +948,10 @@ static void gpu_fence(virtio_gpu_t *gpu, gpu_batch_t *batch, const gpu_ctrl_hdr_
 static void gpu_process_ctrl(virtio_gpu_t *gpu, gpu_batch_t *batch) {
     for (;;) {
         uint16_t head = 0;
-        size_t out_count = 0;
-        size_t in_count = 0;
-        if (gpu_pop(gpu, GPU_QUEUE_CTRL, &head, &out_count, &in_count) <= 0) {
+        size_t count = 0;
+        if (gpu_pop(gpu, GPU_QUEUE_CTRL, &head, &count) <= 0) {
             break;
         }
-        size_t count = out_count + in_count;
         size_t len = virtio_iov_total(gpu->iov, count, false);
         uint32_t response_len;
         gpu_ctrl_hdr_t hdr = {0};
@@ -1002,9 +1001,8 @@ static void gpu_process_ctrl(virtio_gpu_t *gpu, gpu_batch_t *batch) {
 static void gpu_process_cursor(virtio_gpu_t *gpu, gpu_batch_t *batch) {
     for (;;) {
         uint16_t head = 0;
-        size_t out_count = 0;
-        size_t in_count = 0;
-        if (gpu_pop(gpu, GPU_QUEUE_CURSOR, &head, &out_count, &in_count) <= 0) {
+        size_t count = 0;
+        if (gpu_pop(gpu, GPU_QUEUE_CURSOR, &head, &count) <= 0) {
             break;
         }
         gpu_complete(gpu, batch, head, 0);
@@ -1068,13 +1066,6 @@ static uint64_t virtio_gpu_read_config(virtio_dev_t *dev, uint32_t offset, uint3
     return virtio_config_read_buf(&gpu->config, sizeof(gpu->config), offset, size);
 }
 
-static void virtio_gpu_write_config(virtio_dev_t *dev, uint32_t offset, uint32_t size, uint64_t val) {
-    virtio_gpu_t *gpu = dev->priv;
-    if (offset == offsetof(gpu_config_t, events_clear) && size == 4) {
-        gpu->config.events_read &= ~(uint32_t)val;
-    }
-}
-
 static void virtio_gpu_queue_notify(virtio_dev_t *dev, uint32_t queue_idx) {
     virtio_gpu_t *gpu = dev->priv;
     pthread_mutex_lock(&gpu->lock);
@@ -1105,9 +1096,6 @@ static bool virtio_gpu_shm_region(virtio_dev_t *dev, uint32_t id, uint64_t *base
 
 static void virtio_gpu_destroy(virtio_dev_t *dev) {
     virtio_gpu_t *gpu = dev->priv;
-    if (!gpu) {
-        return;
-    }
     if (gpu->worker_started) {
         pthread_mutex_lock(&gpu->lock);
         gpu->stop = true;
@@ -1126,13 +1114,11 @@ static void virtio_gpu_destroy(virtio_dev_t *dev) {
     pthread_mutex_destroy(&gpu->vq_lock);
     free(gpu->request);
     free(gpu);
-    dev->priv = NULL;
 }
 
 static const virtio_dev_ops_t virtio_gpu_ops = {
     .get_features = virtio_gpu_get_features,
     .read_config = virtio_gpu_read_config,
-    .write_config = virtio_gpu_write_config,
     .queue_notify = virtio_gpu_queue_notify,
     .reset = virtio_gpu_reset,
     .destroy = virtio_gpu_destroy,
@@ -1144,7 +1130,6 @@ virtio_dev_t *virtio_gpu_create(vmm_machine_t *vm, uint32_t slot) {
     if (!gpu) {
         return NULL;
     }
-    gpu->config.num_scanouts = 0;
     gpu->config.num_capsets = 1;
     pthread_mutex_init(&gpu->lock, NULL);
     pthread_mutex_init(&gpu->vq_lock, NULL);

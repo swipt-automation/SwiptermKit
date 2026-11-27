@@ -3,18 +3,18 @@ import Foundation
 
 public final class LinuxProcess: @unchecked Sendable {
     public struct Configuration: Sendable {
-        public var executablePath: String
-        public var arguments: [String]
-        public var environment: [String: String]?
-        public var workingDirectory: String?
-        public var standardInput: StandardIO
-        public var standardOutput: StandardIO
-        public var standardError: StandardIO
+        let executablePath: String
+        let arguments: [String]
+        let environment: [String: String]
+        let workingDirectory: String?
+        let standardInput: StandardIO
+        let standardOutput: StandardIO
+        let standardError: StandardIO
 
         public init(
             executablePath: String,
             arguments: [String] = [],
-            environment: [String: String]? = nil,
+            environment: [String: String],
             workingDirectory: String? = nil,
             standardInput: StandardIO = .null,
             standardOutput: StandardIO = .null,
@@ -32,7 +32,6 @@ public final class LinuxProcess: @unchecked Sendable {
 
     public enum StandardIO: Sendable {
         case null
-        case pipe
         case terminal(LinuxTerminal)
     }
 
@@ -44,12 +43,6 @@ public final class LinuxProcess: @unchecked Sendable {
             let signal = status & 0x7F
             self = signal != 0 ? .signaled(LinuxSignal(rawValue: signal)) : .exited((status >> 8) & 0xFF)
         }
-    }
-
-    public struct Output: Sendable {
-        public var termination: Termination
-        public var standardOutput: Data
-        public var standardError: Data
     }
 
     final class State: @unchecked Sendable {
@@ -84,10 +77,6 @@ public final class LinuxProcess: @unchecked Sendable {
         }
     }
 
-    public let pid: Int32
-    public let standardInput: LinuxPipeWriter?
-    public let standardOutput: LinuxPipeReader?
-    public let standardError: LinuxPipeReader?
     private let runtime: LinuxRuntime
     private let handle: OpaquePointer
     private let state: State
@@ -95,36 +84,70 @@ public final class LinuxProcess: @unchecked Sendable {
 
     private struct Launch: Sendable {
         let handle: UnsafeSendable<OpaquePointer>
-        let pid: Int32
-        let descriptors: [Int32]
-    }
-
-    struct Target: Sendable {
-        var disk: UInt32 = 0
-        var hostname: String?
-        var shell = false
-        var invocation: UnsafeSendable<OpaquePointer>?
+        let input: Int32
     }
 
     convenience init(
         runtime: LinuxRuntime,
+        disk: UInt32,
         _ configuration: Configuration,
-        environment: [String: String],
-        target: Target = Target()
+        hostname: String,
+        shell: Bool,
+        invocation: HostCommandInvocation?
     ) async throws {
-        let terminals = target.invocation != nil ? [] : [
+        let terminals = invocation != nil ? [] : [
             configuration.standardInput, configuration.standardOutput, configuration.standardError,
         ].compactMap { io -> LinuxTerminal? in
-            if case .terminal(let terminal) = io { terminal } else { nil }
+            if case let .terminal(terminal) = io {
+                terminal
+            } else {
+                nil
+            }
         }
-        try await self.init(runtime: runtime, terminals: terminals) { runtimeHandle, context in
-            try Self.spawn(
-                runtimeHandle: runtimeHandle,
-                configuration,
-                environment: environment,
-                target: target,
-                context: context
-            )
+        let invocationHandle = invocation?.handle
+        try await self.init(runtime: runtime, terminals: terminals, forwarding: invocation?.standardInput) { runtimeHandle, context in
+            func stdio(_ io: StandardIO) -> swipterm_stdio {
+                switch io {
+                case .null:
+                    swipterm_stdio(kind: SWIPTERM_STDIO_NULL, terminal: nil)
+                case let .terminal(terminal):
+                    swipterm_stdio(kind: SWIPTERM_STDIO_TERMINAL, terminal: terminal.handle)
+                }
+            }
+            let arguments = [configuration.executablePath] + configuration.arguments
+            let environment = configuration.environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
+            var handle: OpaquePointer?
+            var input: Int32 = -1
+            let code = withCStringArray(arguments) { argv in
+                withCStringArray(environment) { envp in
+                    configuration.executablePath.withCString { path in
+                        withOptionalCString(configuration.workingDirectory) { workingDirectory in
+                            hostname.withCString { hostname in
+                                var options = swipterm_spawn_options(
+                                    path: path,
+                                    argc: arguments.count,
+                                    argv: argv,
+                                    envp: envp,
+                                    working_directory: workingDirectory,
+                                    stdio: (
+                                        stdio(configuration.standardInput),
+                                        stdio(configuration.standardOutput),
+                                        stdio(configuration.standardError)
+                                    ),
+                                    context: context.value,
+                                    disk: disk,
+                                    hostname: hostname,
+                                    shell: shell,
+                                    stdio_invocation: invocationHandle?.value
+                                )
+                                return swipterm_spawn(runtimeHandle, &options, &handle, &input)
+                            }
+                        }
+                    }
+                }
+            }
+            try check(code)
+            return Launch(handle: UnsafeSendable(value: handle!), input: input)
         }
     }
 
@@ -136,9 +159,8 @@ public final class LinuxProcess: @unchecked Sendable {
     ) async throws {
         let environment = environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
         let terminalHandle = UnsafeSendable(value: terminal.handle)
-        try await self.init(runtime: runtime, terminals: [terminal]) { runtimeHandle, context in
+        try await self.init(runtime: runtime, terminals: [terminal], forwarding: nil) { runtimeHandle, context in
             var handle: OpaquePointer?
-            var pid: Int32 = 0
             let code = withCStringArray(environment) { envp in
                 user.withCString { user in
                     var options = swipterm_login_options(
@@ -147,17 +169,18 @@ public final class LinuxProcess: @unchecked Sendable {
                         envp: envp,
                         context: context.value
                     )
-                    return swipterm_login(runtimeHandle, &options, &handle, &pid)
+                    return swipterm_login(runtimeHandle, &options, &handle)
                 }
             }
             try check(code)
-            return Launch(handle: UnsafeSendable(value: handle!), pid: pid, descriptors: [-1, -1, -1])
+            return Launch(handle: UnsafeSendable(value: handle!), input: -1)
         }
     }
 
     private init(
         runtime: LinuxRuntime,
         terminals: [LinuxTerminal],
+        forwarding source: LinuxPipeReader?,
         launch: @escaping @Sendable (OpaquePointer, UnsafeSendable<UnsafeMutableRawPointer>) throws -> Launch
     ) async throws {
         let state = State()
@@ -176,70 +199,19 @@ public final class LinuxProcess: @unchecked Sendable {
         self.state = state
         self.terminals = terminals
         handle = spawned.handle.value
-        pid = spawned.pid
-        standardInput = spawned.descriptors[0] >= 0 ? LinuxPipeWriter(fileDescriptor: spawned.descriptors[0]) : nil
-        standardOutput = spawned.descriptors[1] >= 0 ? LinuxPipeReader(fileDescriptor: spawned.descriptors[1]) : nil
-        standardError = spawned.descriptors[2] >= 0 ? LinuxPipeReader(fileDescriptor: spawned.descriptors[2]) : nil
+        if let source, spawned.input >= 0 {
+            let input = LinuxPipeWriter(fileDescriptor: spawned.input)
+            Task {
+                while let chunk = try? await source.read() {
+                    guard (try? await input.write(chunk)) != nil else { break }
+                }
+                input.close()
+            }
+        }
     }
 
     deinit {
         swipterm_process_release(handle)
-    }
-
-    private static func spawn(
-        runtimeHandle: OpaquePointer,
-        _ configuration: Configuration,
-        environment: [String: String],
-        target: Target,
-        context: UnsafeSendable<UnsafeMutableRawPointer>
-    ) throws -> Launch {
-        func stdio(_ io: StandardIO) -> swipterm_stdio {
-            switch io {
-            case .null:
-                swipterm_stdio(kind: SWIPTERM_STDIO_NULL, terminal: nil)
-            case .pipe:
-                swipterm_stdio(kind: SWIPTERM_STDIO_PIPE, terminal: nil)
-            case .terminal(let terminal):
-                swipterm_stdio(kind: SWIPTERM_STDIO_TERMINAL, terminal: terminal.handle)
-            }
-        }
-        let arguments = [configuration.executablePath] + configuration.arguments
-        let environment = environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }
-        var handle: OpaquePointer?
-        var pid: Int32 = 0
-        var descriptors: [Int32] = [-1, -1, -1]
-        let code = withCStringArray(arguments) { argv in
-            withCStringArray(environment) { envp in
-                configuration.executablePath.withCString { path in
-                    withOptionalCString(configuration.workingDirectory) { workingDirectory in
-                        withOptionalCString(target.hostname) { hostname in
-                            var options = swipterm_spawn_options(
-                                path: path,
-                                argc: arguments.count,
-                                argv: argv,
-                                envp: envp,
-                                working_directory: workingDirectory,
-                                stdio: (
-                                    stdio(configuration.standardInput),
-                                    stdio(configuration.standardOutput),
-                                    stdio(configuration.standardError)
-                                ),
-                                context: context.value,
-                                disk: target.disk,
-                                hostname: hostname,
-                                shell: target.shell,
-                                stdio_invocation: target.invocation?.value
-                            )
-                            return descriptors.withUnsafeMutableBufferPointer {
-                                swipterm_spawn(runtimeHandle, &options, &handle, &pid, $0.baseAddress)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        try check(code)
-        return Launch(handle: UnsafeSendable(value: handle!), pid: pid, descriptors: descriptors)
     }
 
     public var termination: Termination {
@@ -248,14 +220,7 @@ public final class LinuxProcess: @unchecked Sendable {
         }
     }
 
-    public func send(_ signal: LinuxSignal, toProcessGroup: Bool = false) throws(LinuxError) {
-        try check(swipterm_process_signal(handle, signal.rawValue, toProcessGroup))
+    public func send(_ signal: LinuxSignal) throws(LinuxError) {
+        try check(swipterm_process_signal(handle, signal.rawValue))
     }
-}
-
-func withOptionalCString<Result>(_ string: String?, _ body: (UnsafePointer<CChar>?) throws -> Result) rethrows -> Result {
-    guard let string else {
-        return try body(nil)
-    }
-    return try string.withCString(body)
 }

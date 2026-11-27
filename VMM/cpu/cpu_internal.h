@@ -4,6 +4,7 @@
 #include "cpu.h"
 #include "../board/machine.h"
 #include "../mmu/mmu.h"
+#include "cpu_fast_layout.h"
 
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -12,21 +13,7 @@
 #include <string.h>
 
 #define CPU_ALWAYS_INLINE static inline __attribute__((always_inline))
-#define CPU_NOINLINE __attribute__((noinline))
-#define CPU_MUSTTAIL [[clang::musttail]]
-#if defined(__clang__) && defined(__aarch64__)
 #define CPU_COLD_MISS __attribute__((cold, noinline, preserve_most))
-#else
-#define CPU_COLD_MISS __attribute__((cold, noinline))
-#endif
-
-#define CPU_YIELD_FAST(cpu, ir)                                                \
-    do {                                                                       \
-        if ((ir)->fast_offset != 0U) {                                         \
-            (cpu)->fast_next = (ir);                                           \
-            return;                                                            \
-        }                                                                      \
-    } while (0)
 
 #ifdef CPU_STATS
 void cpu_stats_cold(vcpu_t *cpu, const ir_insn_t *ir);
@@ -41,10 +28,13 @@ void cpu_stats_walk(vcpu_t *cpu);
 #define CPU_NEXT(cpu, next_ir, tlb_r, tlb_w)                                   \
     do {                                                                       \
         const ir_insn_t *_cpu_next = (next_ir);                                \
-        CPU_YIELD_FAST((cpu), _cpu_next);                                      \
+        if (_cpu_next->fast_offset != 0U) {                                    \
+            (cpu)->fast_next = _cpu_next;                                      \
+            return;                                                            \
+        }                                                                      \
         CPU_STATS_COLD((cpu), _cpu_next);                                      \
-        CPU_MUSTTAIL return _cpu_next->handler((cpu), _cpu_next, (tlb_r),      \
-                                               (tlb_w));                       \
+        [[clang::musttail]] return _cpu_next->handler((cpu), _cpu_next,        \
+                                                      (tlb_r), (tlb_w));       \
     } while (0)
 
 enum {
@@ -71,15 +61,7 @@ enum : uint8_t {
 };
 
 enum : uint32_t {
-    CPU_FPCR_MASK = 0x07C80000U,
-    CPU_FPSR_MASK = 0x0800009FU,
     CPU_FPSR_QC = 1U << 27,
-    CPU_FPSR_IOC = 1U << 0,
-    CPU_FPSR_DZC = 1U << 1,
-    CPU_FPSR_OFC = 1U << 2,
-    CPU_FPSR_UFC = 1U << 3,
-    CPU_FPSR_IXC = 1U << 4,
-    CPU_FPSR_IDC = 1U << 7,
 };
 
 enum : uint64_t {
@@ -117,7 +99,6 @@ enum : uint64_t {
     MDCR_EL2_TDE = 1ULL << 8,
     MDCR_EL2_TDA = 1ULL << 9,
     MDCR_EL2_TDOSA = 1ULL << 10,
-    MDCR_EL2_TDRA = 1ULL << 11,
     VTCR_EL2_VS = 1ULL << 19,
     VTCR_EL2_HA = 1ULL << 21,
     VTCR_EL2_HD = 1ULL << 22,
@@ -160,13 +141,6 @@ enum : uint32_t {
     POOL_NONE = UINT32_MAX,
 };
 
-typedef enum pool_slot_state : uint8_t {
-    POOL_SLOT_FREE,
-    POOL_SLOT_BUSY,
-    POOL_SLOT_LIVE,
-    POOL_SLOT_RETIRED,
-} pool_slot_state_t;
-
 typedef struct ir_page {
     _Atomic uint32_t gen;
     _Atomic uint8_t ref;
@@ -200,10 +174,6 @@ struct vcpu_mmu_ctx {
     exec_cache_entry_t exec_cache[2][EXEC_CACHE_ENTRIES];
 };
 
-CPU_ALWAYS_INLINE exec_cache_entry_t (*cpu_exec_cache(const vcpu_t *cpu))[EXEC_CACHE_ENTRIES] {
-    return (exec_cache_entry_t (*)[EXEC_CACHE_ENTRIES])cpu->exec_cache;
-}
-
 typedef struct ras_entry {
     uint64_t pc;
     const ir_insn_t *ir;
@@ -213,10 +183,6 @@ typedef struct ras_entry {
 } ras_entry_t;
 
 static_assert(sizeof(ras_entry_t) == 32);
-
-CPU_ALWAYS_INLINE ir_page_t *cpu_ir_page(const ir_insn_t *ir) {
-    return (ir_page_t *)((uintptr_t)ir & ~(uintptr_t)(POOL_SLOT_BYTES - 1U));
-}
 
 typedef struct cpu_jit_arena {
     uint8_t *rx;
@@ -343,7 +309,7 @@ typedef struct cpu_pool {
     uint32_t slot_gen[POOL_SLOTS];
     uint32_t slot_link[POOL_SLOTS];
     uint64_t slot_retire[POOL_SLOTS];
-    pool_slot_state_t slot_state[POOL_SLOTS];
+    bool slot_live[POOL_SLOTS];
     bool slot_reusable[POOL_SLOTS];
     uint32_t heads[POOL_BUCKETS];
     cpu_qs_t qs[VMM_MAX_VCPUS];
@@ -352,16 +318,13 @@ typedef struct cpu_pool {
 
 extern _Atomic uint32_t cpu_jit_generation;
 
+void cpu_fast_run(vcpu_t *cpu);
 uintptr_t cpu_fast_base(void);
 void cpu_jit_reserve(void);
 bool cpu_jit_arena_acquire(vmm_machine_t *vm, cpu_jit_arena_t *out);
 void cpu_jit_arena_release(vmm_machine_t *vm);
 void cpu_jit_arena_write(const cpu_jit_arena_t *arena, uint32_t offset, const uint32_t *code, uint32_t words);
 void cpu_jit_arena_patch(const cpu_jit_arena_t *arena, uint32_t offset, uint32_t word);
-uint32_t cpu_jit_enter(vcpu_t *cpu, ir_insn_t *ir);
-const ir_insn_t *cpu_fast_call(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
-uintptr_t cpu_jit_helper(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
-bool cpu_jit_native(const ir_insn_t *ir);
 
 typedef struct cpu_icache {
     ir_page_t *cur_page;
@@ -397,23 +360,15 @@ CPU_ALWAYS_INLINE bool cpu_page_live(const vcpu_t *cpu) {
            atomic_load_explicit(&ic->cur_page->gen, memory_order_seq_cst) == (uint32_t)ic->cur_gen;
 }
 
-CPU_ALWAYS_INLINE uint64_t cpu_page_va(const vcpu_t *cpu) {
-    return ((const cpu_icache_t *)cpu->icache)->cur_va;
-}
-
 CPU_ALWAYS_INLINE uint64_t cpu_ir_pc(const vcpu_t *cpu, const ir_insn_t *ir) {
     const cpu_icache_t *ic = (const cpu_icache_t *)cpu->icache;
     return ic->cur_va + (uint64_t)(ir - ic->cur_page->insns) * 4ULL;
 }
 
-uint32_t cpu_ras_key(const vcpu_t *cpu);
-
 CPU_ALWAYS_INLINE void cpu_ras_rekey(vcpu_t *cpu) {
-    cpu->ras_epoch = (uint32_t)cpu->ras_epoch | ((uint64_t)cpu_ras_key(cpu) << 32);
-}
-
-CPU_ALWAYS_INLINE uint32_t cpu_traps_key(uint32_t traps) {
-    return traps & ~(uint32_t)(CPU_TRAP_TWI | CPU_TRAP_TWE);
+    uint32_t key = (uint32_t)cpu->el | ((uint32_t)cpu->world << 1) | ((uint32_t)cpu->ctx_slot << 3) |
+                   ((uint32_t)(cpu->tlb_asid_salt >> 48) << 16);
+    cpu->ras_epoch = (uint32_t)cpu->ras_epoch | ((uint64_t)key << 32);
 }
 
 void cpu_pool_attach(vcpu_t *cpu);
@@ -433,7 +388,6 @@ void cpu_pool_publish(cpu_pool_t *pool, ir_page_t *pg);
 _Atomic uint32_t *cpu_pool_pfn_gen(cpu_pool_t *pool, uint64_t pa_page);
 uint64_t cpu_pool_retire_pa(cpu_pool_t *pool, uint64_t pa_page);
 uint64_t cpu_pool_retire_all(cpu_pool_t *pool);
-void vcpu_retire_icache_pa(vcpu_t *cpu, uint64_t pa_page);
 ir_page_t *cpu_pool_live(cpu_pool_t *pool, uint64_t pa_page, uint8_t el, uint8_t world, uint32_t traps);
 
 CPU_ALWAYS_INLINE uint64_t cpu_get_x(const vcpu_t *cpu, uint32_t reg) {
@@ -446,16 +400,8 @@ CPU_ALWAYS_INLINE void cpu_set_x(vcpu_t *cpu, uint32_t reg, uint64_t val) {
     }
 }
 
-CPU_ALWAYS_INLINE void cpu_set_x_fast(vcpu_t *cpu, uint32_t reg, uint64_t val) {
-    cpu->x[reg] = val;
-}
-
 CPU_ALWAYS_INLINE uint64_t cpu_get_sp(const vcpu_t *cpu) {
     return cpu->sp_el[cpu->el & cpu->spsel];
-}
-
-CPU_ALWAYS_INLINE void cpu_set_sp(vcpu_t *cpu, uint64_t val) {
-    cpu->sp_el[cpu->el & cpu->spsel] = val;
 }
 
 CPU_ALWAYS_INLINE uint64_t cpu_get_xsp(const vcpu_t *cpu, uint32_t reg) {
@@ -558,158 +504,6 @@ CPU_ALWAYS_INLINE uint16_t cpu_vmid(const vcpu_t *cpu) {
     return (uint16_t)((cpu->el2.vtcr & VTCR_EL2_VS) != 0 ? vmid : (vmid & 0xFFU));
 }
 
-CPU_ALWAYS_INLINE bool cpu_field_banked(size_t offset) {
-    return offset >= offsetof(vcpu_t, bank) && offset < offsetof(vcpu_t, bank) + sizeof(vcpu_bank_t);
-}
-
-#if defined(__aarch64__)
-CPU_ALWAYS_INLINE uint64_t cpu_adds64(uint64_t a, uint64_t b, uint32_t *nzcv_out) {
-    uint64_t res, nzcv;
-    __asm__("adds %0, %2, %3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_subs64(uint64_t a, uint64_t b, uint32_t *nzcv_out) {
-    uint64_t res, nzcv;
-    __asm__("subs %0, %2, %3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_adds32(uint32_t a, uint32_t b, uint32_t *nzcv_out) {
-    uint32_t res;
-    uint64_t nzcv;
-    __asm__("adds %w0, %w2, %w3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return (uint64_t)res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_subs32(uint32_t a, uint32_t b, uint32_t *nzcv_out) {
-    uint32_t res;
-    uint64_t nzcv;
-    __asm__("subs %w0, %w2, %w3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return (uint64_t)res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_adc64(uint64_t a, uint64_t b, uint32_t nzcv_in) {
-    uint64_t res;
-    __asm__("msr nzcv, %3\n\tadc %0, %1, %2"
-            : "=&r"(res)
-            : "r"(a), "r"(b), "r"((uint64_t)nzcv_in)
-            : "cc");
-    return res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_adcs64(uint64_t a, uint64_t b, uint32_t nzcv_in, uint32_t *nzcv_out) {
-    uint64_t res, nzcv;
-    __asm__("msr nzcv, %4\n\tadcs %0, %2, %3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b), "r"((uint64_t)nzcv_in)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_sbc64(uint64_t a, uint64_t b, uint32_t nzcv_in) {
-    uint64_t res;
-    __asm__("msr nzcv, %3\n\tsbc %0, %1, %2"
-            : "=&r"(res)
-            : "r"(a), "r"(b), "r"((uint64_t)nzcv_in)
-            : "cc");
-    return res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_sbcs64(uint64_t a, uint64_t b, uint32_t nzcv_in, uint32_t *nzcv_out) {
-    uint64_t res, nzcv;
-    __asm__("msr nzcv, %4\n\tsbcs %0, %2, %3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b), "r"((uint64_t)nzcv_in)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_adc32(uint32_t a, uint32_t b, uint32_t nzcv_in) {
-    uint32_t res;
-    __asm__("msr nzcv, %3\n\tadc %w0, %w1, %w2"
-            : "=&r"(res)
-            : "r"(a), "r"(b), "r"((uint64_t)nzcv_in)
-            : "cc");
-    return (uint64_t)res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_adcs32(uint32_t a, uint32_t b, uint32_t nzcv_in, uint32_t *nzcv_out) {
-    uint32_t res;
-    uint64_t nzcv;
-    __asm__("msr nzcv, %4\n\tadcs %w0, %w2, %w3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b), "r"((uint64_t)nzcv_in)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return (uint64_t)res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_sbc32(uint32_t a, uint32_t b, uint32_t nzcv_in) {
-    uint32_t res;
-    __asm__("msr nzcv, %3\n\tsbc %w0, %w1, %w2"
-            : "=&r"(res)
-            : "r"(a), "r"(b), "r"((uint64_t)nzcv_in)
-            : "cc");
-    return (uint64_t)res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_sbcs32(uint32_t a, uint32_t b, uint32_t nzcv_in, uint32_t *nzcv_out) {
-    uint32_t res;
-    uint64_t nzcv;
-    __asm__("msr nzcv, %4\n\tsbcs %w0, %w2, %w3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b), "r"((uint64_t)nzcv_in)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return (uint64_t)res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_ands64(uint64_t a, uint64_t b, uint32_t *nzcv_out) {
-    uint64_t res, nzcv;
-    __asm__("ands %0, %2, %3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return res;
-}
-
-CPU_ALWAYS_INLINE uint64_t cpu_ands32(uint32_t a, uint32_t b, uint32_t *nzcv_out) {
-    uint32_t res;
-    uint64_t nzcv;
-    __asm__("ands %w0, %w2, %w3\n\tmrs %1, nzcv"
-            : "=&r"(res), "=r"(nzcv)
-            : "r"(a), "r"(b)
-            : "cc");
-    *nzcv_out = (uint32_t)nzcv;
-    return (uint64_t)res;
-}
-
-CPU_ALWAYS_INLINE uint32_t cpu_hw_read_fpcr(void) {
-    uint64_t v;
-    __asm__ volatile("mrs %0, fpcr" : "=r"(v));
-    return (uint32_t)v;
-}
-
 CPU_ALWAYS_INLINE void cpu_hw_write_fpcr(uint32_t v) {
     __asm__ volatile("msr fpcr, %0" : : "r"((uint64_t)v));
 }
@@ -723,9 +517,6 @@ CPU_ALWAYS_INLINE uint32_t cpu_hw_read_fpsr(void) {
 CPU_ALWAYS_INLINE void cpu_hw_write_fpsr(uint32_t v) {
     __asm__ volatile("msr fpsr, %0" : : "r"((uint64_t)v));
 }
-#else
-#error "ARM64 host required"
-#endif
 
 CPU_COLD_MISS void cpu_fp_enter_guest_slow(vcpu_t *cpu);
 CPU_COLD_MISS void cpu_fp_leave_guest_slow(vcpu_t *cpu);
@@ -751,16 +542,10 @@ CPU_COLD_MISS cpu_read_res_t cpu_read_8_miss(vcpu_t *cpu, const ir_insn_t *ir, u
 CPU_COLD_MISS cpu_read_res_t cpu_read_16_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va);
 CPU_COLD_MISS cpu_read_res_t cpu_read_32_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va);
 CPU_COLD_MISS cpu_read_res_t cpu_read_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va);
-CPU_COLD_MISS bool cpu_read_pair_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
-                                         uint64_t va, uint64_t *out1, uint64_t *out2);
-CPU_COLD_MISS bool cpu_read_128_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, __uint128_t *out);
 CPU_COLD_MISS bool cpu_write_8_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint8_t val);
 CPU_COLD_MISS bool cpu_write_16_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint16_t val);
 CPU_COLD_MISS bool cpu_write_32_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint32_t val);
 CPU_COLD_MISS bool cpu_write_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, uint64_t val);
-CPU_COLD_MISS bool cpu_write_pair_64_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
-                                          uint64_t va, uint64_t val1, uint64_t val2);
-CPU_COLD_MISS bool cpu_write_128_miss(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off, uint64_t va, __uint128_t val);
 
 CPU_ALWAYS_INLINE bool cpu_read_8(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
                                   const softtlb_entry_t *tlb_r, uint64_t va, uint8_t *out) {
@@ -825,29 +610,6 @@ CPU_ALWAYS_INLINE bool cpu_read_64(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc
     return r.ok;
 }
 
-CPU_ALWAYS_INLINE bool cpu_read_pair_64(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
-                                        const softtlb_entry_t *tlb_r, uint64_t va,
-                                        uint64_t *out1, uint64_t *out2) {
-    uintptr_t hva;
-    if (__builtin_expect((va & 7ULL) == 0 && (va & VMM_PAGE_MASK) <= (VMM_PAGE_SIZE - 16U), 1)) {
-        if (__builtin_expect(mmu_tlb_lookup_aligned(tlb_r, cpu->tlb_asid_salt, va, &hva), 1)) {
-            __asm__ volatile("ldp %0, %1, [%2]" : "=r"(*out1), "=r"(*out2) : "r"(hva) : "memory");
-            return true;
-        }
-    }
-    return cpu_read_pair_64_miss(cpu, ir, pc_off, va, out1, out2);
-}
-
-CPU_ALWAYS_INLINE bool cpu_read_128(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
-                                    const softtlb_entry_t *tlb_r, uint64_t va, __uint128_t *out) {
-    uintptr_t hva;
-    if (__builtin_expect(mmu_tlb_lookup(tlb_r, cpu->tlb_asid_salt, va, 16, &hva), 1)) {
-        memcpy(out, (const void *)hva, 16);
-        return true;
-    }
-    return cpu_read_128_miss(cpu, ir, pc_off, va, out);
-}
-
 CPU_ALWAYS_INLINE bool cpu_write_8(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
                                    const softtlb_entry_t *tlb_w, uint64_t va, uint8_t val) {
     uintptr_t hva;
@@ -903,38 +665,24 @@ CPU_ALWAYS_INLINE bool cpu_write_64(vcpu_t *cpu, const ir_insn_t *ir, uint32_t p
     return cpu_write_64_miss(cpu, ir, pc_off, va, val);
 }
 
-CPU_ALWAYS_INLINE bool cpu_write_pair_64(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
-                                         const softtlb_entry_t *tlb_w, uint64_t va,
-                                         uint64_t val1, uint64_t val2) {
-    uintptr_t hva;
-    if (__builtin_expect((va & 7ULL) == 0 && (va & VMM_PAGE_MASK) <= (VMM_PAGE_SIZE - 16U), 1)) {
-        if (__builtin_expect(mmu_tlb_lookup_aligned(tlb_w, cpu->tlb_asid_salt, va, &hva), 1)) {
-            __asm__ volatile("stp %0, %1, [%2]" : : "r"(val1), "r"(val2), "r"(hva) : "memory");
-            return true;
-        }
-    }
-    return cpu_write_pair_64_miss(cpu, ir, pc_off, va, val1, val2);
-}
-
-CPU_ALWAYS_INLINE bool cpu_write_128(vcpu_t *cpu, const ir_insn_t *ir, uint32_t pc_off,
-                                     const softtlb_entry_t *tlb_w, uint64_t va, __uint128_t val) {
-    uintptr_t hva;
-    if (__builtin_expect(mmu_tlb_lookup(tlb_w, cpu->tlb_asid_salt, va, 16, &hva), 1)) {
-        memcpy((void *)hva, &val, 16);
-        return true;
-    }
-    return cpu_write_128_miss(cpu, ir, pc_off, va, val);
-}
-
+void vcpu_init(vcpu_t *cpu, vmm_machine_t *vm, uint32_t cpu_id);
+void vcpu_destroy(vcpu_t *cpu);
+void vcpu_enable_el2(vcpu_t *cpu);
+void vcpu_reset(vcpu_t *cpu, uint64_t entry_pc, uint64_t x0);
+void vcpu_set_world(vcpu_t *cpu, uint8_t world);
+void vcpu_sync_el2(vcpu_t *cpu);
+void vcpu_update_irq_gate(vcpu_t *cpu);
+vcpu_stop_reason_t vcpu_run(vcpu_t *cpu);
+void vcpu_raise_exception(vcpu_t *cpu, uint32_t esr, uint64_t far, uint64_t elr);
 void vcpu_raise_exception_el2(vcpu_t *cpu, uint32_t esr, uint64_t far, uint64_t elr);
+void vcpu_eret(vcpu_t *cpu);
+void vcpu_flush_icache_all(vcpu_t *cpu);
+void vcpu_flush_icache_va(vcpu_t *cpu, uint64_t va);
+void cpu_pool_destroy(vmm_machine_t *vm);
 
 CPU_ALWAYS_INLINE uint32_t vcpu_irq_deliverable(const vcpu_t *cpu) {
     uint32_t pending = atomic_load_explicit(&cpu->irq_pending, memory_order_acquire);
     return pending & ((cpu->daif & (1U << 7)) ? cpu->irq_force : cpu->irq_mask);
-}
-
-CPU_ALWAYS_INLINE void vcpu_raise_undef(vcpu_t *cpu, uint64_t elr) {
-    vcpu_raise_exception(cpu, 1U << 25, 0, elr);
 }
 
 CPU_ALWAYS_INLINE void vcpu_raise_fp_trap(vcpu_t *cpu, uint64_t elr) {
@@ -946,30 +694,8 @@ CPU_ALWAYS_INLINE void vcpu_raise_fp_trap(vcpu_t *cpu, uint64_t elr) {
     }
 }
 
-CPU_ALWAYS_INLINE uint32_t vcpu_sys_trap_esr(uint32_t word) {
-    uint32_t op0 = (word >> 19) & 3U;
-    uint32_t op1 = (word >> 16) & 7U;
-    uint32_t crn = (word >> 12) & 15U;
-    uint32_t crm = (word >> 8) & 15U;
-    uint32_t op2 = (word >> 5) & 7U;
-    uint32_t rt = word & 31U;
-    uint32_t dir = (word >> 21) & 1U;
-    uint32_t iss = (op0 << 20) | (op2 << 17) | (op1 << 14) | (crn << 10) |
-                   (rt << 5) | (crm << 1) | dir;
-    return (0x18U << 26) | (1U << 25) | iss;
-}
-
-CPU_ALWAYS_INLINE void vcpu_raise_sys_trap(vcpu_t *cpu, uint32_t word, uint64_t elr) {
-    vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, elr);
-}
-
 void vcpu_raise_abort(vcpu_t *cpu, uint64_t va, const mmu_translation_t *tr, bool is_write, uint64_t elr,
                       bool fetch);
-
-CPU_ALWAYS_INLINE void vcpu_raise_data_abort(vcpu_t *cpu, uint64_t va, const mmu_translation_t *tr,
-                                             bool is_write, uint64_t elr) {
-    vcpu_raise_abort(cpu, va, tr, is_write, elr, false);
-}
 
 uint32_t cpu_guest_traps(const vcpu_t *cpu);
 bool cpu_sysreg_trapped(uint32_t traps, uint32_t word);
@@ -987,7 +713,6 @@ CPU_ALWAYS_INLINE bool cpu_check_sp_align(vcpu_t *cpu, uint32_t rn, uint64_t elr
 }
 
 enum : uint16_t {
-    SUBOP_NONE = 0,
     SUBOP_CRC32B,
     SUBOP_CRC32H,
     SUBOP_CRC32W,
@@ -1031,9 +756,6 @@ enum : uint16_t {
     SUBOP_SISD_PAIR,
 };
 
-bool vcpu_decode_bitmask(uint32_t n, uint32_t imms, uint32_t immr, bool is_64,
-                         bool immediate, uint64_t *wmask_out, uint64_t *tmask_out);
-
 #define CPU_HOST_FEATURES(X)                                                                   \
     X(AES) X(BF16) X(CSSC) X(DotProd) X(FCMA) X(FHM) X(FlagM) X(FlagM2) X(FP16) X(FRINTTS) X(I8MM) \
     X(JSCVT) X(LRCPC) X(LSE) X(LSE2) X(RDM) X(SHA1) X(SHA256) X(SHA3) X(SHA512)
@@ -1048,13 +770,11 @@ enum : uint32_t {
 #define CPU_HOST_FEATURE_BIT(name) CPU_HOST_FEAT_##name = 1U << CPU_HOST_INDEX_##name,
     CPU_HOST_FEATURES(CPU_HOST_FEATURE_BIT)
 #undef CPU_HOST_FEATURE_BIT
-    CPU_HOST_NATIVE = CPU_HOST_FEAT_AES | CPU_HOST_FEAT_BF16 | CPU_HOST_FEAT_FRINTTS | CPU_HOST_FEAT_I8MM |
-                      CPU_HOST_FEAT_SHA1 | CPU_HOST_FEAT_SHA256 | CPU_HOST_FEAT_SHA3 | CPU_HOST_FEAT_SHA512,
 };
 
 uint32_t cpu_host_features(void);
 bool vcpu_check_interrupts(vcpu_t *cpu);
-bool vmm_handle_psci(vcpu_t *cpu);
+void vmm_handle_psci(vcpu_t *cpu);
 void vmm_vcpu_wfe(vcpu_t *cpu);
 void vmm_vcpu_sev(vmm_machine_t *vm);
 void vmm_vcpu_wfe_notify_write(vmm_machine_t *vm, uintptr_t hva);
@@ -1075,7 +795,6 @@ void cpu_op_simd_ldst_single(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *
 void cpu_op_crc32(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_fp_scalar(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_simd_dp(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
-void cpu_op_native(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 
 void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);
 void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir, softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w);

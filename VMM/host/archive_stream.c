@@ -1,6 +1,7 @@
 #define _DARWIN_C_SOURCE
 
 #include "host_internal.h"
+#include "host_util.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -22,14 +23,6 @@ enum {
     CODEC_XZ,
     CODEC_ZSTD,
 };
-
-static inline uint32_t get_le32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
-static bool is_memory(const archive_stream_t *s) {
-    return s->in.data != NULL;
-}
 
 static int input_fill(archive_stream_t *s, struct archive *a) {
     if (s->in_off < s->in_len || s->in_eof) {
@@ -58,14 +51,6 @@ static int input_fill(archive_stream_t *s, struct archive *a) {
 }
 
 static int next_input(archive_stream_t *s, struct archive *a, const uint8_t **data_out, size_t *len_out) {
-    if (is_memory(s)) {
-        size_t rem = (size_t)(s->in.size - s->pos);
-        size_t n = rem > STREAM_BUF_SIZE ? STREAM_BUF_SIZE : rem;
-        *data_out = s->in.data + s->pos;
-        *len_out = n;
-        s->pos += n;
-        return 0;
-    }
     if (input_fill(s, a) < 0) {
         return -1;
     }
@@ -151,20 +136,7 @@ static la_ssize_t stream_read(struct archive *a, void *client, const void **buff
 }
 
 static const uint8_t *tail_bytes(const archive_stream_t *s, uint64_t off, size_t len, uint8_t *buf) {
-    if (is_memory(s)) {
-        return s->in.data + off;
-    }
-    for (size_t done = 0; done < len;) {
-        ssize_t n = pread(s->in.fd, buf + done, len - done, (off_t)(s->in.offset + off + done));
-        if (n < 0 && errno == EINTR) {
-            continue;
-        }
-        if (n <= 0) {
-            return NULL;
-        }
-        done += (size_t)n;
-    }
-    return buf;
+    return pread_all(s->in.fd, buf, len, (off_t)(s->in.offset + off)) == (ssize_t)len ? buf : NULL;
 }
 
 static uint64_t xz_uncompressed_size(const archive_stream_t *s) {
@@ -190,8 +162,8 @@ static uint64_t xz_uncompressed_size(const archive_stream_t *s) {
         return 0;
     }
     size_t index_size = (size_t)flags.backward_size;
-    uint8_t *index_buf = is_memory(s) ? NULL : malloc(index_size);
-    if (!is_memory(s) && !index_buf) {
+    uint8_t *index_buf = malloc(index_size);
+    if (!index_buf) {
         return 0;
     }
     const uint8_t *index_bytes = tail_bytes(s, index_end - index_size, index_size, index_buf);
@@ -211,29 +183,25 @@ static uint64_t xz_uncompressed_size(const archive_stream_t *s) {
 
 int archive_stream_open(archive_stream_t *s, struct archive *a, const archive_input_t *input) {
     *s = (archive_stream_t){.in = *input};
-    if (!is_memory(s) && !s->in.entry && lseek(s->in.fd, (off_t)s->in.offset, SEEK_SET) < 0) {
+    if (!s->in.entry && lseek(s->in.fd, (off_t)s->in.offset, SEEK_SET) < 0) {
         archive_set_error(a, errno, "%s", strerror(errno));
         return ARCHIVE_FATAL;
     }
-    if (!is_memory(s)) {
-        s->in_buf = malloc(STREAM_BUF_SIZE);
-        if (!s->in_buf) {
-            archive_set_error(a, ENOMEM, "%s", strerror(ENOMEM));
-            return ARCHIVE_FATAL;
-        }
-        if (input_fill(s, a) < 0) {
-            return ARCHIVE_FATAL;
-        }
+    s->in_buf = malloc(STREAM_BUF_SIZE);
+    if (!s->in_buf) {
+        archive_set_error(a, ENOMEM, "%s", strerror(ENOMEM));
+        return ARCHIVE_FATAL;
     }
-    const uint8_t *magic = is_memory(s) ? s->in.data : s->in_buf;
-    size_t magic_len = is_memory(s) ? (size_t)s->in.size : s->in_len;
-    static const uint8_t xz_magic[6] = {0xFD, '7', 'z', 'X', 'Z', 0x00};
-    if (magic_len >= sizeof(xz_magic) && memcmp(magic, xz_magic, sizeof(xz_magic)) == 0) {
+    if (input_fill(s, a) < 0) {
+        return ARCHIVE_FATAL;
+    }
+    const uint8_t *magic = s->in_buf;
+    size_t magic_len = s->in_len;
+    if (magic_len >= sizeof(XZ_MAGIC) && memcmp(magic, XZ_MAGIC, sizeof(XZ_MAGIC)) == 0) {
         s->codec = CODEC_XZ;
     } else if (magic_len >= 4 && get_le32(magic) == ZSTD_MAGICNUMBER) {
         s->codec = CODEC_ZSTD;
     }
-    int r = ARCHIVE_OK;
     if (s->codec == CODEC_XZ) {
         uint32_t threads = lzma_cputhreads();
         lzma_mt mt = {
@@ -260,7 +228,7 @@ int archive_stream_open(archive_stream_t *s, struct archive *a, const archive_in
         }
         (void)ZSTD_DCtx_setParameter(s->zstd, ZSTD_d_windowLogMax, 31);
     }
-    r = s->codec == CODEC_NONE ? archive_read_support_filter_all(a) : archive_read_support_filter_none(a);
+    int r = s->codec == CODEC_NONE ? archive_read_support_filter_all(a) : archive_read_support_filter_none(a);
     if (r == ARCHIVE_OK || r == ARCHIVE_WARN) {
         r = archive_read_open(a, s, NULL, stream_read, NULL);
     }
@@ -302,31 +270,25 @@ void swipterm_archive_close(swipterm_archive *archive) {
     free(archive);
 }
 
-static void archive_error_message(char **error_message, const char *message) {
-    if (error_message && !*error_message) {
-        *error_message = strdup(message && message[0] ? message : "unknown error");
-    }
-}
-
 swipterm_archive *swipterm_archive_open(const char *path, char **error_message) {
     if (error_message) {
         *error_message = NULL;
     }
     swipterm_archive *archive = calloc(1, sizeof(*archive));
     if (!archive) {
-        archive_error_message(error_message, strerror(ENOMEM));
+        set_error(error_message, strerror(ENOMEM));
         return NULL;
     }
     archive->fd = open(path, O_RDONLY | O_CLOEXEC);
     struct stat st;
     if (archive->fd < 0 || fstat(archive->fd, &st) != 0) {
-        archive_error_message(error_message, strerror(errno));
+        set_error(error_message, strerror(errno));
         swipterm_archive_close(archive);
         return NULL;
     }
     archive->archive = archive_read_new();
     if (!archive->archive) {
-        archive_error_message(error_message, strerror(ENOMEM));
+        set_error(error_message, strerror(ENOMEM));
         swipterm_archive_close(archive);
         return NULL;
     }
@@ -334,7 +296,7 @@ swipterm_archive *swipterm_archive_open(const char *path, char **error_message) 
     if (archive_read_support_format_tar(archive->archive) != ARCHIVE_OK ||
         archive_read_support_format_raw(archive->archive) != ARCHIVE_OK ||
         archive_stream_open(&archive->stream, archive->archive, &input) != ARCHIVE_OK) {
-        archive_error_message(error_message, archive_error_string(archive->archive));
+        set_error(error_message, archive_error_string(archive->archive));
         swipterm_archive_close(archive);
         return NULL;
     }
@@ -352,7 +314,7 @@ int swipterm_archive_next(swipterm_archive *archive, const char **name_out, char
             return 0;
         }
         if (r != ARCHIVE_OK && r != ARCHIVE_WARN) {
-            archive_error_message(error_message, archive_error_string(archive->archive));
+            set_error(error_message, archive_error_string(archive->archive));
             return -1;
         }
         if ((archive_entry_mode(entry) & S_IFMT) == S_IFREG) {
@@ -368,7 +330,7 @@ ssize_t swipterm_archive_read(swipterm_archive *archive, void *buffer, size_t le
     }
     la_ssize_t n = archive_read_data(archive->archive, buffer, length);
     if (n < 0) {
-        archive_error_message(error_message, archive_error_string(archive->archive));
+        set_error(error_message, archive_error_string(archive->archive));
         return -1;
     }
     return (ssize_t)n;

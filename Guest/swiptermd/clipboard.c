@@ -2,19 +2,14 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <limits.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/uio.h>
-#include <sys/un.h>
 #include <unistd.h>
 
 enum {
     CLIP_MAX_MIMES = 64,
-    CLIP_MAX_MIME_LEN = 256,
     CLIP_MAX_DATA_BYTES = 64U * 1024U * 1024U,
     CLIP_RELAY_BUF_CAP = 64 * 1024,
 
@@ -25,10 +20,6 @@ enum {
     WL_GLOBAL_SEAT = 1,
     WL_GLOBAL_ZWLR_DATA_CONTROL = 2,
     WL_GLOBAL_EXT_DATA_CONTROL = 3,
-
-    CLIP_SOCK_LIST = 1,
-    CLIP_SOCK_READ = 2,
-    CLIP_SOCK_WRITE = 3,
 };
 
 typedef enum wl_obj_kind {
@@ -64,8 +55,6 @@ struct clip_selection {
 struct wl_obj {
     uint32_t id;
     wl_obj_kind_t kind;
-    uint32_t version;
-    bool is_ext;
     bool supports_primary;
     bool used;
     wl_client_t *client;
@@ -97,15 +86,16 @@ struct wl_client {
     wl_client_t *next;
 };
 
-typedef struct mem_writer {
+typedef struct clip_writer {
     int fd;
     ev_node_t ev;
     clip_selection_t *sel;
+    uint8_t *owned;
     const uint8_t *data;
     size_t len;
     size_t off;
-    struct mem_writer *next;
-} mem_writer_t;
+    struct clip_writer *next;
+} clip_writer_t;
 
 typedef struct host_reader {
     int vsock_fd;
@@ -115,21 +105,11 @@ typedef struct host_reader {
     uint8_t status_hdr[4];
     size_t status_got;
     bool status_ok;
-    bool vsock_eof;
     uint8_t buf[CLIP_RELAY_BUF_CAP];
     size_t off;
     size_t len;
     struct host_reader *next;
 } host_reader_t;
-
-typedef struct host_writer {
-    int vsock_fd;
-    ev_node_t ev;
-    uint8_t *data;
-    size_t len;
-    size_t off;
-    struct host_writer *next;
-} host_writer_t;
 
 typedef struct harvest_pipe {
     int fd;
@@ -138,7 +118,6 @@ typedef struct harvest_pipe {
     uint8_t *data;
     size_t len;
     size_t cap;
-    bool done;
     struct harvest_job *job;
 } harvest_pipe_t;
 
@@ -160,7 +139,7 @@ typedef struct harvest_job {
 typedef struct clip_sock_conn {
     int fd;
     ev_node_t ev;
-    uint8_t hdr[8];
+    uint8_t hdr[CLIP_SOCK_HEADER_SIZE];
     size_t hdr_got;
     uint8_t cmd;
     bool primary;
@@ -181,9 +160,8 @@ static ev_node_t g_clip_listen_ev;
 static wl_client_t *g_wl_clients;
 static clip_selection_t *g_regular_sel;
 static clip_selection_t *g_primary_sel;
-static mem_writer_t *g_mem_writers;
+static clip_writer_t *g_clip_writers;
 static host_reader_t *g_host_readers;
-static host_writer_t *g_host_writers;
 static harvest_job_t *g_harvest_jobs;
 static clip_sock_conn_t *g_clip_conns;
 static uint64_t g_host_write_seq;
@@ -238,37 +216,30 @@ static bool mime_list_contains(char *const *list, size_t count, const char *mime
     return false;
 }
 
-static bool mime_list_add(char ***list, size_t *count, const char *mime) {
+static void mime_list_add(char ***list, size_t *count, const char *mime) {
     if (!mime || mime[0] == '\0' || strlen(mime) >= CLIP_MAX_MIME_LEN)
-        return false;
-    if (mime_list_contains(*list, *count, mime))
-        return true;
-    if (*count >= CLIP_MAX_MIMES)
-        return false;
+        return;
+    if (mime_list_contains(*list, *count, mime) || *count >= CLIP_MAX_MIMES)
+        return;
     char *dup = strdup(mime);
     if (!dup)
-        return false;
+        return;
     char **grown = realloc(*list, (*count + 1) * sizeof(**list));
     if (!grown) {
         free(dup);
-        return false;
+        return;
     }
     *list = grown;
     (*list)[(*count)++] = dup;
-    return true;
 }
 
-static bool sel_add_item(clip_selection_t *sel, const char *mime, const uint8_t *data, size_t len) {
-    for (size_t i = 0; i < sel->item_count; i++) {
-        if (strcmp(sel->items[i].mime, mime) == 0)
-            return true;
-    }
+static void sel_add_item(clip_selection_t *sel, const char *mime, const uint8_t *data, size_t len) {
     char *mdup = strdup(mime);
     uint8_t *ddup = malloc(len > 0 ? len : 1);
     if (!mdup || !ddup) {
         free(mdup);
         free(ddup);
-        return false;
+        return;
     }
     if (len > 0)
         memcpy(ddup, data, len);
@@ -276,11 +247,10 @@ static bool sel_add_item(clip_selection_t *sel, const char *mime, const uint8_t 
     if (!grown) {
         free(mdup);
         free(ddup);
-        return false;
+        return;
     }
     sel->items = grown;
     sel->items[sel->item_count++] = (clip_item_t){.mime = mdup, .data = ddup, .len = len};
-    return true;
 }
 
 static const clip_item_t *sel_find_item(const clip_selection_t *sel, const char *mime) {
@@ -298,9 +268,7 @@ static const clip_item_t *sel_find_item(const clip_selection_t *sel, const char 
 }
 
 static const char *sel_resolve_mime(const clip_selection_t *sel, const char *requested) {
-    if (!sel || sel->mime_count == 0)
-        return NULL;
-    if (!requested || requested[0] == '\0' || strcmp(requested, "text") == 0) {
+    if (requested[0] == '\0' || strcmp(requested, "text") == 0) {
         for (size_t p = 0; p < sizeof(plain_text_mimes) / sizeof(plain_text_mimes[0]); p++) {
             if (mime_list_contains(sel->mimes, sel->mime_count, plain_text_mimes[p]))
                 return plain_text_mimes[p];
@@ -309,7 +277,7 @@ static const char *sel_resolve_mime(const clip_selection_t *sel, const char *req
             if (is_text_mime(sel->mimes[i]))
                 return sel->mimes[i];
         }
-        if (!requested || requested[0] == '\0') {
+        if (requested[0] == '\0') {
             for (size_t i = 0; i < sel->mime_count; i++) {
                 if (strcmp(sel->mimes[i], "x-kde-passwordManagerHint") != 0)
                     return sel->mimes[i];
@@ -338,85 +306,55 @@ static const char *sel_resolve_mime(const clip_selection_t *sel, const char *req
     return NULL;
 }
 
-static void mem_writer_destroy(mem_writer_t *mw) {
-    for (mem_writer_t **pp = &g_mem_writers; *pp; pp = &(*pp)->next) {
-        if (*pp == mw) {
-            *pp = mw->next;
+static void clip_writer_destroy(clip_writer_t *wr) {
+    for (clip_writer_t **pp = &g_clip_writers; *pp; pp = &(*pp)->next) {
+        if (*pp == wr) {
+            *pp = wr->next;
             break;
         }
     }
-    ev_del(&mw->ev);
-    if (mw->fd >= 0)
-        close(mw->fd);
-    clip_sel_unref(mw->sel);
-    free(mw);
+    ev_del(&wr->ev);
+    close(wr->fd);
+    clip_sel_unref(wr->sel);
+    free(wr->owned);
+    free(wr);
 }
 
-static void on_mem_writer_event(ev_node_t *node, uint32_t events) {
+static void on_clip_writer_event(ev_node_t *node, uint32_t events) {
     (void)events;
-    mem_writer_t *mw = node->ctx;
-    while (mw->off < mw->len) {
-        ssize_t n = write(mw->fd, mw->data + mw->off, mw->len - mw->off);
+    clip_writer_t *wr = node->ctx;
+    while (wr->off < wr->len) {
+        ssize_t n = write(wr->fd, wr->data + wr->off, wr->len - wr->off);
         if (n > 0) {
-            mw->off += (size_t)n;
-            continue;
-        }
-        if (n < 0 && errno == EINTR)
-            continue;
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            ev_mod(&mw->ev, EPOLLOUT);
-            return;
-        }
-        mem_writer_destroy(mw);
-        return;
-    }
-    mem_writer_destroy(mw);
-}
-
-static void mem_writer_start(clip_selection_t *sel, const uint8_t *data, size_t len, int fd) {
-    if (len == 0 || set_nonblock(fd) < 0) {
-        if (len > 0)
-            (void)write_all_blocking(fd, data, len);
-        close(fd);
-        return;
-    }
-    ssize_t n;
-    size_t off = 0;
-    while (off < len) {
-        n = write(fd, data + off, len - off);
-        if (n > 0) {
-            off += (size_t)n;
+            wr->off += (size_t)n;
             continue;
         }
         if (n < 0 && errno == EINTR)
             continue;
         if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
-            break;
+            return;
+        break;
+    }
+    clip_writer_destroy(wr);
+}
+
+static void clip_writer_start(int fd, clip_selection_t *sel, uint8_t *owned, const uint8_t *data, size_t len) {
+    (void)set_nonblock(fd, true);
+    clip_writer_t *wr = calloc(1, sizeof(*wr));
+    if (!wr) {
         close(fd);
+        free(owned);
         return;
     }
-    if (off == len) {
-        close(fd);
-        return;
-    }
-    mem_writer_t *mw = calloc(1, sizeof(*mw));
-    if (!mw) {
-        close(fd);
-        return;
-    }
-    mw->fd = fd;
-    mw->sel = clip_sel_ref(sel);
-    mw->data = data;
-    mw->len = len;
-    mw->off = off;
-    if (ev_add(&mw->ev, fd, EPOLLOUT, on_mem_writer_event, mw) < 0) {
-        clip_sel_unref(mw->sel);
-        close(fd);
-        free(mw);
-        return;
-    }
-    mw->next = g_mem_writers;
-    g_mem_writers = mw;
+    wr->fd = fd;
+    wr->sel = clip_sel_ref(sel);
+    wr->owned = owned;
+    wr->data = data;
+    wr->len = len;
+    wr->next = g_clip_writers;
+    g_clip_writers = wr;
+    if (ev_add(&wr->ev, fd, EPOLLOUT, on_clip_writer_event, wr) < 0)
+        clip_writer_destroy(wr);
 }
 
 static void host_reader_destroy(host_reader_t *hr) {
@@ -435,7 +373,9 @@ static void host_reader_destroy(host_reader_t *hr) {
     free(hr);
 }
 
-static void host_reader_pump(host_reader_t *hr) {
+static void on_host_reader_event(ev_node_t *node, uint32_t events) {
+    (void)events;
+    host_reader_t *hr = node->ctx;
     while (!hr->status_ok) {
         ssize_t n = recv(hr->vsock_fd, hr->status_hdr + hr->status_got, 4 - hr->status_got, 0);
         if (n < 0) {
@@ -482,10 +422,6 @@ static void host_reader_pump(host_reader_t *hr) {
             return;
         }
         hr->off = hr->len = 0;
-        if (hr->vsock_eof) {
-            host_reader_destroy(hr);
-            return;
-        }
         ssize_t n = recv(hr->vsock_fd, hr->buf, sizeof(hr->buf), 0);
         if (n < 0) {
             if (errno == EINTR)
@@ -506,14 +442,8 @@ static void host_reader_pump(host_reader_t *hr) {
     }
 }
 
-static void on_host_reader_event(ev_node_t *node, uint32_t events) {
-    (void)events;
-    host_reader_pump(node->ctx);
-}
-
 static void host_reader_start(const char *mime, int dst_fd) {
-    size_t mlen = strlen(mime);
-    if (mlen == 0 || mlen >= CLIP_MAX_MIME_LEN || set_nonblock(dst_fd) < 0) {
+    if (set_nonblock(dst_fd, true) < 0) {
         close(dst_fd);
         return;
     }
@@ -522,6 +452,7 @@ static void host_reader_start(const char *mime, int dst_fd) {
         close(dst_fd);
         return;
     }
+    size_t mlen = strlen(mime);
     uint8_t req[4 + CLIP_MAX_MIME_LEN];
     swiptermd_put_be32(req, (uint32_t)mlen);
     memcpy(req + 4, mime, mlen);
@@ -552,42 +483,7 @@ static void host_reader_start(const char *mime, int dst_fd) {
     }
     hr->next = g_host_readers;
     g_host_readers = hr;
-    host_reader_pump(hr);
-}
-
-static void host_writer_destroy(host_writer_t *hw) {
-    for (host_writer_t **pp = &g_host_writers; *pp; pp = &(*pp)->next) {
-        if (*pp == hw) {
-            *pp = hw->next;
-            break;
-        }
-    }
-    ev_del(&hw->ev);
-    if (hw->vsock_fd >= 0)
-        close(hw->vsock_fd);
-    free(hw->data);
-    free(hw);
-}
-
-static void on_host_writer_event(ev_node_t *node, uint32_t events) {
-    (void)events;
-    host_writer_t *hw = node->ctx;
-    while (hw->off < hw->len) {
-        ssize_t n = send(hw->vsock_fd, hw->data + hw->off, hw->len - hw->off, MSG_NOSIGNAL);
-        if (n > 0) {
-            hw->off += (size_t)n;
-            continue;
-        }
-        if (n < 0 && errno == EINTR)
-            continue;
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-            ev_mod(&hw->ev, EPOLLOUT);
-            return;
-        }
-        host_writer_destroy(hw);
-        return;
-    }
-    host_writer_destroy(hw);
+    on_host_reader_event(&hr->vsock_ev, 0);
 }
 
 static void push_items_to_host(const clip_item_t *items, size_t count) {
@@ -605,70 +501,20 @@ static void push_items_to_host(const clip_item_t *items, size_t count) {
     uint8_t *buf = malloc(total);
     if (!buf)
         return;
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(buf, total);
+    swiptermd_buf_w_t w = {.data = buf, .cap = total};
     swiptermd_w_u32(&w, included);
-    size_t written = 4;
     for (size_t i = 0; i < count; i++) {
-        size_t size = 8 + strlen(items[i].mime) + items[i].len;
-        if (size > SWIPTERMD_MAX_CLIPBOARD_STREAM_LEN - written)
+        if (8 + strlen(items[i].mime) + items[i].len > SWIPTERMD_MAX_CLIPBOARD_STREAM_LEN - w.len)
             continue;
-        written += size;
         swiptermd_w_str(&w, items[i].mime);
         swiptermd_w_bytes(&w, items[i].data, (uint32_t)items[i].len);
-    }
-    if (w.overflow) {
-        free(buf);
-        return;
     }
     int vfd = vsock_connect_stream(SWIPTERMD_STREAM_CLIPBOARD_WRITE, 0, ++g_host_write_seq);
     if (vfd < 0) {
         free(buf);
         return;
     }
-    size_t off = 0;
-    while (off < w.len) {
-        ssize_t n = send(vfd, buf + off, w.len - off, MSG_NOSIGNAL);
-        if (n > 0) {
-            off += (size_t)n;
-            continue;
-        }
-        if (n < 0 && errno == EINTR)
-            continue;
-        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
-            break;
-        close(vfd);
-        free(buf);
-        return;
-    }
-    if (off == w.len) {
-        close(vfd);
-        free(buf);
-        return;
-    }
-    host_writer_t *hw = calloc(1, sizeof(*hw));
-    if (!hw) {
-        close(vfd);
-        free(buf);
-        return;
-    }
-    hw->vsock_fd = vfd;
-    hw->data = buf;
-    hw->len = w.len;
-    hw->off = off;
-    if (ev_add(&hw->ev, vfd, EPOLLOUT, on_host_writer_event, hw) < 0) {
-        close(vfd);
-        free(buf);
-        free(hw);
-        return;
-    }
-    hw->next = g_host_writers;
-    g_host_writers = hw;
-}
-
-static uint16_t wl_get_u16(const uint8_t *p) {
-    uint16_t v;
-    memcpy(&v, p, sizeof(v));
-    return v;
+    clip_writer_start(vfd, NULL, buf, buf, w.len);
 }
 
 static uint32_t wl_get_u32(const uint8_t *p) {
@@ -679,6 +525,15 @@ static uint32_t wl_get_u32(const uint8_t *p) {
 
 static void wl_put_u32(uint8_t *p, uint32_t v) {
     memcpy(p, &v, sizeof(v));
+}
+
+static size_t wl_put_str(uint8_t *dst, const char *s) {
+    size_t slen = strlen(s) + 1;
+    size_t padded = (slen + 3) & ~(size_t)3;
+    memset(dst, 0, 4 + padded);
+    wl_put_u32(dst, (uint32_t)slen);
+    memcpy(dst + 4, s, slen);
+    return 4 + padded;
 }
 
 static bool wl_tx_reserve(wl_client_t *c, size_t extra) {
@@ -705,11 +560,9 @@ static bool wl_tx_reserve(wl_client_t *c, size_t extra) {
 }
 
 static void wl_client_flush(wl_client_t *c) {
-    if (c->dead || c->fd < 0)
+    if (c->dead)
         return;
-    while (c->tx_off < c->tx_len || c->tx_fd_count > 0) {
-        if (c->tx_off == c->tx_len)
-            break;
+    while (c->tx_off < c->tx_len) {
         struct iovec iov = {
             .iov_base = c->tx_buf + c->tx_off,
             .iov_len = c->tx_len - c->tx_off,
@@ -751,58 +604,40 @@ static void wl_client_flush(wl_client_t *c) {
         }
         c->tx_off += (size_t)n;
     }
-    if (c->tx_off == c->tx_len) {
-        c->tx_off = c->tx_len = 0;
-        ev_mod(&c->ev, EPOLLIN);
-    } else {
-        ev_mod(&c->ev, EPOLLIN | EPOLLOUT);
-    }
+    c->tx_off = c->tx_len = 0;
+    ev_mod(&c->ev, EPOLLIN);
 }
 
-static bool wl_send_raw(wl_client_t *c, uint32_t obj_id, uint16_t opcode, const void *payload, uint16_t plen) {
+static void wl_send_raw(wl_client_t *c, uint32_t obj_id, uint16_t opcode, const void *payload, uint16_t plen) {
     uint16_t total = (uint16_t)(8 + plen);
     if (!wl_tx_reserve(c, total)) {
         c->dead = true;
-        return false;
+        return;
     }
     wl_put_u32(c->tx_buf + c->tx_len + 0, obj_id);
     wl_put_u32(c->tx_buf + c->tx_len + 4, ((uint32_t)total << 16) | opcode);
     if (plen > 0)
         memcpy(c->tx_buf + c->tx_len + 8, payload, plen);
     c->tx_len += total;
-    return true;
 }
 
 static void wl_send_u32(wl_client_t *c, uint32_t obj_id, uint16_t opcode, uint32_t v) {
     uint8_t b[4];
     wl_put_u32(b, v);
-    (void)wl_send_raw(c, obj_id, opcode, b, 4);
+    wl_send_raw(c, obj_id, opcode, b, 4);
 }
 
 static void wl_send_str(wl_client_t *c, uint32_t obj_id, uint16_t opcode, const char *s) {
-    size_t slen = strlen(s) + 1;
-    size_t padded = (slen + 3) & ~(size_t)3;
-    if (4 + padded > WL_MAX_MSG_SIZE - 8)
-        return;
-    uint8_t buf[WL_MAX_MSG_SIZE];
-    memset(buf, 0, 4 + padded);
-    wl_put_u32(buf, (uint32_t)slen);
-    memcpy(buf + 4, s, slen);
-    (void)wl_send_raw(c, obj_id, opcode, buf, (uint16_t)(4 + padded));
+    uint8_t buf[4 + CLIP_MAX_MIME_LEN];
+    wl_send_raw(c, obj_id, opcode, buf, (uint16_t)wl_put_str(buf, s));
 }
 
 static void wl_send_global(wl_client_t *c, uint32_t reg_id, uint32_t name, const char *iface, uint32_t ver) {
-    size_t slen = strlen(iface) + 1;
-    size_t padded = (slen + 3) & ~(size_t)3;
     uint8_t buf[256];
-    if (8 + padded + 4 > sizeof(buf))
-        return;
-    memset(buf, 0, 8 + padded + 4);
-    wl_put_u32(buf + 0, name);
-    wl_put_u32(buf + 4, (uint32_t)slen);
-    memcpy(buf + 8, iface, slen);
-    wl_put_u32(buf + 8 + padded, ver);
-    (void)wl_send_raw(c, reg_id, 0, buf, (uint16_t)(8 + padded + 4));
+    wl_put_u32(buf, name);
+    size_t len = 4 + wl_put_str(buf + 4, iface);
+    wl_put_u32(buf + len, ver);
+    wl_send_raw(c, reg_id, 0, buf, (uint16_t)(len + 4));
 }
 
 static bool wl_send_source_send(wl_client_t *c, uint32_t src_id, const char *mime, int fd) {
@@ -827,17 +662,11 @@ static bool wl_send_source_send(wl_client_t *c, uint32_t src_id, const char *mim
 }
 
 static void wl_send_error(wl_client_t *c, uint32_t obj_id, uint32_t code, const char *msg) {
-    size_t slen = strlen(msg) + 1;
-    size_t padded = (slen + 3) & ~(size_t)3;
-    uint8_t buf[512];
-    if (8 + 4 + padded > sizeof(buf))
-        return;
-    memset(buf, 0, 12 + padded);
+    uint8_t buf[256];
     wl_put_u32(buf + 0, obj_id);
     wl_put_u32(buf + 4, code);
-    wl_put_u32(buf + 8, (uint32_t)slen);
-    memcpy(buf + 12, msg, slen);
-    (void)wl_send_raw(c, 1, 0, buf, (uint16_t)(12 + padded));
+    size_t len = 8 + wl_put_str(buf + 8, msg);
+    wl_send_raw(c, 1, 0, buf, (uint16_t)len);
     wl_client_flush(c);
     c->dead = true;
 }
@@ -862,49 +691,6 @@ static wl_obj_t *wl_obj_create(wl_client_t *c, uint32_t id, wl_obj_kind_t kind) 
     o->next = c->objs;
     c->objs = o;
     return o;
-}
-
-static void wl_notify_devices(bool primary);
-
-static void wl_obj_free_fields(wl_obj_t *o) {
-    if (o->kind == WL_OBJ_SOURCE && o->sel) {
-        clip_selection_t *sel = o->sel;
-        sel->live_source = NULL;
-        o->sel = NULL;
-        if (!sel->harvesting && sel->item_count == 0) {
-            if (g_regular_sel == sel) {
-                clip_sel_unref(g_regular_sel);
-                g_regular_sel = NULL;
-                wl_notify_devices(false);
-            }
-            if (g_primary_sel == sel) {
-                clip_sel_unref(g_primary_sel);
-                g_primary_sel = NULL;
-                wl_notify_devices(true);
-            }
-        }
-    }
-    if (o->kind == WL_OBJ_OFFER && o->sel) {
-        clip_sel_unref(o->sel);
-        o->sel = NULL;
-    }
-    for (size_t i = 0; i < o->mime_count; i++)
-        free(o->mimes[i]);
-    free(o->mimes);
-}
-
-static void wl_obj_destroy(wl_client_t *c, uint32_t id, bool client_created) {
-    for (wl_obj_t **pp = &c->objs; *pp; pp = &(*pp)->next) {
-        if ((*pp)->id == id) {
-            wl_obj_t *o = *pp;
-            *pp = o->next;
-            wl_obj_free_fields(o);
-            free(o);
-            break;
-        }
-    }
-    if (client_created && id < WL_SERVER_ID_BASE)
-        wl_send_u32(c, 1, 1, id);
 }
 
 static void wl_emit_device_selection(wl_obj_t *dev, bool primary) {
@@ -940,10 +726,8 @@ static void wl_notify_devices(bool primary) {
         bool sent = false;
         for (wl_obj_t *o = c->objs; o; o = o->next) {
             if (o->kind == WL_OBJ_DEVICE) {
-                if (!primary || o->supports_primary) {
-                    wl_emit_device_selection(o, primary);
-                    sent = true;
-                }
+                wl_emit_device_selection(o, primary);
+                sent = true;
             }
         }
         if (sent)
@@ -951,18 +735,59 @@ static void wl_notify_devices(bool primary) {
     }
 }
 
-static void cancel_live_source(clip_selection_t *old_sel, clip_selection_t *other_sel) {
-    if (!old_sel || !old_sel->live_source)
+static void cancel_live_source(clip_selection_t *sel) {
+    if (!sel || !sel->live_source)
         return;
-    wl_obj_t *src = old_sel->live_source;
-    old_sel->live_source = NULL;
+    wl_obj_t *src = sel->live_source;
+    sel->live_source = NULL;
     src->sel = NULL;
-    if (other_sel && other_sel->live_source == src)
-        return;
     if (!src->client->dead) {
-        (void)wl_send_raw(src->client, src->id, 1, NULL, 0);
+        wl_send_raw(src->client, src->id, 1, NULL, 0);
         wl_client_flush(src->client);
     }
+}
+
+static void clip_set_selection(bool primary, clip_selection_t *sel) {
+    clip_selection_t **slot = primary ? &g_primary_sel : &g_regular_sel;
+    cancel_live_source(*slot);
+    clip_sel_unref(*slot);
+    *slot = sel;
+    wl_notify_devices(primary);
+}
+
+static void wl_obj_free_fields(wl_obj_t *o) {
+    if (o->kind == WL_OBJ_SOURCE && o->sel) {
+        clip_selection_t *sel = o->sel;
+        sel->live_source = NULL;
+        o->sel = NULL;
+        if (!sel->harvesting && sel->item_count == 0) {
+            if (g_regular_sel == sel)
+                clip_set_selection(false, NULL);
+            else if (g_primary_sel == sel)
+                clip_set_selection(true, NULL);
+        }
+    }
+    if (o->kind == WL_OBJ_OFFER && o->sel) {
+        clip_sel_unref(o->sel);
+        o->sel = NULL;
+    }
+    for (size_t i = 0; i < o->mime_count; i++)
+        free(o->mimes[i]);
+    free(o->mimes);
+}
+
+static void wl_obj_destroy(wl_client_t *c, uint32_t id) {
+    for (wl_obj_t **pp = &c->objs; *pp; pp = &(*pp)->next) {
+        if ((*pp)->id == id) {
+            wl_obj_t *o = *pp;
+            *pp = o->next;
+            wl_obj_free_fields(o);
+            free(o);
+            break;
+        }
+    }
+    if (id < WL_SERVER_ID_BASE)
+        wl_send_u32(c, 1, 1, id);
 }
 
 static void clip_serve_fd(clip_selection_t *sel, const char *mime, int dst_fd);
@@ -998,7 +823,7 @@ static void harvest_job_finish(harvest_job_t *job) {
     clip_selection_t *sel = job->sel;
     for (size_t i = 0; i < job->count; i++) {
         if (job->pipes[i].data)
-            (void)sel_add_item(sel, job->pipes[i].mime, job->pipes[i].data, job->pipes[i].len);
+            sel_add_item(sel, job->pipes[i].mime, job->pipes[i].data, job->pipes[i].len);
     }
     sel->harvesting = false;
     if (g_regular_sel == sel && sel->item_count > 0)
@@ -1011,16 +836,10 @@ static void harvest_job_finish(harvest_job_t *job) {
         free(w);
     }
     if (sel->item_count == 0 && !sel->live_source) {
-        if (g_regular_sel == sel) {
-            clip_sel_unref(g_regular_sel);
-            g_regular_sel = NULL;
-            wl_notify_devices(false);
-        }
-        if (g_primary_sel == sel) {
-            clip_sel_unref(g_primary_sel);
-            g_primary_sel = NULL;
-            wl_notify_devices(true);
-        }
+        if (g_regular_sel == sel)
+            clip_set_selection(false, NULL);
+        else if (g_primary_sel == sel)
+            clip_set_selection(true, NULL);
     }
     harvest_job_destroy(job);
 }
@@ -1057,7 +876,6 @@ static void on_harvest_pipe_event(ev_node_t *node, uint32_t events) {
     ev_del(&hp->ev);
     close(hp->fd);
     hp->fd = -1;
-    hp->done = true;
     if (!complete) {
         free(hp->data);
         hp->data = NULL;
@@ -1067,7 +885,7 @@ static void on_harvest_pipe_event(ev_node_t *node, uint32_t events) {
         harvest_job_finish(hp->job);
 }
 
-static void harvest_wayland_source(clip_selection_t *sel, wl_obj_t *src, bool push_host) {
+static void harvest_wayland_source(clip_selection_t *sel, wl_obj_t *src) {
     const char *wanted[3] = {NULL, NULL, NULL};
     size_t nwanted = 0;
 
@@ -1087,7 +905,6 @@ static void harvest_wayland_source(clip_selection_t *sel, wl_obj_t *src, bool pu
             break;
         }
     }
-    (void)push_host;
     if (nwanted == 0)
         return;
 
@@ -1095,15 +912,13 @@ static void harvest_wayland_source(clip_selection_t *sel, wl_obj_t *src, bool pu
     if (!job)
         return;
     job->sel = clip_sel_ref(sel);
-    for (size_t i = 0; i < 3; i++)
-        job->pipes[i].fd = -1;
 
     size_t started = 0;
     for (size_t i = 0; i < nwanted; i++) {
         int pfd[2];
         if (pipe2(pfd, O_CLOEXEC) < 0)
             continue;
-        if (set_nonblock(pfd[0]) < 0 || !wl_send_source_send(src->client, src->id, wanted[i], pfd[1])) {
+        if (set_nonblock(pfd[0], true) < 0 || !wl_send_source_send(src->client, src->id, wanted[i], pfd[1])) {
             close(pfd[0]);
             close(pfd[1]);
             continue;
@@ -1112,16 +927,10 @@ static void harvest_wayland_source(clip_selection_t *sel, wl_obj_t *src, bool pu
         harvest_pipe_t *hp = &job->pipes[started];
         hp->fd = pfd[0];
         hp->mime = strdup(wanted[i]);
-        hp->data = malloc(1);
-        hp->cap = hp->data ? 1 : 0;
         hp->job = job;
-        if (!hp->mime || !hp->data || ev_add(&hp->ev, pfd[0], EPOLLIN, on_harvest_pipe_event, hp) < 0) {
+        if (!hp->mime || ev_add(&hp->ev, pfd[0], EPOLLIN, on_harvest_pipe_event, hp) < 0) {
             close(pfd[0]);
-            hp->fd = -1;
             free(hp->mime);
-            free(hp->data);
-            hp->mime = NULL;
-            hp->data = NULL;
             continue;
         }
         started++;
@@ -1146,8 +955,6 @@ static bool harvest_try_enqueue_waiter(clip_selection_t *sel, const char *mime, 
             continue;
         bool match = false;
         for (size_t i = 0; i < job->count; i++) {
-            if (!job->pipes[i].mime)
-                continue;
             if (strcmp(job->pipes[i].mime, mime) == 0 ||
                 (is_plain_text_alias(mime) && is_plain_text_alias(job->pipes[i].mime))) {
                 match = true;
@@ -1170,13 +977,9 @@ static bool harvest_try_enqueue_waiter(clip_selection_t *sel, const char *mime, 
 }
 
 static void clip_serve_fd(clip_selection_t *sel, const char *mime, int dst_fd) {
-    if (!sel || !mime) {
-        close(dst_fd);
-        return;
-    }
     const clip_item_t *item = sel_find_item(sel, mime);
     if (item) {
-        mem_writer_start(sel, item->data, item->len, dst_fd);
+        clip_writer_start(dst_fd, sel, NULL, item->data, item->len);
         return;
     }
     if (harvest_try_enqueue_waiter(sel, mime, dst_fd))
@@ -1227,14 +1030,8 @@ static int wl_pop_rx_fd(wl_client_t *c) {
 }
 
 static void wl_handle_set_selection(wl_client_t *c, wl_obj_t *dev, uint32_t src_id, bool primary) {
-    clip_selection_t **slot = primary ? &g_primary_sel : &g_regular_sel;
-    clip_selection_t *other = primary ? g_regular_sel : g_primary_sel;
-
     if (src_id == 0) {
-        cancel_live_source(*slot, other);
-        clip_sel_unref(*slot);
-        *slot = NULL;
-        wl_notify_devices(primary);
+        clip_set_selection(primary, NULL);
         if (!primary)
             push_items_to_host(NULL, 0);
         return;
@@ -1256,16 +1053,12 @@ static void wl_handle_set_selection(wl_client_t *c, wl_obj_t *dev, uint32_t src_
         return;
     sel->refcount = 1;
     for (size_t i = 0; i < src->mime_count; i++)
-        (void)mime_list_add(&sel->mimes, &sel->mime_count, src->mimes[i]);
+        mime_list_add(&sel->mimes, &sel->mime_count, src->mimes[i]);
     sel->live_source = src;
     src->sel = sel;
 
-    cancel_live_source(*slot, other);
-    clip_sel_unref(*slot);
-    *slot = sel;
-
-    wl_notify_devices(primary);
-    harvest_wayland_source(sel, src, !primary);
+    clip_set_selection(primary, sel);
+    harvest_wayland_source(sel, src);
 }
 
 static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
@@ -1329,12 +1122,10 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
         uint32_t ver = wl_get_u32(p);
         uint32_t new_id = wl_get_u32(p + 4);
         if (name == WL_GLOBAL_SEAT && strcmp(iface, "wl_seat") == 0 && ver >= 1 && ver <= 5) {
-            wl_obj_t *seat = wl_obj_create(c, new_id, WL_OBJ_SEAT);
-            if (!seat) {
+            if (!wl_obj_create(c, new_id, WL_OBJ_SEAT)) {
                 wl_send_error(c, obj_id, 0, "bind failed");
                 return;
             }
-            seat->version = ver;
             wl_send_u32(c, new_id, 0, 0);
             if (ver >= 2)
                 wl_send_str(c, new_id, 1, "default");
@@ -1347,8 +1138,7 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
                 wl_send_error(c, obj_id, 0, "bind failed");
                 return;
             }
-            mgr->version = ver;
-            mgr->is_ext = false;
+            mgr->supports_primary = ver >= 2;
             return;
         }
         if (name == WL_GLOBAL_EXT_DATA_CONTROL &&
@@ -1358,8 +1148,7 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
                 wl_send_error(c, obj_id, 0, "bind failed");
                 return;
             }
-            mgr->version = 1;
-            mgr->is_ext = true;
+            mgr->supports_primary = true;
             return;
         }
         wl_send_error(c, obj_id, 0, "unknown global");
@@ -1367,7 +1156,7 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
     }
     case WL_OBJ_SEAT:
         if (opcode == 3 && rem == 0) {
-            wl_obj_destroy(c, obj_id, true);
+            wl_obj_destroy(c, obj_id);
             return;
         }
         wl_send_error(c, obj_id, 1, "unsupported seat request");
@@ -1375,13 +1164,8 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
 
     case WL_OBJ_MANAGER:
         if (opcode == 0 && rem == 4) {
-            uint32_t sid = wl_get_u32(p);
-            wl_obj_t *src = wl_obj_create(c, sid, WL_OBJ_SOURCE);
-            if (!src) {
+            if (!wl_obj_create(c, wl_get_u32(p), WL_OBJ_SOURCE))
                 wl_send_error(c, obj_id, 0, "source id failed");
-                return;
-            }
-            src->is_ext = obj->is_ext;
             return;
         }
         if (opcode == 1 && rem == 8) {
@@ -1397,15 +1181,13 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
                 wl_send_error(c, obj_id, 0, "device id failed");
                 return;
             }
-            dev->is_ext = obj->is_ext;
-            dev->version = obj->version;
-            dev->supports_primary = obj->is_ext || obj->version >= 2;
+            dev->supports_primary = obj->supports_primary;
             wl_emit_device_selection(dev, false);
             wl_emit_device_selection(dev, true);
             return;
         }
         if (opcode == 2 && rem == 0) {
-            wl_obj_destroy(c, obj_id, true);
+            wl_obj_destroy(c, obj_id);
             return;
         }
         wl_send_error(c, obj_id, 1, "unknown manager request");
@@ -1417,7 +1199,7 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
             return;
         }
         if (opcode == 1 && rem == 0) {
-            wl_obj_destroy(c, obj_id, true);
+            wl_obj_destroy(c, obj_id);
             return;
         }
         if (opcode == 2 && rem == 4 && obj->supports_primary) {
@@ -1438,11 +1220,11 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
                 wl_send_error(c, obj_id, 1, "offer after set_selection");
                 return;
             }
-            (void)mime_list_add(&obj->mimes, &obj->mime_count, mime);
+            mime_list_add(&obj->mimes, &obj->mime_count, mime);
             return;
         }
         if (opcode == 1 && rem == 0) {
-            wl_obj_destroy(c, obj_id, true);
+            wl_obj_destroy(c, obj_id);
             return;
         }
         wl_send_error(c, obj_id, 1, "unknown source request");
@@ -1460,16 +1242,15 @@ static void wl_dispatch_msg(wl_client_t *c, uint32_t obj_id, uint16_t opcode,
                 wl_send_error(c, obj_id, 1, "missing receive fd");
                 return;
             }
-            // wl-clipboard-rs get_contents_internal (src/paste.rs:399-408) sends
+            // wl-clipboard-rs get_contents_internal (16b63ad src/paste.rs:399-408) sends
             // offer.receive + wl_display.sync, blocks on roundtrip() before reading
             // a single byte from the pipe, and drops the Wayland socket immediately
-            // after roundtrip() returns. Pipe transfer must run asynchronously via
-            // epoll and outlive the client connection.
+            // after roundtrip() returns.
             clip_serve_fd(obj->sel, mime, fd);
             return;
         }
         if (opcode == 1 && rem == 0) {
-            wl_obj_destroy(c, obj_id, false);
+            wl_obj_destroy(c, obj_id);
             return;
         }
         wl_send_error(c, obj_id, 1, "unknown offer request");
@@ -1485,8 +1266,7 @@ static void wl_client_destroy(wl_client_t *c) {
         }
     }
     ev_del(&c->ev);
-    if (c->fd >= 0)
-        close(c->fd);
+    close(c->fd);
     for (size_t i = 0; i < c->rx_fd_count; i++)
         close(c->rx_fds[i]);
     for (size_t i = 0; i < c->tx_fd_count; i++)
@@ -1512,10 +1292,6 @@ static void on_wl_client_event(ev_node_t *node, uint32_t events) {
     }
     if (events & (EPOLLIN | EPOLLHUP | EPOLLERR)) {
         for (;;) {
-            if (c->rx_len == sizeof(c->rx_buf)) {
-                wl_client_destroy(c);
-                return;
-            }
             struct iovec iov = {
                 .iov_base = c->rx_buf + c->rx_len,
                 .iov_len = sizeof(c->rx_buf) - c->rx_len,
@@ -1543,15 +1319,13 @@ static void on_wl_client_event(ev_node_t *node, uint32_t events) {
             for (struct cmsghdr *cm = CMSG_FIRSTHDR(&msg); cm; cm = CMSG_NXTHDR(&msg, cm)) {
                 if (cm->cmsg_level == SOL_SOCKET && cm->cmsg_type == SCM_RIGHTS) {
                     size_t nfds = (cm->cmsg_len - CMSG_LEN(0)) / sizeof(int);
-                    int fds[16];
-                    if (nfds > 16)
-                        nfds = 16;
-                    memcpy(fds, CMSG_DATA(cm), nfds * sizeof(int));
                     for (size_t i = 0; i < nfds; i++) {
+                        int fd;
+                        memcpy(&fd, CMSG_DATA(cm) + i * sizeof(int), sizeof(fd));
                         if (c->rx_fd_count < WL_FD_QUEUE_CAP)
-                            c->rx_fds[c->rx_fd_count++] = fds[i];
+                            c->rx_fds[c->rx_fd_count++] = fd;
                         else
-                            close(fds[i]);
+                            close(fd);
                     }
                 }
             }
@@ -1571,7 +1345,7 @@ static void on_wl_client_event(ev_node_t *node, uint32_t events) {
                 uint32_t obj_id = wl_get_u32(hdr + 0);
                 uint32_t size_op = wl_get_u32(hdr + 4);
                 uint16_t size = (uint16_t)(size_op >> 16);
-                uint16_t opcode = wl_get_u16(hdr + 4);
+                uint16_t opcode = (uint16_t)size_op;
                 if (size < 8 || (size & 3) != 0 || size > WL_MAX_MSG_SIZE) {
                     wl_client_destroy(c);
                     return;
@@ -1641,19 +1415,17 @@ static void clip_sock_destroy(clip_sock_conn_t *cc) {
 }
 
 static void clip_sock_handle(clip_sock_conn_t *cc) {
-    clip_selection_t **slot = cc->primary ? &g_primary_sel : &g_regular_sel;
-    clip_selection_t *other = cc->primary ? g_regular_sel : g_primary_sel;
+    clip_selection_t *cur = cc->primary ? g_primary_sel : g_regular_sel;
 
     if (cc->cmd == CLIP_SOCK_LIST) {
-        clip_selection_t *sel = *slot;
-        uint32_t count = sel ? (uint32_t)sel->mime_count : 0;
+        uint32_t count = cur ? (uint32_t)cur->mime_count : 0;
         size_t total = 4;
         for (uint32_t i = 0; i < count; i++)
-            total += 4 + strlen(sel->mimes[i]);
+            total += 4 + strlen(cur->mimes[i]);
         uint8_t *out = malloc(total);
         if (out) {
-            swiptermd_buf_w_t w = swiptermd_buf_w_init(out, total);
-            swiptermd_w_strv(&w, sel ? (const char *const *)sel->mimes : NULL, count);
+            swiptermd_buf_w_t w = {.data = out, .cap = total};
+            swiptermd_w_strv(&w, cur ? (const char *const *)cur->mimes : NULL, count);
             (void)write_all_blocking(cc->fd, out, w.len);
             free(out);
         }
@@ -1662,15 +1434,14 @@ static void clip_sock_handle(clip_sock_conn_t *cc) {
     }
 
     if (cc->cmd == CLIP_SOCK_READ) {
-        clip_selection_t *sel = *slot;
         uint8_t reply[6 + CLIP_MAX_MIME_LEN];
-        if (!sel || sel->mime_count == 0) {
+        if (!cur || cur->mime_count == 0) {
             swiptermd_put_be32(reply, (uint32_t)(-ENODATA));
             (void)write_all_blocking(cc->fd, reply, 4);
             clip_sock_destroy(cc);
             return;
         }
-        const char *resolved = sel_resolve_mime(sel, cc->mime);
+        const char *resolved = sel_resolve_mime(cur, cc->mime);
         if (!resolved) {
             swiptermd_put_be32(reply, (uint32_t)(-EMEDIUMTYPE));
             (void)write_all_blocking(cc->fd, reply, 4);
@@ -1687,18 +1458,14 @@ static void clip_sock_handle(clip_sock_conn_t *cc) {
         }
         int fd = cc->fd;
         cc->fd = -1;
-        ev_del(&cc->ev);
         clip_sock_destroy(cc);
-        clip_serve_fd(sel, resolved, fd);
+        clip_serve_fd(cur, resolved, fd);
         return;
     }
 
     if (cc->cmd == CLIP_SOCK_WRITE) {
         if (cc->mime_len == 0 && cc->data_len == 0) {
-            cancel_live_source(*slot, other);
-            clip_sel_unref(*slot);
-            *slot = NULL;
-            wl_notify_devices(cc->primary);
+            clip_set_selection(cc->primary, NULL);
             if (!cc->primary)
                 push_items_to_host(NULL, 0);
         } else {
@@ -1708,14 +1475,11 @@ static void clip_sock_handle(clip_sock_conn_t *cc) {
                 sel->refcount = 1;
                 if (is_plain_text_alias(mime)) {
                     for (size_t i = 0; i < sizeof(plain_text_mimes) / sizeof(plain_text_mimes[0]); i++)
-                        (void)mime_list_add(&sel->mimes, &sel->mime_count, plain_text_mimes[i]);
+                        mime_list_add(&sel->mimes, &sel->mime_count, plain_text_mimes[i]);
                 }
-                (void)mime_list_add(&sel->mimes, &sel->mime_count, mime);
-                (void)sel_add_item(sel, mime, cc->data ? cc->data : (const uint8_t *)"", cc->data_len);
-                cancel_live_source(*slot, other);
-                clip_sel_unref(*slot);
-                *slot = sel;
-                wl_notify_devices(cc->primary);
+                mime_list_add(&sel->mimes, &sel->mime_count, mime);
+                sel_add_item(sel, mime, cc->data, cc->data_len);
+                clip_set_selection(cc->primary, sel);
                 if (!cc->primary)
                     push_items_to_host(sel->items, sel->item_count);
             }
@@ -1730,81 +1494,50 @@ static void clip_sock_handle(clip_sock_conn_t *cc) {
     clip_sock_destroy(cc);
 }
 
+static bool clip_sock_fill(clip_sock_conn_t *cc, void *buf, size_t want, size_t *got) {
+    while (*got < want) {
+        ssize_t n = read(cc->fd, (uint8_t *)buf + *got, want - *got);
+        if (n > 0) {
+            *got += (size_t)n;
+            continue;
+        }
+        if (n < 0 && errno == EINTR)
+            continue;
+        if (n == 0 || (errno != EAGAIN && errno != EWOULDBLOCK))
+            clip_sock_destroy(cc);
+        return false;
+    }
+    return true;
+}
+
 static void on_clip_sock_event(ev_node_t *node, uint32_t events) {
     (void)events;
     clip_sock_conn_t *cc = node->ctx;
-    while (cc->hdr_got < 8) {
-        ssize_t n = read(cc->fd, cc->hdr + cc->hdr_got, 8 - cc->hdr_got);
-        if (n < 0) {
-            if (errno == EINTR)
-                continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return;
+    if (cc->hdr_got < sizeof(cc->hdr)) {
+        if (!clip_sock_fill(cc, cc->hdr, sizeof(cc->hdr), &cc->hdr_got))
+            return;
+        cc->cmd = cc->hdr[0];
+        cc->primary = cc->hdr[1] != 0;
+        cc->mime_len = swiptermd_get_be16(cc->hdr + 2);
+        cc->data_len = swiptermd_get_be32(cc->hdr + 4);
+        if (cc->mime_len >= CLIP_MAX_MIME_LEN || cc->data_len > CLIP_MAX_DATA_BYTES ||
+            (cc->cmd != CLIP_SOCK_WRITE && cc->data_len != 0)) {
             clip_sock_destroy(cc);
             return;
         }
-        if (n == 0) {
-            clip_sock_destroy(cc);
-            return;
-        }
-        cc->hdr_got += (size_t)n;
-        if (cc->hdr_got == 8) {
-            cc->cmd = cc->hdr[0];
-            cc->primary = cc->hdr[1] != 0;
-            cc->mime_len = swiptermd_get_be16(cc->hdr + 2);
-            cc->data_len = swiptermd_get_be32(cc->hdr + 4);
-            if (cc->mime_len >= CLIP_MAX_MIME_LEN || cc->data_len > CLIP_MAX_DATA_BYTES ||
-                (cc->cmd != CLIP_SOCK_WRITE && cc->data_len != 0)) {
+        if (cc->data_len > 0) {
+            cc->data = malloc(cc->data_len);
+            if (!cc->data) {
                 clip_sock_destroy(cc);
                 return;
             }
-            if (cc->data_len > 0) {
-                cc->data = malloc(cc->data_len);
-                if (!cc->data) {
-                    clip_sock_destroy(cc);
-                    return;
-                }
-            }
         }
     }
-    while (cc->mime_got < cc->mime_len) {
-        ssize_t n = read(cc->fd, cc->mime + cc->mime_got, cc->mime_len - cc->mime_got);
-        if (n < 0) {
-            if (errno == EINTR)
-                continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return;
-            clip_sock_destroy(cc);
-            return;
-        }
-        if (n == 0) {
-            clip_sock_destroy(cc);
-            return;
-        }
-        cc->mime_got += (size_t)n;
-    }
+    if (!clip_sock_fill(cc, cc->mime, cc->mime_len, &cc->mime_got) ||
+        !clip_sock_fill(cc, cc->data, cc->data_len, &cc->data_got))
+        return;
     cc->mime[cc->mime_len] = '\0';
-
-    while (cc->data_got < cc->data_len) {
-        ssize_t n = read(cc->fd, cc->data + cc->data_got, cc->data_len - cc->data_got);
-        if (n < 0) {
-            if (errno == EINTR)
-                continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-                return;
-            clip_sock_destroy(cc);
-            return;
-        }
-        if (n == 0) {
-            clip_sock_destroy(cc);
-            return;
-        }
-        cc->data_got += (size_t)n;
-    }
-
-    int flags = fcntl(cc->fd, F_GETFL, 0);
-    if (flags >= 0)
-        (void)fcntl(cc->fd, F_SETFL, flags & ~O_NONBLOCK);
+    (void)set_nonblock(cc->fd, false);
     clip_sock_handle(cc);
 }
 
@@ -1836,35 +1569,8 @@ static void on_clip_accept(ev_node_t *node, uint32_t events) {
     }
 }
 
-static int listen_unix_socket(const char *path, ev_node_t *ev, ev_cb_t cb) {
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    if (strlen(path) >= sizeof(addr.sun_path))
-        return -ENAMETOOLONG;
-    strcpy(addr.sun_path, path);
-    unlink(path);
-
-    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-    if (fd < 0)
-        return -errno;
-    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0 || listen(fd, 64) < 0) {
-        int err = -errno;
-        close(fd);
-        return err;
-    }
-    chmod(path, 0666);
-    int rc = ev_add(ev, fd, EPOLLIN, cb, NULL);
-    if (rc < 0) {
-        close(fd);
-        unlink(path);
-        return rc;
-    }
-    return fd;
-}
-
 void clipboard_handle_offer(const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     uint32_t count = swiptermd_r_u32(&r);
     if (r.underflow || count > CLIP_MAX_MIMES)
         return;
@@ -1877,12 +1583,17 @@ void clipboard_handle_offer(const uint8_t *body, uint32_t len) {
         sel->refcount = 1;
         sel->from_host = true;
         for (uint32_t i = 0; i < count; i++) {
-            char mime[CLIP_MAX_MIME_LEN];
-            if (!swiptermd_r_str_copy(&r, mime, sizeof(mime))) {
+            swiptermd_slice_t s = swiptermd_r_bytes(&r);
+            if (r.underflow) {
                 clip_sel_unref(sel);
                 return;
             }
-            (void)mime_list_add(&sel->mimes, &sel->mime_count, mime);
+            if (s.len >= CLIP_MAX_MIME_LEN)
+                continue;
+            char mime[CLIP_MAX_MIME_LEN];
+            memcpy(mime, s.ptr, s.len);
+            mime[s.len] = '\0';
+            mime_list_add(&sel->mimes, &sel->mime_count, mime);
         }
         if (sel->mime_count == 0) {
             clip_sel_unref(sel);
@@ -1890,10 +1601,7 @@ void clipboard_handle_offer(const uint8_t *body, uint32_t len) {
         }
     }
 
-    cancel_live_source(g_regular_sel, g_primary_sel);
-    clip_sel_unref(g_regular_sel);
-    g_regular_sel = sel;
-    wl_notify_devices(false);
+    clip_set_selection(false, sel);
 }
 
 int clipboard_setup(void) {
@@ -1927,12 +1635,10 @@ void clipboard_shutdown(void) {
     }
     while (g_harvest_jobs)
         harvest_job_destroy(g_harvest_jobs);
-    while (g_mem_writers)
-        mem_writer_destroy(g_mem_writers);
+    while (g_clip_writers)
+        clip_writer_destroy(g_clip_writers);
     while (g_host_readers)
         host_reader_destroy(g_host_readers);
-    while (g_host_writers)
-        host_writer_destroy(g_host_writers);
     while (g_clip_conns)
         clip_sock_destroy(g_clip_conns);
     while (g_wl_clients)

@@ -197,22 +197,6 @@ struct vcpu {
     bool main_guest;
 };
 
-static_assert(alignof(vcpu_t) >= 16);
-static_assert(sizeof(((vcpu_t *)0)->v) == 32 * 16);
-
-void vcpu_init(vcpu_t *cpu, vmm_machine_t *vm, uint32_t cpu_id);
-void vcpu_destroy(vcpu_t *cpu);
-void vcpu_enable_el2(vcpu_t *cpu);
-void vcpu_reset(vcpu_t *cpu, uint64_t entry_pc, uint64_t x0);
-void vcpu_set_world(vcpu_t *cpu, uint8_t world);
-void vcpu_sync_el2(vcpu_t *cpu);
-void vcpu_update_irq_gate(vcpu_t *cpu);
 void vcpu_update_counter_bases(vcpu_t *cpu);
-vcpu_stop_reason_t vcpu_run(vcpu_t *cpu);
-void vcpu_raise_exception(vcpu_t *cpu, uint32_t esr, uint64_t far, uint64_t elr);
-void vcpu_eret(vcpu_t *cpu);
-void vcpu_flush_icache_all(vcpu_t *cpu);
-void vcpu_flush_icache_va(vcpu_t *cpu, uint64_t va);
-void cpu_pool_destroy(vmm_machine_t *vm);
 
 #endif

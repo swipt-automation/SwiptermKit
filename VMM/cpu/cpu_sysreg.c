@@ -1,5 +1,4 @@
 #include "cpu_internal.h"
-#include "cpu_fast_layout.h"
 #include "generated/a64_sysreg_gen.inc"
 
 #include <sys/sysctl.h>
@@ -35,18 +34,12 @@ enum : uint64_t {
     CCSIDR_L2_VAL = (16383ULL << 13) | (11ULL << 3) | 2ULL,
 };
 
-static uint64_t cpu_ccsidr_encode(uint64_t size, uint64_t base_assoc, uint64_t fallback) {
-    if (size < 64ULL * base_assoc) {
-        return fallback;
-    }
+static uint64_t cpu_ccsidr_encode(uint64_t size, uint64_t base_assoc) {
     uint64_t assoc = (size % 3ULL == 0) ? (base_assoc / 4ULL * 3ULL) : base_assoc;
     while (size / (64ULL * assoc) > 32768ULL && assoc <= 512ULL) {
         assoc <<= 1;
     }
     uint64_t sets = size / (64ULL * assoc);
-    if (sets == 0 || sets > 32768ULL) {
-        return fallback;
-    }
     return ((sets - 1ULL) << 13) | ((assoc - 1ULL) << 3) | 2ULL;
 }
 
@@ -66,10 +59,9 @@ static uint64_t cpu_ccsidr_val(uint64_t csselr) {
         static const uint64_t fallbacks[3] = {CCSIDR_L1D_VAL, CCSIDR_L1I_VAL, CCSIDR_L2_VAL};
         uint64_t size = 0;
         size_t len = sizeof(size);
-        if (sysctlbyname(names[csselr], &size, &len, nullptr, 0) != 0) {
-            size = 0;
-        }
-        val = cpu_ccsidr_encode(size, base_assocs[csselr], fallbacks[csselr]);
+        val = sysctlbyname(names[csselr], &size, &len, nullptr, 0) == 0 && size >= 64ULL * base_assocs[csselr]
+                  ? cpu_ccsidr_encode(size, base_assocs[csselr])
+                  : fallbacks[csselr];
         atomic_store_explicit(&cached[csselr], val, memory_order_relaxed);
     }
     return val;
@@ -98,8 +90,7 @@ uint32_t cpu_host_features(void) {
 }
 
 bool vcpu_check_interrupts(vcpu_t *cpu) {
-    bool icache_flushed = mmu_poll_shootdown(cpu);
-    if (icache_flushed || cpu_jit_stale(cpu)) {
+    if (mmu_poll_shootdown(cpu) || cpu_jit_stale(cpu)) {
         return true;
     }
     if (atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {
@@ -242,6 +233,19 @@ bool cpu_sysop_trapped(uint32_t traps, uint32_t word) {
         break;
     }
     return (traps & need) != 0;
+}
+
+static uint32_t vcpu_sys_trap_esr(uint32_t word) {
+    uint32_t op0 = (word >> 19) & 3U;
+    uint32_t op1 = (word >> 16) & 7U;
+    uint32_t crn = (word >> 12) & 15U;
+    uint32_t crm = (word >> 8) & 15U;
+    uint32_t op2 = (word >> 5) & 7U;
+    uint32_t rt = word & 31U;
+    uint32_t dir = (word >> 21) & 1U;
+    uint32_t iss = (op0 << 20) | (op2 << 17) | (op1 << 14) | (crn << 10) |
+                   (rt << 5) | (crm << 1) | dir;
+    return (0x18U << 26) | (1U << 25) | iss;
 }
 
 static bool guest_trapped(const vcpu_t *cpu, uint32_t word, bool sysop) {
@@ -422,9 +426,9 @@ static uint64_t timer_ctl_read(const vcpu_t *cpu, uint32_t index) {
 static void sysreg_undef(vcpu_t *cpu, const ir_insn_t *ir, uint32_t word) {
     cpu->pc = cpu_ir_pc(cpu, ir);
     if (cpu->has_el2) {
-        vcpu_raise_undef(cpu, cpu->pc);
+        vcpu_raise_exception(cpu, 1U << 25, 0, cpu->pc);
     } else {
-        vcpu_raise_sys_trap(cpu, word, cpu->pc);
+        vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
     }
 }
 
@@ -481,7 +485,7 @@ void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir,
 
     if (cpu->el == 0 && op1 != 3U) {
         cpu->pc = cpu_ir_pc(cpu, ir);
-        vcpu_raise_sys_trap(cpu, word, cpu->pc);
+        vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
         return;
     }
     if (raise_guest_trap(cpu, ir, word, false)) {
@@ -509,7 +513,7 @@ void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir,
         }
         if (!timer_el0_allowed(cpu, crm == 3U ? 8U : 9U)) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         if (op2 == 0U) {
@@ -579,16 +583,16 @@ void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_CNTFRQ_EL0:
         if (cpu->el == 0 && !(cpu->cntkctl_el1 & 3ULL)) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
-        val = vmm_timer_cntfrq();
+        val = VMM_TIMER_FREQ;
         break;
     case A64_SYSREG_CNTPCT_EL0:
     case A64_SYSREG_CNTPCTSS_EL0:
         if (!timer_el0_allowed(cpu, 0)) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         val = vmm_timer_cntvct(cpu->vm);
@@ -597,7 +601,7 @@ void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_CNTVCTSS_EL0:
         if (!timer_el0_allowed(cpu, 1)) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         val = vmm_timer_ticks() - cpu->cntvct_base;
@@ -611,7 +615,7 @@ void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_DAIF:
         if (cpu->el == 0 && !(cpu->sctlr_el1 & (1ULL << 9))) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         val = cpu->daif & 0x3C0U;
@@ -621,7 +625,7 @@ void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_CTR_EL0:
         if (cpu->el == 0 && !(cpu->sctlr_el1 & (1ULL << 15))) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         val = CTR_EL0_VAL;
@@ -657,7 +661,7 @@ void cpu_op_sysreg_mrs(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_DBGDTRRX_EL0:
         if (cpu->el == 0 && (cpu->mdscr_el1 & (1ULL << 12)) != 0) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         val = 0;
@@ -744,7 +748,7 @@ void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir,
 
     if (cpu->el == 0 && op1 != 3U) {
         cpu->pc = cpu_ir_pc(cpu, ir);
-        vcpu_raise_sys_trap(cpu, word, cpu->pc);
+        vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
         return;
     }
     if (raise_guest_trap(cpu, ir, word, false)) {
@@ -766,7 +770,7 @@ void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir,
     } else if (t) {
         if (!timer_el0_allowed(cpu, crm == 3U ? 8U : 9U)) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         if (op2 == 0U) {
@@ -800,7 +804,7 @@ void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_TPIDRRO_EL0:
         if (cpu->el == 0) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         cpu->tpidrro_el0 = val;
@@ -816,7 +820,7 @@ void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_DAIF:
         if (cpu->el == 0 && !(cpu->sctlr_el1 & (1ULL << 9))) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         cpu->daif = (uint32_t)(val & 0x3C0U);
@@ -832,7 +836,7 @@ void cpu_op_sysreg_msr(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSREG_DBGDTRTX_EL0:
         if (cpu->el == 0 && (cpu->mdscr_el1 & (1ULL << 12)) != 0) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         break;
@@ -888,21 +892,21 @@ void cpu_op_pstate_msr(vcpu_t *cpu, const ir_insn_t *ir,
     if (op1 == 0U && op2 == 5U) {
         if (cpu->el == 0) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         cpu->spsel = (uint8_t)(crm & 1U);
     } else if (op1 == 3U && op2 == 6U) {
         if (cpu->el == 0 && !(cpu->sctlr_el1 & (1ULL << 9))) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         cpu->daif |= (crm & 0xFU) << 6;
     } else if (op1 == 3U && op2 == 7U) {
         if (cpu->el == 0 && !(cpu->sctlr_el1 & (1ULL << 9))) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         cpu->daif &= ~((crm & 0xFU) << 6);
@@ -913,7 +917,7 @@ void cpu_op_pstate_msr(vcpu_t *cpu, const ir_insn_t *ir,
     } else if (op1 == 0U && op2 == 4U) {
         if (cpu->el == 0) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         cpu->pan = (uint8_t)(crm & 1U);
@@ -921,13 +925,13 @@ void cpu_op_pstate_msr(vcpu_t *cpu, const ir_insn_t *ir,
     } else if (op1 == 0U && op2 == 3U) {
         if (cpu->el == 0) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         cpu->sysregs.uao = (uint64_t)(crm & 1U) << 23;
     } else {
         cpu->pc = cpu_ir_pc(cpu, ir);
-        vcpu_raise_undef(cpu, cpu->pc);
+        vcpu_raise_exception(cpu, 1U << 25, 0, cpu->pc);
         return;
     }
 
@@ -1131,12 +1135,12 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
 
     if (cpu->el == 0 && op1 != 3U) {
         cpu->pc = cpu_ir_pc(cpu, ir);
-        vcpu_raise_sys_trap(cpu, word, cpu->pc);
+        vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
         return;
     }
     if (op1 >= 4U && cpu->world == VCPU_WORLD_GUEST && cpu->has_el2) {
         cpu->pc = cpu_ir_pc(cpu, ir);
-        vcpu_raise_undef(cpu, cpu->pc);
+        vcpu_raise_exception(cpu, 1U << 25, 0, cpu->pc);
         return;
     }
     if (raise_guest_trap(cpu, ir, word, true)) {
@@ -1148,7 +1152,7 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSOP_DC_ZVA: {
         if (cpu->el == 0 && !(cpu->sctlr_el1 & (1ULL << 14))) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         const uint64_t zva_size = 4ULL << VMM_DCZID_BS;
@@ -1161,17 +1165,17 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
             mmu_translation_t tr;
             bool is_dev = false;
             if (!mmu_translate_and_fill(cpu, base, MMU_ACCESS_WRITE, cpu->el, &tr, &is_dev)) {
-                vcpu_raise_data_abort(cpu, xt, &tr, true, elr);
+                vcpu_raise_abort(cpu, xt, &tr, true, elr, false);
                 return;
             }
             if (is_dev) {
-                vcpu_raise_data_abort(cpu, xt, NULL, true, elr);
+                vcpu_raise_abort(cpu, xt, NULL, true, elr, false);
                 return;
             }
             if (tr.is_mmio) {
                 cpu_fp_leave_guest(cpu);
                 for (uint64_t off = 0; off < zva_size; off += 8ULL) {
-                    vmm_mmio_write(cpu->vm, cpu, tr.pa + off, 8, 0);
+                    vmm_mmio_write(cpu, tr.pa + off, 8, 0);
                 }
             } else {
                 memset((void *)tr.hva, 0, (size_t)zva_size);
@@ -1186,7 +1190,7 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSOP_DC_CVADP:
         if (cpu->el == 0 && !(cpu->sctlr_el1 & (1ULL << 26))) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         break;
@@ -1208,7 +1212,7 @@ void cpu_op_sys_insn(vcpu_t *cpu, const ir_insn_t *ir,
     case A64_SYSOP_IC_IVAU: {
         if (cpu->el == 0 && !(cpu->sctlr_el1 & (1ULL << 26))) {
             cpu->pc = cpu_ir_pc(cpu, ir);
-            vcpu_raise_sys_trap(cpu, word, cpu->pc);
+            vcpu_raise_exception(cpu, vcpu_sys_trap_esr(word), 0, cpu->pc);
             return;
         }
         vcpu_flush_icache_va(cpu, xt);
@@ -1280,12 +1284,12 @@ void cpu_op_hvc(vcpu_t *cpu, const ir_insn_t *ir,
                 return;
             }
         }
-        vcpu_raise_undef(cpu, cur_pc);
+        vcpu_raise_exception(cpu, 1U << 25, 0, cur_pc);
         return;
     }
     if (cpu->has_el2) {
         if ((cpu->el2.hcr & HCR_EL2_HCD) != 0) {
-            vcpu_raise_undef(cpu, cur_pc);
+            vcpu_raise_exception(cpu, 1U << 25, 0, cur_pc);
             return;
         }
         uint32_t imm16 = (uint32_t)ir->target_or_imm & 0xFFFFU;
@@ -1295,9 +1299,7 @@ void cpu_op_hvc(vcpu_t *cpu, const ir_insn_t *ir,
     cpu->pc = cur_pc + 4ULL;
     cpu_fp_leave_guest(cpu);
     cpu_qs_park(cpu);
-    if (!vmm_handle_psci(cpu)) {
-        cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
-    }
+    vmm_handle_psci(cpu);
     if (!cpu_qs_unpark(cpu) || atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {
         return;
     }
@@ -1308,7 +1310,7 @@ void cpu_op_smc(vcpu_t *cpu, const ir_insn_t *ir,
                 softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
     uint64_t cur_pc = cpu_ir_pc(cpu, ir);
     if (!cpu->has_el2 || cpu->el == 0) {
-        vcpu_raise_undef(cpu, cur_pc);
+        vcpu_raise_exception(cpu, 1U << 25, 0, cur_pc);
         return;
     }
     if (cpu->world == VCPU_WORLD_GUEST && (cpu->el2.hcr & HCR_EL2_TSC) != 0) {
@@ -1319,9 +1321,7 @@ void cpu_op_smc(vcpu_t *cpu, const ir_insn_t *ir,
     cpu->pc = cur_pc + 4ULL;
     cpu_fp_leave_guest(cpu);
     cpu_qs_park(cpu);
-    if (!vmm_handle_psci(cpu)) {
-        cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
-    }
+    vmm_handle_psci(cpu);
     if (!cpu_qs_unpark(cpu) || atomic_load_explicit(&cpu->stop_requested, memory_order_relaxed)) {
         return;
     }
@@ -1343,7 +1343,7 @@ void cpu_op_hlt(vcpu_t *cpu, const ir_insn_t *ir,
     (void)tlb_w;
     cpu->pc = cpu_ir_pc(cpu, ir);
     if (cpu->el == 0) {
-        vcpu_raise_undef(cpu, cpu->pc);
+        vcpu_raise_exception(cpu, 1U << 25, 0, cpu->pc);
         return;
     }
     cpu->stop_reason = VCPU_STOP_HALT;
@@ -1356,7 +1356,7 @@ void cpu_op_eret(vcpu_t *cpu, const ir_insn_t *ir,
     (void)tlb_w;
     if (cpu->el == 0) {
         uint64_t cur_pc = cpu_ir_pc(cpu, ir);
-        vcpu_raise_undef(cpu, cur_pc);
+        vcpu_raise_exception(cpu, 1U << 25, 0, cur_pc);
         return;
     }
     vcpu_eret(cpu);
@@ -1405,11 +1405,7 @@ void cpu_op_wfe(vcpu_t *cpu, const ir_insn_t *ir,
 
 void cpu_op_sev(vcpu_t *cpu, const ir_insn_t *ir,
                 softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
-    if (cpu->vm) {
-        vmm_vcpu_sev(cpu->vm);
-    } else {
-        atomic_store_explicit(&cpu->event_reg, true, memory_order_release);
-    }
+    vmm_vcpu_sev(cpu->vm);
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
 }
 

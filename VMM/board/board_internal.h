@@ -9,41 +9,46 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VMM_TIMER_FREQ 24000000ULL
-
 enum {
     GICV2_LIST_REGS = 4,
+    GICV2_NUM_SPIS = 96,
 };
 
-typedef struct gicv2_snapshot {
-    uint32_t dist_enabled;
+typedef struct gicv2_vif {
+    uint32_t hcr;
+    uint32_t vmcr;
+    uint32_t apr;
+    uint32_t lr[GICV2_LIST_REGS];
+} gicv2_vif_t;
+
+typedef struct gicv2_cpu_state {
+    uint32_t ctlr;
+    uint32_t pmr;
+    uint32_t bpr;
+    uint32_t enabled_local;
+    uint32_t pending_local;
+    uint32_t level_local;
+    uint32_t active_local;
+    uint32_t icfgr_ppi;
+    uint32_t apr;
+    uint8_t sgi_pending[16];
+    uint8_t priority_local[32];
+    gicv2_vif_t vif;
+} gicv2_cpu_state_t;
+
+typedef struct gicv2_state {
+    bool dist_enabled;
     uint32_t spi_enabled[3];
     uint32_t spi_pending[3];
     uint32_t spi_level[3];
     uint32_t spi_active[3];
-    uint8_t spi_priority[96];
-    uint8_t spi_targets[96];
+    uint8_t spi_priority[GICV2_NUM_SPIS];
+    uint8_t spi_targets[GICV2_NUM_SPIS];
     uint32_t spi_icfgr[6];
-    struct {
-        uint32_t ctlr;
-        uint32_t pmr;
-        uint32_t bpr;
-        uint32_t enabled_local;
-        uint32_t pending_local;
-        uint32_t level_local;
-        uint32_t active_local;
-        uint32_t icfgr_ppi;
-        uint32_t apr;
-        uint8_t sgi_pending[16];
-        uint8_t priority_local[32];
-        uint32_t gich_hcr;
-        uint32_t gich_vmcr;
-        uint32_t gich_apr;
-        uint32_t gich_lr[GICV2_LIST_REGS];
-    } cpu[VMM_MAX_VCPUS];
-} gicv2_snapshot_t;
+    gicv2_cpu_state_t cpu[VMM_MAX_VCPUS];
+} gicv2_state_t;
 
-typedef struct pl011_snapshot {
+typedef struct pl011_state {
     uint32_t ilpr;
     uint32_t ibrd;
     uint32_t fbrd;
@@ -53,16 +58,19 @@ typedef struct pl011_snapshot {
     uint32_t imsc;
     uint32_t ris;
     uint32_t dmacr;
-} pl011_snapshot_t;
+} pl011_state_t;
 
-typedef struct pl031_snapshot {
+typedef struct pl031_state {
     int64_t tick_offset;
     uint32_t mr;
     uint32_t lr;
     uint32_t cr;
     uint32_t imsc;
-    uint32_t ris;
-} pl031_snapshot_t;
+} pl031_state_t;
+
+typedef struct gicv2 gicv2_t;
+typedef struct pl011 pl011_t;
+typedef struct pl031 pl031_t;
 
 typedef struct vmm_timer_state {
     pthread_t thread;
@@ -72,11 +80,9 @@ typedef struct vmm_timer_state {
     pthread_cond_t cond;
     uint64_t deadlines[VMM_MAX_VCPUS];
     bool stop;
-    _Atomic bool active;
 } vmm_timer_state_t;
 
 typedef enum vmm_preboot_phase {
-    VMM_PREBOOT_DISABLED,
     VMM_PREBOOT_ARMED,
     VMM_PREBOOT_REACHED,
     VMM_PREBOOT_RELEASED,
@@ -85,7 +91,10 @@ typedef enum vmm_preboot_phase {
 
 typedef struct vmm_machine_priv {
     vmm_machine_t pub;
-    uint64_t priv_magic;
+
+    gicv2_t *gic;
+    pl011_t *uart;
+    pl031_t *rtc;
 
     pthread_t threads[VMM_MAX_VCPUS];
     bool thread_started[VMM_MAX_VCPUS];
@@ -102,70 +111,46 @@ typedef struct vmm_machine_priv {
     uint32_t suspended_count;
     bool halt_notified;
     bool restored_from_snapshot;
-    bool el2;
     _Atomic vmm_preboot_phase_t preboot_phase;
     uint8_t snapshot_key[32];
-
-    uint64_t kernel_entry_pc;
-    uint64_t dtb_addr;
-    int blk_fd;
 
     vmm_timer_state_t timer;
 } vmm_machine_priv_t;
 
-#define VMM_MACHINE_PRIV_MAGIC 0x535749504d414348ULL
-
 static inline vmm_machine_priv_t *vmm_priv(vmm_machine_t *vm) {
-    if (!vm) {
-        return NULL;
-    }
-    vmm_machine_priv_t *priv = (vmm_machine_priv_t *)vm;
-    return priv->priv_magic == VMM_MACHINE_PRIV_MAGIC ? priv : NULL;
+    return (vmm_machine_priv_t *)vm;
 }
 
-static inline const vmm_machine_priv_t *vmm_priv_const(const vmm_machine_t *vm) {
-    if (!vm) {
-        return NULL;
-    }
-    const vmm_machine_priv_t *priv = (const vmm_machine_priv_t *)vm;
-    return priv->priv_magic == VMM_MACHINE_PRIV_MAGIC ? priv : NULL;
-}
-
-static inline uint64_t vmm_initrd_addr(size_t ram_size, size_t initramfs_size) {
-    if (initramfs_size == 0 || initramfs_size >= ram_size) {
-        return 0;
-    }
-    return (VMM_RAM_BASE + (uint64_t)ram_size - (uint64_t)initramfs_size) & ~(uint64_t)VMM_PAGE_MASK;
-}
-
-void *gicv2_create(vmm_machine_t *vm);
-void gicv2_destroy(void *gic);
+gicv2_t *gicv2_create(vmm_machine_t *vm);
+void gicv2_destroy(gicv2_t *g);
 void gicv2_set_timer_ppis(vmm_machine_t *vm, uint32_t cpu_id, uint32_t lines);
-uint64_t gicv2_dist_read(void *gic, vcpu_t *cpu, uint32_t offset, uint32_t size);
-void gicv2_dist_write(void *gic, vcpu_t *cpu, uint32_t offset, uint32_t size, uint64_t val);
-uint64_t gicv2_cpu_read(void *gic, vcpu_t *cpu, uint32_t offset, uint32_t size);
-uint64_t gicv2_hyp_read(void *gic, vcpu_t *cpu, uint32_t offset);
-void gicv2_hyp_write(void *gic, vcpu_t *cpu, uint32_t offset, uint64_t val);
-uint64_t gicv2_vcpu_read(void *gic, vcpu_t *cpu, uint32_t offset);
-void gicv2_vcpu_write(void *gic, vcpu_t *cpu, uint32_t offset, uint64_t val);
-void gicv2_cpu_write(void *gic, vcpu_t *cpu, uint32_t offset, uint32_t size, uint64_t val);
-void gicv2_save_state(const void *gic, gicv2_snapshot_t *out);
-void gicv2_load_state(void *gic, const gicv2_snapshot_t *in);
+uint64_t gicv2_dist_read(gicv2_t *g, vcpu_t *cpu, uint32_t offset, uint32_t size);
+void gicv2_dist_write(gicv2_t *g, vcpu_t *cpu, uint32_t offset, uint32_t size, uint64_t val);
+uint64_t gicv2_cpu_read(gicv2_t *g, vcpu_t *cpu, uint32_t offset);
+void gicv2_cpu_write(gicv2_t *g, vcpu_t *cpu, uint32_t offset, uint64_t val);
+uint64_t gicv2_hyp_read(gicv2_t *g, vcpu_t *cpu, uint32_t offset);
+void gicv2_hyp_write(gicv2_t *g, vcpu_t *cpu, uint32_t offset, uint64_t val);
+uint64_t gicv2_vcpu_read(gicv2_t *g, vcpu_t *cpu, uint32_t offset);
+void gicv2_vcpu_write(gicv2_t *g, vcpu_t *cpu, uint32_t offset, uint64_t val);
+void gicv2_save_state(gicv2_t *g, gicv2_state_t *out);
+void gicv2_load_state(gicv2_t *g, const gicv2_state_t *in);
 
-void *pl011_create(vmm_machine_t *vm);
-void pl011_destroy(void *uart);
-uint64_t pl011_read(void *uart, uint32_t offset, uint32_t size);
-void pl011_write(void *uart, uint32_t offset, uint32_t size, uint64_t val);
-void pl011_push_rx(vmm_machine_t *vm, const uint8_t *data, size_t len);
-void pl011_save_state(const void *uart, pl011_snapshot_t *out);
-void pl011_load_state(void *uart, const pl011_snapshot_t *in);
+pl011_t *pl011_create(vmm_machine_t *vm);
+void pl011_destroy(pl011_t *u);
+uint64_t pl011_read(pl011_t *u, uint32_t offset);
+void pl011_write(pl011_t *u, uint32_t offset, uint64_t val);
+void pl011_save_state(pl011_t *u, pl011_state_t *out);
+void pl011_load_state(pl011_t *u, const pl011_state_t *in);
 
-void *pl031_create(vmm_machine_t *vm);
-void pl031_destroy(void *rtc);
-uint64_t pl031_read(void *rtc, uint32_t offset, uint32_t size);
-void pl031_write(void *rtc, uint32_t offset, uint32_t size, uint64_t val);
-void pl031_save_state(const void *rtc, pl031_snapshot_t *out);
-void pl031_load_state(void *rtc, const pl031_snapshot_t *in);
+pl031_t *pl031_create(void);
+void pl031_destroy(pl031_t *r);
+uint64_t pl031_read(pl031_t *r, uint32_t offset);
+void pl031_write(pl031_t *r, uint32_t offset, uint64_t val);
+void pl031_save_state(pl031_t *r, pl031_state_t *out);
+void pl031_load_state(pl031_t *r, const pl031_state_t *in);
+
+int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config, uint64_t initrd_start,
+              void *buf, size_t buf_size);
 
 int vmm_timer_init(vmm_machine_priv_t *priv);
 void vmm_timer_destroy(vmm_machine_priv_t *priv);
@@ -173,15 +158,12 @@ void vmm_timer_disarm_all(vmm_machine_priv_t *priv);
 void vmm_timer_sync_all(vmm_machine_priv_t *priv);
 void vmm_timer_set_cntvct(vmm_machine_t *vm, uint64_t cntvct);
 void vmm_timer_sync(vcpu_t *cpu);
+void vmm_timer_sample_realtime(const vmm_machine_t *vm, uint64_t *realtime_ns, uint64_t *cntvct);
 
 static inline void vmm_host_sev(void) {
     __asm__ __volatile__("dsb ish\n\tsev" ::: "memory");
 }
 
 void vmm_vcpu_wake(vmm_machine_t *vm, uint32_t cpu_id);
-void vmm_vcpu_wfe(vcpu_t *cpu);
-void vmm_vcpu_sev(vmm_machine_t *vm);
-void vmm_vcpu_wfe_notify_write(vmm_machine_t *vm, uintptr_t hva);
-bool vmm_handle_psci(vcpu_t *cpu);
 
 #endif

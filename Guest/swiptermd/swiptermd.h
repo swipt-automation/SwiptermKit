@@ -3,6 +3,7 @@
 
 #define _GNU_SOURCE
 
+#include "guest_ipc.h"
 #include "protocol.h"
 #include "wire_format.h"
 
@@ -11,20 +12,33 @@
 #include <limits.h>
 #include <stdint.h>
 #include <sys/epoll.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #define GUEST_ROOT "/mnt/root"
-#define GUEST_RUN_HOST "/run/host"
 #define GUEST_NOTIFY_SOCKET GUEST_RUN_HOST "/notify"
 #define GUEST_WAYLAND_SOCKET GUEST_RUN_HOST "/wayland-0"
-#define GUEST_CLIPBOARD_SOCKET GUEST_RUN_HOST "/clipboard.sock"
 #define GUEST_TOOL_PATH GUEST_RUN_HOST "/swiptermd"
 #define GUEST_DEFAULT_RESOLV_CONF "nameserver 10.0.2.3\nnameserver fd00::3\n"
 #define SESSIONS_ANCHOR_COMMAND "sessions-anchor"
+#define SESSIONS_READY_MESSAGE "X_SWIPTERM_SESSIONS=1"
 #define MANAGED_INIT_NAME "init"
 #define TRUSTED_PATH "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin"
-#define GPU_VENUS_ENV "VN_DEBUG=no_abort"
+#define GPU_VENUS_ENV_NAME "VN_DEBUG"
+#define GPU_VENUS_ENV_VALUE "no_abort"
+#define GPU_VENUS_ENV GPU_VENUS_ENV_NAME "=" GPU_VENUS_ENV_VALUE
 #define LOGIN_USER_CAP 33
+#define VIRTIO_MMIO_ADDR(slot) (0x0a000000U + (unsigned)(slot) * 0x200U)
+
+enum {
+    VIRTIO_SLOT_BOOT_COUNT = 4,
+    VIRTIO_SLOT_RNG = 4,
+    VIRTIO_SLOT_FS_BASE = 5,
+    VIRTIO_SLOT_FS_COUNT = 4,
+    VIRTIO_SLOT_DISK_BASE = 9,
+    VIRTIO_SLOT_DISK_COUNT = 4,
+    VIRTIO_SLOT_GPU = 13,
+};
 
 typedef struct ev_node ev_node_t;
 typedef void (*ev_cb_t)(ev_node_t *node, uint32_t events);
@@ -51,11 +65,9 @@ typedef struct daemon_state {
 
     bool init_started;
     bool gpu;
-    bool halted;
     bool stopping;
     bool shutdown_requested;
     bool reboot_requested;
-    uint32_t stop_flags;
     uint32_t ready_mask;
     pid_t container_init_pid;
     int container_pid_ns_fd;
@@ -71,15 +83,18 @@ int ev_add(ev_node_t *node, int fd, uint32_t events, ev_cb_t cb, void *ctx);
 int ev_mod(ev_node_t *node, uint32_t events);
 void ev_del(ev_node_t *node);
 
-int set_nonblock(int fd);
-int write_all_blocking(int fd, const void *buf, size_t len);
-int read_all_blocking(int fd, void *buf, size_t len);
+int set_nonblock(int fd, bool enabled);
 int write_file(int dir_fd, const char *path, const char *text, int flags, mode_t mode);
 void close_other_fds(const int *keep, int nkeep);
-void ensure_dir(const char *path, mode_t mode);
+void redirect_stdio(int fd);
+_Noreturn void child_exit_error(int fd, int32_t err);
+char **strv_decode(swiptermd_buf_r_t *r);
+void strv_free(char **vec);
+int namespace_open(pid_t pid, const char *name);
 void console_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
 void boot_err_log(const char *step, int rc);
 int vsock_connect_stream(uint32_t role, uint32_t resource_id, uint64_t token);
+int listen_unix_socket(const char *path, ev_node_t *ev, ev_cb_t cb);
 
 int ctrl_send_frame(uint16_t opcode, uint32_t req_id, const void *body, uint32_t body_len);
 int ctrl_send_err_reply(uint16_t opcode, uint32_t req_id, int32_t err);
@@ -92,7 +107,7 @@ void shutdown_check_done(void);
 
 int storage_mount_root(void);
 int storage_check(const char *device);
-bool storage_teardown(void);
+void storage_teardown(void);
 
 int network_setup(void);
 int network_guest_fd(void);
@@ -105,6 +120,9 @@ int container_assemble(void);
 int container_enter(bool disk);
 int disk_procs_fd(void);
 int container_mount_api(void);
+int dev_populate(const char *dev);
+void cgroup_enable_controllers(int dir_fd);
+bool cgroup_membership(const char *proc_cgroup, char *group, size_t cap);
 int sessions_procs_fd(void);
 void sessions_register(pid_t sender);
 void sessions_shutdown(void);
@@ -116,7 +134,7 @@ void notify_close(void);
 int notify_signals_level(void);
 
 bool login_name_valid(const char *name);
-int login_exec(const char *user, char *const envp[], bool fallback_shell);
+int login_exec(const char *user, char *const envp[], bool managed);
 int shell_exec(const char *user, char *const envp[]);
 bool login_available(void);
 int sessions_anchor_main(void);
@@ -147,9 +165,8 @@ typedef struct launch_target {
 typedef struct disk_sandbox disk_sandbox_t;
 
 void launch_target_close(launch_target_t *target);
-void proc_pty_init(void);
+int pty_open_master(int *pts_num_out);
 void proc_pty_shutdown(void);
-void proc_handle_spawn(uint32_t req_id, const uint8_t *body, uint32_t len);
 void proc_handle_disk_spawn(uint32_t req_id, const uint8_t *body, uint32_t len);
 void proc_handle_login(uint32_t req_id, const uint8_t *body, uint32_t len);
 void proc_handle_signal(uint32_t req_id, const uint8_t *body, uint32_t len);
@@ -161,15 +178,13 @@ void pty_handle_close(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_stat(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_read(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_write(uint32_t req_id, const uint8_t *body, uint32_t len);
-void fs_handle_list(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_mkdir(uint32_t req_id, const uint8_t *body, uint32_t len);
-void fs_handle_remove(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len);
-void fs_handle_unmount(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_unmount_all(void);
 int fs_normalize_path(const char *in, char *out, size_t cap);
 int fs_prepare_mountpoint(const char *guest_path, char norm[PATH_MAX]);
 int fs_open_in_root(const char *rel, uint64_t flags, uint64_t mode);
+char *fs_read_root_file(const char *rel, struct stat *st);
 int fs_open_parent(const char *guest_path, char *name_out, size_t name_cap);
 int fs_write_file_jailed(const char *guest_path, const uint8_t *data, size_t len, uint32_t mode, bool sync);
 int fs_mkdir_p_jailed(const char *guest_path, uint32_t mode);
@@ -191,7 +206,7 @@ void host_cmd_handle_start_reply(uint32_t req_id, const uint8_t *body, uint32_t 
 
 bool cuse_available(void);
 void cuse_handle_register_device(uint32_t req_id, const uint8_t *body, uint32_t len);
-bool cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, uint32_t len);
+void cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, uint32_t len);
 
 void sock_mirror_init(void);
 void sock_mirror_scan_now(void);

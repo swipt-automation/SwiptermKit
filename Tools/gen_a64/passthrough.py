@@ -344,7 +344,3 @@ class Passthrough:
             else:
                 lines.append("    .long 0")
         return "\n".join(lines) + "\n"
-
-    def emit_words(self):
-        return "".join(f"    {{0x{s[2]:08x}u, \"{s[5].replace(chr(9), ' ')}\"}},\n"
-                       for i, s in enumerate(self.stubs) if s and s[0] == i)

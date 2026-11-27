@@ -90,14 +90,7 @@ typedef struct virtio_blk {
     bool read_only;
     virtio_blk_config_t config;
     char serial[VIRTIO_BLK_ID_BYTES];
-    pthread_t worker;
-    bool worker_started;
-    pthread_mutex_t lock;
-    pthread_cond_t work_cond;
-    pthread_cond_t idle_cond;
-    bool pending;
-    bool busy;
-    bool stop;
+    virtio_worker_t worker;
     _Atomic bool dirty;
 } virtio_blk_t;
 
@@ -108,91 +101,21 @@ static int blk_flush(int fd) {
     return fsync(fd);
 }
 
-static uint8_t blk_punch_hole(int fd, uint64_t offset, uint64_t len) {
-    uint64_t aligned_start = (offset + (VIRTIO_BLK_BLOCK_SIZE - 1)) & ~(uint64_t)(VIRTIO_BLK_BLOCK_SIZE - 1);
-    uint64_t aligned_end = (offset + len) & ~(uint64_t)(VIRTIO_BLK_BLOCK_SIZE - 1);
-    if (aligned_end <= aligned_start) {
-        return VIRTIO_BLK_S_OK;
-    }
-    struct fpunchhole ph = {
-        .fp_flags = 0,
-        .reserved = 0,
-        .fp_offset = (off_t)aligned_start,
-        .fp_length = (off_t)(aligned_end - aligned_start),
-    };
-    if (fcntl(fd, F_PUNCHHOLE, &ph) < 0) {
-        if (errno == ENOTSUP || errno == EINVAL || errno == ENOSYS) {
-            return VIRTIO_BLK_S_OK;
-        }
-        return VIRTIO_BLK_S_IOERR;
-    }
-    return VIRTIO_BLK_S_OK;
-}
-
-static uint8_t blk_zero_range(int fd, uint64_t offset, uint64_t len) {
-    static const uint8_t zeros[65536];
-    while (len > 0) {
-        size_t chunk = len > sizeof(zeros) ? sizeof(zeros) : (size_t)len;
-        ssize_t n;
-        do {
-            n = pwrite(fd, zeros, chunk, (off_t)offset);
-        } while (n < 0 && errno == EINTR);
-        if (n <= 0) {
-            return VIRTIO_BLK_S_IOERR;
-        }
-        offset += (uint64_t)n;
-        len -= (uint64_t)n;
-    }
-    return VIRTIO_BLK_S_OK;
-}
-
 static uint8_t blk_handle_rw(virtio_blk_t *blk, uint32_t type, uint64_t sector,
-                             const virtio_iov_t *iov, size_t total_iov,
+                             const virtio_iov_t *iov, size_t total_iov, size_t in_total,
                              uint32_t *written_out) {
     if (type == VIRTIO_BLK_T_OUT && blk->read_only) {
         return VIRTIO_BLK_S_IOERR;
     }
     struct iovec vecs[VIRTIO_BLK_MAX_IOV];
-    int vec_cnt = 0;
-    size_t data_bytes = 0;
-
+    size_t data_bytes;
+    int vec_cnt;
     if (type == VIRTIO_BLK_T_IN) {
-        size_t in_total = virtio_iov_total(iov, total_iov, true);
-        if (in_total < 1) {
-            return VIRTIO_BLK_S_IOERR;
-        }
-        size_t rem = in_total - 1;
-        for (size_t i = 0; i < total_iov && rem > 0; i++) {
-            if (!iov[i].write) {
-                continue;
-            }
-            size_t take = iov[i].len < rem ? iov[i].len : rem;
-            if (take > 0) {
-                vecs[vec_cnt++] = (struct iovec){ .iov_base = iov[i].base, .iov_len = take };
-                data_bytes += take;
-                rem -= take;
-            }
-        }
+        data_bytes = in_total - 1;
+        vec_cnt = virtio_iov_spans(iov, total_iov, true, 0, data_bytes, vecs);
     } else {
-        size_t skip = sizeof(virtio_blk_req_hdr_t);
-        for (size_t i = 0; i < total_iov; i++) {
-            if (iov[i].write) {
-                continue;
-            }
-            if (skip >= iov[i].len) {
-                skip -= iov[i].len;
-                continue;
-            }
-            size_t take = iov[i].len - skip;
-            if (take > 0) {
-                vecs[vec_cnt++] = (struct iovec){
-                    .iov_base = (uint8_t *)iov[i].base + skip,
-                    .iov_len = take,
-                };
-                data_bytes += take;
-            }
-            skip = 0;
-        }
+        data_bytes = virtio_iov_total(iov, total_iov, false) - sizeof(virtio_blk_req_hdr_t);
+        vec_cnt = virtio_iov_spans(iov, total_iov, false, sizeof(virtio_blk_req_hdr_t), data_bytes, vecs);
     }
 
     if ((data_bytes % VIRTIO_BLK_SECTOR_SIZE) != 0) {
@@ -272,142 +195,104 @@ static uint8_t blk_handle_dwz(virtio_blk_t *blk, uint32_t type,
         if (len == 0) {
             continue;
         }
+        uint64_t aligned_start = (off + (VIRTIO_BLK_BLOCK_SIZE - 1)) & ~(uint64_t)(VIRTIO_BLK_BLOCK_SIZE - 1);
+        uint64_t aligned_end = (off + len) & ~(uint64_t)(VIRTIO_BLK_BLOCK_SIZE - 1);
+        int punched = -1;
+        if (aligned_end > aligned_start &&
+            (type == VIRTIO_BLK_T_DISCARD || (reqs[i].flags & VIRTIO_BLK_WRITE_ZEROES_UNMAP))) {
+            struct fpunchhole ph = {
+                .fp_offset = (off_t)aligned_start,
+                .fp_length = (off_t)(aligned_end - aligned_start),
+            };
+            punched = fcntl(blk->fd, F_PUNCHHOLE, &ph);
+            if (punched < 0 && type == VIRTIO_BLK_T_DISCARD &&
+                errno != ENOTSUP && errno != EINVAL && errno != ENOSYS) {
+                return VIRTIO_BLK_S_IOERR;
+            }
+        }
         if (type == VIRTIO_BLK_T_DISCARD) {
-            uint8_t st = blk_punch_hole(blk->fd, off, len);
-            if (st != VIRTIO_BLK_S_OK) {
-                return st;
+            continue;
+        }
+        if (punched == 0) {
+            if ((aligned_start > off && virtio_write_zeros(blk->fd, (off_t)off, (off_t)(aligned_start - off)) < 0) ||
+                (off + len > aligned_end &&
+                 virtio_write_zeros(blk->fd, (off_t)aligned_end, (off_t)(off + len - aligned_end)) < 0)) {
+                return VIRTIO_BLK_S_IOERR;
             }
-        } else {
-            uint64_t aligned_start = (off + (VIRTIO_BLK_BLOCK_SIZE - 1)) & ~(uint64_t)(VIRTIO_BLK_BLOCK_SIZE - 1);
-            uint64_t aligned_end = (off + len) & ~(uint64_t)(VIRTIO_BLK_BLOCK_SIZE - 1);
-            bool punched = false;
-            if ((reqs[i].flags & VIRTIO_BLK_WRITE_ZEROES_UNMAP) && aligned_end > aligned_start) {
-                struct fpunchhole ph = {
-                    .fp_flags = 0,
-                    .reserved = 0,
-                    .fp_offset = (off_t)aligned_start,
-                    .fp_length = (off_t)(aligned_end - aligned_start),
-                };
-                if (fcntl(blk->fd, F_PUNCHHOLE, &ph) == 0) {
-                    punched = true;
-                }
-            }
-            if (punched) {
-                if (aligned_start > off) {
-                    uint8_t st = blk_zero_range(blk->fd, off, aligned_start - off);
-                    if (st != VIRTIO_BLK_S_OK) {
-                        return st;
-                    }
-                }
-                if (off + len > aligned_end) {
-                    uint8_t st = blk_zero_range(blk->fd, aligned_end, (off + len) - aligned_end);
-                    if (st != VIRTIO_BLK_S_OK) {
-                        return st;
-                    }
-                }
-            } else {
-                uint8_t st = blk_zero_range(blk->fd, off, len);
-                if (st != VIRTIO_BLK_S_OK) {
-                    return st;
-                }
-            }
+        } else if (virtio_write_zeros(blk->fd, (off_t)off, (off_t)len) < 0) {
+            return VIRTIO_BLK_S_IOERR;
         }
     }
     return VIRTIO_BLK_S_OK;
 }
 
-static void *virtio_blk_worker(void *ctx) {
+static void virtio_blk_run(void *ctx) {
     virtio_blk_t *blk = ctx;
     virtio_dev_t *dev = blk->dev;
     virtqueue_t *vq = &dev->queues[0];
+    if (!virtqueue_active(dev, vq)) {
+        return;
+    }
+    uint16_t old_used = vq->used_idx;
+    bool pushed = false;
 
-    pthread_mutex_lock(&blk->lock);
     for (;;) {
-        while (!blk->pending && !blk->stop) {
-            pthread_cond_wait(&blk->work_cond, &blk->lock);
-        }
-        if (!blk->pending && blk->stop) {
+        virtio_iov_t iov[VIRTIO_BLK_MAX_IOV];
+        uint16_t head = 0;
+        size_t total_iov = 0;
+        if (virtqueue_pop(dev, vq, iov, VIRTIO_BLK_MAX_IOV, &head, &total_iov) <= 0) {
             break;
         }
-        blk->pending = false;
-        blk->busy = true;
-        pthread_mutex_unlock(&blk->lock);
 
-        if (atomic_load_explicit(&vq->ready, memory_order_acquire) &&
-            (atomic_load_explicit(&dev->status, memory_order_acquire) & VIRTIO_STATUS_DRIVER_OK)) {
-            uint16_t old_used = vq->used_idx;
-            bool pushed = false;
+        virtio_blk_req_hdr_t hdr = {0};
+        uint8_t status = VIRTIO_BLK_S_IOERR;
+        uint32_t data_written = 0;
 
-            for (;;) {
-                virtio_iov_t iov[VIRTIO_BLK_MAX_IOV];
-                uint16_t head = 0;
-                size_t out_cnt = 0;
-                size_t in_cnt = 0;
-                int popped = virtqueue_pop(dev, vq, iov, VIRTIO_BLK_MAX_IOV, &head, &out_cnt, &in_cnt);
-                if (popped <= 0) {
-                    break;
+        size_t in_total = virtio_iov_total(iov, total_iov, true);
+        if (virtio_iov_read(iov, total_iov, 0, &hdr, sizeof(hdr)) == sizeof(hdr) && in_total >= 1) {
+            switch (hdr.type) {
+            case VIRTIO_BLK_T_IN:
+                status = blk_handle_rw(blk, hdr.type, hdr.sector, iov, total_iov, in_total, &data_written);
+                break;
+            case VIRTIO_BLK_T_OUT:
+                status = blk_handle_rw(blk, hdr.type, hdr.sector, iov, total_iov, in_total, &data_written);
+                if (status == VIRTIO_BLK_S_OK) {
+                    atomic_store_explicit(&blk->dirty, true, memory_order_relaxed);
                 }
-
-                size_t total_iov = out_cnt + in_cnt;
-                virtio_blk_req_hdr_t hdr = {0};
-                uint8_t status = VIRTIO_BLK_S_IOERR;
-                uint32_t data_written = 0;
-
-                size_t in_total = virtio_iov_total(iov, total_iov, true);
-                if (virtio_iov_read(iov, total_iov, 0, &hdr, sizeof(hdr)) == sizeof(hdr) && in_total >= 1) {
-                    switch (hdr.type) {
-                    case VIRTIO_BLK_T_IN:
-                        status = blk_handle_rw(blk, hdr.type, hdr.sector, iov, total_iov, &data_written);
-                        break;
-                    case VIRTIO_BLK_T_OUT:
-                        status = blk_handle_rw(blk, hdr.type, hdr.sector, iov, total_iov, &data_written);
-                        if (status == VIRTIO_BLK_S_OK) {
-                            atomic_store_explicit(&blk->dirty, true, memory_order_relaxed);
-                        }
-                        break;
-                    case VIRTIO_BLK_T_GET_ID: {
-                        size_t n = in_total - 1;
-                        if (n > VIRTIO_BLK_ID_BYTES) {
-                            n = VIRTIO_BLK_ID_BYTES;
-                        }
-                        virtio_iov_write(iov, total_iov, 0, blk->serial, n);
-                        data_written = (uint32_t)n;
-                        status = VIRTIO_BLK_S_OK;
-                        break;
-                    }
-                    case VIRTIO_BLK_T_DISCARD:
-                    case VIRTIO_BLK_T_WRITE_ZEROES:
-                        status = blk_handle_dwz(blk, hdr.type, iov, total_iov);
-                        if (status == VIRTIO_BLK_S_OK) {
-                            atomic_store_explicit(&blk->dirty, true, memory_order_relaxed);
-                        }
-                        break;
-                    default:
-                        status = VIRTIO_BLK_S_UNSUPP;
-                        break;
-                    }
+                break;
+            case VIRTIO_BLK_T_GET_ID: {
+                size_t n = in_total - 1;
+                if (n > VIRTIO_BLK_ID_BYTES) {
+                    n = VIRTIO_BLK_ID_BYTES;
                 }
-
-                if (in_total >= 1) {
-                    virtio_iov_write(iov, total_iov, in_total - 1, &status, 1);
-                }
-                virtqueue_push(dev, vq, head, data_written + (in_total >= 1 ? 1U : 0U));
-                pushed = true;
+                virtio_iov_write(iov, total_iov, 0, blk->serial, n);
+                data_written = (uint32_t)n;
+                status = VIRTIO_BLK_S_OK;
+                break;
             }
-
-            if (pushed && virtqueue_should_notify(dev, vq, old_used)) {
-                virtio_raise_irq(dev, VIRTIO_MMIO_INT_VRING);
+            case VIRTIO_BLK_T_DISCARD:
+            case VIRTIO_BLK_T_WRITE_ZEROES:
+                status = blk_handle_dwz(blk, hdr.type, iov, total_iov);
+                if (status == VIRTIO_BLK_S_OK) {
+                    atomic_store_explicit(&blk->dirty, true, memory_order_relaxed);
+                }
+                break;
+            default:
+                status = VIRTIO_BLK_S_UNSUPP;
+                break;
             }
         }
 
-        pthread_mutex_lock(&blk->lock);
-        blk->busy = false;
-        if (!blk->pending) {
-            pthread_cond_broadcast(&blk->idle_cond);
+        if (in_total >= 1) {
+            virtio_iov_write(iov, total_iov, in_total - 1, &status, 1);
         }
+        virtqueue_push(dev, vq, head, data_written + (in_total >= 1 ? 1U : 0U));
+        pushed = true;
     }
-    pthread_mutex_unlock(&blk->lock);
-    return NULL;
+
+    if (pushed && virtqueue_should_notify(dev, vq, old_used)) {
+        virtio_raise_irq(dev, VIRTIO_MMIO_INT_VRING);
+    }
 }
 
 static uint64_t virtio_blk_get_features(virtio_dev_t *dev) {
@@ -428,33 +313,22 @@ static uint64_t virtio_blk_read_config(virtio_dev_t *dev, uint32_t offset, uint3
 }
 
 static void virtio_blk_queue_notify(virtio_dev_t *dev, uint32_t queue_idx) {
-    if (queue_idx != 0) {
-        return;
-    }
+    (void)queue_idx;
     virtio_blk_t *blk = dev->priv;
-    pthread_mutex_lock(&blk->lock);
-    if (!blk->stop) {
-        blk->pending = true;
-        pthread_cond_signal(&blk->work_cond);
-    }
-    pthread_mutex_unlock(&blk->lock);
+    virtio_worker_kick(&blk->worker);
 }
 
 static void virtio_blk_reset(virtio_dev_t *dev) {
     virtio_blk_t *blk = dev->priv;
-    pthread_mutex_lock(&blk->lock);
-    while (blk->pending || blk->busy) {
-        pthread_cond_wait(&blk->idle_cond, &blk->lock);
-    }
-    pthread_mutex_unlock(&blk->lock);
+    virtio_worker_wait_idle(&blk->worker);
 }
 
 void virtio_blk_flush_host(virtio_dev_t *dev) {
     if (!dev) {
         return;
     }
-    virtio_blk_reset(dev);
     virtio_blk_t *blk = dev->priv;
+    virtio_worker_wait_idle(&blk->worker);
     if (atomic_exchange_explicit(&blk->dirty, false, memory_order_acq_rel) && blk_flush(blk->fd) != 0) {
         atomic_store_explicit(&blk->dirty, true, memory_order_relaxed);
     }
@@ -462,28 +336,12 @@ void virtio_blk_flush_host(virtio_dev_t *dev) {
 
 static void virtio_blk_destroy(virtio_dev_t *dev) {
     virtio_blk_t *blk = dev->priv;
-    if (!blk) {
-        return;
+    virtio_worker_destroy(&blk->worker);
+    if (atomic_load_explicit(&blk->dirty, memory_order_acquire)) {
+        (void)blk_flush(blk->fd);
     }
-    pthread_mutex_lock(&blk->lock);
-    blk->stop = true;
-    pthread_cond_signal(&blk->work_cond);
-    pthread_mutex_unlock(&blk->lock);
-    if (blk->worker_started) {
-        pthread_join(blk->worker, NULL);
-        blk->worker_started = false;
-    }
-    pthread_cond_destroy(&blk->idle_cond);
-    pthread_cond_destroy(&blk->work_cond);
-    pthread_mutex_destroy(&blk->lock);
-    if (blk->fd >= 0) {
-        if (atomic_load_explicit(&blk->dirty, memory_order_acquire)) {
-            (void)blk_flush(blk->fd);
-        }
-        close(blk->fd);
-    }
+    close(blk->fd);
     free(blk);
-    dev->priv = NULL;
 }
 
 static const virtio_dev_ops_t virtio_blk_ops = {
@@ -495,9 +353,6 @@ static const virtio_dev_ops_t virtio_blk_ops = {
 };
 
 virtio_dev_t *virtio_blk_create(vmm_machine_t *vm, uint32_t slot, int fd, bool read_only) {
-    if (!vm || fd < 0) {
-        return NULL;
-    }
     struct stat st;
     if (fstat(fd, &st) < 0) {
         return NULL;
@@ -519,7 +374,6 @@ virtio_dev_t *virtio_blk_create(vmm_machine_t *vm, uint32_t slot, int fd, bool r
     blk->config.size_max = 1U << 20;
     blk->config.seg_max = VIRTIO_BLK_MAX_IOV - 2;
     blk->config.blk_size = VIRTIO_BLK_BLOCK_SIZE;
-    blk->config.topology.physical_block_exp = 0;
     blk->config.topology.min_io_size = 1;
     blk->config.num_queues = 1;
     blk->config.max_discard_sectors = 0x200000U;
@@ -529,26 +383,20 @@ virtio_dev_t *virtio_blk_create(vmm_machine_t *vm, uint32_t slot, int fd, bool r
     blk->config.max_write_zeroes_seg = VIRTIO_BLK_MAX_DWZ_SEG;
     blk->config.write_zeroes_may_unmap = 1;
     snprintf(blk->serial, sizeof(blk->serial), "swipterm-blk%u", slot);
-
-    pthread_mutex_init(&blk->lock, NULL);
-    pthread_cond_init(&blk->work_cond, NULL);
-    pthread_cond_init(&blk->idle_cond, NULL);
+    virtio_worker_init(&blk->worker, virtio_blk_run, blk);
 
     const uint32_t qsizes[1] = { VIRTIO_BLK_QUEUE_SIZE };
     virtio_dev_t *dev = virtio_dev_alloc(vm, slot, VIRTIO_ID_BLOCK, 1, qsizes, &virtio_blk_ops, blk);
     if (!dev) {
-        pthread_cond_destroy(&blk->idle_cond);
-        pthread_cond_destroy(&blk->work_cond);
-        pthread_mutex_destroy(&blk->lock);
+        virtio_worker_destroy(&blk->worker);
         close(dup_fd);
         free(blk);
         return NULL;
     }
     blk->dev = dev;
-    if (pthread_create(&blk->worker, NULL, virtio_blk_worker, blk) != 0) {
+    if (virtio_worker_start(&blk->worker) != 0) {
         virtio_dev_destroy(dev);
         return NULL;
     }
-    blk->worker_started = true;
     return dev;
 }

@@ -1,6 +1,7 @@
 #define _DARWIN_C_SOURCE
 
 #include "host_internal.h"
+#include "host_util.h"
 
 #include <CommonCrypto/CommonDigest.h>
 #include <errno.h>
@@ -16,18 +17,13 @@
 
 enum {
     RELEASE_MAX = 64,
-    MODULE_NAME_MAX = 63,
     INDEX_FILE_LIMIT = 64 << 20,
-    MODULE_FILE_LIMIT = 64 << 20,
-    KERNEL_FILE_LIMIT = 256 << 20,
     KERNEL_PROBE_PREFIX = 1 << 20,
-    KERNEL_PROBE_LIMIT = KERNEL_FILE_LIMIT,
     VISIT_MAX_DEPTH = 64,
     MAX_BOOT_MODULES = 999,
 };
 
 static const char *const NIX_SYSTEM = "/nix/var/nix/profiles/system";
-static const char *const MODULE_BASES[] = {"/lib/modules", "/usr/lib/modules"};
 static const char *const INDEX_FILES[] = {"modules.dep", "modules.builtin", "modules.softdep", "modules.alias"};
 
 typedef struct boot_requirement {
@@ -107,7 +103,7 @@ static void set_reason(boot_plan_t *plan, const char *fmt, ...) {
 }
 
 static int resolve_kind(ext4_fs_t *fs, const char *path, uint32_t kind, ext4_node_t *node) {
-    int rc = ext4_fs_resolve(fs, path, true, node);
+    int rc = ext4_fs_resolve(fs, path, node);
     if (rc == 0 && (node->mode & S_IFMT) != kind) {
         rc = kind == S_IFDIR ? -ENOTDIR : -EINVAL;
     }
@@ -293,15 +289,14 @@ static int find_image(boot_plan_t *plan, const module_dir_t *dir, size_t dir_cou
 static int discover_module_dirs(boot_plan_t *plan) {
     module_dir_t *dirs = NULL;
     size_t dir_count = 0;
-    uint32_t base_inos[2] = {0};
+    uint32_t previous_ino = 0;
     int rc = 0;
     for (size_t b = 0; b < 2 && rc == 0; b++) {
         ext4_node_t base;
-        if (resolve_kind(plan->fs, MODULE_BASES[b], S_IFDIR, &base) != 0 ||
-            (b == 1 && base.ino == base_inos[0])) {
+        if (resolve_kind(plan->fs, MODULE_BASES[b], S_IFDIR, &base) != 0 || base.ino == previous_ino) {
             continue;
         }
-        base_inos[b] = base.ino;
+        previous_ino = base.ino;
         name_list_t names = {0};
         rc = ext4_fs_list(plan->fs, &base, collect_name, &names);
         for (size_t i = 0; i < names.count && rc == 0; i++) {
@@ -349,21 +344,6 @@ static int discover_module_dirs(boot_plan_t *plan) {
     return rc;
 }
 
-static void normalize_name(const char *src, size_t len, char *out, size_t out_size) {
-    size_t n = len < out_size - 1 ? len : out_size - 1;
-    int bracket = 0;
-    for (size_t i = 0; i < n; i++) {
-        char c = src[i];
-        if (c == '[') {
-            bracket++;
-        } else if (c == ']' && bracket > 0) {
-            bracket--;
-        }
-        out[i] = (c == '-' && bracket == 0) ? '_' : c;
-    }
-    out[n] = '\0';
-}
-
 static bool module_name_from_path(const char *path, size_t len, char *out, size_t out_size) {
     const char *base = path;
     for (size_t i = 0; i < len; i++) {
@@ -372,18 +352,12 @@ static bool module_name_from_path(const char *path, size_t len, char *out, size_
         }
     }
     size_t base_len = len - (size_t)(base - path);
-    static const char *const suffixes[] = {".ko", ".ko.gz", ".ko.xz", ".ko.zst"};
-    for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); i++) {
-        size_t sl = strlen(suffixes[i]);
-        if (base_len > sl && memcmp(base + base_len - sl, suffixes[i], sl) == 0) {
-            if (base_len - sl >= out_size) {
-                return false;
-            }
-            normalize_name(base, base_len - sl, out, out_size);
-            return true;
-        }
+    size_t suffix = module_suffix_len(base, base_len);
+    if (suffix == 0 || base_len - suffix >= out_size) {
+        return false;
     }
-    return false;
+    normalize_module_name(base, base_len - suffix, out, out_size);
+    return true;
 }
 
 typedef struct dep_entry {
@@ -398,15 +372,6 @@ typedef struct name_index {
     uint32_t *slots;
     size_t cap;
 } name_index_t;
-
-static uint32_t name_hash(const char *s) {
-    uint32_t h = 2166136261U;
-    while (*s) {
-        h ^= (uint8_t)*s++;
-        h *= 16777619U;
-    }
-    return h;
-}
 
 typedef struct alias_entry {
     char pattern[128];
@@ -455,7 +420,8 @@ static int index_build(name_index_t *idx, size_t count, const char *(*name_at)(c
     }
     idx->cap = cap;
     for (size_t i = 0; i < count; i++) {
-        size_t pos = name_hash(name_at(items, i)) & (cap - 1);
+        const char *name = name_at(items, i);
+        size_t pos = fnv1a_32(name, strlen(name)) & (cap - 1);
         while (idx->slots[pos] != 0) {
             pos = (pos + 1) & (cap - 1);
         }
@@ -469,7 +435,7 @@ static ssize_t index_find(const name_index_t *idx, const char *name, const char 
     if (idx->cap == 0) {
         return -1;
     }
-    size_t pos = name_hash(name) & (idx->cap - 1);
+    size_t pos = fnv1a_32(name, strlen(name)) & (idx->cap - 1);
     while (idx->slots[pos] != 0) {
         size_t i = idx->slots[pos] - 1;
         if (strcmp(name_at(items, i), name) == 0) {
@@ -601,7 +567,7 @@ static int parse_softdep(module_tree_t *t) {
         }
         t->softdeps = grown;
         softdep_entry_t *e = &t->softdeps[t->softdep_count++];
-        normalize_name(module, strlen(module), e->module, sizeof(e->module));
+        normalize_module_name(module, strlen(module), e->module, sizeof(e->module));
         e->pre = pre;
     }
     return 0;
@@ -635,8 +601,8 @@ static int load_aliases(module_tree_t *t) {
             t->aliases = grown;
         }
         alias_entry_t *e = &t->aliases[t->alias_count++];
-        normalize_name(pattern, strlen(pattern), e->pattern, sizeof(e->pattern));
-        normalize_name(module, strlen(module), e->module, sizeof(e->module));
+        normalize_module_name(pattern, strlen(pattern), e->pattern, sizeof(e->pattern));
+        normalize_module_name(module, strlen(module), e->module, sizeof(e->module));
     }
     return 0;
 }
@@ -655,16 +621,12 @@ static void module_tree_free(module_tree_t *t) {
     free(t->order);
 }
 
-static bool is_builtin(const module_tree_t *t, const char *name) {
-    return index_find(&t->builtin_index, name, builtin_name_at, t->builtin) >= 0;
-}
-
 static int visit_module(module_tree_t *t, size_t index, bool required, unsigned depth);
 
 static int visit_name(module_tree_t *t, const char *raw, size_t raw_len, bool required, unsigned depth) {
     char name[128];
-    normalize_name(raw, raw_len, name, sizeof(name));
-    if (is_builtin(t, name)) {
+    normalize_module_name(raw, raw_len, name, sizeof(name));
+    if (index_find(&t->builtin_index, name, builtin_name_at, t->builtin) >= 0) {
         return 0;
     }
     ssize_t idx = index_find(&t->dep_index, name, dep_name_at, t->deps);
@@ -681,7 +643,7 @@ static int visit_name(module_tree_t *t, const char *raw, size_t raw_len, bool re
         if (strcmp(a->pattern, name) != 0 && fnmatch(a->pattern, name, 0) != 0) {
             continue;
         }
-        if (is_builtin(t, a->module)) {
+        if (index_find(&t->builtin_index, a->module, builtin_name_at, t->builtin) >= 0) {
             matched = true;
             continue;
         }
@@ -760,13 +722,9 @@ static int visit_module(module_tree_t *t, size_t index, bool required, unsigned 
 }
 
 static void sha_node(CC_SHA256_CTX *ctx, const ext4_node_t *node) {
-    uint64_t fields[5] = {node->ino, node->generation, node->size, (uint64_t)node->mtime_ns,
-                          (uint64_t)node->ctime_ns};
+    uint64_t fields[7] = {node->ino, node->generation, node->size, (uint64_t)node->mtime, node->mtime_nsec,
+                          (uint64_t)node->ctime, node->ctime_nsec};
     CC_SHA256_Update(ctx, fields, sizeof(fields));
-}
-
-static void sha_string(CC_SHA256_CTX *ctx, const char *s) {
-    CC_SHA256_Update(ctx, s, (CC_LONG)strlen(s) + 1);
 }
 
 static void clear_modules(boot_plan_t *plan) {
@@ -778,7 +736,7 @@ static void clear_modules(boot_plan_t *plan) {
     plan->module_count = 0;
 }
 
-static int resolve_modules(boot_plan_t *plan, const kernel_candidate_t *c, char *reason, size_t reason_size) {
+static int resolve_modules(boot_plan_t *plan, const kernel_candidate_t *c) {
     module_tree_t t = {.fs = plan->fs, .moddir = c->moddir};
     int rc = read_index(&t, 0, true, &t.dep_data);
     if (rc == 0) {
@@ -807,14 +765,15 @@ static int resolve_modules(boot_plan_t *plan, const kernel_candidate_t *c, char 
     if (rc == 0 && plan->gpu) {
         const size_t order_count = t.order_count;
         rc = visit_name(&t, GPU_MODULE, strlen(GPU_MODULE), false, 0);
-        plan->gpu_driver = rc == 0 && (is_builtin(&t, GPU_MODULE) || t.order_count > order_count);
+        plan->gpu_driver = rc == 0 && (index_find(&t.builtin_index, GPU_MODULE, builtin_name_at, t.builtin) >= 0 ||
+                                       t.order_count > order_count);
     }
     if (rc == -ENOENT && t.missing[0] != '\0') {
-        snprintf(reason, reason_size, "kernel %s has no %s module", c->release, t.missing);
+        set_reason(plan, "kernel %s has no %s module", c->release, t.missing);
     } else if (rc < 0) {
-        snprintf(reason, reason_size, "kernel %s modules cannot be read (%s)", c->release, strerror(-rc));
+        set_reason(plan, "kernel %s modules cannot be read (%s)", c->release, strerror(-rc));
     } else if (t.order_count > MAX_BOOT_MODULES) {
-        snprintf(reason, reason_size, "kernel %s needs too many boot modules", c->release);
+        set_reason(plan, "kernel %s needs too many boot modules", c->release);
         rc = -E2BIG;
     }
 
@@ -836,7 +795,7 @@ static int resolve_modules(boot_plan_t *plan, const kernel_candidate_t *c, char 
         plan->module_count++;
         int frc = resolve_kind(plan->fs, m->path, S_IFREG, &m->node);
         if (frc < 0 && m->required) {
-            snprintf(reason, reason_size, "kernel %s module %s is missing", c->release, m->name);
+            set_reason(plan, "kernel %s module %s is missing", c->release, m->name);
             rc = frc;
         } else if (frc < 0) {
             free(m->path);
@@ -847,20 +806,20 @@ static int resolve_modules(boot_plan_t *plan, const kernel_candidate_t *c, char 
     if (rc == 0) {
         CC_SHA256_CTX ctx;
         CC_SHA256_Init(&ctx);
-        sha_string(&ctx, "installed");
-        sha_string(&ctx, c->release);
-        sha_string(&ctx, c->image_path);
+        CC_SHA256_Update(&ctx, "installed", sizeof("installed"));
+        CC_SHA256_Update(&ctx, c->release, (CC_LONG)strlen(c->release) + 1);
+        CC_SHA256_Update(&ctx, c->image_path, (CC_LONG)strlen(c->image_path) + 1);
         sha_node(&ctx, &c->image);
         for (size_t i = 0; i < 4; i++) {
             if (t.index_present[i]) {
-                sha_string(&ctx, INDEX_FILES[i]);
+                CC_SHA256_Update(&ctx, INDEX_FILES[i], (CC_LONG)strlen(INDEX_FILES[i]) + 1);
                 sha_node(&ctx, &t.index_nodes[i]);
             }
         }
         for (size_t i = 0; i < plan->module_count; i++) {
             const boot_module_t *m = &plan->modules[i];
-            sha_string(&ctx, m->required ? "R" : "O");
-            sha_string(&ctx, m->path);
+            CC_SHA256_Update(&ctx, m->required ? "R" : "O", 2);
+            CC_SHA256_Update(&ctx, m->path, (CC_LONG)strlen(m->path) + 1);
             sha_node(&ctx, &m->node);
         }
         CC_SHA256_Final(plan->identity, &ctx);
@@ -892,7 +851,7 @@ static int probe_image(boot_plan_t *plan, const kernel_candidate_t *c) {
         if (!b.data) {
             return -ENOMEM;
         }
-        int rc = ext4_fs_stream(plan->fs, &c->image, 0, want, prefix_collect, &b);
+        int rc = ext4_fs_stream(plan->fs, &c->image, want, prefix_collect, &b);
         size_t needed = 0;
         if (rc == 0) {
             rc = swipterm_kernel_probe(b.data, b.len, &needed);
@@ -901,7 +860,7 @@ static int probe_image(boot_plan_t *plan, const kernel_candidate_t *c) {
         if (rc != -EAGAIN) {
             return rc;
         }
-        if (needed <= want || needed > KERNEL_PROBE_LIMIT || needed > c->image.size) {
+        if (needed <= want || needed > KERNEL_IMAGE_LIMIT || needed > c->image.size) {
             return -ENOEXEC;
         }
         want = needed;
@@ -941,7 +900,7 @@ static int select_kernel(boot_plan_t *plan) {
     int rc = probe_image(plan, c);
     if (rc >= 0) {
         c->page_size = (uint32_t)rc;
-        rc = resolve_modules(plan, c, plan->reason, sizeof(plan->reason));
+        rc = resolve_modules(plan, c);
     } else {
         set_reason(plan, "kernel %s image %s %s", c->release, c->image_path, image_error(rc));
     }
@@ -1026,10 +985,7 @@ int boot_list_kernels(int disk_fd, char ***releases_out, size_t *count_out) {
         *releases_out = releases;
         *count_out = plan->candidate_count;
     } else if (releases) {
-        for (size_t i = 0; i < plan->candidate_count; i++) {
-            free(releases[i]);
-        }
-        free(releases);
+        swipterm_free_strings(releases, plan->candidate_count);
     }
     boot_plan_free(plan);
     return rc == -ENOEXEC ? -EIO : rc;
@@ -1037,10 +993,6 @@ int boot_list_kernels(int disk_fd, char ***releases_out, size_t *count_out) {
 
 void boot_plan_fail(boot_plan_t *plan, const char *reason) {
     set_reason(plan, "kernel %s %s", plan->release, reason);
-}
-
-const char *boot_plan_release(const boot_plan_t *plan) {
-    return plan->release;
 }
 
 bool boot_plan_gpu(const boot_plan_t *plan) {
@@ -1135,8 +1087,7 @@ static int load_module_file(boot_plan_t *plan, const boot_module_t *m, uint8_t *
     return 0;
 }
 
-static int build_modules_cpio(boot_plan_t *plan, uint8_t **cpio_out, size_t *cpio_size_out, char *reason,
-                              size_t reason_size) {
+static int build_modules_cpio(boot_plan_t *plan, uint8_t **cpio_out, size_t *cpio_size_out) {
     cpio_writer_t w = {.next_ino = 1};
     char *list = NULL;
     size_t list_len = 0;
@@ -1154,8 +1105,8 @@ static int build_modules_cpio(boot_plan_t *plan, uint8_t **cpio_out, size_t *cpi
                 rc = 0;
                 continue;
             }
-            snprintf(reason, reason_size, "module %s cannot be loaded (%s)", m->name,
-                     rc == -ENOEXEC ? "not an ELF module" : strerror(-rc));
+            set_reason(plan, "kernel %s module %s cannot be loaded (%s)", plan->release, m->name,
+                       rc == -ENOEXEC ? "not an ELF module" : strerror(-rc));
             break;
         }
         char file[MODULE_NAME_MAX + 32];
@@ -1192,14 +1143,13 @@ static int build_modules_cpio(boot_plan_t *plan, uint8_t **cpio_out, size_t *cpi
     return 0;
 }
 
-static int load_installed(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_out, char *reason,
-                          size_t reason_size) {
+static int load_installed(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_out) {
     const kernel_candidate_t *c = plan->current;
     uint8_t *file = NULL;
     size_t size = 0;
-    int rc = ext4_fs_read(plan->fs, &c->image, KERNEL_FILE_LIMIT, &file, &size);
+    int rc = ext4_fs_read(plan->fs, &c->image, KERNEL_IMAGE_LIMIT, &file, &size);
     if (rc < 0) {
-        snprintf(reason, reason_size, "image %s cannot be read (%s)", c->image_path, strerror(-rc));
+        set_reason(plan, "kernel %s image %s cannot be read (%s)", c->release, c->image_path, strerror(-rc));
         return rc;
     }
     uint8_t *image = NULL;
@@ -1207,14 +1157,14 @@ static int load_installed(boot_plan_t *plan, uint8_t **kernel_out, size_t *kerne
     rc = swipterm_kernel_image(file, size, &image, &image_size);
     free(file);
     if (rc < 0) {
-        snprintf(reason, reason_size, "image %s %s", c->image_path, image_error(rc));
+        set_reason(plan, "kernel %s image %s %s", c->release, c->image_path, image_error(rc));
         return rc;
     }
     char banner[RELEASE_MAX + 32];
     int banner_len = snprintf(banner, sizeof(banner), "Linux version %s ", c->release);
     if (!memmem(image, image_size, banner, (size_t)banner_len)) {
         free(image);
-        snprintf(reason, reason_size, "image %s is not built for this release", c->image_path);
+        set_reason(plan, "kernel %s image %s is not built for this release", c->release, c->image_path);
         return -ESTALE;
     }
     *kernel_out = image;
@@ -1228,21 +1178,16 @@ int boot_plan_load(boot_plan_t *plan, uint8_t **kernel_out, size_t *kernel_size_
     *kernel_size_out = 0;
     *modules_cpio_out = NULL;
     *modules_cpio_size_out = 0;
-    char reason[192] = {0};
-    int rc = load_installed(plan, kernel_out, kernel_size_out, reason, sizeof(reason));
+    int rc = load_installed(plan, kernel_out, kernel_size_out);
     if (rc == 0) {
-        rc = build_modules_cpio(plan, modules_cpio_out, modules_cpio_size_out, reason, sizeof(reason));
+        rc = build_modules_cpio(plan, modules_cpio_out, modules_cpio_size_out);
         if (rc < 0) {
             free(*kernel_out);
             *kernel_out = NULL;
             *kernel_size_out = 0;
         }
     }
-    if (rc < 0 && rc != -ENOMEM) {
-        boot_plan_fail(plan, reason);
-        return -ENOEXEC;
-    }
-    return rc;
+    return rc < 0 && rc != -ENOMEM ? -ENOEXEC : rc;
 }
 
 void boot_plan_free(boot_plan_t *plan) {

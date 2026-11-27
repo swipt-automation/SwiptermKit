@@ -40,8 +40,6 @@ enum : uint32_t {
 #define JIT_DEBUGGER_HANDSHAKE 0
 #endif
 
-extern void cpu_fast_run(vcpu_t *cpu);
-
 _Atomic uint32_t cpu_jit_generation = 1;
 extern const uint32_t cpu_fast_base_offset;
 
@@ -266,14 +264,13 @@ static bool jit_prepare_region(char **error_message) {
     struct kinfo_proc info = {0};
     size_t info_size = sizeof(info);
     bool traced = sysctl(mib, 4, &info, &info_size, nullptr, 0) == 0 && (info.kp_proc.p_flag & P_TRACED) != 0;
-    bool blessed = false;
     if (traced) {
         struct sigaction saved, action = {.sa_sigaction = jit_trap_handler, .sa_flags = SA_SIGINFO};
         sigaction(SIGTRAP, &action, &saved);
-        if (ok) {
-            blessed = jit_debugger_prepare((void *)rx, size) == (void *)rx;
-            if (!blessed) {
+        if (ok && jit_debugger_prepare((void *)rx, size) != (void *)rx) {
+            if (__builtin_available(iOS 26.0, *)) {
                 jit_set_error(error_message, "debugger refused to prepare %u MiB region at %p", size >> 20, (void *)rx);
+                ok = false;
             }
         }
         jit_debugger_detach();
@@ -281,11 +278,6 @@ static bool jit_prepare_region(char **error_message) {
     } else if (ok) {
         if (__builtin_available(iOS 26.0, *)) {
             jit_set_error(error_message, "debugger is not attached (P_TRACED is clear)");
-            ok = false;
-        }
-    }
-    if (ok && !blessed) {
-        if (__builtin_available(iOS 26.0, *)) {
             ok = false;
         }
     }

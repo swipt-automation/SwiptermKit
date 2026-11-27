@@ -15,7 +15,6 @@ enum {
     PROBE_INTERVAL_MS = 250,
     PROBE_LIMIT = 15 * 60 * 1000 / PROBE_INTERVAL_MS,
     PROBE_CONFIRMATIONS = 2,
-    STATE_FILE_MAX = 64 * 1024,
     UTMP_RECORD_SIZE = 400,
     UTMP_TYPE_OFFSET = 0,
     UTMP_PID_OFFSET = 4,
@@ -30,26 +29,6 @@ static int g_probe_fd = -1;
 static unsigned g_probe_count;
 static unsigned g_probe_hits;
 
-static char *read_root_file(const char *rel, size_t *len_out) {
-    int fd = fs_open_in_root(rel, O_RDONLY | O_NOFOLLOW, 0);
-    if (fd < 0)
-        return NULL;
-    struct stat st;
-    char *data = NULL;
-    if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size <= STATE_FILE_MAX &&
-        (data = malloc((size_t)st.st_size + 1))) {
-        if (read_all_blocking(fd, data, (size_t)st.st_size) == 0) {
-            data[st.st_size] = '\0';
-            *len_out = (size_t)st.st_size;
-        } else {
-            free(data);
-            data = NULL;
-        }
-    }
-    close(fd);
-    return data;
-}
-
 static bool exists_in_root(const char *rel) {
     int fd = fs_open_in_root(rel, O_PATH | O_NOFOLLOW, 0);
     if (fd < 0)
@@ -59,8 +38,8 @@ static bool exists_in_root(const char *rel) {
 }
 
 static bool openrc_settled(void) {
-    size_t len = 0;
-    char *level = read_root_file("run/openrc/softlevel", &len);
+    struct stat st;
+    char *level = fs_read_root_file("run/openrc/softlevel", &st);
     if (!level)
         return false;
     level[strcspn(level, "\n")] = '\0';
@@ -138,13 +117,13 @@ static char utmp_runlevel(const uint8_t *utmp, size_t len) {
 }
 
 static bool sysvinit_settled(void) {
-    size_t utmp_len = 0;
-    uint8_t *utmp = (uint8_t *)read_root_file("var/run/utmp", &utmp_len);
+    struct stat st;
+    uint8_t *utmp = (uint8_t *)fs_read_root_file("var/run/utmp", &st);
     if (!utmp)
         return false;
+    size_t utmp_len = (size_t)st.st_size;
     char level = utmp_runlevel(utmp, utmp_len);
-    size_t inittab_len = 0;
-    char *inittab = level >= '1' && level <= '5' ? read_root_file("etc/inittab", &inittab_len) : NULL;
+    char *inittab = level >= '1' && level <= '5' ? fs_read_root_file("etc/inittab", &st) : NULL;
     bool settled = inittab != NULL;
     char *save = NULL;
     for (char *line = inittab ? strtok_r(inittab, "\n", &save) : NULL; settled && line;

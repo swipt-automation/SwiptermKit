@@ -1,11 +1,13 @@
 #include "board_internal.h"
-#include "machine.h"
 
 #include "../cpu/cpu_internal.h"
 #include "../mmu/mmu.h"
 
 #include <errno.h>
 #include <fcntl.h>
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#include <mach/vm_map.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -18,23 +20,82 @@
 #include <time.h>
 #include <unistd.h>
 
-#if defined(__APPLE__)
-#include <mach/mach.h>
-#include <mach/mach_time.h>
-#include <mach/vm_map.h>
-#endif
-
 #define WFE_POLL_MIN_TICKS 24U
 #define WFE_POLL_MAX_TICKS 480U
 #define WFI_POLL_MIN_TICKS 48U
 #define WFI_POLL_MAX_TICKS 1200U
 
 #define VMM_SNAPSHOT_MAGIC 0x53575054534e4150ULL
-#define VMM_SNAPSHOT_VERSION 5U
-#define VMM_SNAPSHOT_PREBOOT 1U
-#define VMM_SNAPSHOT_EL2 2U
+#define VMM_SNAPSHOT_VERSION 6U
 #define VMM_SNAPSHOT_WRITE_MAX ((size_t)16 << 20)
-#define ARM64_IMAGE_MAGIC 0x644d5241U
+
+#define SMCCC_VERSION 0x80000000U
+#define SMCCC_ARCH_FEATURES 0x80000001U
+#define SMCCC_ARCH_SOC_ID 0x80000002U
+#define SMCCC_ARCH_WORKAROUND_3 0x80003FFFU
+#define SMCCC_ARCH_WORKAROUND_2 0x80007FFFU
+#define SMCCC_ARCH_WORKAROUND_1 0x80008000U
+
+#define SMCCC_VERSION_1_2 0x00010002U
+#define SMCCC_ARCH_WORKAROUND_RET_UNAFFECTED 1
+#define JEP106_APPLE 0x48U
+
+#define SMCCC_TRNG_VERSION 0x84000050U
+#define SMCCC_TRNG_FEATURES 0x84000051U
+#define SMCCC_TRNG_GET_UUID 0x84000052U
+#define SMCCC_TRNG_RND32 0x84000053U
+#define SMCCC_TRNG_RND64 0xC4000053U
+#define SMCCC_TRNG_VERSION_1_0 0x00010000U
+
+#define SMCCC_KVM_FEATURES 0x86000000U
+#define SMCCC_KVM_PTP 0x86000001U
+#define SMCCC_VENDOR_HYP_CALL_UID 0x8600FF01U
+#define SMCCC_KVM_FUNC_FEATURES 0U
+#define SMCCC_KVM_FUNC_PTP 1U
+#define SMCCC_KVM_PTP_VIRT_COUNTER 0U
+#define SMCCC_KVM_PTP_PHYS_COUNTER 1U
+
+#define PSCI_VERSION_1_1 0x00010001U
+
+#define PSCI_FN_VERSION 0x84000000U
+#define PSCI_FN_CPU_SUSPEND 0x84000001U
+#define PSCI_FN_CPU_OFF 0x84000002U
+#define PSCI_FN_CPU_ON 0x84000003U
+#define PSCI_FN_AFFINITY_INFO 0x84000004U
+#define PSCI_FN_MIGRATE_INFO_TYPE 0x84000006U
+#define PSCI_FN_SYSTEM_OFF 0x84000008U
+#define PSCI_FN_SYSTEM_RESET 0x84000009U
+#define PSCI_FN_FEATURES 0x8400000AU
+#define PSCI_FN_SYSTEM_RESET2 0x84000012U
+
+#define PSCI_FN64_CPU_SUSPEND 0xC4000001U
+#define PSCI_FN64_CPU_ON 0xC4000003U
+#define PSCI_FN64_AFFINITY_INFO 0xC4000004U
+#define PSCI_FN64_SYSTEM_RESET2 0xC4000012U
+
+enum : int64_t {
+    PSCI_RET_SUCCESS = 0,
+    PSCI_RET_NOT_SUPPORTED = -1,
+    PSCI_RET_INVALID_PARAMS = -2,
+    PSCI_RET_DENIED = -3,
+    PSCI_RET_ALREADY_ON = -4,
+    PSCI_RET_ON_PENDING = -5,
+    PSCI_RET_INTERNAL_FAILURE = -6,
+    PSCI_RET_NOT_PRESENT = -7,
+    PSCI_RET_DISABLED = -8,
+    PSCI_RET_INVALID_ADDRESS = -9,
+};
+
+enum : int64_t {
+    SMCCC_RET_SUCCESS = 0,
+    SMCCC_RET_NOT_SUPPORTED = -1,
+    SMCCC_RET_INVALID_PARAMETER = -3,
+};
+
+enum : int64_t {
+    TRNG_RET_NOT_SUPPORTED = -1,
+    TRNG_RET_INVALID_PARAMETERS = -2,
+};
 
 typedef struct vmm_snapshot_header {
     uint64_t magic;
@@ -46,7 +107,6 @@ typedef struct vmm_snapshot_header {
     uint32_t gic_state_size;
     uint32_t uart_state_size;
     uint32_t rtc_state_size;
-    uint32_t flags;
     uint8_t key[32];
 } vmm_snapshot_header_t;
 
@@ -221,7 +281,6 @@ static int snapshot_write_span(int fd, const uint8_t *ram, size_t start, size_t 
 }
 
 static int snapshot_write_ram(int fd, const vmm_machine_t *vm) {
-#if defined(__APPLE__)
     vm_address_t base = (vm_address_t)vm->ram;
     vm_address_t end = base + vm->ram_size;
     vm_address_t addr = base;
@@ -252,9 +311,131 @@ static int snapshot_write_ram(int fd, const vmm_machine_t *vm) {
         addr = span_end;
     }
     return 0;
-#else
-    return snapshot_write_span(fd, vm->ram, 0, vm->ram_size);
-#endif
+}
+
+static void vmm_save_snapshot(vmm_machine_t *vm, const char *path) {
+    vmm_machine_priv_t *priv = vmm_priv(vm);
+    bool was_running = atomic_load_explicit(&vm->running, memory_order_acquire);
+    bool was_suspended = atomic_load_explicit(&vm->suspended, memory_order_acquire);
+    if (was_running && !was_suspended) {
+        vmm_suspend(vm);
+    }
+
+    uint64_t cntvct = vmm_timer_cntvct(vm);
+    size_t tmp_len = strlen(path) + sizeof(".XXXXXX");
+    char *tmp_path = malloc(tmp_len);
+    if (!tmp_path) {
+        if (was_running && !was_suspended) {
+            vmm_resume(vm);
+        }
+        return;
+    }
+    snprintf(tmp_path, tmp_len, "%s.XXXXXX", path);
+
+    int fd = mkstemp(tmp_path);
+    if (fd < 0) {
+        free(tmp_path);
+        if (was_running && !was_suspended) {
+            vmm_resume(vm);
+        }
+        return;
+    }
+    (void)fcntl(fd, F_NOCACHE, 1);
+
+    int rc = 0;
+    if (ftruncate(fd, (off_t)vm->ram_size) < 0) {
+        rc = -errno;
+    }
+
+    if (rc == 0) {
+        rc = snapshot_write_ram(fd, vm);
+    }
+
+    if (rc == 0) {
+        vmm_snapshot_header_t hdr = {
+            .magic = VMM_SNAPSHOT_MAGIC,
+            .version = VMM_SNAPSHOT_VERSION,
+            .cpu_count = vm->cpu_count,
+            .ram_size = (uint64_t)vm->ram_size,
+            .timer_cntvct = cntvct,
+            .online_mask = 0,
+            .gic_state_size = (uint32_t)sizeof(gicv2_state_t),
+            .uart_state_size = (uint32_t)sizeof(pl011_state_t),
+            .rtc_state_size = (uint32_t)sizeof(pl031_state_t),
+        };
+        memcpy(hdr.key, priv->snapshot_key, sizeof(hdr.key));
+        for (uint32_t i = 0; i < vm->cpu_count; i++) {
+            if (atomic_load_explicit(&priv->cpu_online[i], memory_order_acquire)) {
+                hdr.online_mask |= (1U << i);
+            }
+        }
+
+        vmm_snapshot_vcpu_t *vcpu_states = calloc(vm->cpu_count, sizeof(*vcpu_states));
+        if (!vcpu_states) {
+            rc = -ENOMEM;
+        } else {
+            gicv2_state_t gic_state;
+            pl011_state_t uart_state;
+            pl031_state_t rtc_state;
+            for (uint32_t i = 0; i < vm->cpu_count; i++) {
+                vcpu_save_snapshot(vm->cpus[i], &vcpu_states[i]);
+            }
+            gicv2_save_state(priv->gic, &gic_state);
+            pl011_save_state(priv->uart, &uart_state);
+            pl031_save_state(priv->rtc, &rtc_state);
+
+            off_t off = (off_t)vm->ram_size;
+            rc = pwrite_all(fd, &hdr, sizeof(hdr), off);
+            off += (off_t)sizeof(hdr);
+            if (rc == 0) {
+                rc = pwrite_all(fd, vcpu_states, vm->cpu_count * sizeof(*vcpu_states), off);
+                off += (off_t)(vm->cpu_count * sizeof(*vcpu_states));
+            }
+            if (rc == 0) {
+                rc = pwrite_all(fd, &gic_state, sizeof(gic_state), off);
+                off += (off_t)sizeof(gic_state);
+            }
+            if (rc == 0) {
+                rc = pwrite_all(fd, &uart_state, sizeof(uart_state), off);
+                off += (off_t)sizeof(uart_state);
+            }
+            if (rc == 0) {
+                rc = pwrite_all(fd, &rtc_state, sizeof(rtc_state), off);
+                off += (off_t)sizeof(rtc_state);
+            }
+            if (rc == 0) {
+                vmm_snapshot_footer_t footer = {
+                    .state_offset = (uint64_t)vm->ram_size,
+                    .magic = VMM_SNAPSHOT_MAGIC,
+                };
+                rc = pwrite_all(fd, &footer, sizeof(footer), off);
+            }
+        }
+        free(vcpu_states);
+    }
+
+    if (rc == 0 && fsync(fd) < 0) {
+        rc = -errno;
+    }
+    close(fd);
+
+    if (rc != 0 || rename(tmp_path, path) < 0) {
+        unlink(tmp_path);
+    }
+    free(tmp_path);
+
+    if (was_running && !was_suspended) {
+        vmm_resume(vm);
+    }
+}
+
+static void request_stop_all(vmm_machine_t *vm) {
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
+        if (vm->cpus[i]) {
+            atomic_store_explicit(&vm->cpus[i]->stop_requested, true, memory_order_release);
+            vmm_vcpu_wake(vm, i);
+        }
+    }
 }
 
 static void *vcpu_thread_main(void *arg) {
@@ -311,15 +492,7 @@ static void *vcpu_thread_main(void *arg) {
         }
         if (reason == VCPU_STOP_PANIC) {
             atomic_store_explicit(&vm->running, false, memory_order_release);
-            for (uint32_t i = 0; i < vm->cpu_count; i++) {
-                if (vm->cpus[i]) {
-                    atomic_store_explicit(&vm->cpus[i]->stop_requested, true, memory_order_release);
-                    vmm_vcpu_wake(vm, i);
-                }
-            }
-            if (vm->on_panic) {
-                vm->on_panic(vm->callback_ctx, "vCPU panic");
-            }
+            request_stop_all(vm);
             break;
         }
         if (atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) &&
@@ -337,9 +510,6 @@ static void *vcpu_thread_main(void *arg) {
 
 void vmm_vcpu_wake(vmm_machine_t *vm, uint32_t cpu_id) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || cpu_id >= vm->cpu_count) {
-        return;
-    }
     vcpu_t *cpu = vm->cpus[cpu_id];
     atomic_store_explicit(&cpu->event_reg, true, memory_order_release);
     vmm_host_sev();
@@ -383,47 +553,55 @@ static bool wfe_excl_changed(const vcpu_t *cpu) {
     }
 }
 
-void vmm_vcpu_wfe(vcpu_t *cpu) {
-    if (!cpu || !cpu->vm) {
-        return;
-    }
+static bool vcpu_wake_pending(vcpu_t *cpu) {
     vmm_machine_t *vm = cpu->vm;
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || cpu->cpu_id >= vm->cpu_count || vm->cpu_count <= 1) {
-        return;
-    }
+    return (atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) ||
+           atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) ||
+           atomic_load_explicit(&vm->suspended, memory_order_acquire) ||
+           !atomic_load_explicit(&vm->running, memory_order_acquire);
+}
 
-    const void *watch = (cpu->excl_valid && cpu->excl_hva != 0) ? (const void *)cpu->excl_hva
-                                                                 : (const void *)&cpu->irq_pending;
-    uint32_t budget = cpu->wfe_poll_ticks < WFE_POLL_MIN_TICKS ? WFE_POLL_MIN_TICKS : cpu->wfe_poll_ticks;
+static bool poll_wake(vcpu_t *cpu, const void *watch, uint32_t budget, bool wfe) {
     uint64_t poll_start = mach_absolute_time();
     for (;;) {
         mmu_poll_shootdown(cpu);
         host_monitor_arm(watch);
-        bool ev = atomic_load_explicit(&cpu->event_reg, memory_order_acquire);
-        if (ev || wfe_excl_changed(cpu)) {
+        bool ev = wfe && atomic_load_explicit(&cpu->event_reg, memory_order_acquire);
+        if (ev || (wfe && wfe_excl_changed(cpu))) {
             __asm__ __volatile__("clrex" ::: "memory");
             if (ev) {
                 atomic_store_explicit(&cpu->event_reg, false, memory_order_release);
             }
             cpu->excl_valid = false;
             cpu->excl_hva = 0;
-            return;
+            return true;
         }
-        if ((atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) ||
-            atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) ||
-            atomic_load_explicit(&vm->suspended, memory_order_acquire) ||
-            !atomic_load_explicit(&vm->running, memory_order_acquire)) {
+        if (vcpu_wake_pending(cpu)) {
             __asm__ __volatile__("clrex" ::: "memory");
-            return;
+            return true;
         }
         if (mach_absolute_time() - poll_start >= budget) {
-            break;
+            __asm__ __volatile__("clrex" ::: "memory");
+            return false;
         }
         // XNU arm64 enables SCTLR_EL1.nTWE and ~1us CNTKCTL_EL1.EVNTEN WFE event stream for EL0.
         __asm__ __volatile__("wfe" ::: "memory");
     }
-    __asm__ __volatile__("clrex" ::: "memory");
+}
+
+void vmm_vcpu_wfe(vcpu_t *cpu) {
+    vmm_machine_t *vm = cpu->vm;
+    if (vm->cpu_count <= 1) {
+        return;
+    }
+    vmm_machine_priv_t *priv = vmm_priv(vm);
+
+    const void *watch = (cpu->excl_valid && cpu->excl_hva != 0) ? (const void *)cpu->excl_hva
+                                                                 : (const void *)&cpu->irq_pending;
+    uint32_t budget = cpu->wfe_poll_ticks < WFE_POLL_MIN_TICKS ? WFE_POLL_MIN_TICKS : cpu->wfe_poll_ticks;
+    if (poll_wake(cpu, watch, budget, true)) {
+        return;
+    }
 
     uint32_t id = cpu->cpu_id;
     uintptr_t watch_line = (cpu->excl_valid && cpu->excl_hva != 0) ? (cpu->excl_hva & ~(uintptr_t)63U) : 0;
@@ -446,11 +624,7 @@ void vmm_vcpu_wfe(vcpu_t *cpu) {
     uint64_t block_start = mach_absolute_time();
     pthread_mutex_lock(&priv->wfe_lock[id]);
     if (!atomic_exchange_explicit(&cpu->event_reg, false, memory_order_acq_rel) &&
-        !wfe_excl_changed(cpu) &&
-        !(atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) &&
-        !atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) &&
-        !atomic_load_explicit(&vm->suspended, memory_order_acquire) &&
-        atomic_load_explicit(&vm->running, memory_order_acquire)) {
+        !wfe_excl_changed(cpu) && !vcpu_wake_pending(cpu)) {
         pthread_cond_timedwait_relative_np(&priv->wfe_cond[id], &priv->wfe_lock[id],
                                            &(struct timespec){.tv_nsec = 200000L});
         atomic_store_explicit(&cpu->event_reg, false, memory_order_release);
@@ -467,10 +641,7 @@ void vmm_vcpu_wfe(vcpu_t *cpu) {
 
 void vmm_vcpu_sev(vmm_machine_t *vm) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv) {
-        return;
-    }
-    for (uint32_t i = 0; i < vm->cpu_count && i < VMM_MAX_VCPUS; i++) {
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
         if (vm->cpus[i]) {
             atomic_store_explicit(&vm->cpus[i]->event_reg, true, memory_order_release);
         }
@@ -479,7 +650,7 @@ void vmm_vcpu_sev(vmm_machine_t *vm) {
     if (atomic_load_explicit(&vm->wfe_waiters, memory_order_acquire) == 0) {
         return;
     }
-    for (uint32_t i = 0; i < vm->cpu_count && i < VMM_MAX_VCPUS; i++) {
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
         if (vm->cpus[i]) {
             pthread_mutex_lock(&priv->wfe_lock[i]);
             pthread_cond_signal(&priv->wfe_cond[i]);
@@ -490,11 +661,8 @@ void vmm_vcpu_sev(vmm_machine_t *vm) {
 
 void vmm_vcpu_wfe_notify_write(vmm_machine_t *vm, uintptr_t hva) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv) {
-        return;
-    }
     uintptr_t line = hva & ~(uintptr_t)63U;
-    for (uint32_t i = 0; i < vm->cpu_count && i < VMM_MAX_VCPUS; i++) {
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
         vcpu_t *c = vm->cpus[i];
         if (!c) {
             continue;
@@ -510,36 +678,14 @@ void vmm_vcpu_wfe_notify_write(vmm_machine_t *vm, uintptr_t hva) {
 }
 
 void vmm_vcpu_wfi(vcpu_t *cpu) {
-    if (!cpu || !cpu->vm) {
-        return;
-    }
     vmm_machine_t *vm = cpu->vm;
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || cpu->cpu_id >= vm->cpu_count) {
-        return;
-    }
-
     uint32_t id = cpu->cpu_id;
 
     uint32_t budget = cpu->wfi_poll_ticks < WFI_POLL_MIN_TICKS ? WFI_POLL_MIN_TICKS : cpu->wfi_poll_ticks;
-    uint64_t poll_start = mach_absolute_time();
-    for (;;) {
-        mmu_poll_shootdown(cpu);
-        host_monitor_arm(&cpu->irq_pending);
-        if ((atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) ||
-            atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) ||
-            atomic_load_explicit(&vm->suspended, memory_order_acquire) ||
-            !atomic_load_explicit(&vm->running, memory_order_acquire)) {
-            __asm__ __volatile__("clrex" ::: "memory");
-            return;
-        }
-        if (mach_absolute_time() - poll_start >= budget) {
-            break;
-        }
-        // XNU arm64 enables SCTLR_EL1.nTWE and ~1us CNTKCTL_EL1.EVNTEN WFE event stream for EL0.
-        __asm__ __volatile__("wfe" ::: "memory");
+    if (poll_wake(cpu, &cpu->irq_pending, budget, false)) {
+        return;
     }
-    __asm__ __volatile__("clrex" ::: "memory");
 
     atomic_store_explicit(&cpu->halted_wfi, true, memory_order_seq_cst);
     atomic_thread_fence(memory_order_seq_cst);
@@ -547,10 +693,7 @@ void vmm_vcpu_wfi(vcpu_t *cpu) {
 
     uint64_t block_start = mach_absolute_time();
     pthread_mutex_lock(&priv->wfi_lock[id]);
-    while (!(atomic_load_explicit(&cpu->irq_pending, memory_order_acquire) & cpu->irq_mask) &&
-           !atomic_load_explicit(&cpu->stop_requested, memory_order_acquire) &&
-           !atomic_load_explicit(&vm->suspended, memory_order_acquire) &&
-           atomic_load_explicit(&vm->running, memory_order_acquire)) {
+    while (!vcpu_wake_pending(cpu)) {
         pthread_cond_wait(&priv->wfi_cond[id], &priv->wfi_lock[id]);
     }
     pthread_mutex_unlock(&priv->wfi_lock[id]);
@@ -574,10 +717,7 @@ static void vmm_notify_halt_once(vmm_machine_priv_t *priv) {
     }
 }
 
-bool vmm_handle_psci(vcpu_t *cpu) {
-    if (!cpu || !cpu->vm) {
-        return false;
-    }
+void vmm_handle_psci(vcpu_t *cpu) {
     vmm_machine_t *vm = cpu->vm;
     vmm_machine_priv_t *priv = vmm_priv(vm);
     uint32_t func_id = (uint32_t)cpu->x[0];
@@ -585,7 +725,7 @@ bool vmm_handle_psci(vcpu_t *cpu) {
     switch (func_id) {
     case SMCCC_VERSION:
         cpu->x[0] = SMCCC_VERSION_1_2;
-        return true;
+        return;
 
     case SMCCC_ARCH_FEATURES:
         switch ((uint32_t)cpu->x[1]) {
@@ -603,7 +743,7 @@ bool vmm_handle_psci(vcpu_t *cpu) {
             cpu->x[0] = (uint64_t)SMCCC_RET_NOT_SUPPORTED;
             break;
         }
-        return true;
+        return;
 
     case SMCCC_ARCH_SOC_ID: {
         uint32_t cpufamily = 0;
@@ -620,12 +760,12 @@ bool vmm_handle_psci(vcpu_t *cpu) {
             cpu->x[0] = (uint64_t)SMCCC_RET_INVALID_PARAMETER;
             break;
         }
-        return true;
+        return;
     }
 
     case SMCCC_TRNG_VERSION:
         cpu->x[0] = SMCCC_TRNG_VERSION_1_0;
-        return true;
+        return;
 
     case SMCCC_TRNG_FEATURES:
         switch ((uint32_t)cpu->x[1]) {
@@ -640,14 +780,14 @@ bool vmm_handle_psci(vcpu_t *cpu) {
             cpu->x[0] = (uint64_t)TRNG_RET_NOT_SUPPORTED;
             break;
         }
-        return true;
+        return;
 
     case SMCCC_TRNG_GET_UUID:
         cpu->x[0] = 0xCA1A8AF3U;
         cpu->x[1] = 0x8A48FB9AU;
         cpu->x[2] = 0xB76E669CU;
         cpu->x[3] = 0x3A45579CU;
-        return true;
+        return;
 
     case SMCCC_TRNG_RND32:
     case SMCCC_TRNG_RND64: {
@@ -655,7 +795,7 @@ bool vmm_handle_psci(vcpu_t *cpu) {
         uint64_t bits = (func_id == SMCCC_TRNG_RND64) ? cpu->x[1] : (uint32_t)cpu->x[1];
         if (bits == 0 || bits > reg_bits * 3U) {
             cpu->x[0] = (uint64_t)TRNG_RET_INVALID_PARAMETERS;
-            return true;
+            return;
         }
         uint64_t entropy[3];
         arc4random_buf(entropy, sizeof(entropy));
@@ -665,7 +805,7 @@ bool vmm_handle_psci(vcpu_t *cpu) {
             cpu->x[3 - i] = entropy[i] & (width == 64 ? UINT64_MAX : (1ULL << width) - 1ULL);
         }
         cpu->x[0] = (uint64_t)SMCCC_RET_SUCCESS;
-        return true;
+        return;
     }
 
     case SMCCC_VENDOR_HYP_CALL_UID:
@@ -673,20 +813,20 @@ bool vmm_handle_psci(vcpu_t *cpu) {
         cpu->x[1] = 0xE911C52EU;
         cpu->x[2] = 0x564BCAA9U;
         cpu->x[3] = 0x743A004DU;
-        return true;
+        return;
 
     case SMCCC_KVM_FEATURES:
         cpu->x[0] = (1U << SMCCC_KVM_FUNC_FEATURES) | (1U << SMCCC_KVM_FUNC_PTP);
         cpu->x[1] = 0;
         cpu->x[2] = 0;
         cpu->x[3] = 0;
-        return true;
+        return;
 
     case SMCCC_KVM_PTP: {
         uint32_t counter_id = (uint32_t)cpu->x[1];
         if (counter_id != SMCCC_KVM_PTP_VIRT_COUNTER && counter_id != SMCCC_KVM_PTP_PHYS_COUNTER) {
             cpu->x[0] = (uint64_t)SMCCC_RET_NOT_SUPPORTED;
-            return true;
+            return;
         }
         uint64_t realtime_ns;
         uint64_t cycles;
@@ -698,12 +838,12 @@ bool vmm_handle_psci(vcpu_t *cpu) {
         cpu->x[1] = (uint32_t)realtime_ns;
         cpu->x[2] = cycles >> 32;
         cpu->x[3] = (uint32_t)cycles;
-        return true;
+        return;
     }
 
     case PSCI_FN_VERSION:
         cpu->x[0] = PSCI_VERSION_1_1;
-        return true;
+        return;
 
     case PSCI_FN_FEATURES: {
         uint32_t fid = (uint32_t)cpu->x[1];
@@ -729,43 +869,39 @@ bool vmm_handle_psci(vcpu_t *cpu) {
             cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
             break;
         }
-        return true;
+        return;
     }
 
     case PSCI_FN_MIGRATE_INFO_TYPE:
         cpu->x[0] = 2;
-        return true;
+        return;
 
     case PSCI_FN_CPU_SUSPEND:
     case PSCI_FN64_CPU_SUSPEND:
         vmm_vcpu_wfi(cpu);
         cpu->x[0] = (uint64_t)PSCI_RET_SUCCESS;
-        return true;
+        return;
 
     case PSCI_FN_CPU_ON:
     case PSCI_FN64_CPU_ON: {
-        if (!priv) {
-            cpu->x[0] = (uint64_t)PSCI_RET_INTERNAL_FAILURE;
-            return true;
-        }
         uint64_t target_mpidr = cpu->x[1];
         uint64_t entry = cpu->x[2];
         uint64_t ctx_id = cpu->x[3];
         uint32_t target_id = (uint32_t)(target_mpidr & 0xffULL);
         if ((target_mpidr & ~0xffULL) != 0 || target_id >= vm->cpu_count) {
             cpu->x[0] = (uint64_t)PSCI_RET_INVALID_PARAMS;
-            return true;
+            return;
         }
         if (!mmu_gpa_to_hva(vm, entry, 4)) {
             cpu->x[0] = (uint64_t)PSCI_RET_INVALID_ADDRESS;
-            return true;
+            return;
         }
 
         pthread_mutex_lock(&priv->state_lock);
         if (atomic_load_explicit(&priv->cpu_online[target_id], memory_order_acquire)) {
             pthread_mutex_unlock(&priv->state_lock);
             cpu->x[0] = (uint64_t)PSCI_RET_ALREADY_ON;
-            return true;
+            return;
         }
         if (priv->thread_started[target_id]) {
             pthread_t old_thr = priv->threads[target_id];
@@ -777,11 +913,6 @@ bool vmm_handle_psci(vcpu_t *cpu) {
 
         vcpu_t *target = vm->cpus[target_id];
         vcpu_reset(target, entry, ctx_id);
-        mmu_tlbi_all(target);
-        mmu_update_asid_salt(target);
-        target->stop_reason = VCPU_STOP_NONE;
-        atomic_store_explicit(&target->stop_requested, false, memory_order_release);
-        atomic_store_explicit(&target->halted_wfi, false, memory_order_release);
         atomic_store_explicit(&priv->cpu_online[target_id], true, memory_order_release);
 
         int rc = 0;
@@ -796,19 +927,17 @@ bool vmm_handle_psci(vcpu_t *cpu) {
         pthread_mutex_unlock(&priv->state_lock);
 
         cpu->x[0] = (uint64_t)(rc == 0 ? PSCI_RET_SUCCESS : PSCI_RET_INTERNAL_FAILURE);
-        return true;
+        return;
     }
 
     case PSCI_FN_CPU_OFF:
         cpu->stop_reason = VCPU_STOP_HALT;
         atomic_store_explicit(&cpu->stop_requested, true, memory_order_release);
         atomic_store_explicit(&cpu->halted_wfi, true, memory_order_release);
-        if (priv && cpu->cpu_id < vm->cpu_count) {
-            atomic_store_explicit(&priv->cpu_online[cpu->cpu_id], false, memory_order_release);
-            vmm_timer_sync(cpu);
-        }
+        atomic_store_explicit(&priv->cpu_online[cpu->cpu_id], false, memory_order_release);
+        vmm_timer_sync(cpu);
         cpu->x[0] = (uint64_t)PSCI_RET_SUCCESS;
-        return true;
+        return;
 
     case PSCI_FN_AFFINITY_INFO:
     case PSCI_FN64_AFFINITY_INFO: {
@@ -816,11 +945,11 @@ bool vmm_handle_psci(vcpu_t *cpu) {
         uint32_t target_id = (uint32_t)(target_mpidr & 0xffULL);
         if ((target_mpidr & ~0xffULL) != 0 || target_id >= vm->cpu_count) {
             cpu->x[0] = (uint64_t)PSCI_RET_INVALID_PARAMS;
-            return true;
+            return;
         }
-        bool online = priv && atomic_load_explicit(&priv->cpu_online[target_id], memory_order_acquire);
+        bool online = atomic_load_explicit(&priv->cpu_online[target_id], memory_order_acquire);
         cpu->x[0] = online ? 0ULL : 1ULL;
-        return true;
+        return;
     }
 
     case PSCI_FN_SYSTEM_OFF:
@@ -829,20 +958,14 @@ bool vmm_handle_psci(vcpu_t *cpu) {
     case PSCI_FN64_SYSTEM_RESET2:
         cpu->stop_reason = (func_id == PSCI_FN_SYSTEM_OFF) ? VCPU_STOP_HALT : VCPU_STOP_REBOOT;
         atomic_store_explicit(&vm->running, false, memory_order_release);
-        for (uint32_t i = 0; i < vm->cpu_count; i++) {
-            if (vm->cpus[i]) {
-                atomic_store_explicit(&vm->cpus[i]->stop_requested, true, memory_order_release);
-                vmm_vcpu_wake(vm, i);
-            }
-        }
-        if (priv) {
-            vmm_notify_halt_once(priv);
-        }
+        request_stop_all(vm);
+        vmm_notify_halt_once(priv);
         cpu->x[0] = (uint64_t)PSCI_RET_SUCCESS;
-        return true;
+        return;
 
     default:
-        return false;
+        cpu->x[0] = (uint64_t)PSCI_RET_NOT_SUPPORTED;
+        return;
     }
 }
 
@@ -860,9 +983,6 @@ static void preboot_return(vcpu_t *cpu) {
 
 bool vmm_preboot_trap(vcpu_t *cpu) {
     vmm_machine_priv_t *priv = vmm_priv(cpu->vm);
-    if (!priv) {
-        return false;
-    }
     pthread_mutex_lock(&priv->state_lock);
     vmm_preboot_phase_t phase = atomic_load(&priv->preboot_phase);
     if (phase == VMM_PREBOOT_ARMED || phase == VMM_PREBOOT_REACHED) {
@@ -870,7 +990,7 @@ bool vmm_preboot_trap(vcpu_t *cpu) {
         atomic_store(&cpu->stop_requested, true);
         atomic_store(&priv->preboot_phase, VMM_PREBOOT_REACHED);
         pthread_cond_broadcast(&priv->suspend_cond);
-    } else if (phase == VMM_PREBOOT_RELEASED || phase == VMM_PREBOOT_DISABLED) {
+    } else if (phase == VMM_PREBOOT_RELEASED) {
         atomic_store(&priv->preboot_phase, VMM_PREBOOT_COMPLETE);
         preboot_return(cpu);
     }
@@ -878,17 +998,9 @@ bool vmm_preboot_trap(vcpu_t *cpu) {
     return phase != VMM_PREBOOT_COMPLETE;
 }
 
-bool vmm_is_warm_boot(vmm_machine_t *vm) {
+int vmm_finish_preboot(vmm_machine_t *vm, const char *snapshot_path) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    return priv ? priv->restored_from_snapshot : false;
-}
-
-int vmm_finish_preboot(vmm_machine_t *vm, const char *snapshot_path, int *save_error) {
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (save_error) {
-        *save_error = 0;
-    }
-    if (!priv || priv->restored_from_snapshot) {
+    if (priv->restored_from_snapshot) {
         return 0;
     }
 
@@ -909,150 +1021,154 @@ int vmm_finish_preboot(vmm_machine_t *vm, const char *snapshot_path, int *save_e
         return -EIO;
     }
 
-    int rc = vmm_suspend(vm);
-    if (rc < 0) {
-        return rc;
-    }
-    if (snapshot_path && snapshot_path[0] != '\0') {
-        int serr = vmm_save_snapshot(vm, snapshot_path);
-        if (save_error) {
-            *save_error = serr;
-        }
+    vmm_suspend(vm);
+    if (snapshot_path) {
+        vmm_save_snapshot(vm, snapshot_path);
     }
     atomic_store(&priv->preboot_phase, VMM_PREBOOT_RELEASED);
-    return vmm_resume(vm);
+    vmm_resume(vm);
+    return 0;
 }
 
-uint64_t vmm_mmio_read(vmm_machine_t *vm, vcpu_t *cpu, uint64_t gpa, uint32_t size) {
-    if (!vm) {
-        return 0;
+static virtio_dev_t *mmio_virtio_dev(vmm_machine_t *vm, uint64_t gpa, uint32_t *off) {
+    uint64_t rel = gpa - VMM_VIRTIO_MMIO_BASE;
+    *off = (uint32_t)(rel % VMM_VIRTIO_MMIO_STRIDE);
+    vmm_preboot_phase_t phase = atomic_load(&vmm_priv(vm)->preboot_phase);
+    if (phase == VMM_PREBOOT_ARMED || phase == VMM_PREBOOT_REACHED) {
+        return NULL;
     }
+    return vm->virtio_devs[rel / VMM_VIRTIO_MMIO_STRIDE];
+}
+
+uint64_t vmm_mmio_read(vcpu_t *cpu, uint64_t gpa, uint32_t size) {
+    vmm_machine_t *vm = cpu->vm;
+    vmm_machine_priv_t *priv = vmm_priv(vm);
     if (gpa >= VMM_GICD_BASE && gpa < VMM_GICD_BASE + VMM_GICD_SIZE) {
-        return gicv2_dist_read(vm->gic, cpu, (uint32_t)(gpa - VMM_GICD_BASE), size);
+        return gicv2_dist_read(priv->gic, cpu, (uint32_t)(gpa - VMM_GICD_BASE), size);
     }
     if (gpa >= VMM_GICC_BASE && gpa < VMM_GICC_BASE + VMM_GICC_SIZE) {
-        return gicv2_cpu_read(vm->gic, cpu, (uint32_t)(gpa - VMM_GICC_BASE), size);
+        return gicv2_cpu_read(priv->gic, cpu, (uint32_t)(gpa - VMM_GICC_BASE));
     }
     if (gpa >= VMM_GICH_BASE && gpa < VMM_GICH_BASE + VMM_GICH_SIZE) {
-        return gicv2_hyp_read(vm->gic, cpu, (uint32_t)(gpa - VMM_GICH_BASE));
+        return gicv2_hyp_read(priv->gic, cpu, (uint32_t)(gpa - VMM_GICH_BASE));
     }
     if (gpa >= VMM_GICV_BASE && gpa < VMM_GICV_BASE + VMM_GICV_SIZE) {
-        return gicv2_vcpu_read(vm->gic, cpu, (uint32_t)(gpa - VMM_GICV_BASE));
+        return gicv2_vcpu_read(priv->gic, cpu, (uint32_t)(gpa - VMM_GICV_BASE));
     }
     if (gpa >= VMM_UART0_BASE && gpa < VMM_UART0_BASE + VMM_UART0_SIZE) {
-        return pl011_read(vm->uart, (uint32_t)(gpa - VMM_UART0_BASE), size);
+        return pl011_read(priv->uart, (uint32_t)(gpa - VMM_UART0_BASE));
     }
     if (gpa >= VMM_RTC_BASE && gpa < VMM_RTC_BASE + VMM_RTC_SIZE) {
-        return pl031_read(vm->rtc, (uint32_t)(gpa - VMM_RTC_BASE), size);
+        return pl031_read(priv->rtc, (uint32_t)(gpa - VMM_RTC_BASE));
     }
     if (gpa >= VMM_VIRTIO_MMIO_BASE && gpa < VMM_VIRTIO_MMIO_BASE + VMM_VIRTIO_MMIO_SIZE) {
-        uint64_t rel = gpa - VMM_VIRTIO_MMIO_BASE;
-        uint32_t slot = (uint32_t)(rel / VMM_VIRTIO_MMIO_STRIDE);
-        uint32_t off = (uint32_t)(rel % VMM_VIRTIO_MMIO_STRIDE);
-        vmm_preboot_phase_t phase = atomic_load(&vmm_priv(vm)->preboot_phase);
-        if (slot < VMM_VIRTIO_MMIO_SLOTS && phase != VMM_PREBOOT_ARMED &&
-            phase != VMM_PREBOOT_REACHED && vm->virtio_devs[slot]) {
-            return virtio_mmio_read(vm->virtio_devs[slot], off, size);
+        uint32_t off;
+        virtio_dev_t *dev = mmio_virtio_dev(vm, gpa, &off);
+        if (dev) {
+            return virtio_mmio_read(dev, off, size);
         }
     }
     return 0;
 }
 
-void vmm_mmio_write(vmm_machine_t *vm, vcpu_t *cpu, uint64_t gpa, uint32_t size, uint64_t val) {
-    if (!vm) {
-        return;
-    }
+void vmm_mmio_write(vcpu_t *cpu, uint64_t gpa, uint32_t size, uint64_t val) {
+    vmm_machine_t *vm = cpu->vm;
+    vmm_machine_priv_t *priv = vmm_priv(vm);
     if (gpa >= VMM_GICD_BASE && gpa < VMM_GICD_BASE + VMM_GICD_SIZE) {
-        gicv2_dist_write(vm->gic, cpu, (uint32_t)(gpa - VMM_GICD_BASE), size, val);
+        gicv2_dist_write(priv->gic, cpu, (uint32_t)(gpa - VMM_GICD_BASE), size, val);
         return;
     }
     if (gpa >= VMM_GICC_BASE && gpa < VMM_GICC_BASE + VMM_GICC_SIZE) {
-        gicv2_cpu_write(vm->gic, cpu, (uint32_t)(gpa - VMM_GICC_BASE), size, val);
+        gicv2_cpu_write(priv->gic, cpu, (uint32_t)(gpa - VMM_GICC_BASE), val);
         return;
     }
     if (gpa >= VMM_GICH_BASE && gpa < VMM_GICH_BASE + VMM_GICH_SIZE) {
-        gicv2_hyp_write(vm->gic, cpu, (uint32_t)(gpa - VMM_GICH_BASE), val);
+        gicv2_hyp_write(priv->gic, cpu, (uint32_t)(gpa - VMM_GICH_BASE), val);
         return;
     }
     if (gpa >= VMM_GICV_BASE && gpa < VMM_GICV_BASE + VMM_GICV_SIZE) {
-        gicv2_vcpu_write(vm->gic, cpu, (uint32_t)(gpa - VMM_GICV_BASE), val);
+        gicv2_vcpu_write(priv->gic, cpu, (uint32_t)(gpa - VMM_GICV_BASE), val);
         return;
     }
     if (gpa >= VMM_UART0_BASE && gpa < VMM_UART0_BASE + VMM_UART0_SIZE) {
-        pl011_write(vm->uart, (uint32_t)(gpa - VMM_UART0_BASE), size, val);
+        pl011_write(priv->uart, (uint32_t)(gpa - VMM_UART0_BASE), val);
         return;
     }
     if (gpa >= VMM_RTC_BASE && gpa < VMM_RTC_BASE + VMM_RTC_SIZE) {
-        pl031_write(vm->rtc, (uint32_t)(gpa - VMM_RTC_BASE), size, val);
+        pl031_write(priv->rtc, (uint32_t)(gpa - VMM_RTC_BASE), val);
         return;
     }
     if (gpa >= VMM_VIRTIO_MMIO_BASE && gpa < VMM_VIRTIO_MMIO_BASE + VMM_VIRTIO_MMIO_SIZE) {
-        uint64_t rel = gpa - VMM_VIRTIO_MMIO_BASE;
-        uint32_t slot = (uint32_t)(rel / VMM_VIRTIO_MMIO_STRIDE);
-        uint32_t off = (uint32_t)(rel % VMM_VIRTIO_MMIO_STRIDE);
-        vmm_preboot_phase_t phase = atomic_load(&vmm_priv(vm)->preboot_phase);
-        if (slot < VMM_VIRTIO_MMIO_SLOTS && phase != VMM_PREBOOT_ARMED &&
-            phase != VMM_PREBOOT_REACHED && vm->virtio_devs[slot]) {
-            virtio_mmio_write(vm->virtio_devs[slot], off, size, val);
+        uint32_t off;
+        virtio_dev_t *dev = mmio_virtio_dev(vm, gpa, &off);
+        if (dev) {
+            virtio_mmio_write(dev, off, size, val);
         }
     }
 }
 
-static int load_kernel_and_dtb(vmm_machine_priv_t *priv, const vmm_config_t *config) {
+static int create_machine(vmm_machine_priv_t *priv) {
     vmm_machine_t *vm = &priv->pub;
-    uint64_t kernel_load = VMM_KERNEL_ADDR;
-    uint64_t kernel_end = VMM_KERNEL_ADDR;
-
-    if (config->kernel_image && config->kernel_size > 0) {
-        const uint8_t *img_ptr = (const uint8_t *)config->kernel_image;
-        size_t img_len = config->kernel_size;
-        uint64_t text_offset = 0;
-        uint64_t hdr_img_size = 0;
-        if (img_len >= 64) {
-            uint32_t magic = 0;
-            uint64_t hdr_text_off = 0;
-            memcpy(&hdr_text_off, img_ptr + 0x08, 8);
-            memcpy(&hdr_img_size, img_ptr + 0x10, 8);
-            memcpy(&magic, img_ptr + 0x38, 4);
-            if (magic == ARM64_IMAGE_MAGIC) {
-                text_offset = (hdr_img_size == 0) ? 0x80000ULL : hdr_text_off;
-            }
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
+        void *mem = NULL;
+        if (posix_memalign(&mem, 64, sizeof(vcpu_t)) != 0) {
+            return -ENOMEM;
         }
-        kernel_load = (text_offset >= (VMM_KERNEL_ADDR - VMM_RAM_BASE))
-                          ? (VMM_RAM_BASE + text_offset)
-                          : (VMM_KERNEL_ADDR + text_offset);
-        uint64_t offset_in_ram = kernel_load - VMM_RAM_BASE;
-        uint64_t reserved_span = hdr_img_size > img_len ? hdr_img_size : (uint64_t)img_len;
-        if (offset_in_ram >= vm->ram_size || reserved_span > vm->ram_size - offset_in_ram) {
-            return -ENOSPC;
-        }
-        memcpy(vm->ram + offset_in_ram, img_ptr, img_len);
-        kernel_end = kernel_load + reserved_span;
+        vm->cpus[i] = (vcpu_t *)mem;
+        vcpu_init(vm->cpus[i], vm, i);
+        vcpu_enable_el2(vm->cpus[i]);
     }
 
-    if (config->initramfs && config->initramfs_size > 0) {
-        uint64_t initrd_addr = vmm_initrd_addr(vm->ram_size, config->initramfs_size);
-        if (initrd_addr == 0 || initrd_addr < kernel_end) {
-            return -ENOSPC;
-        }
-        memcpy(vm->ram + (initrd_addr - VMM_RAM_BASE), config->initramfs, config->initramfs_size);
+    priv->gic = gicv2_create(vm);
+    priv->uart = pl011_create(vm);
+    priv->rtc = pl031_create();
+    if (!priv->gic || !priv->uart || !priv->rtc) {
+        return -ENOMEM;
     }
+    return vmm_timer_init(priv);
+}
 
-    int rc = fdt_build(vm, config, vm->ram + (VMM_DTB_ADDR - VMM_RAM_BASE), VMM_DTB_MAX_SIZE, NULL);
+static int load_kernel_and_dtb(vmm_machine_t *vm, const vmm_config_t *config, uint64_t *entry_out) {
+    const uint8_t *img_ptr = (const uint8_t *)config->kernel_image;
+    size_t img_len = config->kernel_size;
+    uint64_t hdr_text_off = 0;
+    uint64_t hdr_img_size = 0;
+    memcpy(&hdr_text_off, img_ptr + 0x08, 8);
+    memcpy(&hdr_img_size, img_ptr + 0x10, 8);
+    uint64_t text_offset = (hdr_img_size == 0) ? 0x80000ULL : hdr_text_off;
+    uint64_t kernel_load = (text_offset >= (VMM_KERNEL_ADDR - VMM_RAM_BASE))
+                               ? (VMM_RAM_BASE + text_offset)
+                               : (VMM_KERNEL_ADDR + text_offset);
+    uint64_t offset_in_ram = kernel_load - VMM_RAM_BASE;
+    uint64_t reserved_span = hdr_img_size > img_len ? hdr_img_size : (uint64_t)img_len;
+    if (offset_in_ram >= vm->ram_size || reserved_span > vm->ram_size - offset_in_ram) {
+        return -ENOSPC;
+    }
+    memcpy(vm->ram + offset_in_ram, img_ptr, img_len);
+
+    if (config->initramfs_size >= vm->ram_size) {
+        return -ENOSPC;
+    }
+    uint64_t initrd_addr =
+        (VMM_RAM_BASE + (uint64_t)vm->ram_size - (uint64_t)config->initramfs_size) & ~(uint64_t)VMM_PAGE_MASK;
+    if (initrd_addr < kernel_load + reserved_span) {
+        return -ENOSPC;
+    }
+    memcpy(vm->ram + (initrd_addr - VMM_RAM_BASE), config->initramfs, config->initramfs_size);
+
+    int rc = fdt_build(vm, config, initrd_addr, vm->ram + (VMM_DTB_ADDR - VMM_RAM_BASE), VMM_DTB_MAX_SIZE);
     if (rc < 0) {
         return rc;
     }
-
-    priv->kernel_entry_pc = kernel_load;
-    priv->dtb_addr = VMM_DTB_ADDR;
+    *entry_out = kernel_load;
     return 0;
 }
 
-static int try_restore_snapshot(vmm_machine_priv_t *priv, const vmm_config_t *config,
-                                size_t requested_ram_size, uint32_t requested_cpu_count) {
+static int restore_snapshot(vmm_machine_priv_t *priv, const vmm_config_t *config) {
+    vmm_machine_t *vm = &priv->pub;
     int fd = open(config->snapshot_path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
-        return (errno == ENOENT) ? 0 : -errno;
+        return -errno;
     }
 
     struct stat st;
@@ -1077,152 +1193,115 @@ static int try_restore_snapshot(vmm_machine_priv_t *priv, const vmm_config_t *co
     vmm_snapshot_header_t hdr;
     rc = pread_all(fd, &hdr, sizeof(hdr), (off_t)footer.state_offset);
     if (rc < 0 || hdr.magic != VMM_SNAPSHOT_MAGIC || hdr.version != VMM_SNAPSHOT_VERSION ||
-        hdr.cpu_count != requested_cpu_count || hdr.ram_size != requested_ram_size ||
+        hdr.cpu_count != vm->cpu_count || hdr.ram_size != vm->ram_size ||
         hdr.ram_size != footer.state_offset ||
-        hdr.flags != ((config->preboot_checkpoint ? VMM_SNAPSHOT_PREBOOT : 0) | (config->el2 ? VMM_SNAPSHOT_EL2 : 0)) ||
         memcmp(hdr.key, config->snapshot_key, sizeof(hdr.key)) != 0 ||
         hdr.online_mask == 0 || (hdr.online_mask >> hdr.cpu_count) != 0 ||
-        hdr.gic_state_size != sizeof(gicv2_snapshot_t) ||
-        hdr.uart_state_size != sizeof(pl011_snapshot_t) ||
-        hdr.rtc_state_size != sizeof(pl031_snapshot_t)) {
+        hdr.gic_state_size != sizeof(gicv2_state_t) ||
+        hdr.uart_state_size != sizeof(pl011_state_t) ||
+        hdr.rtc_state_size != sizeof(pl031_state_t)) {
         close(fd);
         return rc < 0 ? rc : -EINVAL;
     }
     uint64_t expected_size = hdr.ram_size + sizeof(hdr) + hdr.cpu_count * sizeof(vmm_snapshot_vcpu_t) +
-                             sizeof(gicv2_snapshot_t) + sizeof(pl011_snapshot_t) +
-                             sizeof(pl031_snapshot_t) + sizeof(footer);
+                             sizeof(gicv2_state_t) + sizeof(pl011_state_t) +
+                             sizeof(pl031_state_t) + sizeof(footer);
     if (expected_size != (uint64_t)st.st_size) {
         close(fd);
         return -EINVAL;
     }
 
-    void *ram = mmap(NULL, (size_t)hdr.ram_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    void *ram = mmap(NULL, vm->ram_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
     if (ram == MAP_FAILED) {
         int err = -errno;
         close(fd);
         return err;
     }
-
-    vmm_machine_t *vm = &priv->pub;
     vm->ram = (uint8_t *)ram;
-    vm->ram_size = (size_t)hdr.ram_size;
-    vm->cpu_count = hdr.cpu_count;
 
     off_t off = (off_t)footer.state_offset + (off_t)sizeof(hdr);
-
-    vmm_snapshot_vcpu_t *vcpu_states = calloc(hdr.cpu_count, sizeof(*vcpu_states));
-    gicv2_snapshot_t *gic_state = malloc(sizeof(*gic_state));
-    pl011_snapshot_t *uart_state = malloc(sizeof(*uart_state));
-    pl031_snapshot_t *rtc_state = malloc(sizeof(*rtc_state));
-    if (!vcpu_states || !gic_state || !uart_state || !rtc_state) {
-        free(vcpu_states);
-        free(gic_state);
-        free(uart_state);
-        free(rtc_state);
-        close(fd);
-        return -ENOMEM;
-    }
-
-    rc = pread_all(fd, vcpu_states, hdr.cpu_count * sizeof(*vcpu_states), off);
-    off += (off_t)(hdr.cpu_count * sizeof(*vcpu_states));
+    vmm_snapshot_vcpu_t *vcpu_states = calloc(vm->cpu_count, sizeof(*vcpu_states));
+    gicv2_state_t gic_state;
+    pl011_state_t uart_state;
+    pl031_state_t rtc_state;
+    rc = vcpu_states ? pread_all(fd, vcpu_states, vm->cpu_count * sizeof(*vcpu_states), off) : -ENOMEM;
+    off += (off_t)(vm->cpu_count * sizeof(*vcpu_states));
     if (rc == 0) {
-        rc = pread_all(fd, gic_state, sizeof(*gic_state), off);
-        off += (off_t)sizeof(*gic_state);
+        rc = pread_all(fd, &gic_state, sizeof(gic_state), off);
+        off += (off_t)sizeof(gic_state);
     }
     if (rc == 0) {
-        rc = pread_all(fd, uart_state, sizeof(*uart_state), off);
-        off += (off_t)sizeof(*uart_state);
+        rc = pread_all(fd, &uart_state, sizeof(uart_state), off);
+        off += (off_t)sizeof(uart_state);
     }
     if (rc == 0) {
-        rc = pread_all(fd, rtc_state, sizeof(*rtc_state), off);
+        rc = pread_all(fd, &rtc_state, sizeof(rtc_state), off);
     }
     close(fd);
 
-    if (rc < 0) {
-        free(vcpu_states);
-        free(gic_state);
-        free(uart_state);
-        free(rtc_state);
-        return rc;
-    }
-
-    for (uint32_t i = 0; i < hdr.cpu_count; i++) {
-        void *mem = NULL;
-        if (posix_memalign(&mem, 64, sizeof(vcpu_t)) != 0 || !mem) {
-            free(vcpu_states);
-            free(gic_state);
-            free(uart_state);
-            free(rtc_state);
-            return -ENOMEM;
-        }
-        memset(mem, 0, sizeof(vcpu_t));
-        vm->cpus[i] = (vcpu_t *)mem;
-        vcpu_init(vm->cpus[i], vm, i);
-        if (config->el2) {
-            vcpu_enable_el2(vm->cpus[i]);
-        }
-        vcpu_load_snapshot(vm->cpus[i], &vcpu_states[i]);
-        bool online = ((hdr.online_mask >> i) & 1U) != 0;
-        atomic_store_explicit(&priv->cpu_online[i], online, memory_order_release);
-        atomic_store_explicit(&vm->cpus[i]->halted_wfi, !online, memory_order_release);
-    }
-
-    vm->gic = gicv2_create(vm);
-    vm->uart = pl011_create(vm);
-    vm->rtc = pl031_create(vm);
-    if (!vm->gic || !vm->uart || !vm->rtc) {
-        free(vcpu_states);
-        free(gic_state);
-        free(uart_state);
-        free(rtc_state);
-        return -ENOMEM;
-    }
-
-    gicv2_load_state(vm->gic, gic_state);
-    pl011_load_state(vm->uart, uart_state);
-    pl031_load_state(vm->rtc, rtc_state);
-
-    rc = vmm_timer_init(priv);
     if (rc == 0) {
+        rc = create_machine(priv);
+    }
+    if (rc == 0) {
+        for (uint32_t i = 0; i < vm->cpu_count; i++) {
+            vcpu_load_snapshot(vm->cpus[i], &vcpu_states[i]);
+            bool online = ((hdr.online_mask >> i) & 1U) != 0;
+            atomic_store_explicit(&priv->cpu_online[i], online, memory_order_release);
+            atomic_store_explicit(&vm->cpus[i]->halted_wfi, !online, memory_order_release);
+        }
+        gicv2_load_state(priv->gic, &gic_state);
+        pl011_load_state(priv->uart, &uart_state);
+        pl031_load_state(priv->rtc, &rtc_state);
         vmm_timer_set_cntvct(vm, hdr.timer_cntvct);
-    }
-
-    free(vcpu_states);
-    free(gic_state);
-    free(uart_state);
-    free(rtc_state);
-
-    if (rc < 0) {
-        return rc;
-    }
-    priv->restored_from_snapshot = true;
-    if (config->preboot_checkpoint) {
+        priv->restored_from_snapshot = true;
         atomic_store(&priv->preboot_phase, VMM_PREBOOT_RELEASED);
     }
-    return 1;
+    free(vcpu_states);
+    return rc;
 }
 
-static int attach_default_virtio(vmm_machine_priv_t *priv, const vmm_config_t *config) {
+static int cold_boot(vmm_machine_priv_t *priv, const vmm_config_t *config) {
     vmm_machine_t *vm = &priv->pub;
-    if (config->root_disk_path && config->root_disk_path[0] != '\0') {
-        bool read_only = false;
-        int fd = open(config->root_disk_path, O_RDWR | O_CLOEXEC);
-        if (fd < 0 && (errno == EACCES || errno == EROFS)) {
-            fd = open(config->root_disk_path, O_RDONLY | O_CLOEXEC);
-            read_only = true;
-        }
-        if (fd < 0) {
-            return -errno;
-        }
-        priv->blk_fd = fd;
-        if (flock(fd, LOCK_EX | LOCK_NB) < 0) {
-            return -errno;
-        }
-        vm->virtio_devs[VMM_VIRTIO_SLOT_BLK] =
-            virtio_blk_create(vm, VMM_VIRTIO_SLOT_BLK, fd, read_only);
-        if (!vm->virtio_devs[VMM_VIRTIO_SLOT_BLK]) {
-            return -ENOMEM;
-        }
+    void *ram = mmap(NULL, vm->ram_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (ram == MAP_FAILED) {
+        return -errno;
+    }
+    vm->ram = (uint8_t *)ram;
+
+    int rc = create_machine(priv);
+    uint64_t entry = 0;
+    if (rc == 0) {
+        rc = load_kernel_and_dtb(vm, config, &entry);
+    }
+    if (rc < 0) {
+        return rc;
+    }
+    vcpu_reset(vm->cpus[0], entry, VMM_DTB_ADDR);
+    atomic_store_explicit(&priv->cpu_online[0], true, memory_order_release);
+    for (uint32_t i = 1; i < vm->cpu_count; i++) {
+        atomic_store_explicit(&vm->cpus[i]->halted_wfi, true, memory_order_release);
+    }
+    return 0;
+}
+
+static int attach_default_virtio(vmm_machine_t *vm, const vmm_config_t *config) {
+    bool read_only = false;
+    int fd = open(config->root_disk_path, O_RDWR | O_CLOEXEC);
+    if (fd < 0 && (errno == EACCES || errno == EROFS)) {
+        fd = open(config->root_disk_path, O_RDONLY | O_CLOEXEC);
+        read_only = true;
+    }
+    if (fd < 0) {
+        return -errno;
+    }
+    int rc = flock(fd, LOCK_EX | LOCK_NB) < 0 ? -errno : 0;
+    if (rc == 0) {
+        vm->virtio_devs[VMM_VIRTIO_SLOT_BLK] = virtio_blk_create(vm, VMM_VIRTIO_SLOT_BLK, fd, read_only);
+        rc = vm->virtio_devs[VMM_VIRTIO_SLOT_BLK] ? 0 : -ENOMEM;
+    }
+    close(fd);
+    if (rc < 0) {
+        return rc;
     }
 
     vm->virtio_devs[VMM_VIRTIO_SLOT_VSOCK] = virtio_vsock_create(vm, VMM_VIRTIO_SLOT_VSOCK, 3);
@@ -1253,35 +1332,21 @@ static int attach_default_virtio(vmm_machine_priv_t *priv, const vmm_config_t *c
 }
 
 vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
-    if (!config) {
-        if (err_out) {
-            *err_out = EINVAL;
-        }
-        return NULL;
-    }
-
-    uint32_t cpu_count = config->cpu_count ? config->cpu_count : 1;
-    if (cpu_count > VMM_MAX_VCPUS) {
-        if (err_out) {
-            *err_out = EINVAL;
-        }
+    if (config->cpu_count > VMM_MAX_VCPUS || config->ram_size > SIZE_MAX - (size_t)VMM_RAM_ALIGN ||
+        config->ram_size < (VMM_KERNEL_ADDR - VMM_RAM_BASE) + VMM_PAGE_SIZE) {
+        *err_out = EINVAL;
         return NULL;
     }
 
     vmm_machine_priv_t *priv;
     if (posix_memalign((void **)&priv, 128, sizeof(*priv)) != 0) {
-        if (err_out) {
-            *err_out = ENOMEM;
-        }
+        *err_out = ENOMEM;
         return NULL;
     }
     memset(priv, 0, sizeof(*priv));
 
-    priv->priv_magic = VMM_MACHINE_PRIV_MAGIC;
-    priv->blk_fd = -1;
-    atomic_init(&priv->preboot_phase, config->preboot_checkpoint ? VMM_PREBOOT_ARMED : VMM_PREBOOT_DISABLED);
+    atomic_init(&priv->preboot_phase, VMM_PREBOOT_ARMED);
     memcpy(priv->snapshot_key, config->snapshot_key, sizeof(priv->snapshot_key));
-    priv->el2 = config->el2;
     pthread_mutex_init(&priv->state_lock, NULL);
     pthread_cond_init(&priv->suspend_cond, NULL);
     for (uint32_t i = 0; i < VMM_MAX_VCPUS; i++) {
@@ -1292,160 +1357,24 @@ vmm_machine_t *vmm_create(const vmm_config_t *config, int *err_out) {
     }
 
     vmm_machine_t *vm = &priv->pub;
+    vm->ram_size = (config->ram_size + (size_t)VMM_RAM_ALIGN - 1) & ~((size_t)VMM_RAM_ALIGN - 1);
+    vm->cpu_count = config->cpu_count;
     vm->callback_ctx = config->callback_ctx;
-    vm->console_output = config->console_output;
     vm->on_halt = config->on_halt;
-    vm->on_panic = config->on_panic;
-
-    int rc = 0;
-    size_t ram_size = config->ram_size ? config->ram_size : (256ULL << 20);
-    if (ram_size > SIZE_MAX - (size_t)VMM_RAM_ALIGN ||
-        ram_size < (VMM_KERNEL_ADDR - VMM_RAM_BASE) + VMM_PAGE_SIZE) {
-        vmm_destroy(vm);
-        if (err_out) {
-            *err_out = EINVAL;
-        }
-        return NULL;
-    }
-    ram_size = (ram_size + (size_t)VMM_RAM_ALIGN - 1) & ~((size_t)VMM_RAM_ALIGN - 1);
 
     cpu_jit_reserve();
 
-    int snap_rc = 0;
-    if (config->snapshot_path && config->snapshot_path[0] != '\0') {
-        snap_rc = try_restore_snapshot(priv, config, ram_size, cpu_count);
+    int rc = config->snapshot_path ? restore_snapshot(priv, config) : cold_boot(priv, config);
+    if (rc == 0) {
+        rc = attach_default_virtio(vm, config);
     }
-    if (config->snapshot_required && (snap_rc == 0 || snap_rc == -EINVAL)) {
-        snap_rc = -ESTALE;
-    }
-    if (snap_rc < 0) {
-        vmm_destroy(vm);
-        if (err_out) {
-            *err_out = -snap_rc;
-        }
-        return NULL;
-    }
-
-    if (snap_rc == 0) {
-        void *ram = mmap(NULL, ram_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-        if (ram == MAP_FAILED) {
-            int err = errno;
-            vmm_destroy(vm);
-            if (err_out) {
-                *err_out = err;
-            }
-            return NULL;
-        }
-
-        vm->ram = (uint8_t *)ram;
-        vm->ram_size = ram_size;
-        vm->cpu_count = cpu_count;
-
-        for (uint32_t i = 0; i < cpu_count; i++) {
-            void *mem = NULL;
-            if (posix_memalign(&mem, 64, sizeof(vcpu_t)) != 0 || !mem) {
-                vmm_destroy(vm);
-                if (err_out) {
-                    *err_out = ENOMEM;
-                }
-                return NULL;
-            }
-            memset(mem, 0, sizeof(vcpu_t));
-            vm->cpus[i] = (vcpu_t *)mem;
-            vcpu_init(vm->cpus[i], vm, i);
-            if (config->el2) {
-                vcpu_enable_el2(vm->cpus[i]);
-            }
-            mmu_tlbi_all(vm->cpus[i]);
-            mmu_update_asid_salt(vm->cpus[i]);
-        }
-
-        vm->gic = gicv2_create(vm);
-        vm->uart = pl011_create(vm);
-        vm->rtc = pl031_create(vm);
-        if (!vm->gic || !vm->uart || !vm->rtc) {
-            vmm_destroy(vm);
-            if (err_out) {
-                *err_out = ENOMEM;
-            }
-            return NULL;
-        }
-
-        rc = vmm_timer_init(priv);
-        if (rc < 0) {
-            vmm_destroy(vm);
-            if (err_out) {
-                *err_out = -rc;
-            }
-            return NULL;
-        }
-
-        rc = load_kernel_and_dtb(priv, config);
-        if (rc < 0) {
-            vmm_destroy(vm);
-            if (err_out) {
-                *err_out = -rc;
-            }
-            return NULL;
-        }
-
-        vcpu_reset(vm->cpus[0], priv->kernel_entry_pc, priv->dtb_addr);
-        mmu_tlbi_all(vm->cpus[0]);
-        mmu_update_asid_salt(vm->cpus[0]);
-        atomic_store_explicit(&priv->cpu_online[0], true, memory_order_release);
-        atomic_store_explicit(&vm->cpus[0]->halted_wfi, false, memory_order_release);
-        for (uint32_t i = 1; i < cpu_count; i++) {
-            atomic_store_explicit(&priv->cpu_online[i], false, memory_order_release);
-            atomic_store_explicit(&vm->cpus[i]->halted_wfi, true, memory_order_release);
-        }
-    }
-
-    rc = attach_default_virtio(priv, config);
     if (rc < 0) {
         vmm_destroy(vm);
-        if (err_out) {
-            *err_out = -rc;
-        }
+        *err_out = -rc;
         return NULL;
     }
-    if (err_out) {
-        *err_out = 0;
-    }
+    *err_out = 0;
     return vm;
-}
-
-int vmm_start(vmm_machine_t *vm) {
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv) {
-        return -EINVAL;
-    }
-
-    pthread_mutex_lock(&priv->state_lock);
-    if (atomic_load_explicit(&vm->running, memory_order_acquire)) {
-        pthread_mutex_unlock(&priv->state_lock);
-        return -EBUSY;
-    }
-    priv->halt_notified = false;
-    atomic_store_explicit(&vm->suspended, false, memory_order_release);
-    atomic_store_explicit(&vm->running, true, memory_order_release);
-
-    for (uint32_t i = 0; i < vm->cpu_count; i++) {
-        if (!atomic_load_explicit(&priv->cpu_online[i], memory_order_acquire)) {
-            continue;
-        }
-        vcpu_t *cpu = vm->cpus[i];
-        cpu->stop_reason = VCPU_STOP_NONE;
-        atomic_store_explicit(&cpu->stop_requested, false, memory_order_release);
-        int rc = pthread_create(&priv->threads[i], NULL, vcpu_thread_main, cpu);
-        if (rc != 0) {
-            pthread_mutex_unlock(&priv->state_lock);
-            vmm_stop(vm);
-            return -rc;
-        }
-        priv->thread_started[i] = true;
-    }
-    pthread_mutex_unlock(&priv->state_lock);
-    return 0;
 }
 
 static void flush_block_devices(vmm_machine_t *vm) {
@@ -1459,90 +1388,11 @@ static void flush_block_devices(vmm_machine_t *vm) {
     pthread_mutex_unlock(&priv->state_lock);
 }
 
-int vmm_suspend(vmm_machine_t *vm) {
+static void vmm_stop(vmm_machine_t *vm) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv) {
-        return -EINVAL;
-    }
-    if (!atomic_load_explicit(&vm->running, memory_order_acquire)) {
-        return 0;
-    }
-    if (atomic_exchange_explicit(&vm->suspended, true, memory_order_acq_rel)) {
-        return 0;
-    }
-    pthread_mutex_lock(&priv->state_lock);
-    pthread_cond_broadcast(&priv->suspend_cond);
-    pthread_mutex_unlock(&priv->state_lock);
-
-    vmm_timer_disarm_all(priv);
-    for (uint32_t i = 0; i < vm->cpu_count; i++) {
-        if (vm->cpus[i]) {
-            atomic_store_explicit(&vm->cpus[i]->stop_requested, true, memory_order_release);
-            vmm_vcpu_wake(vm, i);
-        }
-    }
-
-    pthread_mutex_lock(&priv->state_lock);
-    for (;;) {
-        uint32_t active = 0;
-        for (uint32_t i = 0; i < vm->cpu_count; i++) {
-            if (priv->thread_started[i] &&
-                atomic_load_explicit(&priv->cpu_online[i], memory_order_acquire)) {
-                active++;
-            }
-        }
-        if (priv->suspended_count >= active ||
-            !atomic_load_explicit(&vm->running, memory_order_acquire)) {
-            break;
-        }
-        pthread_cond_wait(&priv->suspend_cond, &priv->state_lock);
-    }
-    pthread_mutex_unlock(&priv->state_lock);
-    flush_block_devices(vm);
-    return 0;
-}
-
-int vmm_resume(vmm_machine_t *vm) {
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv) {
-        return -EINVAL;
-    }
-    if (!atomic_load_explicit(&vm->running, memory_order_acquire)) {
-        return 0;
-    }
-    if (!atomic_load_explicit(&vm->suspended, memory_order_acquire)) {
-        return 0;
-    }
-
-    for (uint32_t i = 0; i < vm->cpu_count; i++) {
-        if (vm->cpus[i]) {
-            atomic_store_explicit(&vm->cpus[i]->stop_requested, false, memory_order_release);
-        }
-    }
-    pthread_mutex_lock(&priv->state_lock);
-    atomic_store_explicit(&vm->suspended, false, memory_order_release);
-    pthread_cond_broadcast(&priv->suspend_cond);
-    pthread_mutex_unlock(&priv->state_lock);
-
-    vmm_timer_sync_all(priv);
-    return 0;
-}
-
-void vmm_stop(vmm_machine_t *vm) {
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv) {
-        return;
-    }
-
     atomic_store_explicit(&vm->running, false, memory_order_release);
     vmm_timer_disarm_all(priv);
-
-    for (uint32_t i = 0; i < vm->cpu_count; i++) {
-        if (vm->cpus[i]) {
-            atomic_store_explicit(&vm->cpus[i]->stop_requested, true, memory_order_release);
-            vmm_vcpu_wake(vm, i);
-        }
-    }
+    request_stop_all(vm);
 
     pthread_mutex_lock(&priv->state_lock);
     atomic_store_explicit(&vm->suspended, false, memory_order_release);
@@ -1567,12 +1417,85 @@ void vmm_stop(vmm_machine_t *vm) {
     flush_block_devices(vm);
 }
 
-void vmm_destroy(vmm_machine_t *vm) {
+int vmm_start(vmm_machine_t *vm) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv) {
+    pthread_mutex_lock(&priv->state_lock);
+    atomic_store_explicit(&vm->running, true, memory_order_release);
+
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
+        if (!atomic_load_explicit(&priv->cpu_online[i], memory_order_acquire)) {
+            continue;
+        }
+        int rc = pthread_create(&priv->threads[i], NULL, vcpu_thread_main, vm->cpus[i]);
+        if (rc != 0) {
+            pthread_mutex_unlock(&priv->state_lock);
+            vmm_stop(vm);
+            return -rc;
+        }
+        priv->thread_started[i] = true;
+    }
+    pthread_mutex_unlock(&priv->state_lock);
+    return 0;
+}
+
+void vmm_suspend(vmm_machine_t *vm) {
+    vmm_machine_priv_t *priv = vmm_priv(vm);
+    if (!atomic_load_explicit(&vm->running, memory_order_acquire)) {
+        return;
+    }
+    if (atomic_exchange_explicit(&vm->suspended, true, memory_order_acq_rel)) {
+        return;
+    }
+    pthread_mutex_lock(&priv->state_lock);
+    pthread_cond_broadcast(&priv->suspend_cond);
+    pthread_mutex_unlock(&priv->state_lock);
+
+    vmm_timer_disarm_all(priv);
+    request_stop_all(vm);
+
+    pthread_mutex_lock(&priv->state_lock);
+    for (;;) {
+        uint32_t active = 0;
+        for (uint32_t i = 0; i < vm->cpu_count; i++) {
+            if (priv->thread_started[i] &&
+                atomic_load_explicit(&priv->cpu_online[i], memory_order_acquire)) {
+                active++;
+            }
+        }
+        if (priv->suspended_count >= active ||
+            !atomic_load_explicit(&vm->running, memory_order_acquire)) {
+            break;
+        }
+        pthread_cond_wait(&priv->suspend_cond, &priv->state_lock);
+    }
+    pthread_mutex_unlock(&priv->state_lock);
+    flush_block_devices(vm);
+}
+
+void vmm_resume(vmm_machine_t *vm) {
+    vmm_machine_priv_t *priv = vmm_priv(vm);
+    if (!atomic_load_explicit(&vm->running, memory_order_acquire)) {
+        return;
+    }
+    if (!atomic_load_explicit(&vm->suspended, memory_order_acquire)) {
         return;
     }
 
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
+        if (vm->cpus[i]) {
+            atomic_store_explicit(&vm->cpus[i]->stop_requested, false, memory_order_release);
+        }
+    }
+    pthread_mutex_lock(&priv->state_lock);
+    atomic_store_explicit(&vm->suspended, false, memory_order_release);
+    pthread_cond_broadcast(&priv->suspend_cond);
+    pthread_mutex_unlock(&priv->state_lock);
+
+    vmm_timer_sync_all(priv);
+}
+
+void vmm_destroy(vmm_machine_t *vm) {
+    vmm_machine_priv_t *priv = vmm_priv(vm);
     vmm_stop(vm);
     vmm_timer_destroy(priv);
 
@@ -1585,12 +1508,9 @@ void vmm_destroy(vmm_machine_t *vm) {
     free(vm->gpu_shm.pages);
     vm->gpu_shm = (vmm_shm_window_t){0};
 
-    gicv2_destroy(vm->gic);
-    vm->gic = NULL;
-    pl011_destroy(vm->uart);
-    vm->uart = NULL;
-    pl031_destroy(vm->rtc);
-    vm->rtc = NULL;
+    gicv2_destroy(priv->gic);
+    pl011_destroy(priv->uart);
+    pl031_destroy(priv->rtc);
 
     for (uint32_t i = 0; i < VMM_MAX_VCPUS; i++) {
         if (vm->cpus[i]) {
@@ -1605,10 +1525,6 @@ void vmm_destroy(vmm_machine_t *vm) {
         vm->ram = NULL;
     }
     cpu_pool_destroy(vm);
-    if (priv->blk_fd >= 0) {
-        close(priv->blk_fd);
-        priv->blk_fd = -1;
-    }
 
     for (uint32_t i = 0; i < VMM_MAX_VCPUS; i++) {
         pthread_cond_destroy(&priv->wfi_cond[i]);
@@ -1618,145 +1534,7 @@ void vmm_destroy(vmm_machine_t *vm) {
     }
     pthread_cond_destroy(&priv->suspend_cond);
     pthread_mutex_destroy(&priv->state_lock);
-    priv->priv_magic = 0;
     free(priv);
-}
-
-int vmm_save_snapshot(vmm_machine_t *vm, const char *path) {
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || !path || path[0] == '\0' || !vm->ram || vm->ram_size == 0) {
-        return -EINVAL;
-    }
-
-    bool was_running = atomic_load_explicit(&vm->running, memory_order_acquire);
-    bool was_suspended = atomic_load_explicit(&vm->suspended, memory_order_acquire);
-    if (was_running && !was_suspended) {
-        int rc = vmm_suspend(vm);
-        if (rc < 0) {
-            return rc;
-        }
-    }
-
-    vmm_preboot_phase_t phase = atomic_load(&priv->preboot_phase);
-    uint64_t cntvct = vmm_timer_cntvct(vm);
-    size_t tmp_len = strlen(path) + sizeof(".XXXXXX");
-    char *tmp_path = malloc(tmp_len);
-    if (!tmp_path) {
-        if (was_running && !was_suspended) {
-            vmm_resume(vm);
-        }
-        return -ENOMEM;
-    }
-    snprintf(tmp_path, tmp_len, "%s.XXXXXX", path);
-
-    int fd = mkstemp(tmp_path);
-    if (fd < 0) {
-        int err = -errno;
-        free(tmp_path);
-        if (was_running && !was_suspended) {
-            vmm_resume(vm);
-        }
-        return err;
-    }
-    (void)fcntl(fd, F_NOCACHE, 1);
-
-    int rc = 0;
-    if (ftruncate(fd, (off_t)vm->ram_size) < 0) {
-        rc = -errno;
-    }
-
-    if (rc == 0) {
-        rc = snapshot_write_ram(fd, vm);
-    }
-
-    if (rc == 0) {
-        vmm_snapshot_header_t hdr = {
-            .magic = VMM_SNAPSHOT_MAGIC,
-            .version = VMM_SNAPSHOT_VERSION,
-            .cpu_count = vm->cpu_count,
-            .ram_size = (uint64_t)vm->ram_size,
-            .timer_cntvct = cntvct,
-            .online_mask = 0,
-            .gic_state_size = (uint32_t)sizeof(gicv2_snapshot_t),
-            .uart_state_size = (uint32_t)sizeof(pl011_snapshot_t),
-            .rtc_state_size = (uint32_t)sizeof(pl031_snapshot_t),
-            .flags = (phase == VMM_PREBOOT_REACHED ? VMM_SNAPSHOT_PREBOOT : 0) | (priv->el2 ? VMM_SNAPSHOT_EL2 : 0),
-        };
-        memcpy(hdr.key, priv->snapshot_key, sizeof(hdr.key));
-        for (uint32_t i = 0; i < vm->cpu_count; i++) {
-            if (atomic_load_explicit(&priv->cpu_online[i], memory_order_acquire)) {
-                hdr.online_mask |= (1U << i);
-            }
-        }
-
-        vmm_snapshot_vcpu_t *vcpu_states = calloc(vm->cpu_count, sizeof(*vcpu_states));
-        gicv2_snapshot_t *gic_state = malloc(sizeof(*gic_state));
-        pl011_snapshot_t *uart_state = malloc(sizeof(*uart_state));
-        pl031_snapshot_t *rtc_state = malloc(sizeof(*rtc_state));
-
-        if (!vcpu_states || !gic_state || !uart_state || !rtc_state) {
-            rc = -ENOMEM;
-        } else {
-            for (uint32_t i = 0; i < vm->cpu_count; i++) {
-                vcpu_save_snapshot(vm->cpus[i], &vcpu_states[i]);
-            }
-            gicv2_save_state(vm->gic, gic_state);
-            pl011_save_state(vm->uart, uart_state);
-            pl031_save_state(vm->rtc, rtc_state);
-
-            off_t off = (off_t)vm->ram_size;
-            rc = pwrite_all(fd, &hdr, sizeof(hdr), off);
-            off += (off_t)sizeof(hdr);
-            if (rc == 0) {
-                rc = pwrite_all(fd, vcpu_states, vm->cpu_count * sizeof(*vcpu_states), off);
-                off += (off_t)(vm->cpu_count * sizeof(*vcpu_states));
-            }
-            if (rc == 0) {
-                rc = pwrite_all(fd, gic_state, sizeof(*gic_state), off);
-                off += (off_t)sizeof(*gic_state);
-            }
-            if (rc == 0) {
-                rc = pwrite_all(fd, uart_state, sizeof(*uart_state), off);
-                off += (off_t)sizeof(*uart_state);
-            }
-            if (rc == 0) {
-                rc = pwrite_all(fd, rtc_state, sizeof(*rtc_state), off);
-                off += (off_t)sizeof(*rtc_state);
-            }
-            if (rc == 0) {
-                vmm_snapshot_footer_t footer = {
-                    .state_offset = (uint64_t)vm->ram_size,
-                    .magic = VMM_SNAPSHOT_MAGIC,
-                };
-                rc = pwrite_all(fd, &footer, sizeof(footer), off);
-            }
-        }
-
-        free(vcpu_states);
-        free(gic_state);
-        free(uart_state);
-        free(rtc_state);
-    }
-
-    if (rc == 0 && fsync(fd) < 0) {
-        rc = -errno;
-    }
-    close(fd);
-
-    if (rc == 0) {
-        if (rename(tmp_path, path) < 0) {
-            rc = -errno;
-            unlink(tmp_path);
-        }
-    } else {
-        unlink(tmp_path);
-    }
-    free(tmp_path);
-
-    if (was_running && !was_suspended) {
-        vmm_resume(vm);
-    }
-    return rc;
 }
 
 static uint32_t free_virtio_slot(const vmm_machine_t *vm, uint32_t base, uint32_t count) {
@@ -1768,26 +1546,10 @@ static uint32_t free_virtio_slot(const vmm_machine_t *vm, uint32_t base, uint32_
     return VMM_VIRTIO_MMIO_SLOTS;
 }
 
-static void detach_virtio(vmm_machine_t *vm, uint32_t base, uint32_t count, uint32_t slot) {
-    vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || slot < base || slot >= base + count) {
-        return;
-    }
-
-    pthread_mutex_lock(&priv->state_lock);
-    virtio_dev_t *dev = vm->virtio_devs[slot];
-    vm->virtio_devs[slot] = NULL;
-    pthread_mutex_unlock(&priv->state_lock);
-
-    if (dev) {
-        virtio_dev_destroy(dev);
-    }
-}
-
 int vmm_attach_virtio_fs(vmm_machine_t *vm, const char *tag, const char *host_root,
                          bool read_only, uint32_t *slot_out) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || !tag || !host_root) {
+    if (!tag || !host_root) {
         return -EINVAL;
     }
 
@@ -1806,19 +1568,13 @@ int vmm_attach_virtio_fs(vmm_machine_t *vm, const char *tag, const char *host_ro
     vm->virtio_devs[chosen] = dev;
     pthread_mutex_unlock(&priv->state_lock);
 
-    if (slot_out) {
-        *slot_out = chosen;
-    }
+    *slot_out = chosen;
     return 0;
-}
-
-void vmm_detach_virtio_fs(vmm_machine_t *vm, uint32_t slot) {
-    detach_virtio(vm, VMM_VIRTIO_SLOT_FS_BASE, VMM_VIRTIO_SLOT_FS_COUNT, slot);
 }
 
 int vmm_attach_virtio_blk(vmm_machine_t *vm, int fd, uint32_t *slot_out) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || fd < 0 || !slot_out) {
+    if (fd < 0) {
         return -EINVAL;
     }
 
@@ -1841,6 +1597,14 @@ int vmm_attach_virtio_blk(vmm_machine_t *vm, int fd, uint32_t *slot_out) {
     return 0;
 }
 
-void vmm_detach_virtio_blk(vmm_machine_t *vm, uint32_t slot) {
-    detach_virtio(vm, VMM_VIRTIO_SLOT_DISK_BASE, VMM_VIRTIO_SLOT_DISK_COUNT, slot);
+void vmm_detach_virtio(vmm_machine_t *vm, uint32_t slot) {
+    vmm_machine_priv_t *priv = vmm_priv(vm);
+    pthread_mutex_lock(&priv->state_lock);
+    virtio_dev_t *dev = vm->virtio_devs[slot];
+    vm->virtio_devs[slot] = NULL;
+    pthread_mutex_unlock(&priv->state_lock);
+
+    if (dev) {
+        virtio_dev_destroy(dev);
+    }
 }

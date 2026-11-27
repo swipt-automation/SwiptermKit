@@ -24,7 +24,6 @@
 #define CONSOLE_BUF_CAP 32768
 #define CONTAINER_TTY_COUNT 4
 #define LXC_TEMPLATE_PLACEHOLDER "LXC_NAME"
-#define LXC_TEMPLATE_MAX_SIZE (64 * 1024)
 
 enum {
     MANAGED_INIT_GRACE_MS = 15000,
@@ -62,14 +61,11 @@ static void ttys_close(void) {
 
 static int ttys_open(void) {
     for (int i = 0; i < CONTAINER_TTY_COUNT; i++) {
-        int master = open(GUEST_ROOT "/dev/pts/ptmx", O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
-        if (master < 0)
-            return -errno;
-        g_tty_masters[i] = master;
-        int unlock = 0;
         int pts_num = -1;
-        if (ioctl(master, TIOCSPTLCK, &unlock) < 0 || ioctl(master, TIOCGPTN, &pts_num) < 0)
-            return -errno;
+        int master = pty_open_master(&pts_num);
+        if (master < 0)
+            return master;
+        g_tty_masters[i] = master;
         char source[64];
         char target[64];
         snprintf(source, sizeof(source), GUEST_ROOT "/dev/pts/%d", pts_num);
@@ -85,28 +81,18 @@ static int ttys_open(void) {
 }
 
 static void apply_lxc_template(const char *guest_path) {
-    int fd = fs_open_in_root(guest_path + 1, O_RDONLY | O_NOFOLLOW, 0);
-    if (fd < 0)
-        return;
     struct stat st;
-    char *text = NULL;
-    ssize_t n = -1;
-    if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0 && st.st_size <= LXC_TEMPLATE_MAX_SIZE &&
-        (text = malloc((size_t)st.st_size + 1)))
-        n = read_all_blocking(fd, text, (size_t)st.st_size) == 0 ? st.st_size : -1;
-    close(fd);
-    if (n <= 0) {
-        free(text);
+    char *text = fs_read_root_file(guest_path + 1, &st);
+    if (!text)
         return;
-    }
-    text[n] = '\0';
+    size_t n = (size_t)st.st_size;
 
     const size_t placeholder_len = strlen(LXC_TEMPLATE_PLACEHOLDER);
     const size_t name_len = strlen(g_daemon.hostname);
     size_t count = 0;
     for (const char *p = text; (p = strstr(p, LXC_TEMPLATE_PLACEHOLDER)); p += placeholder_len)
         count++;
-    char *out = count > 0 ? malloc((size_t)n + count * name_len + 1) : NULL;
+    char *out = count > 0 ? malloc(n + count * name_len + 1) : NULL;
     if (out) {
         size_t len = 0;
         const char *cursor = text;
@@ -150,21 +136,11 @@ static void ensure_hosts_entry(void) {
     const char *name = g_daemon.hostname;
     if (name[0] == '\0')
         return;
-    int fd = fs_open_in_root("etc/hosts", O_RDONLY | O_NOFOLLOW, 0);
-    if (fd < 0)
-        return;
     struct stat st;
-    char *text = NULL;
-    if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size <= LXC_TEMPLATE_MAX_SIZE &&
-        (text = malloc((size_t)st.st_size + 1)) && read_all_blocking(fd, text, (size_t)st.st_size) < 0) {
-        free(text);
-        text = NULL;
-    }
-    close(fd);
+    char *text = fs_read_root_file("etc/hosts", &st);
     if (!text)
         return;
     size_t len = (size_t)st.st_size;
-    text[len] = '\0';
 
     const char *replace_from = NULL;
     const char *replace_to = NULL;
@@ -254,7 +230,9 @@ static bool console_flush(void) {
     return true;
 }
 
-static void console_pump(void) {
+static void on_console_event(ev_node_t *node, uint32_t events) {
+    (void)node;
+    (void)events;
     if (g_console.master_fd < 0)
         return;
     for (;;) {
@@ -285,19 +263,11 @@ static void console_pump(void) {
         ev_mod(&g_console.vsock_ev, 0);
 }
 
-static void on_console_event(ev_node_t *node, uint32_t events) {
-    (void)node;
-    (void)events;
-    console_pump();
-}
-
 static void console_drain(void) {
     if (g_console.vsock_fd >= 0 && g_console.master_fd >= 0) {
         struct timeval timeout = {.tv_sec = 1};
         (void)setsockopt(g_console.vsock_fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
-        int flags = fcntl(g_console.vsock_fd, F_GETFL, 0);
-        if (flags >= 0)
-            (void)fcntl(g_console.vsock_fd, F_SETFL, flags & ~O_NONBLOCK);
+        (void)set_nonblock(g_console.vsock_fd, false);
         bool ok = write_all_blocking(g_console.vsock_fd, g_console.buf + g_console.off,
                                      g_console.len - g_console.off) == 0;
         while (ok) {
@@ -313,21 +283,15 @@ static void console_drain(void) {
 }
 
 static int console_open(bool has_console, uint64_t console_token, int *pts_num_out) {
-    int master = open(GUEST_ROOT "/dev/pts/ptmx", O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
-    if (master < 0)
-        return -errno;
-    int unlock = 0;
     int pts_num = -1;
-    int guard = -1;
+    int master = pty_open_master(&pts_num);
+    if (master < 0)
+        return master;
     int vsock = -1;
     int rc = 0;
-    if (ioctl(master, TIOCSPTLCK, &unlock) < 0 || ioctl(master, TIOCGPTN, &pts_num) < 0)
+    int guard = ioctl(master, TIOCGPTPEER, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+    if (guard < 0)
         rc = -errno;
-    if (rc == 0) {
-        guard = ioctl(master, TIOCGPTPEER, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
-        if (guard < 0)
-            rc = -errno;
-    }
     if (rc == 0) {
         struct winsize ws = {.ws_row = 24, .ws_col = 80};
         (void)ioctl(master, TIOCSWINSZ, &ws);
@@ -362,8 +326,7 @@ static int console_open(bool has_console, uint64_t console_token, int *pts_num_o
 }
 
 void ns_handle_configure_init(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
-    uint32_t mode = swiptermd_r_u32(&r);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     char hostname[256];
     char cmd_dir[512];
 
@@ -373,19 +336,14 @@ void ns_handle_configure_init(uint32_t req_id, const uint8_t *body, uint32_t len
         return;
     }
 
-    g_daemon.init_mode = mode;
     if (hostname[0] != '\0')
         strcpy(g_daemon.hostname, hostname);
-    if (cmd_dir[0] != '\0' && strcmp(cmd_dir, g_daemon.host_cmd_dir) != 0) {
+    int err = 0;
+    if (cmd_dir[0] != '\0') {
         strcpy(g_daemon.host_cmd_dir, cmd_dir);
-        int err = host_cmd_setup(g_daemon.host_cmd_dir);
-        if (err < 0) {
-            ctrl_send_err_reply(SWIPTERMD_OP_CONFIGURE_INIT, req_id, err);
-            return;
-        }
+        err = host_cmd_setup(g_daemon.host_cmd_dir);
     }
-
-    ctrl_send_err_reply(SWIPTERMD_OP_CONFIGURE_INIT, req_id, 0);
+    ctrl_send_err_reply(SWIPTERMD_OP_CONFIGURE_INIT, req_id, err);
 }
 
 typedef struct init_child_args {
@@ -399,20 +357,6 @@ typedef struct init_child_args {
     int go_rd;
     int err_wr;
 } init_child_args_t;
-
-static void child_fail(int err_wr, int err) {
-    int32_t wire = err < 0 ? err : -EIO;
-    (void)write(err_wr, &wire, sizeof(wire));
-    _exit(127);
-}
-
-static void redirect_stdio(int fd) {
-    dup2(fd, 0);
-    dup2(fd, 1);
-    dup2(fd, 2);
-    if (fd > 2)
-        close(fd);
-}
 
 static void managed_init_signals(sigset_t *set) {
     static const int faults[] = {SIGILL, SIGABRT, SIGFPE, SIGSEGV, SIGBUS, SIGSYS, SIGTRAP};
@@ -481,7 +425,7 @@ static int container_init_entry(void *arg) {
     if (rc == 0)
         rc = container_mount_api();
     if (rc < 0)
-        child_fail(a->err_wr, rc);
+        child_exit_error(a->err_wr, rc);
 
     uint8_t ok = 1;
     (void)write(a->ready_wr, &ok, 1);
@@ -495,7 +439,7 @@ static int container_init_entry(void *arg) {
         (void)setsid();
         int null_fd = open("/dev/null", O_RDWR);
         if (null_fd < 0)
-            child_fail(a->err_wr, -errno);
+            child_exit_error(a->err_wr, -errno);
         redirect_stdio(null_fd);
         close_other_fds(&a->err_wr, 1);
         umask(0022);
@@ -503,7 +447,7 @@ static int container_init_entry(void *arg) {
         managed_init_signals(&waited);
         sigprocmask(SIG_SETMASK, &waited, NULL);
         execve(GUEST_TOOL_PATH, managed_argv, managed_envp);
-        child_fail(a->err_wr, -errno);
+        child_exit_error(a->err_wr, -errno);
     }
 
     (void)setsid();
@@ -511,49 +455,17 @@ static int container_init_entry(void *arg) {
     snprintf(pts_path, sizeof(pts_path), "/dev/pts/%d", a->pts_num);
     int console = open(pts_path, O_RDWR);
     if (console < 0 || ioctl(console, TIOCSCTTY, 0) < 0 || mount(pts_path, "/dev/console", NULL, MS_BIND, NULL) < 0)
-        child_fail(a->err_wr, -errno);
+        child_exit_error(a->err_wr, -errno);
     redirect_stdio(console);
 
     extern char **environ;
     environ = a->envp;
     if (setenv("container", "lxc", 1) < 0 || setenv("NOTIFY_SOCKET", GUEST_NOTIFY_SOCKET, 1) < 0 ||
-        (g_daemon.gpu && setenv("VN_DEBUG", "no_abort", 0) < 0))
-        child_fail(a->err_wr, -errno);
+        (g_daemon.gpu && setenv(GPU_VENUS_ENV_NAME, GPU_VENUS_ENV_VALUE, 0) < 0))
+        child_exit_error(a->err_wr, -errno);
     umask(0022);
     execve(a->path, a->argv, environ);
-    child_fail(a->err_wr, -errno);
-    return 127;
-}
-
-static char **decode_strv(swiptermd_buf_r_t *r) {
-    uint32_t count = swiptermd_r_u32(r);
-    if (r->underflow || count > (r->len - r->pos) / sizeof(uint32_t))
-        return NULL;
-    char **vec = calloc((size_t)count + 1, sizeof(char *));
-    if (!vec)
-        return NULL;
-    for (uint32_t i = 0; i < count; i++) {
-        swiptermd_slice_t s = swiptermd_r_bytes(r);
-        vec[i] = r->underflow ? NULL : malloc((size_t)s.len + 1);
-        if (!vec[i]) {
-            for (uint32_t j = 0; j < i; j++)
-                free(vec[j]);
-            free(vec);
-            return NULL;
-        }
-        if (s.len > 0)
-            memcpy(vec[i], s.ptr, s.len);
-        vec[i][s.len] = '\0';
-    }
-    return vec;
-}
-
-static void free_strv(char **vec) {
-    if (!vec)
-        return;
-    for (size_t i = 0; vec[i]; i++)
-        free(vec[i]);
-    free(vec);
+    child_exit_error(a->err_wr, -errno);
 }
 
 static void close_pipe_end(int *fd) {
@@ -561,12 +473,6 @@ static void close_pipe_end(int *fd) {
         close(*fd);
         *fd = -1;
     }
-}
-
-static int open_init_namespace(pid_t pid, const char *name) {
-    char path[64];
-    snprintf(path, sizeof(path), "/proc/%d/ns/%s", (int)pid, name);
-    return open(path, O_RDONLY | O_CLOEXEC);
 }
 
 void ns_close_namespaces(void) {
@@ -620,7 +526,7 @@ void ns_handle_start_init(uint32_t req_id, const uint8_t *body, uint32_t len) {
         return;
     }
 
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     uint32_t mode = swiptermd_r_u32(&r);
     uint64_t console_token = swiptermd_r_u64(&r);
     uint8_t has_console = swiptermd_r_u8(&r);
@@ -630,18 +536,17 @@ void ns_handle_start_init(uint32_t req_id, const uint8_t *body, uint32_t len) {
         ctrl_send_err_reply(SWIPTERMD_OP_START_INIT, req_id, -EINVAL);
         return;
     }
-    char **argv = decode_strv(&r);
-    char **envp = argv ? decode_strv(&r) : NULL;
+    char **argv = strv_decode(&r);
+    char **envp = argv ? strv_decode(&r) : NULL;
     if (!argv || !envp) {
-        free_strv(argv);
-        free_strv(envp);
+        strv_free(argv);
+        strv_free(envp);
         ctrl_send_err_reply(SWIPTERMD_OP_START_INIT, req_id, -EINVAL);
         return;
     }
 
     int pts_num = -1;
     int rc = 0;
-    g_daemon.init_mode = mode;
     if (mode == SWIPTERMD_INIT_PROCESS) {
         rc = console_open(has_console != 0, console_token, &pts_num);
         if (rc == 0)
@@ -692,11 +597,11 @@ void ns_handle_start_init(uint32_t req_id, const uint8_t *body, uint32_t len) {
     if (rc == 0) {
         uint8_t ready_byte = 0;
         if (read(ready_pipe[0], &ready_byte, 1) == 1) {
-            g_daemon.container_pid_ns_fd = open_init_namespace(pid, "pid");
-            g_daemon.container_mnt_ns_fd = open_init_namespace(pid, "mnt");
-            g_daemon.container_uts_ns_fd = open_init_namespace(pid, "uts");
-            g_daemon.container_ipc_ns_fd = open_init_namespace(pid, "ipc");
-            g_daemon.container_cgroup_ns_fd = open_init_namespace(pid, "cgroup");
+            g_daemon.container_pid_ns_fd = namespace_open(pid, "pid");
+            g_daemon.container_mnt_ns_fd = namespace_open(pid, "mnt");
+            g_daemon.container_uts_ns_fd = namespace_open(pid, "uts");
+            g_daemon.container_ipc_ns_fd = namespace_open(pid, "ipc");
+            g_daemon.container_cgroup_ns_fd = namespace_open(pid, "cgroup");
         }
         uint8_t go = 1;
         (void)write(go_pipe[1], &go, 1);
@@ -718,8 +623,8 @@ void ns_handle_start_init(uint32_t req_id, const uint8_t *body, uint32_t len) {
     close_pipe_end(&go_pipe[1]);
     close_pipe_end(&err_pipe[0]);
     free(stack);
-    free_strv(argv);
-    free_strv(envp);
+    strv_free(argv);
+    strv_free(envp);
 
     if (rc < 0) {
         console_close_all();
@@ -731,7 +636,6 @@ void ns_handle_start_init(uint32_t req_id, const uint8_t *body, uint32_t len) {
     g_daemon.init_mode = mode;
     g_daemon.container_init_pid = pid;
     g_daemon.init_started = true;
-    g_daemon.halted = false;
     ctrl_send_err_reply(SWIPTERMD_OP_START_INIT, req_id, 0);
     if (mode == SWIPTERMD_INIT_MANAGED) {
         ready_announce(SWIPTERMD_READY_LOGIN);
@@ -766,7 +670,6 @@ bool ns_init_is_systemd(void) {
 
 void ns_init_exited(int status) {
     g_daemon.container_init_pid = -1;
-    g_daemon.halted = true;
     readiness_stop();
     ns_close_namespaces();
     console_drain();
@@ -811,7 +714,6 @@ void ns_kill_container(void) {
         int status;
         while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
         g_daemon.container_init_pid = -1;
-        g_daemon.halted = true;
     }
     readiness_stop();
     ns_close_namespaces();

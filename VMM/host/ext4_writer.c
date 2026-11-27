@@ -1,6 +1,8 @@
 #define _DARWIN_C_SOURCE
 
+#include "ext4_format.h"
 #include "host_internal.h"
+#include "host_util.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -22,38 +24,16 @@ enum : uint32_t {
     MIN_BLOCKS = 16384,
     LAST_GROUP_SLACK = 256,
 
-    ROOT_INO = 2,
     JOURNAL_INO = 8,
     FIRST_INO = 11,
     LOST_FOUND_BLOCKS = 4,
     LINK_MAX = 65000,
 
-    EXT4_SUPER_MAGIC = 0xEF53,
-    EXT4_INDEX_FL = 0x00001000,
-    EXT4_EXTENTS_FL = 0x00080000,
-    EXT4_EXTENT_MAGIC = 0xF30A,
-    EXTENT_MAX_LEN = 32768,
     EXTENTS_IN_INODE = 4,
     EXTENTS_PER_BLOCK = (BLOCK_SIZE - 12) / 12,
-    XATTR_MAGIC = 0xEA020000,
-    XATTR_BLOCK_HEADER = 32,
-    XATTR_ENTRY_HEADER = 16,
-    XATTR_IBODY_OFFSET = 128 + INODE_EXTRA_ISIZE,
+    XATTR_IBODY_OFFSET = EXT4_GOOD_OLD_INODE_SIZE + INODE_EXTRA_ISIZE,
     XATTR_IBODY_SPACE = INODE_SIZE - XATTR_IBODY_OFFSET - 4,
-    FAST_SYMLINK_MAX = 60,
 
-    COMPAT_HAS_JOURNAL = 0x0004,
-    COMPAT_EXT_ATTR = 0x0008,
-    COMPAT_DIR_INDEX = 0x0020,
-    INCOMPAT_FILETYPE = 0x0002,
-    INCOMPAT_EXTENTS = 0x0040,
-    INCOMPAT_64BIT = 0x0080,
-    INCOMPAT_FLEX_BG = 0x0200,
-    RO_COMPAT_SPARSE_SUPER = 0x0001,
-    RO_COMPAT_LARGE_FILE = 0x0002,
-    RO_COMPAT_HUGE_FILE = 0x0008,
-    RO_COMPAT_DIR_NLINK = 0x0020,
-    RO_COMPAT_EXTRA_ISIZE = 0x0040,
     DEFM_XATTR_USER = 0x0004,
     DEFM_ACL = 0x0008,
     FLAGS_UNSIGNED_HASH = 0x0002,
@@ -66,9 +46,6 @@ enum : uint32_t {
     DX_ROOT_LIMIT = (BLOCK_SIZE - DX_ROOT_ENTRIES) / 8,
     DX_NODE_LIMIT = (BLOCK_SIZE - DX_NODE_ENTRIES) / 8,
     JNL_BACKUP_BLOCKS = 1,
-
-    JBD2_MAGIC = 0xC03B3998,
-    JBD2_SUPERBLOCK_V2 = 4,
 
     STAGE_SIZE = 1U << 20,
     HOLE_MIN_BLOCKS = 16,
@@ -132,37 +109,15 @@ struct ext4_writer {
     int64_t now;
 };
 
-static inline void put_le16(uint8_t *p, uint16_t v) {
-    p[0] = (uint8_t)v;
-    p[1] = (uint8_t)(v >> 8);
-}
-
-static inline void put_le32(uint8_t *p, uint32_t v) {
-    p[0] = (uint8_t)v;
-    p[1] = (uint8_t)(v >> 8);
-    p[2] = (uint8_t)(v >> 16);
-    p[3] = (uint8_t)(v >> 24);
-}
-
-static inline void put_be32(uint8_t *p, uint32_t v) {
-    p[0] = (uint8_t)(v >> 24);
-    p[1] = (uint8_t)(v >> 16);
-    p[2] = (uint8_t)(v >> 8);
-    p[3] = (uint8_t)v;
-}
-
-static inline uint32_t get_le32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
 static inline size_t align4(size_t v) {
     return (v + 3U) & ~(size_t)3U;
 }
 
-static int pwrite_all(int fd, const void *buf, size_t len, uint64_t off) {
-    const uint8_t *p = buf;
+static int write_blocks(ext4_writer_t *w, uint64_t block, const void *data, size_t len) {
+    const uint8_t *p = data;
+    uint64_t off = block * BLOCK_SIZE;
     while (len > 0) {
-        ssize_t n = pwrite(fd, p, len, (off_t)off);
+        ssize_t n = pwrite(w->fd, p, len, (off_t)off);
         if (n < 0) {
             if (errno == EINTR) {
                 continue;
@@ -174,17 +129,6 @@ static int pwrite_all(int fd, const void *buf, size_t len, uint64_t off) {
         off += (uint64_t)n;
     }
     return 0;
-}
-
-static int write_blocks(ext4_writer_t *w, uint64_t block, const void *data, size_t len) {
-    return pwrite_all(w->fd, data, len, block * BLOCK_SIZE);
-}
-
-static bool is_power_of(uint32_t n, uint32_t base) {
-    while (n > 1 && n % base == 0) {
-        n /= base;
-    }
-    return n == 1;
 }
 
 static bool group_has_super(uint32_t group) {
@@ -376,8 +320,8 @@ static int alloc_blocks(ext4_writer_t *w, uint64_t want, uint64_t *phys_out, uin
         if (got > want) {
             got = want;
         }
-        if (got > EXTENT_MAX_LEN) {
-            got = EXTENT_MAX_LEN;
+        if (got > EXT4_EXTENT_INIT_MAX_LEN) {
+            got = EXT4_EXTENT_INIT_MAX_LEN;
         }
         *phys_out = w->cursor;
         *got_out = (uint32_t)got;
@@ -390,7 +334,7 @@ static int node_add_extent(vfs_node_t *node, uint64_t logical, uint64_t physical
     if (node->extent_count > 0) {
         vfs_extent_t *last = &node->extents[node->extent_count - 1];
         if (last->logical + last->length == logical && last->physical + last->length == physical &&
-            (uint64_t)last->length + length <= EXTENT_MAX_LEN) {
+            (uint64_t)last->length + length <= EXT4_EXTENT_INIT_MAX_LEN) {
             last->length += length;
             return 0;
         }
@@ -589,9 +533,9 @@ static int number_inodes(ext4_writer_t *w, vfs_node_t *root, numbering_t *n) {
         return -ENOMEM;
     }
     uint32_t next = FIRST_INO;
-    root->ino = ROOT_INO;
-    n->by_ino[ROOT_INO] = root;
-    n->parent[ROOT_INO] = ROOT_INO;
+    root->ino = EXT4_ROOT_INO;
+    n->by_ino[EXT4_ROOT_INO] = root;
+    n->parent[EXT4_ROOT_INO] = EXT4_ROOT_INO;
     if (w->lost_found) {
         next++;
     }
@@ -602,7 +546,7 @@ static int number_inodes(ext4_writer_t *w, vfs_node_t *root, numbering_t *n) {
     }
     size_t queue_cap = cap;
     uint32_t queue_len = 0;
-    queue[queue_len++] = ROOT_INO;
+    queue[queue_len++] = EXT4_ROOT_INO;
     int rc = 0;
     while (rc == 0 && queue_head < queue_len) {
         uint32_t dir_ino = queue[queue_head++];
@@ -1066,7 +1010,7 @@ static int compare_xattrs(const void *a, const void *b) {
 static size_t xattr_footprint(const vfs_xattr_t *const *xattrs, size_t count) {
     size_t total = 4;
     for (size_t i = 0; i < count; i++) {
-        total += align4(XATTR_ENTRY_HEADER + xattrs[i]->name_len) + align4(xattrs[i]->value_len);
+        total += align4(EXT4_XATTR_ENTRY_SIZE + xattrs[i]->name_len) + align4(xattrs[i]->value_len);
     }
     return total;
 }
@@ -1094,8 +1038,8 @@ static uint32_t xattr_emit(uint8_t *base, size_t entries_off, size_t end, const 
         put_le32(p + 4, 0);
         put_le32(p + 8, x->value_len);
         put_le32(p + 12, hash);
-        memcpy(p + XATTR_ENTRY_HEADER, x->payload, x->name_len);
-        entry += align4(XATTR_ENTRY_HEADER + x->name_len);
+        memcpy(p + EXT4_XATTR_ENTRY_SIZE, x->payload, x->name_len);
+        entry += align4(EXT4_XATTR_ENTRY_SIZE + x->name_len);
         if (hash == 0) {
             block_hash_valid = false;
         }
@@ -1124,10 +1068,10 @@ static int place_xattrs(ext4_writer_t *w, const vfs_node_t *node, uint8_t *raw, 
     qsort(list, count, sizeof(*list), compare_xattrs);
     int rc = 0;
     if (xattr_footprint(list, count) <= XATTR_IBODY_SPACE) {
-        put_le32(raw + XATTR_IBODY_OFFSET, XATTR_MAGIC);
+        put_le32(raw + XATTR_IBODY_OFFSET, EXT4_XATTR_MAGIC);
         xattr_emit(raw + XATTR_IBODY_OFFSET + 4, 0, XATTR_IBODY_SPACE, list, count);
     } else {
-        while (count > 0 && XATTR_BLOCK_HEADER + xattr_footprint(list, count) > BLOCK_SIZE) {
+        while (count > 0 && EXT4_XATTR_BLOCK_HEADER_SIZE + xattr_footprint(list, count) > BLOCK_SIZE) {
             size_t largest = 0;
             for (size_t k = 1; k < count; k++) {
                 if (list[k]->value_len > list[largest]->value_len) {
@@ -1142,10 +1086,10 @@ static int place_xattrs(ext4_writer_t *w, const vfs_node_t *node, uint8_t *raw, 
         uint32_t got = 0;
         rc = block ? alloc_blocks(w, 1, &phys, &got) : -ENOMEM;
         if (rc == 0) {
-            put_le32(block + 0, XATTR_MAGIC);
+            put_le32(block + 0, EXT4_XATTR_MAGIC);
             put_le32(block + 4, 1);
             put_le32(block + 8, 1);
-            put_le32(block + 12, xattr_emit(block, XATTR_BLOCK_HEADER, BLOCK_SIZE, list, count));
+            put_le32(block + 12, xattr_emit(block, EXT4_XATTR_BLOCK_HEADER_SIZE, BLOCK_SIZE, list, count));
             rc = write_blocks(w, phys, block, BLOCK_SIZE);
         }
         free(block);
@@ -1253,7 +1197,7 @@ static int build_node_inode(ext4_writer_t *w, const numbering_t *n, vfs_node_t *
             return -ENAMETOOLONG;
         }
         shape.size = len;
-        if (len < FAST_SYMLINK_MAX) {
+        if (len < EXT4_FAST_SYMLINK_MAX) {
             memcpy(raw + 0x28, node->symlink, len);
         } else {
             uint8_t *block = calloc(1, BLOCK_SIZE);
@@ -1289,10 +1233,14 @@ static int build_node_inode(ext4_writer_t *w, const numbering_t *n, vfs_node_t *
     return 0;
 }
 
-static void build_journal_inode(ext4_writer_t *w, uint8_t *raw) {
+static void put_journal_extent(const ext4_writer_t *w, uint8_t *iblock) {
     vfs_extent_t extent = {.logical = 0, .physical = w->journal_start, .length = w->journal_blocks};
-    put_extent_header(raw + 0x28, 1, EXTENTS_IN_INODE, 0);
-    put_extent_leaf(raw + 0x28 + 12, &extent);
+    put_extent_header(iblock, 1, EXTENTS_IN_INODE, 0);
+    put_extent_leaf(iblock + 12, &extent);
+}
+
+static void build_journal_inode(ext4_writer_t *w, uint8_t *raw) {
+    put_journal_extent(w, raw + 0x28);
     inode_shape_t shape = {
         .mode = S_IFREG | 0600,
         .links = 1,
@@ -1442,10 +1390,13 @@ static void build_superblock(ext4_writer_t *w, uint8_t *sb, uint32_t group, uint
     put_le32(sb + 0x54, FIRST_INO);
     put_le16(sb + 0x58, INODE_SIZE);
     put_le16(sb + 0x5A, (uint16_t)group);
-    put_le32(sb + 0x5C, COMPAT_HAS_JOURNAL | COMPAT_EXT_ATTR | COMPAT_DIR_INDEX);
-    put_le32(sb + 0x60, INCOMPAT_FILETYPE | INCOMPAT_EXTENTS | INCOMPAT_64BIT | INCOMPAT_FLEX_BG);
-    put_le32(sb + 0x64, RO_COMPAT_SPARSE_SUPER | RO_COMPAT_LARGE_FILE | RO_COMPAT_HUGE_FILE |
-                            RO_COMPAT_DIR_NLINK | RO_COMPAT_EXTRA_ISIZE);
+    put_le32(sb + 0x5C, EXT4_FEATURE_COMPAT_HAS_JOURNAL | EXT4_FEATURE_COMPAT_EXT_ATTR |
+                            EXT4_FEATURE_COMPAT_DIR_INDEX);
+    put_le32(sb + 0x60, EXT4_FEATURE_INCOMPAT_FILETYPE | EXT4_FEATURE_INCOMPAT_EXTENTS | EXT4_FEATURE_INCOMPAT_64BIT |
+                            EXT4_FEATURE_INCOMPAT_FLEX_BG);
+    put_le32(sb + 0x64, EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER | EXT4_FEATURE_RO_COMPAT_LARGE_FILE |
+                            EXT4_FEATURE_RO_COMPAT_HUGE_FILE | EXT4_FEATURE_RO_COMPAT_DIR_NLINK |
+                            EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE);
     memcpy(sb + 0x68, w->uuid, 16);
     put_le32(sb + 0xE0, JOURNAL_INO);
     memcpy(sb + 0xEC, w->hash_seed, 16);
@@ -1497,9 +1448,7 @@ static int write_descriptors_and_supers(ext4_writer_t *w) {
     }
 
     uint8_t journal_iblock[60] = {0};
-    vfs_extent_t extent = {.logical = 0, .physical = w->journal_start, .length = w->journal_blocks};
-    put_extent_header(journal_iblock, 1, EXTENTS_IN_INODE, 0);
-    put_extent_leaf(journal_iblock + 12, &extent);
+    put_journal_extent(w, journal_iblock);
 
     int rc = 0;
     for (uint32_t g = 0; g < w->groups && rc == 0; g++) {
@@ -1583,32 +1532,22 @@ int ext4_writer_finish(ext4_writer_t *w, vfs_node_t *root) {
     return rc;
 }
 
-int ext4_writer_read(ext4_writer_t *w, const vfs_node_t *file, uint64_t offset, void *buf, size_t len) {
-    if (w->file == file) {
-        return -EBUSY;
-    }
-    memset(buf, 0, len);
-    uint64_t end = offset + len;
+int ext4_writer_read(ext4_writer_t *w, const vfs_node_t *file, void *buf) {
+    memset(buf, 0, (size_t)file->size);
     for (size_t i = 0; i < file->extent_count; i++) {
         const vfs_extent_t *e = &file->extents[i];
         uint64_t start = e->logical * BLOCK_SIZE;
-        uint64_t stop = (e->logical + e->length) * BLOCK_SIZE;
-        if (stop <= offset || start >= end) {
+        if (start >= file->size) {
             continue;
         }
-        uint64_t from = start > offset ? start : offset;
-        uint64_t to = stop < end ? stop : end;
-        uint8_t *out = (uint8_t *)buf + (from - offset);
-        uint64_t disk = e->physical * BLOCK_SIZE + (from - start);
-        for (uint64_t done = 0; done < to - from;) {
-            ssize_t n = pread(w->fd, out + done, (size_t)(to - from - done), (off_t)(disk + done));
-            if (n < 0 && errno == EINTR) {
-                continue;
-            }
-            if (n <= 0) {
-                return n < 0 ? -errno : -EIO;
-            }
-            done += (uint64_t)n;
+        uint64_t stop = (e->logical + e->length) * BLOCK_SIZE;
+        size_t len = (size_t)((stop < file->size ? stop : file->size) - start);
+        ssize_t n = pread_all(w->fd, (uint8_t *)buf + start, len, (off_t)(e->physical * BLOCK_SIZE));
+        if (n < 0) {
+            return (int)n;
+        }
+        if ((size_t)n != len) {
+            return -EIO;
         }
     }
     return 0;

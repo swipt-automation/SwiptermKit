@@ -10,25 +10,10 @@ public protocol LinuxCharacterDevice: Sendable {
     func open(access: LinuxFileAccess) throws -> any LinuxCharacterDeviceFile
 }
 
-/// Serves one open file description of a device. The methods run synchronously on a host worker
-/// thread while the guest system call waits. An empty result from `read` is end of file; a thrown
-/// `LinuxError` becomes the errno of the system call, and any other error becomes `EIO`.
-public protocol LinuxCharacterDeviceFile: AnyObject, Sendable {
+public protocol LinuxCharacterDeviceFile: Sendable {
     func read(maxLength: Int) throws -> Data
     func write(_ data: Data) throws -> Int
     func close()
-}
-
-extension LinuxCharacterDeviceFile {
-    public func read(maxLength: Int) throws -> Data {
-        throw LinuxError.EINVAL
-    }
-
-    public func write(_ data: Data) throws -> Int {
-        throw LinuxError.EINVAL
-    }
-
-    public func close() {}
 }
 
 final class DeviceBox: Sendable {

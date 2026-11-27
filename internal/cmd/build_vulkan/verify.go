@@ -10,6 +10,7 @@ import (
 
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/swipt-automation/SwiptermKit/internal/tool"
 )
 
 func verify() error {
@@ -28,14 +29,14 @@ func verify() error {
 
 func verifyFramework(name string, framework string, slice slice) (int, error) {
 	binary := filepath.Join(framework, name)
-	architectures, err := output(exec.Command("lipo", "-archs", binary))
+	architectures, err := tool.Output(exec.Command("lipo", "-archs", binary))
 	if err != nil {
 		return 0, err
 	}
 	if architectures != "arm64" {
 		return 0, E.New("architectures: ", architectures)
 	}
-	buildVersion, err := output(exec.Command("vtool", "-show-build", binary))
+	buildVersion, err := tool.Output(exec.Command("vtool", "-show-build", binary))
 	if err != nil {
 		return 0, err
 	}
@@ -48,7 +49,7 @@ func verifyFramework(name string, framework string, slice slice) (int, error) {
 		return 0, E.New("build version: ", fields["platform"], " ", fields["minos"])
 	}
 	for key, expected := range map[string]string{"CFBundleExecutable": name, "MinimumOSVersion": iosVersion} {
-		value, err := output(exec.Command("plutil", "-extract", key, "raw", filepath.Join(framework, "Info.plist")))
+		value, err := tool.Output(exec.Command("plutil", "-extract", key, "raw", filepath.Join(framework, "Info.plist")))
 		if err != nil {
 			return 0, err
 		}
@@ -56,14 +57,14 @@ func verifyFramework(name string, framework string, slice slice) (int, error) {
 			return 0, E.New(key, ": ", value)
 		}
 	}
-	installName, err := output(exec.Command("otool", "-D", binary))
+	installName, err := tool.Output(exec.Command("otool", "-D", binary))
 	if err != nil {
 		return 0, err
 	}
 	if lines := strings.Split(installName, "\n"); lines[len(lines)-1] != "@rpath/"+name+".framework/"+name {
 		return 0, E.New("install name: ", lines[len(lines)-1])
 	}
-	exportOutput, err := output(exec.Command("nm", "-gUj", binary))
+	exportOutput, err := tool.Output(exec.Command("nm", "-gUj", binary))
 	if err != nil {
 		return 0, err
 	}
@@ -72,14 +73,14 @@ func verifyFramework(name string, framework string, slice slice) (int, error) {
 	if !slices.Equal(exports, icdExports) {
 		return 0, E.New("exports: ", strings.Join(exports, " "))
 	}
-	libraries, err := output(exec.Command("otool", "-L", binary))
+	libraries, err := tool.Output(exec.Command("otool", "-L", binary))
 	if err != nil {
 		return 0, err
 	}
 	if strings.Contains(libraries, "/PrivateFrameworks/") {
 		return 0, E.New("links a private framework:\n", libraries)
 	}
-	symbols, err := output(exec.Command("nm", "-m", binary))
+	symbols, err := tool.Output(exec.Command("nm", "-m", binary))
 	if err != nil {
 		return 0, err
 	}
@@ -108,9 +109,9 @@ func verifyFramework(name string, framework string, slice slice) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	err = common.Error(output(exec.Command("codesign", "--force", "--sign", "-", signedFramework)))
+	err = common.Error(tool.Output(exec.Command("codesign", "--force", "--sign", "-", signedFramework)))
 	if err == nil {
-		err = common.Error(output(exec.Command("codesign", "--verify", "--strict", signedFramework)))
+		err = common.Error(tool.Output(exec.Command("codesign", "--verify", "--strict", signedFramework)))
 	}
 	return weakImports, err
 }

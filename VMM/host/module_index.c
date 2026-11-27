@@ -1,6 +1,7 @@
 #define _DARWIN_C_SOURCE
 
 #include "host_internal.h"
+#include "host_util.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -10,13 +11,8 @@
 #include <sys/stat.h>
 
 enum {
-    MODULE_FILE_LIMIT = 64 << 20,
-    MODULE_NAME_MAX = 63,
     MODULE_TREE_DEPTH = 32,
 };
-
-static const char *const MODULE_BASES[] = {"/lib/modules", "/usr/lib/modules"};
-static const char *const MODULE_SUFFIXES[] = {".ko", ".ko.gz", ".ko.xz", ".ko.zst"};
 
 typedef struct module {
     char *path;
@@ -62,62 +58,28 @@ static int text_append(text_t *t, const char *s, size_t len) {
     return 0;
 }
 
-static int text_add(text_t *t, const char *s) {
-    return text_append(t, s, strlen(s));
-}
-
-static void normalize(char *name) {
-    for (char *p = name; *p; p++) {
-        if (*p == '-') {
-            *p = '_';
-        }
-    }
-}
-
-static size_t module_suffix(const char *name, size_t len) {
-    for (size_t i = 0; i < sizeof(MODULE_SUFFIXES) / sizeof(MODULE_SUFFIXES[0]); i++) {
-        size_t suffix = strlen(MODULE_SUFFIXES[i]);
-        if (len > suffix && memcmp(name + len - suffix, MODULE_SUFFIXES[i], suffix) == 0) {
-            return suffix;
-        }
-    }
-    return 0;
-}
-
-static uint16_t le16(const uint8_t *p) {
-    return (uint16_t)(p[0] | (p[1] << 8));
-}
-
-static uint32_t le32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
-static uint64_t le64(const uint8_t *p) {
-    return (uint64_t)le32(p) | ((uint64_t)le32(p + 4) << 32);
-}
-
 static bool find_modinfo(const uint8_t *elf, size_t len, const char **data_out, size_t *size_out) {
     if (len < 64 || memcmp(elf, "\177ELF", 4) != 0 || elf[4] != 2 || elf[5] != 1) {
         return false;
     }
-    uint64_t shoff = le64(elf + 0x28);
-    uint16_t shentsize = le16(elf + 0x3A);
-    uint16_t shnum = le16(elf + 0x3C);
-    uint16_t shstrndx = le16(elf + 0x3E);
+    uint64_t shoff = get_le64(elf + 0x28);
+    uint16_t shentsize = get_le16(elf + 0x3A);
+    uint16_t shnum = get_le16(elf + 0x3C);
+    uint16_t shstrndx = get_le16(elf + 0x3E);
     if (shentsize < 64 || shstrndx >= shnum || shoff > len || (uint64_t)shnum * shentsize > len - shoff) {
         return false;
     }
     const uint8_t *strtab = elf + shoff + (uint64_t)shstrndx * shentsize;
-    uint64_t names = le64(strtab + 0x18);
-    uint64_t names_size = le64(strtab + 0x20);
+    uint64_t names = get_le64(strtab + 0x18);
+    uint64_t names_size = get_le64(strtab + 0x20);
     if (names > len || names_size > len - names) {
         return false;
     }
     for (uint16_t i = 0; i < shnum; i++) {
         const uint8_t *sh = elf + shoff + (uint64_t)i * shentsize;
-        uint32_t name = le32(sh);
-        uint64_t offset = le64(sh + 0x18);
-        uint64_t size = le64(sh + 0x20);
+        uint32_t name = get_le32(sh);
+        uint64_t offset = get_le64(sh + 0x18);
+        uint64_t size = get_le64(sh + 0x20);
         if (name >= names_size || strncmp((const char *)elf + names + name, ".modinfo",
                                           (size_t)(names_size - name)) != 0) {
             continue;
@@ -183,7 +145,7 @@ static int add_module(ext4_writer_t *w, vfs_node_t *node, const char *path, cons
     if (!raw) {
         return -ENOMEM;
     }
-    int rc = ext4_writer_read(w, node, 0, raw, raw_size);
+    int rc = ext4_writer_read(w, node, raw);
     uint8_t *elf = NULL;
     size_t elf_size = 0;
     if (rc == 0) {
@@ -215,7 +177,7 @@ static int add_module(ext4_writer_t *w, vfs_node_t *node, const char *path, cons
     snprintf(m->name, sizeof(m->name), "%.*s", (int)(stem < MODULE_NAME_MAX ? stem : MODULE_NAME_MAX), leaf);
     rc = m->path ? parse_modinfo(m, info, info_size) : -ENOMEM;
     free(elf);
-    normalize(m->name);
+    normalize_module_name(m->name, strlen(m->name), m->name, sizeof(m->name));
     set->count++;
     return rc;
 }
@@ -234,7 +196,7 @@ static int collect_modules(ext4_writer_t *w, vfs_node_t *dir, char *path, size_t
             path[path_len + de->name_len] = '/';
             rc = collect_modules(w, de->node, path, path_len + de->name_len + 1, depth + 1, set);
         } else if (S_ISREG(de->node->mode)) {
-            size_t suffix = module_suffix(de->name, de->name_len);
+            size_t suffix = module_suffix_len(de->name, de->name_len);
             if (suffix > 0) {
                 rc = add_module(w, de->node, path, de->name, suffix, set);
             }
@@ -284,7 +246,8 @@ static int link_dependencies(module_set_t *set) {
         }
         char *save = NULL;
         for (char *name = strtok_r(m->depends, ",", &save); name; name = strtok_r(NULL, ",", &save)) {
-            normalize(name);
+            size_t len = strlen(name);
+            normalize_module_name(name, len, name, len + 1);
             ssize_t index = find_module(set, name);
             if (index >= 0 && (size_t)index != i) {
                 m->deps[m->dep_count++] = (size_t)index;
@@ -318,36 +281,40 @@ static int write_dep(module_set_t *set, text_t *out) {
         }
         set->order_count = 0;
         visit(set, i, 0);
-        rc = text_add(out, set->items[i].path);
-        rc = rc == 0 ? text_add(out, ":") : rc;
+        const char *path = set->items[i].path;
+        rc = text_append(out, path, strlen(path));
+        rc = rc == 0 ? text_append(out, ":", 1) : rc;
         for (size_t k = set->order_count - 1; k > 0 && rc == 0; k--) {
-            rc = text_add(out, " ");
-            rc = rc == 0 ? text_add(out, set->items[set->order[k - 1]].path) : rc;
+            const char *dep = set->items[set->order[k - 1]].path;
+            rc = text_append(out, " ", 1);
+            rc = rc == 0 ? text_append(out, dep, strlen(dep)) : rc;
         }
-        rc = rc == 0 ? text_add(out, "\n") : rc;
+        rc = rc == 0 ? text_append(out, "\n", 1) : rc;
     }
     return rc;
 }
 
 static int write_lines(const module_set_t *set, bool aliases, text_t *out) {
-    int rc = text_add(out, aliases ? "# Aliases extracted from modules themselves.\n"
-                                   : "# Soft dependencies extracted from modules themselves.\n");
+    const char *header = aliases ? "# Aliases extracted from modules themselves.\n"
+                                 : "# Soft dependencies extracted from modules themselves.\n";
+    const char *kind = aliases ? "alias " : "softdep ";
+    int rc = text_append(out, header, strlen(header));
     for (size_t i = 0; i < set->count && rc == 0; i++) {
         const module_t *m = &set->items[i];
         const char *values = aliases ? m->aliases : m->softdeps;
         for (const char *line = values; line && *line && rc == 0;) {
             size_t len = strcspn(line, "\n");
-            rc = text_add(out, aliases ? "alias " : "softdep ");
+            rc = text_append(out, kind, strlen(kind));
             if (aliases) {
                 rc = rc == 0 ? text_append(out, line, len) : rc;
-                rc = rc == 0 ? text_add(out, " ") : rc;
-                rc = rc == 0 ? text_add(out, m->name) : rc;
+                rc = rc == 0 ? text_append(out, " ", 1) : rc;
+                rc = rc == 0 ? text_append(out, m->name, strlen(m->name)) : rc;
             } else {
-                rc = rc == 0 ? text_add(out, m->name) : rc;
-                rc = rc == 0 ? text_add(out, " ") : rc;
+                rc = rc == 0 ? text_append(out, m->name, strlen(m->name)) : rc;
+                rc = rc == 0 ? text_append(out, " ", 1) : rc;
                 rc = rc == 0 ? text_append(out, line, len) : rc;
             }
-            rc = rc == 0 ? text_add(out, "\n") : rc;
+            rc = rc == 0 ? text_append(out, "\n", 1) : rc;
             line += len + (line[len] == '\n');
         }
     }
@@ -376,7 +343,7 @@ static int dep_matches_modules(ext4_writer_t *w, vfs_node_t *root, const char *d
     size_t size = (size_t)dep->size;
     char *data = malloc(size + 1);
     char *path = malloc(PATH_MAX);
-    int rc = data && path ? ext4_writer_read(w, dep, 0, data, size) : -ENOMEM;
+    int rc = data && path ? ext4_writer_read(w, dep, data) : -ENOMEM;
     if (rc == 0) {
         data[size] = '\0';
         *matches = true;
@@ -387,7 +354,7 @@ static int dep_matches_modules(ext4_writer_t *w, vfs_node_t *root, const char *d
                 int name_len = (int)(colon - line);
                 int n = line[0] == '/' ? snprintf(path, PATH_MAX, "%.*s", name_len, line)
                                        : snprintf(path, PATH_MAX, "%s/%.*s", dir_path, name_len, line);
-                vfs_node_t *module = n < PATH_MAX ? vfs_find(root, path, true) : NULL;
+                vfs_node_t *module = n < PATH_MAX ? vfs_find(root, path) : NULL;
                 *matches = module && S_ISREG(module->mode);
             }
             line += len + (line[len] == '\n');
@@ -438,13 +405,13 @@ static int index_release(ext4_writer_t *w, vfs_node_t *root, vfs_node_t *dir, co
 }
 
 int module_index_build(ext4_writer_t *w, vfs_node_t *root) {
-    vfs_node_t *seen[2] = {NULL, NULL};
+    vfs_node_t *previous = NULL;
     for (size_t b = 0; b < 2; b++) {
-        vfs_node_t *base = vfs_find(root, MODULE_BASES[b], true);
-        if (!base || !S_ISDIR(base->mode) || base == seen[0]) {
+        vfs_node_t *base = vfs_find(root, MODULE_BASES[b]);
+        if (!base || !S_ISDIR(base->mode) || base == previous) {
             continue;
         }
-        seen[b] = base;
+        previous = base;
         for (size_t i = 0; i < base->child_count; i++) {
             const vfs_dirent_t *release = &base->children[i];
             if (!S_ISDIR(release->node->mode)) {

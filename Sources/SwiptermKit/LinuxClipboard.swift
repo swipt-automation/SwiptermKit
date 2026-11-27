@@ -1,8 +1,8 @@
 import Foundation
 
 public struct LinuxClipboardItem: Sendable {
-    public var mime: String
-    public var data: Data
+    public let mime: String
+    public let data: Data
 
     public init(mime: String, data: Data) {
         self.mime = mime

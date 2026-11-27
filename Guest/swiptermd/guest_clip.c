@@ -1,5 +1,8 @@
 #define _GNU_SOURCE
 
+#include "guest_ipc.h"
+#include "protocol.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -13,13 +16,6 @@
 #include <unistd.h>
 
 #define CLIPBOARD_PATH "/dev/clipboard"
-#define CLIPBOARD_SOCKET "/run/host/clipboard.sock"
-
-enum {
-    CLIP_SOCK_LIST = 1,
-    CLIP_SOCK_READ = 2,
-    CLIP_SOCK_WRITE = 3,
-};
 
 typedef struct buffer {
     char *data;
@@ -28,26 +24,6 @@ typedef struct buffer {
 } buffer_t;
 
 static const char *program;
-
-static uint16_t get_be16(const uint8_t *p) {
-    return (uint16_t)(((uint16_t)p[0] << 8) | (uint16_t)p[1]);
-}
-
-static uint32_t get_be32(const uint8_t *p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
-}
-
-static void put_be16(uint8_t *p, uint16_t v) {
-    p[0] = (uint8_t)(v >> 8);
-    p[1] = (uint8_t)v;
-}
-
-static void put_be32(uint8_t *p, uint32_t v) {
-    p[0] = (uint8_t)(v >> 24);
-    p[1] = (uint8_t)(v >> 16);
-    p[2] = (uint8_t)(v >> 8);
-    p[3] = (uint8_t)v;
-}
 
 static int fail(const char *subject) {
     fprintf(stderr, "%s: %s: %s\n", program, subject, strerror(errno));
@@ -99,47 +75,9 @@ static void trim_newline(buffer_t *buffer) {
         buffer->len--;
 }
 
-static int write_all(int fd, const void *data, size_t len) {
-    const uint8_t *p = data;
-    while (len > 0) {
-        ssize_t n = write(fd, p, len);
-        if (n < 0) {
-            if (errno == EINTR)
-                continue;
-            return -1;
-        }
-        p += (size_t)n;
-        len -= (size_t)n;
-    }
-    return 0;
-}
-
-static int read_exact(int fd, void *buf, size_t len) {
-    uint8_t *p = buf;
-    while (len > 0) {
-        ssize_t n = read(fd, p, len);
-        if (n < 0) {
-            if (errno == EINTR)
-                continue;
-            return -1;
-        }
-        if (n == 0) {
-            errno = EPIPE;
-            return -1;
-        }
-        p += (size_t)n;
-        len -= (size_t)n;
-    }
-    return 0;
-}
-
-static int read_stdin(buffer_t *buffer) {
-    return buffer_read(buffer, STDIN_FILENO) < 0 ? fail("stdin") : 0;
-}
-
 static int emit(const buffer_t *buffer, bool newline) {
-    if (write_all(STDOUT_FILENO, buffer->data, buffer->len) < 0 ||
-        (newline && write_all(STDOUT_FILENO, "\n", 1) < 0))
+    if (write_all_blocking(STDOUT_FILENO, buffer->data, buffer->len) < 0 ||
+        (newline && write_all_blocking(STDOUT_FILENO, "\n", 1) < 0))
         return fail("stdout");
     return 0;
 }
@@ -163,14 +101,7 @@ static const char *detect_mime(const buffer_t *buffer) {
 }
 
 static int connect_clip_socket(void) {
-    const char *override_sock = getenv("SWIPTERM_CLIPBOARD_SOCKET");
-    const char *sock_path = (override_sock && override_sock[0]) ? override_sock : CLIPBOARD_SOCKET;
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    if (strlen(sock_path) >= sizeof(addr.sun_path))
-        return -1;
-    strcpy(addr.sun_path, sock_path);
+    struct sockaddr_un addr = {.sun_family = AF_UNIX, .sun_path = GUEST_CLIPBOARD_SOCKET};
     int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
         return -1;
@@ -185,45 +116,37 @@ static int load(buffer_t *buffer, bool primary, const char *mime, char *resolved
     int sfd = connect_clip_socket();
     if (sfd >= 0) {
         size_t mlen = mime ? strlen(mime) : 0;
-        if (mlen >= 256) {
+        if (mlen >= CLIP_MAX_MIME_LEN) {
             close(sfd);
-            errno = EINVAL;
             return -EINVAL;
         }
-        uint8_t hdr[8] = {CLIP_SOCK_READ, primary ? 1 : 0, 0, 0, 0, 0, 0, 0};
-        put_be16(hdr + 2, (uint16_t)mlen);
-        if (write_all(sfd, hdr, sizeof(hdr)) < 0 || (mlen > 0 && write_all(sfd, mime, mlen) < 0)) {
-            int err = -errno;
-            close(sfd);
-            return err;
-        }
+        uint8_t hdr[CLIP_SOCK_HEADER_SIZE] = {CLIP_SOCK_READ, primary ? 1 : 0};
+        swiptermd_put_be16(hdr + 2, (uint16_t)mlen);
         uint8_t st_buf[4];
-        if (read_exact(sfd, st_buf, 4) < 0) {
-            int err = -errno;
-            close(sfd);
-            return err;
-        }
-        int32_t st = (int32_t)get_be32(st_buf);
-        if (st < 0) {
-            close(sfd);
-            return st;
-        }
         uint8_t rlen_buf[2];
-        if (read_exact(sfd, rlen_buf, 2) < 0) {
-            int err = -errno;
+        int rc = write_all_blocking(sfd, hdr, sizeof(hdr));
+        if (rc == 0)
+            rc = write_all_blocking(sfd, mime, mlen);
+        if (rc == 0)
+            rc = read_all_blocking(sfd, st_buf, sizeof(st_buf));
+        if (rc == 0)
+            rc = (int32_t)swiptermd_get_be32(st_buf);
+        if (rc == 0)
+            rc = read_all_blocking(sfd, rlen_buf, sizeof(rlen_buf));
+        if (rc < 0) {
             close(sfd);
-            return err;
+            return rc;
         }
-        uint16_t rlen = get_be16(rlen_buf);
-        char rbuf[256];
-        if (rlen >= sizeof(rbuf) || (rlen > 0 && read_exact(sfd, rbuf, rlen) < 0)) {
+        uint16_t rlen = swiptermd_get_be16(rlen_buf);
+        char rbuf[CLIP_MAX_MIME_LEN];
+        if (rlen >= sizeof(rbuf) || read_all_blocking(sfd, rbuf, rlen) < 0) {
             close(sfd);
             return -EIO;
         }
         rbuf[rlen] = '\0';
-        if (resolved_mime && resolved_cap > 0)
+        if (resolved_mime)
             snprintf(resolved_mime, resolved_cap, "%s", rbuf);
-        int rc = buffer_read(buffer, sfd) < 0 ? -errno : 0;
+        rc = buffer_read(buffer, sfd) < 0 ? -errno : 0;
         close(sfd);
         return rc;
     }
@@ -235,7 +158,7 @@ static int load(buffer_t *buffer, bool primary, const char *mime, char *resolved
         return -errno;
     int rc = buffer_read(buffer, fd) < 0 ? -errno : 0;
     close(fd);
-    if (rc == 0 && resolved_mime && resolved_cap > 0)
+    if (rc == 0 && resolved_mime)
         snprintf(resolved_mime, resolved_cap, "text/plain;charset=utf-8");
     return rc;
 }
@@ -244,33 +167,36 @@ static int store(const buffer_t *buffer, bool primary, const char *mime) {
     int sfd = connect_clip_socket();
     if (sfd >= 0) {
         size_t mlen = mime ? strlen(mime) : 0;
-        if (mlen >= 256) {
+        if (mlen >= CLIP_MAX_MIME_LEN) {
             close(sfd);
             errno = EINVAL;
             return fail("mime");
         }
-        uint8_t hdr[8] = {CLIP_SOCK_WRITE, primary ? 1 : 0, 0, 0, 0, 0, 0, 0};
-        put_be16(hdr + 2, (uint16_t)mlen);
-        put_be32(hdr + 4, (uint32_t)buffer->len);
-        if (write_all(sfd, hdr, sizeof(hdr)) < 0 ||
-            (mlen > 0 && write_all(sfd, mime, mlen) < 0) ||
-            (buffer->len > 0 && write_all(sfd, buffer->data, buffer->len) < 0)) {
-            fail(CLIPBOARD_SOCKET);
-            close(sfd);
-            return 1;
-        }
+        uint8_t hdr[CLIP_SOCK_HEADER_SIZE] = {CLIP_SOCK_WRITE, primary ? 1 : 0};
+        swiptermd_put_be16(hdr + 2, (uint16_t)mlen);
+        swiptermd_put_be32(hdr + 4, (uint32_t)buffer->len);
         uint8_t reply[4];
-        int rc = read_exact(sfd, reply, 4) < 0 || (int32_t)get_be32(reply) < 0 ? 1 : 0;
+        int rc = write_all_blocking(sfd, hdr, sizeof(hdr));
+        if (rc == 0)
+            rc = write_all_blocking(sfd, mime, mlen);
+        if (rc == 0)
+            rc = write_all_blocking(sfd, buffer->data, buffer->len);
+        if (rc == 0)
+            rc = read_all_blocking(sfd, reply, sizeof(reply));
+        if (rc == 0)
+            rc = (int32_t)swiptermd_get_be32(reply);
         close(sfd);
-        if (rc)
-            return fail(CLIPBOARD_SOCKET);
+        if (rc < 0) {
+            errno = -rc;
+            return fail(GUEST_CLIPBOARD_SOCKET);
+        }
         return 0;
     }
 
     int fd = open(CLIPBOARD_PATH, O_WRONLY | O_TRUNC | O_CLOEXEC);
     if (fd < 0)
         return fail(CLIPBOARD_PATH);
-    if (write_all(fd, buffer->data, buffer->len) < 0) {
+    if (write_all_blocking(fd, buffer->data, buffer->len) < 0) {
         fail(CLIPBOARD_PATH);
         close(fd);
         return 1;
@@ -281,17 +207,17 @@ static int store(const buffer_t *buffer, bool primary, const char *mime) {
 static int list_types(bool primary, bool x11_targets) {
     int sfd = connect_clip_socket();
     if (sfd >= 0) {
-        uint8_t hdr[8] = {CLIP_SOCK_LIST, primary ? 1 : 0, 0, 0, 0, 0, 0, 0};
-        if (write_all(sfd, hdr, sizeof(hdr)) < 0) {
-            close(sfd);
-            return fail(CLIPBOARD_SOCKET);
-        }
+        uint8_t hdr[CLIP_SOCK_HEADER_SIZE] = {CLIP_SOCK_LIST, primary ? 1 : 0};
         uint8_t cbuf[4];
-        if (read_exact(sfd, cbuf, 4) < 0) {
+        int rc = write_all_blocking(sfd, hdr, sizeof(hdr));
+        if (rc == 0)
+            rc = read_all_blocking(sfd, cbuf, sizeof(cbuf));
+        if (rc < 0) {
             close(sfd);
-            return fail(CLIPBOARD_SOCKET);
+            errno = -rc;
+            return fail(GUEST_CLIPBOARD_SOCKET);
         }
-        uint32_t count = get_be32(cbuf);
+        uint32_t count = swiptermd_get_be32(cbuf);
         if (count == 0) {
             close(sfd);
             if (!x11_targets) {
@@ -305,13 +231,13 @@ static int list_types(bool primary, bool x11_targets) {
             puts("TARGETS");
         for (uint32_t i = 0; i < count; i++) {
             uint8_t lbuf[4];
-            if (read_exact(sfd, lbuf, 4) < 0) {
+            if (read_all_blocking(sfd, lbuf, sizeof(lbuf)) < 0) {
                 close(sfd);
                 return 1;
             }
-            uint32_t len = get_be32(lbuf);
-            char mime[256];
-            if (len >= sizeof(mime) || read_exact(sfd, mime, len) < 0) {
+            uint32_t len = swiptermd_get_be32(lbuf);
+            char mime[CLIP_MAX_MIME_LEN];
+            if (len >= sizeof(mime) || read_all_blocking(sfd, mime, len) < 0) {
                 close(sfd);
                 return 1;
             }
@@ -335,8 +261,8 @@ static int pbcopy(int argc, char **argv) {
     (void)argc;
     (void)argv;
     buffer_t buffer = {0};
-    if (read_stdin(&buffer))
-        return 1;
+    if (buffer_read(&buffer, STDIN_FILENO) < 0)
+        return fail("stdin");
     return store(&buffer, false, detect_mime(&buffer));
 }
 
@@ -391,20 +317,21 @@ static int wl_copy(int argc, char **argv) {
     buffer_t buffer = {0};
     if (clear)
         return store(&buffer, primary, NULL);
+    const char *mime = type;
     if (optind == argc) {
-        if (read_stdin(&buffer))
-            return 1;
-        const char *mime = type ? type : detect_mime(&buffer);
-        if (trim && text_type(mime))
-            trim_newline(&buffer);
-        return store(&buffer, primary, mime);
+        if (buffer_read(&buffer, STDIN_FILENO) < 0)
+            return fail("stdin");
+        if (!mime)
+            mime = detect_mime(&buffer);
+    } else {
+        for (int i = optind; i < argc; i++) {
+            if ((i > optind && buffer_append(&buffer, " ", 1) < 0) ||
+                buffer_append(&buffer, argv[i], strlen(argv[i])) < 0)
+                return fail("argv");
+        }
+        if (!mime)
+            mime = "text/plain;charset=utf-8";
     }
-    for (int i = optind; i < argc; i++) {
-        if ((i > optind && buffer_append(&buffer, " ", 1) < 0) ||
-            buffer_append(&buffer, argv[i], strlen(argv[i])) < 0)
-            return fail("argv");
-    }
-    const char *mime = type ? type : "text/plain;charset=utf-8";
     if (trim && text_type(mime))
         trim_newline(&buffer);
     return store(&buffer, primary, mime);
@@ -449,7 +376,7 @@ static int wl_paste(int argc, char **argv) {
     if (list)
         return list_types(primary, false);
     buffer_t buffer = {0};
-    char resolved[256] = {0};
+    char resolved[CLIP_MAX_MIME_LEN] = {0};
     int rc = load(&buffer, primary, type, resolved, sizeof(resolved));
     if (rc == -ENODATA) {
         fprintf(stderr, "Nothing is copied\n");
@@ -463,8 +390,7 @@ static int wl_paste(int argc, char **argv) {
         errno = -rc;
         return fail("clipboard");
     }
-    bool add_nl = !no_newline && text_type(resolved[0] ? resolved : (type ? type : "text/plain"));
-    return emit(&buffer, add_nl);
+    return emit(&buffer, !no_newline && text_type(resolved));
 }
 
 static int xclip(int argc, char **argv) {
@@ -507,7 +433,7 @@ static int xclip(int argc, char **argv) {
         const char *value = options[match].value ? argv[++i] : NULL;
         switch (options[match].action) {
         case SELECTION:
-            primary = value && value[0] == 'p';
+            primary = value[0] == 'p';
             break;
         case IN:
             out = false;
@@ -541,8 +467,8 @@ static int xclip(int argc, char **argv) {
             trim_newline(&buffer);
         return emit(&buffer, false);
     }
-    if (files == 0 && read_stdin(&buffer))
-        return 1;
+    if (files == 0 && buffer_read(&buffer, STDIN_FILENO) < 0)
+        return fail("stdin");
     for (int i = 1; i <= files; i++) {
         int fd = open(argv[i], O_RDONLY | O_CLOEXEC);
         if (fd < 0)
@@ -656,8 +582,8 @@ static int xsel(int argc, char **argv) {
             return fail("clipboard");
         }
     }
-    if (read_stdin(&buffer))
-        return 1;
+    if (buffer_read(&buffer, STDIN_FILENO) < 0)
+        return fail("stdin");
     const char *mime = detect_mime(&buffer);
     if (trim && text_type(mime))
         trim_newline(&buffer);

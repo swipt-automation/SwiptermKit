@@ -1,6 +1,7 @@
 #define _DARWIN_C_SOURCE
 
 #include "host_internal.h"
+#include "host_util.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -11,7 +12,6 @@
 enum {
     ARM64_IMAGE_MAGIC = 0x644d5241,
     ARM64_IMAGE_HEADER_SIZE = 64,
-    KERNEL_IMAGE_LIMIT = 256U << 20,
     KERNEL_PROBE_INPUT = 1U << 20,
     DECOMPRESS_INITIAL_CAP = 1U << 20,
     ZBOOT_HEADER_SIZE = 64,
@@ -25,27 +25,14 @@ typedef enum codec {
     CODEC_XZ,
 } codec_t;
 
-static uint16_t load_le16(const uint8_t *p) {
-    return (uint16_t)(p[0] | (p[1] << 8));
-}
-
-static uint32_t load_le32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
-static uint64_t load_le64(const uint8_t *p) {
-    return (uint64_t)load_le32(p) | ((uint64_t)load_le32(p + 4) << 32);
-}
-
 static codec_t detect_codec(const uint8_t *in, size_t len) {
-    static const uint8_t xz_magic[6] = {0xFD, '7', 'z', 'X', 'Z', 0x00};
     if (len >= 2 && in[0] == 0x1F && in[1] == 0x8B) {
         return CODEC_GZIP;
     }
-    if (len >= 4 && load_le32(in) == ZSTD_MAGICNUMBER) {
+    if (len >= 4 && get_le32(in) == ZSTD_MAGICNUMBER) {
         return CODEC_ZSTD;
     }
-    if (len >= sizeof(xz_magic) && memcmp(in, xz_magic, sizeof(xz_magic)) == 0) {
+    if (len >= sizeof(XZ_MAGIC) && memcmp(in, XZ_MAGIC, sizeof(XZ_MAGIC)) == 0) {
         return CODEC_XZ;
     }
     return CODEC_RAW;
@@ -127,7 +114,7 @@ static bool zstd_frame_follows(const uint8_t *in, size_t len) {
     if (len < 4) {
         return false;
     }
-    uint32_t magic = load_le32(in);
+    uint32_t magic = get_le32(in);
     return magic == ZSTD_MAGICNUMBER || (magic & ZSTD_MAGIC_SKIPPABLE_MASK) == ZSTD_MAGIC_SKIPPABLE_START;
 }
 
@@ -202,17 +189,7 @@ static int inflate_xz(const uint8_t *in, size_t len, out_buffer_t *out) {
     return rc;
 }
 
-static int run_codec(codec_t codec, const uint8_t *in, size_t len, out_buffer_t *out) {
-    switch (codec) {
-    case CODEC_GZIP:
-        return inflate_gzip(in, len, out);
-    case CODEC_ZSTD:
-        return inflate_zstd(in, len, out);
-    case CODEC_XZ:
-        return inflate_xz(in, len, out);
-    case CODEC_RAW:
-        break;
-    }
+static int copy_raw(const uint8_t *in, size_t len, out_buffer_t *out) {
     size_t n = len;
     if (n > out->limit) {
         if (!out->prefix) {
@@ -233,16 +210,24 @@ static int run_codec(codec_t codec, const uint8_t *in, size_t len, out_buffer_t 
 static int decompress_with(codec_t codec, const uint8_t *in, size_t len, size_t limit, bool prefix,
                            uint8_t **out, size_t *out_len) {
     out_buffer_t buf = {.limit = limit, .prefix = prefix};
-    int rc = run_codec(codec, in, len, &buf);
+    int rc = 0;
+    switch (codec) {
+    case CODEC_GZIP:
+        rc = inflate_gzip(in, len, &buf);
+        break;
+    case CODEC_ZSTD:
+        rc = inflate_zstd(in, len, &buf);
+        break;
+    case CODEC_XZ:
+        rc = inflate_xz(in, len, &buf);
+        break;
+    case CODEC_RAW:
+        rc = copy_raw(in, len, &buf);
+        break;
+    }
     if (rc < 0) {
         free(buf.data);
         return rc;
-    }
-    if (!buf.data) {
-        buf.data = malloc(1);
-        if (!buf.data) {
-            return -ENOMEM;
-        }
     }
     *out = buf.data;
     *out_len = buf.len;
@@ -275,8 +260,8 @@ static int zboot_parse(const uint8_t *file, zboot_payload_t *payload) {
     } else {
         return -ENOTSUP;
     }
-    payload->offset = load_le32(file + 8);
-    payload->size = load_le32(file + 12);
+    payload->offset = get_le32(file + 8);
+    payload->size = get_le32(file + 12);
     if (payload->size == 0 || payload->offset < ZBOOT_HEADER_SIZE) {
         return -ENOEXEC;
     }
@@ -288,7 +273,7 @@ static int stub_linux_section(const uint8_t *file, size_t len, size_t *offset_ou
     if (len < ARM64_IMAGE_HEADER_SIZE || file[0] != 'M' || file[1] != 'Z') {
         return -ENOEXEC;
     }
-    size_t pe = load_le32(file + 0x3C);
+    size_t pe = get_le32(file + 0x3C);
     if (pe > len || len - pe < 24) {
         *needed_out = pe + 24;
         return -EAGAIN;
@@ -296,8 +281,8 @@ static int stub_linux_section(const uint8_t *file, size_t len, size_t *offset_ou
     if (memcmp(file + pe, "PE\0\0", 4) != 0) {
         return -ENOEXEC;
     }
-    size_t table = pe + 24 + load_le16(file + pe + 20);
-    size_t count = load_le16(file + pe + 6);
+    size_t table = pe + 24 + get_le16(file + pe + 20);
+    size_t count = get_le16(file + pe + 6);
     if (table + count * PE_SECTION_HEADER_SIZE > len) {
         *needed_out = table + count * PE_SECTION_HEADER_SIZE;
         return -EAGAIN;
@@ -307,20 +292,20 @@ static int stub_linux_section(const uint8_t *file, size_t len, size_t *offset_ou
         if (memcmp(section, ".linux\0\0", 8) != 0) {
             continue;
         }
-        uint32_t virtual_size = load_le32(section + 8);
-        uint32_t raw_size = load_le32(section + 16);
-        *offset_out = load_le32(section + 20);
+        uint32_t virtual_size = get_le32(section + 8);
+        uint32_t raw_size = get_le32(section + 16);
+        *offset_out = get_le32(section + 20);
         *size_out = virtual_size != 0 && virtual_size < raw_size ? virtual_size : raw_size;
         return *size_out == 0 || *offset_out < ARM64_IMAGE_HEADER_SIZE ? -ENOEXEC : 0;
     }
     return -ENOEXEC;
 }
 
-int swipterm_kernel_check_header(const uint8_t *image, size_t len) {
-    if (len < ARM64_IMAGE_HEADER_SIZE || load_le32(image + 0x38) != ARM64_IMAGE_MAGIC) {
+static int check_kernel_header(const uint8_t *image, size_t len) {
+    if (len < ARM64_IMAGE_HEADER_SIZE || get_le32(image + 0x38) != ARM64_IMAGE_MAGIC) {
         return -ENOEXEC;
     }
-    uint64_t flags = load_le64(image + 0x18);
+    uint64_t flags = get_le64(image + 0x18);
     uint64_t page_size = (flags >> 1) & 3U;
     if ((flags & 1U) != 0 || page_size == 3) {
         return -ENOTSUP;
@@ -367,7 +352,7 @@ int swipterm_kernel_probe(const uint8_t *file, size_t len, size_t *needed_out) {
         payload = file + z.offset;
         payload_len = want;
     } else if (codec == CODEC_RAW) {
-        return swipterm_kernel_check_header(file, len);
+        return check_kernel_header(file, len);
     }
     uint8_t *header = NULL;
     size_t header_len = 0;
@@ -375,7 +360,7 @@ int swipterm_kernel_probe(const uint8_t *file, size_t len, size_t *needed_out) {
     if (rc < 0) {
         return rc == -ENOMEM ? rc : -ENOEXEC;
     }
-    rc = swipterm_kernel_check_header(header, header_len);
+    rc = check_kernel_header(header, header_len);
     free(header);
     return rc;
 }
@@ -409,7 +394,7 @@ int swipterm_kernel_image(const uint8_t *file, size_t len, uint8_t **image_out, 
     if (rc < 0) {
         return rc;
     }
-    rc = swipterm_kernel_check_header(image, size);
+    rc = check_kernel_header(image, size);
     if (rc < 0) {
         free(image);
         return rc;
@@ -417,33 +402,4 @@ int swipterm_kernel_image(const uint8_t *file, size_t len, uint8_t **image_out, 
     *image_out = image;
     *image_len = size;
     return 0;
-}
-
-bool swipterm_kernel_find_release(const uint8_t *image, size_t len, char *release, size_t release_size) {
-    static const char banner[] = "Linux version ";
-    const size_t banner_len = sizeof(banner) - 1;
-    const uint8_t *p = image;
-    size_t left = len;
-    while (left > banner_len) {
-        const uint8_t *hit = memmem(p, left, banner, banner_len);
-        if (!hit) {
-            return false;
-        }
-        const uint8_t *start = hit + banner_len;
-        const uint8_t *end = image + len;
-        if (start < end && *start >= '0' && *start <= '9') {
-            size_t n = 0;
-            while (start + n < end && start[n] > ' ' && start[n] < 0x7F) {
-                n++;
-            }
-            if (start + n < end && start[n] == ' ' && n > 0 && n < release_size) {
-                memcpy(release, start, n);
-                release[n] = '\0';
-                return true;
-            }
-        }
-        left -= (size_t)(start - p);
-        p = start;
-    }
-    return false;
 }

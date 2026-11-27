@@ -13,18 +13,7 @@
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <sys/uio.h>
-#include <sys/un.h>
 #include <unistd.h>
-
-enum {
-    STUB_MSG_EXIT = 1,
-    STUB_MSG_CANCEL = 2,
-};
-
-struct stub_ctl_msg {
-    uint32_t type;
-    int32_t value;
-};
 
 #define CMD_BUF_CAP 32768
 #define CUSE_IO_MAX (128 * 1024)
@@ -51,7 +40,6 @@ typedef struct cmd_invocation {
     cmd_chan_t chans[3];
     bool finish_received;
     int32_t exit_status;
-    bool cancelled;
     struct cmd_invocation *next;
 } cmd_invocation_t;
 
@@ -112,7 +100,9 @@ static void cmd_chan_close(cmd_chan_t *ch) {
     ch->off = ch->len = 0;
 }
 
-static void cmd_chan_pump(cmd_chan_t *ch) {
+static void on_cmd_chan_event(ev_node_t *node, uint32_t events) {
+    (void)events;
+    cmd_chan_t *ch = node->ctx;
     if (ch->eof)
         return;
 
@@ -231,19 +221,13 @@ static void cmd_chan_pump(cmd_chan_t *ch) {
     }
 }
 
-static void on_cmd_chan_event(ev_node_t *node, uint32_t events) {
-    (void)events;
-    cmd_chan_t *ch = node->ctx;
-    cmd_chan_pump(ch);
-}
-
 static void cmd_check_done(cmd_invocation_t *inv) {
-    if (!inv || !inv->finish_received)
+    if (!inv->finish_received)
         return;
     if (!inv->chans[1].eof || !inv->chans[2].eof)
         return;
 
-    struct stub_ctl_msg msg = {
+    stub_ctl_msg_t msg = {
         .type = STUB_MSG_EXIT,
         .value = inv->exit_status,
     };
@@ -253,8 +237,6 @@ static void cmd_check_done(cmd_invocation_t *inv) {
 }
 
 static void cmd_invocation_destroy(cmd_invocation_t *inv) {
-    if (!inv)
-        return;
     cmd_invocation_t **pp = &g_invocations;
     while (*pp) {
         if (*pp == inv) {
@@ -274,9 +256,6 @@ static void cmd_invocation_destroy(cmd_invocation_t *inv) {
 }
 
 static void cmd_send_cancel(cmd_invocation_t *inv, int32_t sig) {
-    if (inv->cancelled)
-        return;
-    inv->cancelled = true;
     uint8_t msg[SWIPTERMD_CMD_CANCEL_SIZE];
     swiptermd_enc_cmd_cancel(msg, inv->invocation_id, sig);
     ctrl_send_frame(SWIPTERMD_OP_CMD_CANCEL, 0, msg, sizeof(msg));
@@ -285,7 +264,7 @@ static void cmd_send_cancel(cmd_invocation_t *inv, int32_t sig) {
 static void on_stub_event(ev_node_t *node, uint32_t events) {
     cmd_invocation_t *inv = node->ctx;
     if (events & EPOLLIN) {
-        struct stub_ctl_msg msg;
+        stub_ctl_msg_t msg;
         ssize_t n = read(inv->stub_fd, &msg, sizeof(msg));
         if (n == (ssize_t)sizeof(msg) && msg.type == STUB_MSG_CANCEL) {
             cmd_send_cancel(inv, msg.value);
@@ -347,7 +326,7 @@ static int recv_stub_header(int fd, uint32_t *payload_len_out, int fds_out[3]) {
 }
 
 static void cmd_start(int cfd, const int guest_fds[3], const uint8_t *payload, uint32_t plen) {
-    swiptermd_buf_r_t pr = swiptermd_buf_r_init(payload, plen);
+    swiptermd_buf_r_t pr = {.data = payload, .len = plen};
     char name[256];
     if (!swiptermd_r_str_copy(&pr, name, sizeof(name))) {
         for (int i = 0; i < 3; i++)
@@ -438,7 +417,7 @@ static void cmd_start(int cfd, const int guest_fds[3], const uint8_t *payload, u
     }
 
     if (!inv->chans[0].guest_epoll)
-        cmd_chan_pump(&inv->chans[0]);
+        on_cmd_chan_event(&inv->chans[0].vsock_ev, 0);
 }
 
 int host_cmd_borrow_stdio(uint32_t invocation_id, int fds[3]) {
@@ -625,7 +604,7 @@ int host_cmd_setup(const char *guest_dir) {
             (int)sizeof(stub_path) ||
         snprintf(clip_path, sizeof(clip_path), "%s%s/.clip", GUEST_ROOT, guest_dir) >=
             (int)sizeof(clip_path) ||
-        snprintf(sock_path, sizeof(sock_path), "%s%s/.sock", GUEST_ROOT, guest_dir) >=
+        snprintf(sock_path, sizeof(sock_path), "%s%s/" HOST_CMD_SOCKET_NAME, GUEST_ROOT, guest_dir) >=
             (int)sizeof(sock_path))
         return -ENAMETOOLONG;
 
@@ -645,40 +624,15 @@ int host_cmd_setup(const char *guest_dir) {
     }
     export_path(guest_dir);
 
-    if (g_cmd_listen_fd >= 0) {
-        ev_del(&g_cmd_listen_ev);
-        close(g_cmd_listen_fd);
-        g_cmd_listen_fd = -1;
-    }
-
-    int sfd = socket(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    int sfd = listen_unix_socket(sock_path, &g_cmd_listen_ev, on_cmd_accept);
     if (sfd < 0)
-        return -errno;
-
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    if (strlen(sock_path) >= sizeof(addr.sun_path)) {
-        close(sfd);
-        return -ENAMETOOLONG;
-    }
-    strcpy(addr.sun_path, sock_path);
-    unlink(sock_path);
-
-    if (bind(sfd, (struct sockaddr *)&addr, sizeof(addr)) < 0 || listen(sfd, 64) < 0) {
-        err = -errno;
-        close(sfd);
-        return err;
-    }
-    chmod(sock_path, 0666);
-
+        return sfd;
     g_cmd_listen_fd = sfd;
-    ev_add(&g_cmd_listen_ev, sfd, EPOLLIN, on_cmd_accept, NULL);
     return 0;
 }
 
 void host_cmd_handle_register(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     char name[NAME_MAX + 1];
     if (!swiptermd_r_str_copy(&r, name, sizeof(name))) {
         ctrl_send_err_reply(SWIPTERMD_OP_REGISTER_CMD, req_id, -EINVAL);
@@ -686,8 +640,12 @@ void host_cmd_handle_register(uint32_t req_id, const uint8_t *body, uint32_t len
     }
     if (name[0] == '\0' || strchr(name, '/') != NULL || strcmp(name, ".") == 0 ||
         strcmp(name, "..") == 0 || strcmp(name, ".stub") == 0 || strcmp(name, ".clip") == 0 ||
-        strcmp(name, ".sock") == 0) {
+        strcmp(name, HOST_CMD_SOCKET_NAME) == 0) {
         ctrl_send_err_reply(SWIPTERMD_OP_REGISTER_CMD, req_id, -EINVAL);
+        return;
+    }
+    if (g_daemon.host_cmd_dir[0] == '\0') {
+        ctrl_send_err_reply(SWIPTERMD_OP_REGISTER_CMD, req_id, -ENOENT);
         return;
     }
 
@@ -729,9 +687,7 @@ void host_cmd_handle_start_reply(uint32_t req_id, const uint8_t *body, uint32_t 
         return;
     for (cmd_invocation_t *inv = g_invocations; inv; inv = inv->next) {
         if (inv->start_req_id == req_id) {
-            inv->finish_received = true;
-            inv->exit_status = 127;
-            struct stub_ctl_msg msg = {.type = STUB_MSG_EXIT, .value = 127};
+            stub_ctl_msg_t msg = {.type = STUB_MSG_EXIT, .value = 127};
             if (inv->stub_fd >= 0)
                 (void)write_all_blocking(inv->stub_fd, &msg, sizeof(msg));
             cmd_invocation_destroy(inv);
@@ -854,7 +810,7 @@ static void on_cuse_event(ev_node_t *node, uint32_t events) {
                 break;
             }
             cuse_queue_pending(dev, rid, SWIPTERMD_OP_DEV_WRITE, in->unique);
-            swiptermd_buf_w_t w = swiptermd_buf_w_init(wire, wlen);
+            swiptermd_buf_w_t w = {.data = wire, .cap = wlen};
             swiptermd_enc_dev_write_req(&w, dev->device_id, wi->fh,
                                         arg + sizeof(*wi), wi->size);
             ctrl_send_frame(SWIPTERMD_OP_DEV_WRITE, rid, wire, (uint32_t)w.len);
@@ -885,7 +841,7 @@ static void on_cuse_event(ev_node_t *node, uint32_t events) {
     }
 }
 
-bool cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, uint32_t len) {
+void cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, uint32_t len) {
     cuse_pending_t **pp = &g_cuse_pending;
     cuse_pending_t *found = NULL;
     while (*pp) {
@@ -897,7 +853,7 @@ bool cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, ui
         pp = &(*pp)->next;
     }
     if (!found)
-        return false;
+        return;
 
     int cuse_fd = found->dev->cuse_fd;
     uint64_t unique = found->fuse_unique;
@@ -909,56 +865,54 @@ bool cuse_handle_reply(uint16_t opcode, uint32_t req_id, const uint8_t *body, ui
         uint64_t fh;
         if (!swiptermd_dec_dev_open_reply(body, len, &err, &fh)) {
             cuse_write_reply(cuse_fd, unique, -EIO, NULL, 0);
-            return true;
+            return;
         }
         if (err < 0) {
             cuse_write_reply(cuse_fd, unique, err, NULL, 0);
-            return true;
+            return;
         }
         struct fuse_open_out oo;
         memset(&oo, 0, sizeof(oo));
         oo.fh = fh;
         oo.open_flags = FOPEN_DIRECT_IO | FOPEN_NONSEEKABLE;
         cuse_write_reply(cuse_fd, unique, 0, &oo, sizeof(oo));
-        return true;
+        return;
     }
     case SWIPTERMD_OP_DEV_READ: {
         int32_t err;
         swiptermd_slice_t data;
         if (!swiptermd_dec_dev_read_reply(body, len, &err, &data)) {
             cuse_write_reply(cuse_fd, unique, -EIO, NULL, 0);
-            return true;
+            return;
         }
         if (err < 0) {
             cuse_write_reply(cuse_fd, unique, err, NULL, 0);
-            return true;
+            return;
         }
         cuse_write_reply(cuse_fd, unique, 0, data.ptr, data.len);
-        return true;
+        return;
     }
     case SWIPTERMD_OP_DEV_WRITE: {
         int32_t err;
         uint32_t written;
         if (!swiptermd_dec_dev_write_reply(body, len, &err, &written)) {
             cuse_write_reply(cuse_fd, unique, -EIO, NULL, 0);
-            return true;
+            return;
         }
         if (err < 0) {
             cuse_write_reply(cuse_fd, unique, err, NULL, 0);
-            return true;
+            return;
         }
         struct fuse_write_out wo = {.size = written, .padding = 0};
         cuse_write_reply(cuse_fd, unique, 0, &wo, sizeof(wo));
-        return true;
+        return;
     }
     case SWIPTERMD_OP_DEV_CLOSE: {
         int32_t err = 0;
         (void)swiptermd_dec_err(body, len, &err);
         cuse_write_reply(cuse_fd, unique, err < 0 ? err : 0, NULL, 0);
-        return true;
+        return;
     }
-    default:
-        return false;
     }
 }
 
@@ -971,7 +925,7 @@ bool cuse_available(void) {
 }
 
 void cuse_handle_register_device(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     uint32_t device_id = swiptermd_r_u32(&r);
     char path[PATH_MAX];
     if (!swiptermd_r_str_copy(&r, path, sizeof(path)) || path[0] != '/') {
@@ -1065,7 +1019,7 @@ void cuse_handle_register_device(uint32_t req_id, const uint8_t *body, uint32_t 
         created = err == 0;
     }
     if (err == 0)
-        err = set_nonblock(cuse_fd);
+        err = set_nonblock(cuse_fd, true);
     if (err == 0) {
         dev->device_id = device_id;
         dev->rdev = st.st_rdev;

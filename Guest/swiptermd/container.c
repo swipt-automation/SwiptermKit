@@ -52,10 +52,6 @@ static const device_key_t default_devices[] = {
     {BPF_DEVCG_DEV_BLOCK, LOOP_MAJOR, DEVICE_ANY_MINOR},
 };
 
-static long bpf_call(enum bpf_cmd cmd, union bpf_attr *attr) {
-    return syscall(SYS_bpf, cmd, attr, sizeof(*attr));
-}
-
 static int device_allow(const device_key_t *key) {
     uint32_t allowed = 1;
     union bpf_attr attr;
@@ -64,7 +60,7 @@ static int device_allow(const device_key_t *key) {
     attr.key = (uint64_t)(uintptr_t)key;
     attr.value = (uint64_t)(uintptr_t)&allowed;
     attr.flags = BPF_ANY;
-    return bpf_call(BPF_MAP_UPDATE_ELEM, &attr) < 0 ? -errno : 0;
+    return syscall(SYS_bpf, BPF_MAP_UPDATE_ELEM, &attr, sizeof(attr)) < 0 ? -errno : 0;
 }
 
 int device_permit(unsigned major_number, unsigned minor_number) {
@@ -78,7 +74,7 @@ void device_revoke(unsigned major_number, unsigned minor_number) {
     memset(&attr, 0, sizeof(attr));
     attr.map_fd = (uint32_t)g_device_map;
     attr.key = (uint64_t)(uintptr_t)&key;
-    (void)bpf_call(BPF_MAP_DELETE_ELEM, &attr);
+    (void)syscall(SYS_bpf, BPF_MAP_DELETE_ELEM, &attr, sizeof(attr));
 }
 
 #define BPF_INSN(code_, dst_, src_, off_, imm_) \
@@ -100,7 +96,7 @@ static int device_policy_attach(void) {
     attr.key_size = sizeof(device_key_t);
     attr.value_size = sizeof(uint32_t);
     attr.max_entries = 1024;
-    g_device_map = (int)bpf_call(BPF_MAP_CREATE, &attr);
+    g_device_map = (int)syscall(SYS_bpf, BPF_MAP_CREATE, &attr, sizeof(attr));
     if (g_device_map < 0)
         return -errno;
     (void)fcntl(g_device_map, F_SETFD, FD_CLOEXEC);
@@ -139,7 +135,7 @@ static int device_policy_attach(void) {
     attr.insns = (uint64_t)(uintptr_t)program;
     attr.insn_cnt = sizeof(program) / sizeof(program[0]);
     attr.license = (uint64_t)(uintptr_t)license;
-    int prog = (int)bpf_call(BPF_PROG_LOAD, &attr);
+    int prog = (int)syscall(SYS_bpf, BPF_PROG_LOAD, &attr, sizeof(attr));
     if (prog < 0)
         return -errno;
     static const char *const groups[] = {CGROUP_MACHINE, CGROUP_DISKS};
@@ -155,15 +151,15 @@ static int device_policy_attach(void) {
         attr.attach_bpf_fd = (uint32_t)prog;
         attr.attach_type = BPF_CGROUP_DEVICE;
         attr.attach_flags = BPF_F_ALLOW_MULTI;
-        rc = bpf_call(BPF_PROG_ATTACH, &attr) < 0 ? -errno : 0;
+        rc = syscall(SYS_bpf, BPF_PROG_ATTACH, &attr, sizeof(attr)) < 0 ? -errno : 0;
         close(cgroup);
     }
     close(prog);
     return rc;
 }
 
-static void enable_root_controllers(void) {
-    int fd = open(CGROUP_ROOT "/cgroup.controllers", O_RDONLY | O_CLOEXEC);
+void cgroup_enable_controllers(int dir_fd) {
+    int fd = openat(dir_fd, "cgroup.controllers", O_RDONLY | O_CLOEXEC);
     if (fd < 0)
         return;
     char controllers[512];
@@ -176,8 +172,26 @@ static void enable_root_controllers(void) {
     for (char *name = strtok_r(controllers, " \n", &save); name; name = strtok_r(NULL, " \n", &save)) {
         char request[64];
         if (snprintf(request, sizeof(request), "+%s", name) < (int)sizeof(request))
-            (void)write_file(AT_FDCWD, CGROUP_ROOT "/cgroup.subtree_control", request, 0, 0);
+            (void)write_file(dir_fd, "cgroup.subtree_control", request, 0, 0);
     }
+}
+
+bool cgroup_membership(const char *proc_cgroup, char *group, size_t cap) {
+    int fd = open(proc_cgroup, O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return false;
+    char membership[PATH_MAX];
+    ssize_t n = read(fd, membership, sizeof(membership) - 1);
+    close(fd);
+    if (n <= 0)
+        return false;
+    membership[n] = '\0';
+    char *line = strstr(membership, "0::");
+    if (!line || (line != membership && line[-1] != '\n'))
+        return false;
+    line += 3;
+    line[strcspn(line, "\n")] = '\0';
+    return snprintf(group, cap, "%s", line) < (int)cap;
 }
 
 int cgroup_setup(void) {
@@ -189,12 +203,12 @@ int cgroup_setup(void) {
     int rc = write_file(AT_FDCWD, CGROUP_HOST "/cgroup.procs", "0", 0, 0);
     if (rc < 0)
         return rc;
-    enable_root_controllers();
+    int root = open(CGROUP_ROOT, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (root >= 0) {
+        cgroup_enable_controllers(root);
+        close(root);
+    }
     return device_policy_attach();
-}
-
-static int make_mountpoint(const char *path, mode_t mode) {
-    return mkdir(path, mode) < 0 && errno != EEXIST ? -errno : 0;
 }
 
 static int make_device(const char *path, mode_t mode, unsigned major_number, unsigned minor_number) {
@@ -229,6 +243,39 @@ static int assemble_dri(void) {
     return rc;
 }
 
+int dev_populate(const char *dev) {
+    static const struct {
+        const char *name;
+        unsigned major_number;
+        unsigned minor_number;
+    } nodes[] = {
+        {"null", 1, 3}, {"zero", 1, 5}, {"full", 1, 7}, {"random", 1, 8}, {"urandom", 1, 9}, {"tty", 5, 0},
+    };
+    static const struct {
+        const char *target;
+        const char *name;
+    } links[] = {
+        {"pts/ptmx", "ptmx"},
+        {"/proc/self/fd", "fd"},
+        {"/proc/self/fd/0", "stdin"},
+        {"/proc/self/fd/1", "stdout"},
+        {"/proc/self/fd/2", "stderr"},
+    };
+    char path[PATH_MAX];
+    for (size_t i = 0; i < sizeof(nodes) / sizeof(nodes[0]); i++) {
+        snprintf(path, sizeof(path), "%s/%s", dev, nodes[i].name);
+        int rc = make_device(path, S_IFCHR | 0666, nodes[i].major_number, nodes[i].minor_number);
+        if (rc < 0)
+            return rc;
+    }
+    for (size_t i = 0; i < sizeof(links) / sizeof(links[0]); i++) {
+        snprintf(path, sizeof(path), "%s/%s", dev, links[i].name);
+        if (symlink(links[i].target, path) < 0)
+            return -errno;
+    }
+    return 0;
+}
+
 static int assemble_dev(void) {
     static const struct {
         const char *path;
@@ -236,28 +283,12 @@ static int assemble_dev(void) {
         unsigned major_number;
         unsigned minor_number;
     } nodes[] = {
-        {GUEST_ROOT "/dev/null", S_IFCHR | 0666, 1, 3},
-        {GUEST_ROOT "/dev/zero", S_IFCHR | 0666, 1, 5},
-        {GUEST_ROOT "/dev/full", S_IFCHR | 0666, 1, 7},
-        {GUEST_ROOT "/dev/random", S_IFCHR | 0666, 1, 8},
-        {GUEST_ROOT "/dev/urandom", S_IFCHR | 0666, 1, 9},
-        {GUEST_ROOT "/dev/tty", S_IFCHR | 0666, 5, 0},
         {GUEST_ROOT "/dev/console", S_IFCHR | 0600, 5, 1},
         {GUEST_ROOT "/dev/fuse", S_IFCHR | 0666, 10, 229},
         {GUEST_ROOT "/dev/cuse", S_IFCHR | 0600, 10, 203},
         {GUEST_ROOT "/dev/autofs", S_IFCHR | 0600, 10, 235},
         {GUEST_ROOT "/dev/loop-control", S_IFCHR | 0660, 10, 237},
         {GUEST_ROOT "/dev/net/tun", S_IFCHR | 0666, 10, 200},
-    };
-    static const struct {
-        const char *target;
-        const char *path;
-    } links[] = {
-        {"pts/ptmx", GUEST_ROOT "/dev/ptmx"},
-        {"/proc/self/fd", GUEST_ROOT "/dev/fd"},
-        {"/proc/self/fd/0", GUEST_ROOT "/dev/stdin"},
-        {"/proc/self/fd/1", GUEST_ROOT "/dev/stdout"},
-        {"/proc/self/fd/2", GUEST_ROOT "/dev/stderr"},
     };
     if (mount("tmpfs", GUEST_ROOT "/dev", "tmpfs", MS_NOSUID, "mode=0755,size=4m") < 0)
         return -errno;
@@ -268,27 +299,20 @@ static int assemble_dev(void) {
         if (mkdir(dirs[i], i == 1 ? 01777 : 0755) < 0)
             return -errno;
     }
-    for (size_t i = 0; i < sizeof(nodes) / sizeof(nodes[0]); i++) {
-        int rc = make_device(nodes[i].path, nodes[i].mode, nodes[i].major_number, nodes[i].minor_number);
-        if (rc < 0)
-            return rc;
-    }
-    if (access("/sys/class/misc/kvm", F_OK) == 0) {
-        int rc = make_device(GUEST_ROOT "/dev/kvm", S_IFCHR | 0666, 10, 232);
-        if (rc < 0)
-            return rc;
-    }
-    for (unsigned i = 0; i < LOOP_NODE_COUNT; i++) {
+    int rc = dev_populate(GUEST_ROOT "/dev");
+    for (size_t i = 0; i < sizeof(nodes) / sizeof(nodes[0]) && rc == 0; i++)
+        rc = make_device(nodes[i].path, nodes[i].mode, nodes[i].major_number, nodes[i].minor_number);
+    if (rc < 0)
+        return rc;
+    if (access("/sys/class/misc/kvm", F_OK) == 0)
+        rc = make_device(GUEST_ROOT "/dev/kvm", S_IFCHR | 0666, 10, 232);
+    for (unsigned i = 0; i < LOOP_NODE_COUNT && rc == 0; i++) {
         char path[64];
         snprintf(path, sizeof(path), GUEST_ROOT "/dev/loop%u", i);
-        int rc = make_device(path, S_IFBLK | 0660, LOOP_MAJOR, i);
-        if (rc < 0)
-            return rc;
+        rc = make_device(path, S_IFBLK | 0660, LOOP_MAJOR, i);
     }
-    for (size_t i = 0; i < sizeof(links) / sizeof(links[0]); i++) {
-        if (symlink(links[i].target, links[i].path) < 0)
-            return -errno;
-    }
+    if (rc < 0)
+        return rc;
     if (mount("devpts", GUEST_ROOT "/dev/pts", "devpts", MS_NOSUID | MS_NOEXEC,
               "newinstance,ptmxmode=0666,mode=0620,gid=5") < 0 ||
         mount("tmpfs", GUEST_ROOT "/dev/shm", "tmpfs", MS_NOSUID | MS_NODEV, "mode=1777") < 0)
@@ -398,9 +422,8 @@ int container_assemble(void) {
         {GUEST_ROOT "/tmp", 01777},
     };
     for (size_t i = 0; i < sizeof(mountpoints) / sizeof(mountpoints[0]); i++) {
-        int rc = make_mountpoint(mountpoints[i].path, mountpoints[i].mode);
-        if (rc < 0)
-            return rc;
+        if (mkdir(mountpoints[i].path, mountpoints[i].mode) < 0 && errno != EEXIST)
+            return -errno;
     }
     int rc = assemble_dev();
     if (rc == 0)
@@ -453,20 +476,9 @@ int sessions_procs_fd(void) {
 void sessions_register(pid_t sender) {
     char path[64];
     snprintf(path, sizeof(path), "/proc/%d/cgroup", (int)sender);
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0)
+    char group[PATH_MAX];
+    if (!cgroup_membership(path, group, sizeof(group)))
         return;
-    char membership[PATH_MAX];
-    ssize_t n = read(fd, membership, sizeof(membership) - 1);
-    close(fd);
-    if (n <= 0)
-        return;
-    membership[n] = '\0';
-    char *line = strstr(membership, "0::");
-    if (!line || (line != membership && line[-1] != '\n'))
-        return;
-    char *group = line + 3;
-    group[strcspn(group, "\n")] = '\0';
     size_t len = strlen(group);
     static const char agent[] = "/agent";
     if (strncmp(group, "/machine/", 9) != 0 || len < sizeof(agent) ||

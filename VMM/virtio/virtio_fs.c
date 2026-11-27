@@ -1,4 +1,5 @@
 #include "virtio_internal.h"
+#include "../common/linux_errno.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -122,46 +123,6 @@ enum : uint32_t {
     LINUX_XATTR_CREATE = 1U,
     LINUX_XATTR_REPLACE = 2U,
     LINUX_XATTR_NAME_MAX = 255U,
-};
-
-enum : int32_t {
-    LINUX_EPERM = 1,
-    LINUX_ENOENT = 2,
-    LINUX_EINTR = 4,
-    LINUX_EIO = 5,
-    LINUX_ENXIO = 6,
-    LINUX_E2BIG = 7,
-    LINUX_EBADF = 9,
-    LINUX_EAGAIN = 11,
-    LINUX_ENOMEM = 12,
-    LINUX_EACCES = 13,
-    LINUX_EFAULT = 14,
-    LINUX_EBUSY = 16,
-    LINUX_EEXIST = 17,
-    LINUX_EXDEV = 18,
-    LINUX_ENODEV = 19,
-    LINUX_ENOTDIR = 20,
-    LINUX_EISDIR = 21,
-    LINUX_EINVAL = 22,
-    LINUX_ENFILE = 23,
-    LINUX_EMFILE = 24,
-    LINUX_EFBIG = 27,
-    LINUX_ENOSPC = 28,
-    LINUX_ESPIPE = 29,
-    LINUX_EROFS = 30,
-    LINUX_EMLINK = 31,
-    LINUX_EPIPE = 32,
-    LINUX_ERANGE = 34,
-    LINUX_EDEADLK = 35,
-    LINUX_ENAMETOOLONG = 36,
-    LINUX_ENOSYS = 38,
-    LINUX_ENOTEMPTY = 39,
-    LINUX_ELOOP = 40,
-    LINUX_ENODATA = 61,
-    LINUX_EOVERFLOW = 75,
-    LINUX_EOPNOTSUPP = 95,
-    LINUX_ESTALE = 116,
-    LINUX_EDQUOT = 122,
 };
 
 typedef struct __attribute__((packed)) virtio_fs_config {
@@ -504,14 +465,7 @@ typedef struct virtio_fs {
     virtio_dev_t *dev;
     virtio_fs_config_t config;
     bool read_only;
-    pthread_t worker;
-    bool worker_started;
-    pthread_mutex_t lock;
-    pthread_cond_t work_cond;
-    pthread_cond_t idle_cond;
-    bool pending;
-    bool busy;
-    bool stop;
+    virtio_worker_t worker;
 
     fs_htable_t inodes;
     fs_htable_t inodes_by_dev_ino;
@@ -1026,28 +980,6 @@ static void fs_free_handle(virtio_fs_t *fs, fs_handle_t *h) {
     fs_inode_put(fs, node);
 }
 
-static int fs_data_iov(const virtio_iov_t *iov, size_t count, bool write, size_t skip,
-                       size_t len, struct iovec vecs[VIRTIO_FS_MAX_IOV]) {
-    int used = 0;
-    for (size_t i = 0; i < count && len > 0; i++) {
-        if (iov[i].write != write) {
-            continue;
-        }
-        if (skip >= iov[i].len) {
-            skip -= iov[i].len;
-            continue;
-        }
-        size_t span = iov[i].len - skip;
-        if (span > len) {
-            span = len;
-        }
-        vecs[used++] = (struct iovec){ .iov_base = (uint8_t *)iov[i].base + skip, .iov_len = span };
-        len -= span;
-        skip = 0;
-    }
-    return used;
-}
-
 static bool fs_xattr_name_allowed(const char *name) {
     static const char *const prefixes[] = { "user.", "trusted.", "security.", "system." };
     for (size_t i = 0; i < sizeof(prefixes) / sizeof(prefixes[0]); i++) {
@@ -1094,23 +1026,6 @@ static ssize_t fs_xattr_list(int fd, char **out) {
     }
 }
 
-static int fs_write_zeros(int fd, off_t offset, off_t length) {
-    static const uint8_t zeros[4096];
-    while (length > 0) {
-        size_t chunk = length < (off_t)sizeof(zeros) ? (size_t)length : sizeof(zeros);
-        ssize_t n = pwrite(fd, zeros, chunk, offset);
-        if (n < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return -1;
-        }
-        offset += n;
-        length -= n;
-    }
-    return 0;
-}
-
 static int fs_fallocate(int fd, uint32_t mode, off_t offset, off_t length) {
     struct stat st;
     if (fstat(fd, &st) < 0) {
@@ -1128,12 +1043,12 @@ static int fs_fallocate(int fd, uint32_t mode, off_t offset, off_t length) {
             off_t head = (offset + block - 1) / block * block;
             off_t tail = hole_end / block * block;
             if (head >= tail) {
-                if (fs_write_zeros(fd, offset, hole_end - offset) < 0) {
+                if (virtio_write_zeros(fd, offset, hole_end - offset) < 0) {
                     return -1;
                 }
             } else {
-                if (fs_write_zeros(fd, offset, head - offset) < 0 ||
-                    fs_write_zeros(fd, tail, hole_end - tail) < 0) {
+                if (virtio_write_zeros(fd, offset, head - offset) < 0 ||
+                    virtio_write_zeros(fd, tail, hole_end - tail) < 0) {
                     return -1;
                 }
                 fpunchhole_t hole = { .fp_offset = head, .fp_length = tail - head };
@@ -1145,7 +1060,7 @@ static int fs_fallocate(int fd, uint32_t mode, off_t offset, off_t length) {
         return 0;
     }
     if (mode & LINUX_FALLOC_FL_ZERO_RANGE) {
-        if (offset < hole_end && fs_write_zeros(fd, offset, hole_end - offset) < 0) {
+        if (offset < hole_end && virtio_write_zeros(fd, offset, hole_end - offset) < 0) {
             return -1;
         }
     } else if (offset < st.st_size && (off_t)st.st_blocks * 512 < st.st_size) {
@@ -1243,26 +1158,14 @@ static int fs_snapshot_dir(fs_handle_t *h) {
             size_t new_cap = cap * 2;
             fs_dir_entry_t *grown = realloc(entries, new_cap * sizeof(*grown));
             if (!grown) {
-                for (size_t i = 0; i < count; i++) {
-                    free(entries[i].name);
-                }
-                free(entries);
-                closedir(dir);
-                errno = ENOMEM;
-                return -1;
+                goto fail;
             }
             entries = grown;
             cap = new_cap;
         }
         char *dup_name = strdup(de->d_name);
         if (!dup_name) {
-            for (size_t i = 0; i < count; i++) {
-                free(entries[i].name);
-            }
-            free(entries);
-            closedir(dir);
-            errno = ENOMEM;
-            return -1;
+            goto fail;
         }
         entries[count++] = (fs_dir_entry_t){
             .ino = de->d_ino,
@@ -1274,6 +1177,15 @@ static int fs_snapshot_dir(fs_handle_t *h) {
     h->entries = entries;
     h->entry_count = count;
     return 0;
+
+fail:
+    for (size_t i = 0; i < count; i++) {
+        free(entries[i].name);
+    }
+    free(entries);
+    closedir(dir);
+    errno = ENOMEM;
+    return -1;
 }
 
 static uint32_t fs_reply(const virtio_iov_t *iov, size_t total_iov, uint64_t unique,
@@ -1299,6 +1211,25 @@ static void fs_fill_entry_out(const fs_inode_t *node, const struct stat *st, fus
     fs_fill_attr(st, node->nodeid, &eo->attr);
 }
 
+static uint32_t fs_reply_entry(const virtio_iov_t *iov, size_t total_iov, uint64_t unique,
+                               const fs_inode_t *node, const struct stat *st) {
+    if (!node) {
+        return fs_reply(iov, total_iov, unique, -darwin_to_linux_errno(errno), NULL, 0);
+    }
+    fuse_entry_out_t eo;
+    fs_fill_entry_out(node, st, &eo);
+    return fs_reply(iov, total_iov, unique, 0, &eo, sizeof(eo));
+}
+
+static size_t fs_read_string(const virtio_iov_t *iov, size_t total_iov, size_t offset, char *buf, size_t cap) {
+    size_t total = virtio_iov_total(iov, total_iov, false);
+    size_t avail = total > offset ? total - offset : 0;
+    size_t n = avail < cap - 1 ? avail : cap - 1;
+    virtio_iov_read(iov, total_iov, offset, buf, n);
+    buf[n] = '\0';
+    return n;
+}
+
 static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size_t total_iov) {
     fuse_in_header_t in;
     if (virtio_iov_read(iov, total_iov, 0, &in, sizeof(in)) != sizeof(in)) {
@@ -1306,7 +1237,6 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
     }
 
     size_t out_total = virtio_iov_total(iov, total_iov, false);
-    size_t body_len = out_total > sizeof(in) ? out_total - sizeof(in) : 0;
 
     switch (in.opcode) {
     case FUSE_INIT: {
@@ -1366,20 +1296,13 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
         char name[NAME_MAX + 1];
-        size_t n = body_len < sizeof(name) ? body_len : sizeof(name) - 1;
-        virtio_iov_read(iov, total_iov, sizeof(in), name, n);
-        name[n] = '\0';
+        fs_read_string(iov, total_iov, sizeof(in), name, sizeof(name));
         if (!fs_name_valid(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
         struct stat st;
         fs_inode_t *child = fs_lookup_or_insert(fs, parent, name, &st);
-        if (!child) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
-        fuse_entry_out_t eo;
-        fs_fill_entry_out(child, &st, &eo);
-        return fs_reply(iov, total_iov, in.unique, 0, &eo, sizeof(eo));
+        return fs_reply_entry(iov, total_iov, in.unique, child, &st);
     }
 
     case FUSE_GETATTR: {
@@ -1521,9 +1444,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
         char buf[PATH_MAX + NAME_MAX + 2];
-        size_t n = body_len < sizeof(buf) - 1 ? body_len : sizeof(buf) - 1;
-        virtio_iov_read(iov, total_iov, sizeof(in), buf, n);
-        buf[n] = '\0';
+        size_t n = fs_read_string(iov, total_iov, sizeof(in), buf, sizeof(buf));
         size_t name_len = strnlen(buf, n);
         if (name_len + 1 >= n) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
@@ -1539,12 +1460,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         }
         struct stat st;
         fs_inode_t *child = fs_lookup_or_insert(fs, parent, name, &st);
-        if (!child) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
-        fuse_entry_out_t eo;
-        fs_fill_entry_out(child, &st, &eo);
-        return fs_reply(iov, total_iov, in.unique, 0, &eo, sizeof(eo));
+        return fs_reply_entry(iov, total_iov, in.unique, child, &st);
     }
 
     case FUSE_MKNOD: {
@@ -1560,10 +1476,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
         char name[NAME_MAX + 1];
-        size_t rem = body_len > sizeof(req) ? body_len - sizeof(req) : 0;
-        size_t n = rem < sizeof(name) ? rem : sizeof(name) - 1;
-        virtio_iov_read(iov, total_iov, sizeof(in) + sizeof(req), name, n);
-        name[n] = '\0';
+        fs_read_string(iov, total_iov, sizeof(in) + sizeof(req), name, sizeof(name));
         if (!fs_name_valid(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
@@ -1588,12 +1501,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         }
         struct stat st;
         fs_inode_t *child = fs_lookup_or_insert(fs, parent, name, &st);
-        if (!child) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
-        fuse_entry_out_t eo;
-        fs_fill_entry_out(child, &st, &eo);
-        return fs_reply(iov, total_iov, in.unique, 0, &eo, sizeof(eo));
+        return fs_reply_entry(iov, total_iov, in.unique, child, &st);
     }
 
     case FUSE_MKDIR: {
@@ -1609,10 +1517,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
         char name[NAME_MAX + 1];
-        size_t rem = body_len > sizeof(req) ? body_len - sizeof(req) : 0;
-        size_t n = rem < sizeof(name) ? rem : sizeof(name) - 1;
-        virtio_iov_read(iov, total_iov, sizeof(in) + sizeof(req), name, n);
-        name[n] = '\0';
+        fs_read_string(iov, total_iov, sizeof(in) + sizeof(req), name, sizeof(name));
         if (!fs_name_valid(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
@@ -1622,12 +1527,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         }
         struct stat st;
         fs_inode_t *child = fs_lookup_or_insert(fs, parent, name, &st);
-        if (!child) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
-        }
-        fuse_entry_out_t eo;
-        fs_fill_entry_out(child, &st, &eo);
-        return fs_reply(iov, total_iov, in.unique, 0, &eo, sizeof(eo));
+        return fs_reply_entry(iov, total_iov, in.unique, child, &st);
     }
 
     case FUSE_UNLINK:
@@ -1640,9 +1540,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
         char name[NAME_MAX + 1];
-        size_t n = body_len < sizeof(name) ? body_len : sizeof(name) - 1;
-        virtio_iov_read(iov, total_iov, sizeof(in), name, n);
-        name[n] = '\0';
+        fs_read_string(iov, total_iov, sizeof(in), name, sizeof(name));
         if (!fs_name_valid(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
@@ -1691,10 +1589,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
         char buf[2 * (NAME_MAX + 1)];
-        size_t rem = body_len > hdr_extra ? body_len - hdr_extra : 0;
-        size_t n = rem < sizeof(buf) - 1 ? rem : sizeof(buf) - 1;
-        virtio_iov_read(iov, total_iov, sizeof(in) + hdr_extra, buf, n);
-        buf[n] = '\0';
+        size_t n = fs_read_string(iov, total_iov, sizeof(in) + hdr_extra, buf, sizeof(buf));
         size_t old_len = strnlen(buf, n);
         if (old_len + 1 >= n) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
@@ -1756,10 +1651,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
         char newname[NAME_MAX + 1];
-        size_t rem = body_len > sizeof(req) ? body_len - sizeof(req) : 0;
-        size_t n = rem < sizeof(newname) ? rem : sizeof(newname) - 1;
-        virtio_iov_read(iov, total_iov, sizeof(in) + sizeof(req), newname, n);
-        newname[n] = '\0';
+        fs_read_string(iov, total_iov, sizeof(in) + sizeof(req), newname, sizeof(newname));
         if (!fs_name_valid(newname)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
@@ -1774,13 +1666,10 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
         }
         fs_inode_t *child = fs_lookup_or_insert(fs, newdir, newname, &st);
-        if (!child) {
-            return fs_reply(iov, total_iov, in.unique, -darwin_to_linux_errno(errno), NULL, 0);
+        if (child) {
+            fs_inode_move(fs, child, newdir, newname, true);
         }
-        fs_inode_move(fs, child, newdir, newname, true);
-        fuse_entry_out_t eo;
-        fs_fill_entry_out(child, &st, &eo);
-        return fs_reply(iov, total_iov, in.unique, 0, &eo, sizeof(eo));
+        return fs_reply_entry(iov, total_iov, in.unique, child, &st);
     }
 
     case FUSE_OPEN: {
@@ -1828,10 +1717,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
         char name[NAME_MAX + 1];
-        size_t rem = body_len > sizeof(req) ? body_len - sizeof(req) : 0;
-        size_t n = rem < sizeof(name) ? rem : sizeof(name) - 1;
-        virtio_iov_read(iov, total_iov, sizeof(in) + sizeof(req), name, n);
-        name[n] = '\0';
+        fs_read_string(iov, total_iov, sizeof(in) + sizeof(req), name, sizeof(name));
         if (!fs_name_valid(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EINVAL, NULL, 0);
         }
@@ -1877,7 +1763,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_EBADF, NULL, 0);
         }
         struct iovec vecs[VIRTIO_FS_MAX_IOV];
-        int cnt = fs_data_iov(iov, total_iov, true, sizeof(fuse_out_header_t), req.size, vecs);
+        int cnt = virtio_iov_spans(iov, total_iov, true, sizeof(fuse_out_header_t), req.size, vecs);
         ssize_t got = 0;
         if (cnt > 0) {
             do {
@@ -1907,7 +1793,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_EBADF, NULL, 0);
         }
         struct iovec vecs[VIRTIO_FS_MAX_IOV];
-        int cnt = fs_data_iov(iov, total_iov, false, sizeof(in) + sizeof(req), req.size, vecs);
+        int cnt = virtio_iov_spans(iov, total_iov, false, sizeof(in) + sizeof(req), req.size, vecs);
         ssize_t n = 0;
         if (cnt > 0) {
             do {
@@ -2167,10 +2053,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
         ssize_t len;
         if (in.opcode == FUSE_GETXATTR) {
             char name[LINUX_XATTR_NAME_MAX + 1];
-            size_t rem = body_len > sizeof(req) ? body_len - sizeof(req) : 0;
-            size_t n = rem < sizeof(name) ? rem : sizeof(name) - 1;
-            virtio_iov_read(iov, total_iov, sizeof(in) + sizeof(req), name, n);
-            name[n] = '\0';
+            fs_read_string(iov, total_iov, sizeof(in) + sizeof(req), name, sizeof(name));
             if (!fs_xattr_name_allowed(name)) {
                 return fs_reply(iov, total_iov, in.unique, -LINUX_EOPNOTSUPP, NULL, 0);
             }
@@ -2228,10 +2111,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
             return fs_reply(iov, total_iov, in.unique, -LINUX_ENOENT, NULL, 0);
         }
         char name[LINUX_XATTR_NAME_MAX + 1];
-        size_t rem = out_total > name_off ? out_total - name_off : 0;
-        size_t n = rem < sizeof(name) ? rem : sizeof(name) - 1;
-        virtio_iov_read(iov, total_iov, name_off, name, n);
-        name[n] = '\0';
+        fs_read_string(iov, total_iov, name_off, name, sizeof(name));
         if (!fs_xattr_name_allowed(name)) {
             return fs_reply(iov, total_iov, in.unique, -LINUX_EOPNOTSUPP, NULL, 0);
         }
@@ -2273,8 +2153,7 @@ static uint32_t fs_handle_request(virtio_fs_t *fs, const virtio_iov_t *iov, size
 static void fs_drain_queue(virtio_fs_t *fs, uint32_t qidx) {
     virtio_dev_t *dev = fs->dev;
     virtqueue_t *vq = &dev->queues[qidx];
-    if (!atomic_load_explicit(&vq->ready, memory_order_acquire) ||
-        !(atomic_load_explicit(&dev->status, memory_order_acquire) & VIRTIO_STATUS_DRIVER_OK)) {
+    if (!virtqueue_active(dev, vq)) {
         return;
     }
     uint16_t old_used = vq->used_idx;
@@ -2283,12 +2162,11 @@ static void fs_drain_queue(virtio_fs_t *fs, uint32_t qidx) {
     for (;;) {
         virtio_iov_t iov[VIRTIO_FS_MAX_IOV];
         uint16_t head = 0;
-        size_t out_cnt = 0;
-        size_t in_cnt = 0;
-        if (virtqueue_pop(dev, vq, iov, VIRTIO_FS_MAX_IOV, &head, &out_cnt, &in_cnt) <= 0) {
+        size_t count = 0;
+        if (virtqueue_pop(dev, vq, iov, VIRTIO_FS_MAX_IOV, &head, &count) <= 0) {
             break;
         }
-        uint32_t written = fs_handle_request(fs, iov, out_cnt + in_cnt);
+        uint32_t written = fs_handle_request(fs, iov, count);
         virtqueue_push(dev, vq, head, written);
         fs_trim_fds(fs);
         pushed = true;
@@ -2299,31 +2177,10 @@ static void fs_drain_queue(virtio_fs_t *fs, uint32_t qidx) {
     }
 }
 
-static void *virtio_fs_worker(void *ctx) {
+static void virtio_fs_run(void *ctx) {
     virtio_fs_t *fs = ctx;
-    pthread_mutex_lock(&fs->lock);
-    for (;;) {
-        while (!fs->pending && !fs->stop) {
-            pthread_cond_wait(&fs->work_cond, &fs->lock);
-        }
-        if (!fs->pending && fs->stop) {
-            break;
-        }
-        fs->pending = false;
-        fs->busy = true;
-        pthread_mutex_unlock(&fs->lock);
-
-        fs_drain_queue(fs, VIRTIO_FS_VQ_HIPRIO);
-        fs_drain_queue(fs, VIRTIO_FS_VQ_REQUEST);
-
-        pthread_mutex_lock(&fs->lock);
-        fs->busy = false;
-        if (!fs->pending) {
-            pthread_cond_broadcast(&fs->idle_cond);
-        }
-    }
-    pthread_mutex_unlock(&fs->lock);
-    return NULL;
+    fs_drain_queue(fs, VIRTIO_FS_VQ_HIPRIO);
+    fs_drain_queue(fs, VIRTIO_FS_VQ_REQUEST);
 }
 
 static uint64_t virtio_fs_read_config(virtio_dev_t *dev, uint32_t offset, uint32_t size) {
@@ -2332,16 +2189,9 @@ static uint64_t virtio_fs_read_config(virtio_dev_t *dev, uint32_t offset, uint32
 }
 
 static void virtio_fs_queue_notify(virtio_dev_t *dev, uint32_t queue_idx) {
-    if (queue_idx >= dev->num_queues) {
-        return;
-    }
+    (void)queue_idx;
     virtio_fs_t *fs = dev->priv;
-    pthread_mutex_lock(&fs->lock);
-    if (!fs->stop) {
-        fs->pending = true;
-        pthread_cond_signal(&fs->work_cond);
-    }
-    pthread_mutex_unlock(&fs->lock);
+    virtio_worker_kick(&fs->worker);
 }
 
 static void virtio_fs_reset_tables(virtio_fs_t *fs) {
@@ -2394,35 +2244,16 @@ static void virtio_fs_free(virtio_fs_t *fs) {
 
 static void virtio_fs_reset(virtio_dev_t *dev) {
     virtio_fs_t *fs = dev->priv;
-    pthread_mutex_lock(&fs->lock);
-    while (fs->pending || fs->busy) {
-        pthread_cond_wait(&fs->idle_cond, &fs->lock);
-    }
-    pthread_mutex_unlock(&fs->lock);
+    virtio_worker_wait_idle(&fs->worker);
     virtio_fs_reset_tables(fs);
 }
 
 static void virtio_fs_destroy(virtio_dev_t *dev) {
     virtio_fs_t *fs = dev->priv;
-    if (!fs) {
-        return;
-    }
-    pthread_mutex_lock(&fs->lock);
-    fs->stop = true;
-    pthread_cond_signal(&fs->work_cond);
-    pthread_mutex_unlock(&fs->lock);
-    if (fs->worker_started) {
-        pthread_join(fs->worker, NULL);
-        fs->worker_started = false;
-    }
-    pthread_cond_destroy(&fs->idle_cond);
-    pthread_cond_destroy(&fs->work_cond);
-    pthread_mutex_destroy(&fs->lock);
-
+    virtio_worker_destroy(&fs->worker);
     virtio_fs_reset_tables(fs);
     close(fs->root->fd);
     virtio_fs_free(fs);
-    dev->priv = NULL;
 }
 
 static const virtio_dev_ops_t virtio_fs_ops = {
@@ -2434,7 +2265,7 @@ static const virtio_dev_ops_t virtio_fs_ops = {
 
 virtio_dev_t *virtio_fs_create(vmm_machine_t *vm, uint32_t slot,
                                const char *tag, const char *host_root, bool read_only) {
-    if (!vm || !tag || !host_root || tag[0] == '\0') {
+    if (tag[0] == '\0') {
         return NULL;
     }
     int root_fd = open(host_root, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
@@ -2473,26 +2304,20 @@ virtio_dev_t *virtio_fs_create(vmm_machine_t *vm, uint32_t slot,
     fs->next_nodeid = FUSE_ROOT_ID + 1;
     fs->next_fh = 1;
     virtio_fs_reset_tables(fs);
-
-    pthread_mutex_init(&fs->lock, NULL);
-    pthread_cond_init(&fs->work_cond, NULL);
-    pthread_cond_init(&fs->idle_cond, NULL);
+    virtio_worker_init(&fs->worker, virtio_fs_run, fs);
 
     const uint32_t qsizes[2] = { VIRTIO_FS_HIPRIO_SIZE, VIRTIO_FS_REQ_SIZE };
     virtio_dev_t *dev = virtio_dev_alloc(vm, slot, VIRTIO_ID_FS, 2, qsizes, &virtio_fs_ops, fs);
     if (!dev) {
-        pthread_cond_destroy(&fs->idle_cond);
-        pthread_cond_destroy(&fs->work_cond);
-        pthread_mutex_destroy(&fs->lock);
+        virtio_worker_destroy(&fs->worker);
         virtio_fs_free(fs);
         close(root_fd);
         return NULL;
     }
     fs->dev = dev;
-    if (pthread_create(&fs->worker, NULL, virtio_fs_worker, fs) != 0) {
+    if (virtio_worker_start(&fs->worker) != 0) {
         virtio_dev_destroy(dev);
         return NULL;
     }
-    fs->worker_started = true;
     return dev;
 }

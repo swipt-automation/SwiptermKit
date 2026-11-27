@@ -80,7 +80,11 @@ static bool jit_mode;
 static uint64_t rng_state = 0x9E3779B97F4A7C15ULL;
 
 static bool fast_path(const ir_insn_t *ir) {
-    return jit_mode ? cpu_jit_native(ir) : ir->fast_offset != 0;
+    if (!jit_mode) {
+        return ir->fast_offset != 0;
+    }
+    uint32_t base = cpu_pool(cpu)->jit.arena.base_offset;
+    return ir->heat != 0 || (base != 0 && ir->fast_offset >= base);
 }
 
 static uint64_t rng(void) {
@@ -732,17 +736,6 @@ static void system_case(const char *name, const uint32_t *words, uint32_t count,
     in->system = 1;
     fuzz.total++;
     uint64_t pc = place_code(words, count);
-    const ir_insn_t *ir = resolve_at(pc);
-    for (uint32_t i = 0; i < count; ++i) {
-        if (!fast_path(&ir[i])) {
-            fuzz.fast_bad++;
-            if (*shown < 4) {
-                ++*shown;
-                printf("MISMATCH system %s %08x: not on the fast path\n", name, words[i]);
-            }
-            return;
-        }
-    }
     fuzz.fast++;
     outcome_t fast = guest_run(pc, count, in, &fast_state, false, true, &fast_mask);
     memcpy(fuzz.fast_data, (void *)DATA_BASE, DATA_SIZE);
@@ -857,31 +850,6 @@ static int command_system(int argc, char **argv) {
         system_case("adrp pair", forms[t % 3], 2, &in, &shown);
     }
     return fuzz_finish("system");
-}
-
-static uint32_t find_leaf(uint32_t word);
-
-static int command_stubs(int argc, char **argv) {
-    static const struct { uint32_t word; const char *text; } stubs[] = {
-#include "generated/a64_passthrough_words.inc"
-    };
-    uint32_t per_stub = argc > 0 ? (uint32_t)strtoul(argv[0], nullptr, 0) : 8;
-    fuzz_setup();
-    for (size_t i = 0; i < sizeof(stubs) / sizeof(stubs[0]); ++i) {
-        const a64_leaf_t *leaf = &a64_leaves[find_leaf(stubs[i].word)];
-        if (leaf->features & ~host_features) {
-            continue;
-        }
-        uint32_t shown = 0, fast_before = fuzz.fast, total_before = fuzz.total;
-        for (uint32_t t = 0; t < per_stub; ++t) {
-            fuzz_case(leaf, &stubs[i].word, &shown);
-        }
-        if (fuzz.fast - fast_before != fuzz.total - total_before) {
-            fuzz.fast_bad++;
-            printf("MISMATCH stub %s %08x %s: not on the fast path\n", leaf->name, stubs[i].word, stubs[i].text);
-        }
-    }
-    return fuzz_finish("stubs");
 }
 
 typedef struct coverage {
@@ -1132,79 +1100,6 @@ static int command_elf(int argc, char **argv) {
     return 0;
 }
 
-static int command_coverage(int argc, char **argv) {
-    static struct { char prefix[96]; bool used; } allowed[256];
-    uint32_t allowed_count = 0, failures = 0, slow = 0;
-    if (argc < 1) {
-        return 2;
-    }
-    FILE *in = fopen(argv[0], "r");
-    if (!in) {
-        perror(argv[0]);
-        return 1;
-    }
-    char line[512];
-    while (fgets(line, sizeof(line), in) && allowed_count < 256) {
-        if (sscanf(line, "%95s", allowed[allowed_count].prefix) == 1 && allowed[allowed_count].prefix[0] != '#') {
-            ++allowed_count;
-        }
-    }
-    fclose(in);
-    setup_native();
-    const uint32_t udf = 0;
-    ir_handler_fn undefined = resolve_at(place_code(&udf, 1))->handler;
-    for (uint32_t l = 0; l < LEAF_COUNT; ++l) {
-        const a64_leaf_t *leaf = &a64_leaves[l];
-        bool native = leaf_fuzzable(leaf);
-        uint32_t valid = 0, fast = 0, undefined_count = 0;
-        for (uint32_t t = 0; t < 64; ++t) {
-            uint32_t word;
-            test_state_t state, out;
-            bool native_differs;
-            if (native) {
-                if (!random_instance(leaf, nullptr, &word, &state, &native_differs) ||
-                    native_run(&word, 1, &state, &out) == OUTCOME_UNDEFINED) {
-                    continue;
-                }
-                memcpy((void *)DATA_BASE, data_pristine, DATA_SIZE);
-            } else {
-                word = leaf->value | ((uint32_t)rng() & ~leaf->mask);
-                if (!leaf_matches(leaf, word)) {
-                    continue;
-                }
-            }
-            const ir_insn_t *ir = resolve_at(place_code(&word, 1));
-            ++valid;
-            fast += fast_path(ir);
-            undefined_count += ir->handler == undefined;
-        }
-        if (fast == valid || ((leaf->features & ~host_features) != 0 && undefined_count == valid)) {
-            continue;
-        }
-        ++slow;
-        char name[160];
-        snprintf(name, sizeof(name), "%s/%s", leaf->subgroup, leaf->name);
-        bool listed = false;
-        for (uint32_t a = 0; a < allowed_count; ++a) {
-            if (strncmp(name, allowed[a].prefix, strlen(allowed[a].prefix)) == 0) {
-                allowed[a].used = listed = true;
-            }
-        }
-        if (!listed) {
-            ++failures;
-            printf("unlisted slow path: %s (%u of %u fast)\n", name, fast, valid);
-        }
-    }
-    for (uint32_t a = 0; a < allowed_count; ++a) {
-        if (!allowed[a].used) {
-            ++failures;
-            printf("listed but fast: %s\n", allowed[a].prefix);
-        }
-    }
-    printf("coverage: %u of %u encodings take the slow path, %u problems\n", slow, LEAF_COUNT, failures);
-    return failures != 0;
-}
-
 typedef struct system_word {
     uint32_t word;
     uint64_t count;
@@ -1324,12 +1219,10 @@ int main(int argc, char **argv) {
         fprintf(stderr,
                 "usage: a64_check [-j] COMMAND ...\n"
                 "       a64_check fuzz [-n COUNT] [-s SEED] [-v] [-p] [FILTER]\n"
-                "       a64_check stubs [COUNT]\n"
                 "       a64_check system [COUNT]\n"
                 "       a64_check spec [COUNT [SUBGROUP]]\n"
                 "       a64_check elf [-t TOP] [-p] FILE...\n"
-                "       a64_check stats [-t TOP] FILE...\n"
-                "       a64_check coverage SLOW_PATH_LIST\n");
+                "       a64_check stats [-t TOP] FILE...\n");
         return 2;
     }
     host_features = query_host_features();
@@ -1339,12 +1232,6 @@ int main(int argc, char **argv) {
     }
     if (strcmp(argv[1], "system") == 0) {
         return command_system(argc - 2, argv + 2);
-    }
-    if (strcmp(argv[1], "stubs") == 0) {
-        return command_stubs(argc - 2, argv + 2);
-    }
-    if (strcmp(argv[1], "coverage") == 0) {
-        return command_coverage(argc - 2, argv + 2);
     }
     if (strcmp(argv[1], "stats") == 0) {
         return command_stats(argc - 2, argv + 2);

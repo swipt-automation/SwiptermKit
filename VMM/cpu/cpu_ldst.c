@@ -2,8 +2,7 @@
 
 static inline void cpu_notify_wfe_write(vcpu_t *cpu, uintptr_t hva) {
     vmm_machine_t *vm = cpu->vm;
-    if (__builtin_expect(vm != NULL &&
-                         atomic_load_explicit(&vm->wfe_waiters, memory_order_seq_cst) != 0, 0)) {
+    if (__builtin_expect(atomic_load_explicit(&vm->wfe_waiters, memory_order_seq_cst) != 0, 0)) {
         vmm_vcpu_wfe_notify_write(vm, hva);
     }
 }
@@ -24,12 +23,12 @@ static bool unpriv_read_bytes(vcpu_t *cpu, uint64_t va, uint8_t *dst, uint32_t s
         }
         mmu_translation_t tr;
         if (!mmu_translate_and_fill(cpu, cur, MMU_ACCESS_READ, 0, &tr, NULL)) {
-            vcpu_raise_data_abort(cpu, cur, &tr, false, elr);
+            vcpu_raise_abort(cpu, cur, &tr, false, elr, false);
             return false;
         }
         if (tr.is_mmio) {
             cpu_fp_leave_guest(cpu);
-            uint64_t v = vmm_mmio_read(cpu->vm, cpu, tr.pa, chunk);
+            uint64_t v = vmm_mmio_read(cpu, tr.pa, chunk);
             memcpy(dst + done, &v, chunk);
         } else {
             memcpy(dst + done, (const void *)tr.hva, chunk);
@@ -55,14 +54,14 @@ static bool unpriv_write_bytes(vcpu_t *cpu, uint64_t va, const uint8_t *src, uin
         }
         mmu_translation_t tr;
         if (!mmu_translate_and_fill(cpu, cur, MMU_ACCESS_WRITE, 0, &tr, NULL)) {
-            vcpu_raise_data_abort(cpu, cur, &tr, true, elr);
+            vcpu_raise_abort(cpu, cur, &tr, true, elr, false);
             return false;
         }
         if (tr.is_mmio) {
             uint64_t v = 0;
             memcpy(&v, src + done, chunk);
             cpu_fp_leave_guest(cpu);
-            vmm_mmio_write(cpu->vm, cpu, tr.pa, chunk, v);
+            vmm_mmio_write(cpu, tr.pa, chunk, v);
         } else {
             memcpy((void *)tr.hva, src + done, chunk);
         }
@@ -101,15 +100,10 @@ void cpu_op_ldst_unpriv(vcpu_t *cpu, const ir_insn_t *ir,
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
 }
 
-static bool resolve_atomic_addr(vcpu_t *cpu, uint64_t va, uint32_t align,
-                                mmu_access_t acc, bool is_write_abort,
+static bool resolve_atomic_addr(vcpu_t *cpu, uint64_t va, mmu_access_t acc, bool is_write_abort,
                                 uint64_t elr, mmu_translation_t *tr_out) {
-    if ((va & (align - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, NULL, is_write_abort, elr);
-        return false;
-    }
     if (!mmu_translate_and_fill(cpu, va, acc, cpu->el, tr_out, NULL)) {
-        vcpu_raise_data_abort(cpu, va, tr_out, is_write_abort, elr);
+        vcpu_raise_abort(cpu, va, tr_out, is_write_abort, elr, false);
         return false;
     }
     return true;
@@ -129,7 +123,7 @@ static bool ordered_access(vcpu_t *cpu, const ir_insn_t *ir, const softtlb_entry
     uint32_t bytes = 1U << size;
 
     if ((va & (bytes - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, NULL, !is_load, elr);
+        vcpu_raise_abort(cpu, va, NULL, !is_load, elr, false);
         return false;
     }
 
@@ -139,8 +133,7 @@ static bool ordered_access(vcpu_t *cpu, const ir_insn_t *ir, const softtlb_entry
     const softtlb_entry_t *tlb = is_load ? tlb_r : tlb_w;
     if (!mmu_tlb_lookup(tlb, cpu->tlb_asid_salt, va, bytes, &hva)) {
         mmu_translation_t tr;
-        if (!resolve_atomic_addr(cpu, va, bytes, is_load ? MMU_ACCESS_READ : MMU_ACCESS_WRITE,
-                                 !is_load, elr, &tr)) {
+        if (!resolve_atomic_addr(cpu, va, is_load ? MMU_ACCESS_READ : MMU_ACCESS_WRITE, !is_load, elr, &tr)) {
             return false;
         }
         hva = tr.hva;
@@ -152,7 +145,7 @@ static bool ordered_access(vcpu_t *cpu, const ir_insn_t *ir, const softtlb_entry
         uint64_t val = 0;
         if (is_mmio) {
             cpu_fp_leave_guest(cpu);
-            val = vmm_mmio_read(cpu->vm, cpu, pa, bytes);
+            val = vmm_mmio_read(cpu, pa, bytes);
             atomic_thread_fence(memory_order_seq_cst);
         } else if (size == 0U) {
             val = __atomic_load_n((const uint8_t *)hva, __ATOMIC_SEQ_CST);
@@ -174,7 +167,7 @@ static bool ordered_access(vcpu_t *cpu, const ir_insn_t *ir, const softtlb_entry
         if (is_mmio) {
             atomic_thread_fence(memory_order_seq_cst);
             cpu_fp_leave_guest(cpu);
-            vmm_mmio_write(cpu->vm, cpu, pa, bytes, val);
+            vmm_mmio_write(cpu, pa, bytes, val);
         } else if (size == 0U) {
             __atomic_store_n((uint8_t *)hva, (uint8_t)val, __ATOMIC_SEQ_CST);
         } else if (size == 1U) {
@@ -222,10 +215,13 @@ void cpu_op_ldst_exclr(vcpu_t *cpu, const ir_insn_t *ir,
     if (!cpu_check_sp_align(cpu, rn, elr)) {
         return;
     }
+    if ((va & (bytes - 1U)) != 0) {
+        vcpu_raise_abort(cpu, va, NULL, !is_load, elr, false);
+        return;
+    }
 
     mmu_translation_t tr;
-    if (!resolve_atomic_addr(cpu, va, bytes, is_load ? MMU_ACCESS_READ : MMU_ACCESS_WRITE,
-                             !is_load, elr, &tr)) {
+    if (!resolve_atomic_addr(cpu, va, is_load ? MMU_ACCESS_READ : MMU_ACCESS_WRITE, !is_load, elr, &tr)) {
         return;
     }
 
@@ -234,7 +230,7 @@ void cpu_op_ldst_exclr(vcpu_t *cpu, const ir_insn_t *ir,
         int mo = ordered ? __ATOMIC_ACQUIRE : __ATOMIC_RELAXED;
         if (tr.is_mmio) {
             cpu_fp_leave_guest(cpu);
-            val = vmm_mmio_read(cpu->vm, cpu, tr.pa, bytes);
+            val = vmm_mmio_read(cpu, tr.pa, bytes);
         } else if (size == 0U) {
             val = __atomic_load_n((uint8_t *)tr.hva, mo);
         } else if (size == 1U) {
@@ -258,7 +254,7 @@ void cpu_op_ldst_exclr(vcpu_t *cpu, const ir_insn_t *ir,
             int succ = ordered ? __ATOMIC_ACQ_REL : __ATOMIC_RELAXED;
             if (tr.is_mmio) {
                 cpu_fp_leave_guest(cpu);
-                vmm_mmio_write(cpu->vm, cpu, tr.pa, bytes, nv);
+                vmm_mmio_write(cpu, tr.pa, bytes, nv);
                 ok = true;
             } else if (size == 0U) {
                 uint8_t exp = (uint8_t)cpu->excl_val;
@@ -300,10 +296,13 @@ void cpu_op_ldst_exclp(vcpu_t *cpu, const ir_insn_t *ir,
     if (!cpu_check_sp_align(cpu, rn, elr)) {
         return;
     }
+    if ((va & (bytes - 1U)) != 0) {
+        vcpu_raise_abort(cpu, va, NULL, !is_load, elr, false);
+        return;
+    }
 
     mmu_translation_t tr;
-    if (!resolve_atomic_addr(cpu, va, bytes, is_load ? MMU_ACCESS_READ : MMU_ACCESS_WRITE,
-                             !is_load, elr, &tr)) {
+    if (!resolve_atomic_addr(cpu, va, is_load ? MMU_ACCESS_READ : MMU_ACCESS_WRITE, !is_load, elr, &tr)) {
         return;
     }
 
@@ -312,9 +311,9 @@ void cpu_op_ldst_exclp(vcpu_t *cpu, const ir_insn_t *ir,
         __uint128_t val = 0;
         if (tr.is_mmio) {
             cpu_fp_leave_guest(cpu);
-            val = vmm_mmio_read(cpu->vm, cpu, tr.pa, 8U);
+            val = vmm_mmio_read(cpu, tr.pa, 8U);
             if (is_64) {
-                val |= (__uint128_t)vmm_mmio_read(cpu->vm, cpu, tr.pa + 8U, 8U) << 64;
+                val |= (__uint128_t)vmm_mmio_read(cpu, tr.pa + 8U, 8U) << 64;
             }
         } else if (is_64) {
             val = __atomic_load_n((__uint128_t *)tr.hva, mo);
@@ -342,9 +341,9 @@ void cpu_op_ldst_exclp(vcpu_t *cpu, const ir_insn_t *ir,
                                          ((uint64_t)(uint32_t)cpu_get_x(cpu, rt2) << 32);
             if (tr.is_mmio) {
                 cpu_fp_leave_guest(cpu);
-                vmm_mmio_write(cpu->vm, cpu, tr.pa, 8U, (uint64_t)nv);
+                vmm_mmio_write(cpu, tr.pa, 8U, (uint64_t)nv);
                 if (is_64) {
-                    vmm_mmio_write(cpu->vm, cpu, tr.pa + 8U, 8U, (uint64_t)(nv >> 64));
+                    vmm_mmio_write(cpu, tr.pa + 8U, 8U, (uint64_t)(nv >> 64));
                 }
                 ok = true;
             } else if (is_64) {
@@ -392,12 +391,12 @@ void cpu_op_lse_cas(vcpu_t *cpu, const ir_insn_t *ir,
     bool is_mmio = false;
     uint64_t pa = 0;
     if ((va & (bytes - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, NULL, true, elr);
+        vcpu_raise_abort(cpu, va, NULL, true, elr, false);
         return;
     }
     if (!mmu_tlb_lookup(tlb_w, cpu->tlb_asid_salt, va, bytes, &hva)) {
         mmu_translation_t tr;
-        if (!resolve_atomic_addr(cpu, va, bytes, MMU_ACCESS_WRITE, true, elr, &tr)) {
+        if (!resolve_atomic_addr(cpu, va, MMU_ACCESS_WRITE, true, elr, &tr)) {
             return;
         }
         hva = tr.hva;
@@ -413,10 +412,10 @@ void cpu_op_lse_cas(vcpu_t *cpu, const ir_insn_t *ir,
 
     if (is_mmio) {
         cpu_fp_leave_guest(cpu);
-        old = vmm_mmio_read(cpu->vm, cpu, pa, bytes);
+        old = vmm_mmio_read(cpu, pa, bytes);
         uint64_t mask = bytes == 8U ? UINT64_MAX : ((1ULL << (bytes * 8U)) - 1ULL);
         if ((old & mask) == (cmp & mask)) {
-            vmm_mmio_write(cpu->vm, cpu, pa, bytes, nv & mask);
+            vmm_mmio_write(cpu, pa, bytes, nv & mask);
         }
     } else if (size == 0U) {
         uint8_t exp = (uint8_t)cmp;
@@ -454,7 +453,7 @@ void cpu_op_lse_casp(vcpu_t *cpu, const ir_insn_t *ir,
     uint32_t rt = word & 31U;
     uint64_t elr = cpu_ir_pc(cpu, ir);
     if ((rs & 1U) != 0 || (rt & 1U) != 0) {
-        vcpu_raise_undef(cpu, elr);
+        vcpu_raise_exception(cpu, 1U << 25, 0, elr);
         return;
     }
     if (!cpu_check_sp_align(cpu, rn, elr)) {
@@ -466,12 +465,12 @@ void cpu_op_lse_casp(vcpu_t *cpu, const ir_insn_t *ir,
     bool is_mmio = false;
     uint64_t pa = 0;
     if ((va & (bytes - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, NULL, true, elr);
+        vcpu_raise_abort(cpu, va, NULL, true, elr, false);
         return;
     }
     if (!mmu_tlb_lookup(tlb_w, cpu->tlb_asid_salt, va, bytes, &hva)) {
         mmu_translation_t tr;
-        if (!resolve_atomic_addr(cpu, va, bytes, MMU_ACCESS_WRITE, true, elr, &tr)) {
+        if (!resolve_atomic_addr(cpu, va, MMU_ACCESS_WRITE, true, elr, &tr)) {
             return;
         }
         hva = tr.hva;
@@ -490,14 +489,14 @@ void cpu_op_lse_casp(vcpu_t *cpu, const ir_insn_t *ir,
     }
     if (is_mmio) {
         cpu_fp_leave_guest(cpu);
-        __uint128_t old = vmm_mmio_read(cpu->vm, cpu, pa, 8U);
+        __uint128_t old = vmm_mmio_read(cpu, pa, 8U);
         if (is_64) {
-            old |= (__uint128_t)vmm_mmio_read(cpu->vm, cpu, pa + 8U, 8U) << 64;
+            old |= (__uint128_t)vmm_mmio_read(cpu, pa + 8U, 8U) << 64;
         }
         if (old == exp) {
-            vmm_mmio_write(cpu->vm, cpu, pa, 8U, (uint64_t)nv);
+            vmm_mmio_write(cpu, pa, 8U, (uint64_t)nv);
             if (is_64) {
-                vmm_mmio_write(cpu->vm, cpu, pa + 8U, 8U, (uint64_t)(nv >> 64));
+                vmm_mmio_write(cpu, pa + 8U, 8U, (uint64_t)(nv >> 64));
             }
         }
         exp = old;
@@ -604,7 +603,7 @@ void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
 
     if ((word & 0x00FFFC00U) == 0x00BFC000U) {
         if ((va & (bytes - 1U)) != 0) {
-            vcpu_raise_data_abort(cpu, va, NULL, false, elr);
+            vcpu_raise_abort(cpu, va, NULL, false, elr, false);
             return;
         }
         uintptr_t hva = 0;
@@ -612,7 +611,7 @@ void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
         uint64_t pa = 0;
         if (!mmu_tlb_lookup(tlb_r, cpu->tlb_asid_salt, va, bytes, &hva)) {
             mmu_translation_t tr;
-            if (!resolve_atomic_addr(cpu, va, bytes, MMU_ACCESS_READ, false, elr, &tr)) {
+            if (!resolve_atomic_addr(cpu, va, MMU_ACCESS_READ, false, elr, &tr)) {
                 return;
             }
             hva = tr.hva;
@@ -622,7 +621,7 @@ void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
         uint64_t val = 0;
         if (is_mmio) {
             cpu_fp_leave_guest(cpu);
-            val = vmm_mmio_read(cpu->vm, cpu, pa, bytes);
+            val = vmm_mmio_read(cpu, pa, bytes);
             atomic_thread_fence(memory_order_acquire);
         } else if (size == 0U) {
             val = __atomic_load_n((const uint8_t *)hva, __ATOMIC_ACQUIRE);
@@ -647,12 +646,12 @@ void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
     bool is_mmio = false;
     uint64_t pa = 0;
     if ((va & (bytes - 1U)) != 0) {
-        vcpu_raise_data_abort(cpu, va, NULL, true, elr);
+        vcpu_raise_abort(cpu, va, NULL, true, elr, false);
         return;
     }
     if (!mmu_tlb_lookup(tlb_w, cpu->tlb_asid_salt, va, bytes, &hva)) {
         mmu_translation_t tr;
-        if (!resolve_atomic_addr(cpu, va, bytes, MMU_ACCESS_WRITE, true, elr, &tr)) {
+        if (!resolve_atomic_addr(cpu, va, MMU_ACCESS_WRITE, true, elr, &tr)) {
             return;
         }
         hva = tr.hva;
@@ -666,9 +665,9 @@ void cpu_op_lse_memop(vcpu_t *cpu, const ir_insn_t *ir,
 
     if (is_mmio) {
         cpu_fp_leave_guest(cpu);
-        old = vmm_mmio_read(cpu->vm, cpu, pa, bytes);
+        old = vmm_mmio_read(cpu, pa, bytes);
         uint64_t nv = is_swp ? op_val : lse_alu(opc, bytes * 8U, old, op_val);
-        vmm_mmio_write(cpu->vm, cpu, pa, bytes, nv);
+        vmm_mmio_write(cpu, pa, bytes, nv);
     } else if (is_swp) {
         if (size == 0U) old = __atomic_exchange_n((uint8_t *)hva, (uint8_t)op_val, mo);
         else if (size == 1U) old = __atomic_exchange_n((uint16_t *)hva, (uint16_t)op_val, mo);
@@ -756,7 +755,6 @@ static inline bool mops_resolve_page(vcpu_t *cpu, const softtlb_entry_t *bank, u
                                      uintptr_t *hva_out, mmu_translation_t *tr_out) {
     if (__builtin_expect(mmu_tlb_lookup_aligned(bank, cpu->tlb_asid_salt, va, hva_out), 1)) {
         tr_out->is_mmio = false;
-        tr_out->ok = true;
         return true;
     }
     if (!mmu_translate_and_fill(cpu, va, acc, access_el, tr_out, NULL)) {
@@ -776,7 +774,7 @@ void cpu_op_mops_set(vcpu_t *cpu, const ir_insn_t *ir,
 
     if (__builtin_expect(!mops_is_enabled(cpu), 0)) {
         uint64_t elr = cpu_ir_pc(cpu, ir);
-        vcpu_raise_undef(cpu, elr);
+        vcpu_raise_exception(cpu, 1U << 25, 0, elr);
         return;
     }
 
@@ -829,13 +827,13 @@ void cpu_op_mops_set(vcpu_t *cpu, const ir_insn_t *ir,
             } else {
                 cpu->x[rn] = (uint64_t)(-(int64_t)rem);
             }
-            vcpu_raise_data_abort(cpu, dst, &tr, true, elr);
+            vcpu_raise_abort(cpu, dst, &tr, true, elr, false);
             return;
         }
         if (__builtin_expect(tr.is_mmio, 0)) {
             cpu_fp_leave_guest(cpu);
             for (size_t i = 0; i < chunk; i++) {
-                vmm_mmio_write(cpu->vm, cpu, tr.pa + i, 1, fill);
+                vmm_mmio_write(cpu, tr.pa + i, 1, fill);
             }
         } else {
             memset((void *)dst_hva, fill, chunk);
@@ -866,7 +864,7 @@ void cpu_op_mops_cpy(vcpu_t *cpu, const ir_insn_t *ir,
 
     if (__builtin_expect(!mops_is_enabled(cpu), 0)) {
         uint64_t elr = cpu_ir_pc(cpu, ir);
-        vcpu_raise_undef(cpu, elr);
+        vcpu_raise_exception(cpu, 1U << 25, 0, elr);
         return;
     }
 
@@ -944,7 +942,7 @@ void cpu_op_mops_cpy(vcpu_t *cpu, const ir_insn_t *ir,
                 } else {
                     cpu->x[rn] = (uint64_t)(-(int64_t)rem);
                 }
-                vcpu_raise_data_abort(cpu, src, &trs, false, elr);
+                vcpu_raise_abort(cpu, src, &trs, false, elr, false);
                 return;
             }
             if (__builtin_expect(!mops_resolve_page(cpu, w_bank, dst, MMU_ACCESS_WRITE, w_el, &dst_hva, &trd), 0)) {
@@ -955,17 +953,17 @@ void cpu_op_mops_cpy(vcpu_t *cpu, const ir_insn_t *ir,
                 } else {
                     cpu->x[rn] = (uint64_t)(-(int64_t)rem);
                 }
-                vcpu_raise_data_abort(cpu, dst, &trd, true, elr);
+                vcpu_raise_abort(cpu, dst, &trd, true, elr, false);
                 return;
             }
             if (__builtin_expect(trs.is_mmio || trd.is_mmio, 0)) {
                 cpu_fp_leave_guest(cpu);
                 for (size_t i = 0; i < chunk; i++) {
                     uint8_t b = trs.is_mmio
-                                    ? (uint8_t)vmm_mmio_read(cpu->vm, cpu, trs.pa + i, 1)
+                                    ? (uint8_t)vmm_mmio_read(cpu, trs.pa + i, 1)
                                     : ((const uint8_t *)src_hva)[i];
                     if (trd.is_mmio) {
-                        vmm_mmio_write(cpu->vm, cpu, trd.pa + i, 1, b);
+                        vmm_mmio_write(cpu, trd.pa + i, 1, b);
                     } else {
                         ((uint8_t *)dst_hva)[i] = b;
                     }
@@ -1007,12 +1005,12 @@ void cpu_op_mops_cpy(vcpu_t *cpu, const ir_insn_t *ir,
             mmu_translation_t trs, trd;
             if (__builtin_expect(!mops_resolve_page(cpu, r_bank, s_lo, MMU_ACCESS_READ, r_el, &src_hva, &trs), 0)) {
                 cpu->x[rn] = rem;
-                vcpu_raise_data_abort(cpu, src_end, &trs, false, elr);
+                vcpu_raise_abort(cpu, src_end, &trs, false, elr, false);
                 return;
             }
             if (__builtin_expect(!mops_resolve_page(cpu, w_bank, d_lo, MMU_ACCESS_WRITE, w_el, &dst_hva, &trd), 0)) {
                 cpu->x[rn] = rem;
-                vcpu_raise_data_abort(cpu, dst_end, &trd, true, elr);
+                vcpu_raise_abort(cpu, dst_end, &trd, true, elr, false);
                 return;
             }
             if (__builtin_expect(trs.is_mmio || trd.is_mmio, 0)) {
@@ -1020,10 +1018,10 @@ void cpu_op_mops_cpy(vcpu_t *cpu, const ir_insn_t *ir,
                 for (size_t i = chunk; i > 0; i--) {
                     size_t off = i - 1U;
                     uint8_t b = trs.is_mmio
-                                    ? (uint8_t)vmm_mmio_read(cpu->vm, cpu, trs.pa + off, 1)
+                                    ? (uint8_t)vmm_mmio_read(cpu, trs.pa + off, 1)
                                     : ((const uint8_t *)src_hva)[off];
                     if (trd.is_mmio) {
-                        vmm_mmio_write(cpu->vm, cpu, trd.pa + off, 1, b);
+                        vmm_mmio_write(cpu, trd.pa + off, 1, b);
                     } else {
                         ((uint8_t *)dst_hva)[off] = b;
                     }
@@ -1078,8 +1076,8 @@ void cpu_op_simd_ldst_multi(vcpu_t *cpu, const ir_insn_t *ir,
     uint32_t rn = (word >> 5) & 31U;
     uint32_t rt = word & 31U;
 
-    uint32_t rpt = 1U;
-    uint32_t selem = 1U;
+    uint32_t rpt;
+    uint32_t selem;
     switch (opcode) {
     case 0U: rpt = 1U; selem = 4U; break;
     case 2U: rpt = 4U; selem = 1U; break;
@@ -1089,12 +1087,12 @@ void cpu_op_simd_ldst_multi(vcpu_t *cpu, const ir_insn_t *ir,
     case 8U: rpt = 1U; selem = 2U; break;
     case 10U: rpt = 2U; selem = 1U; break;
     default:
-        vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+        vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
         return;
     }
 
     if (size == 3U && !q && selem != 1U) {
-        vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+        vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
         return;
     }
 
@@ -1196,28 +1194,28 @@ void cpu_op_simd_ldst_single(vcpu_t *cpu, const ir_insn_t *ir,
     uint32_t selem = (((opcode & 1U) << 1) | r_bit) + 1U;
     uint32_t scale = opcode >> 1;
     bool replicate = false;
-    uint32_t ebytes = 1U;
+    uint32_t ebytes;
     uint32_t index = 0;
 
     if (scale == 0U) {
         ebytes = 1U;
         index = (q << 3) | (s_bit << 2) | size;
     } else if (scale == 1U) {
-        if ((size & 1U) != 0) { vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir)); return; }
+        if ((size & 1U) != 0) { vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir)); return; }
         ebytes = 2U;
         index = (q << 2) | (s_bit << 1) | (size >> 1);
     } else if (scale == 2U) {
         if ((size & 1U) == 0) {
-            if (size != 0U) { vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir)); return; }
+            if (size != 0U) { vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir)); return; }
             ebytes = 4U;
             index = (q << 1) | s_bit;
         } else {
-            if (size != 1U || s_bit != 0U) { vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir)); return; }
+            if (size != 1U || s_bit != 0U) { vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir)); return; }
             ebytes = 8U;
             index = q;
         }
     } else {
-        if (!is_load || s_bit != 0U) { vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir)); return; }
+        if (!is_load || s_bit != 0U) { vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir)); return; }
         replicate = true;
         ebytes = 1U << size;
     }

@@ -1,16 +1,13 @@
 #ifndef SWIPTERMD_PROTOCOL_H
 #define SWIPTERMD_PROTOCOL_H
 
-#include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
 
 enum {
-    SWIPTERMD_PROTO_VERSION = 1,
+    SWIPTERMD_PROTO_VERSION = 2,
     SWIPTERMD_CONTROL_PORT = 4049,
     SWIPTERMD_DATA_PORT = 4052,
     SWIPTERMD_HOST_CID = 2,
-    SWIPTERMD_GUEST_CID = 3,
     SWIPTERMD_FRAME_HEADER_SIZE = 12,
     SWIPTERMD_ATTACH_HEADER_SIZE = 24,
     SWIPTERMD_MAX_BODY_LEN = 16U * 1024U * 1024U,
@@ -29,7 +26,6 @@ typedef enum swiptermd_opcode {
     SWIPTERMD_OP_READY = 0x0007,
     SWIPTERMD_OP_STOPPED = 0x0008,
 
-    SWIPTERMD_OP_SPAWN = 0x0010,
     SWIPTERMD_OP_PROCESS_EXIT = 0x0011,
     SWIPTERMD_OP_PROCESS_SIGNAL = 0x0012,
     SWIPTERMD_OP_LOGIN = 0x0013,
@@ -41,11 +37,8 @@ typedef enum swiptermd_opcode {
     SWIPTERMD_OP_FS_STAT = 0x0030,
     SWIPTERMD_OP_FS_READ = 0x0031,
     SWIPTERMD_OP_FS_WRITE = 0x0032,
-    SWIPTERMD_OP_FS_LIST = 0x0033,
     SWIPTERMD_OP_FS_MKDIR = 0x0034,
-    SWIPTERMD_OP_FS_REMOVE = 0x0035,
     SWIPTERMD_OP_FS_MOUNT_VIRTIOFS = 0x0036,
-    SWIPTERMD_OP_FS_UNMOUNT = 0x0037,
 
     SWIPTERMD_OP_REGISTER_CMD = 0x0050,
     SWIPTERMD_OP_CMD_START = 0x0051,
@@ -83,49 +76,41 @@ typedef enum swiptermd_stream_role {
     SWIPTERMD_STREAM_CLIPBOARD_WRITE = 11,
 } swiptermd_stream_role_t;
 
-typedef enum swiptermd_capability {
-    SWIPTERMD_CAP_READY = 1U << 0,
-    SWIPTERMD_CAP_LOGIN = 1U << 1,
-    SWIPTERMD_CAP_STOP_STATUS = 1U << 2,
-    SWIPTERMD_CAP_DEVICES = 1U << 3,
-    SWIPTERMD_CAP_VIRTIOFS = 1U << 4,
-    SWIPTERMD_CAP_CLIPBOARD = 1U << 5,
-} swiptermd_capability_t;
+enum {
+    SWIPTERMD_CAP_DEVICES = 1U << 0,
+    SWIPTERMD_CAP_VIRTIOFS = 1U << 1,
+    SWIPTERMD_CAP_CLIPBOARD = 1U << 2,
+};
 
-typedef enum swiptermd_ready_level {
+enum {
     SWIPTERMD_READY_LOGIN = 1,
     SWIPTERMD_READY_SYSTEM = 2,
-} swiptermd_ready_level_t;
+};
 
-typedef enum swiptermd_stop_flag {
-    SWIPTERMD_STOP_FORCED = 1U << 0,
-    SWIPTERMD_STOP_STORAGE_ERROR = 1U << 1,
-} swiptermd_stop_flag_t;
-
-typedef enum swiptermd_init_mode {
+enum {
     SWIPTERMD_INIT_MANAGED = 0,
     SWIPTERMD_INIT_PROCESS = 1,
-} swiptermd_init_mode_t;
+};
 
-typedef enum swiptermd_stdio_mode {
+enum {
     SWIPTERMD_STDIO_NULL = 0,
     SWIPTERMD_STDIO_PIPE = 1,
     SWIPTERMD_STDIO_PTY = 2,
-} swiptermd_stdio_mode_t;
+};
 
-typedef enum swiptermd_disk_spawn_flag {
+enum {
     SWIPTERMD_DISK_SPAWN_SHELL = 1U << 0,
-} swiptermd_disk_spawn_flag_t;
+};
 
-typedef enum swiptermd_mirror_family {
+enum {
     SWIPTERMD_MIRROR_AF_INET = 4,
     SWIPTERMD_MIRROR_AF_INET6 = 6,
-} swiptermd_mirror_family_t;
+};
 
-typedef enum swiptermd_mirror_action {
+enum {
     SWIPTERMD_MIRROR_ADDED = 1,
     SWIPTERMD_MIRROR_REMOVED = 2,
-} swiptermd_mirror_action_t;
+};
 
 typedef struct swiptermd_frame_hdr {
     uint32_t body_len;
@@ -140,22 +125,6 @@ typedef struct swiptermd_attach_hdr {
     uint32_t resource_id;
     uint64_t token;
 } swiptermd_attach_hdr_t;
-
-typedef struct swiptermd_stat_wire {
-    uint32_t mode;
-    uint32_t uid;
-    uint32_t gid;
-    uint32_t nlink;
-    uint64_t size;
-    uint64_t inode;
-    uint64_t rdev;
-    int64_t atime_sec;
-    int64_t atime_nsec;
-    int64_t mtime_sec;
-    int64_t mtime_nsec;
-    int64_t ctime_sec;
-    int64_t ctime_nsec;
-} swiptermd_stat_wire_t;
 
 typedef struct swiptermd_mirror_entry {
     uint8_t family;

@@ -12,23 +12,13 @@ public final class LinuxTerminal: @unchecked Sendable {
         }
     }
 
-    private final class Request: @unchecked Sendable {
-        let maxLength: Int
-        var continuation: CheckedContinuation<Data?, Never>?
-        var cancelled = false
-
-        init(maxLength: Int) {
-            self.maxLength = maxLength
-        }
-    }
-
     let handle: OpaquePointer
     private let runtime: LinuxRuntime
     private let notifyDescriptor: Int32
     private let queue = DispatchQueue(label: "SwiptermKit.LinuxTerminal")
     private let inputQueue = DispatchQueue(label: "SwiptermKit.LinuxTerminal.Input")
     private let events: DispatchEventSource
-    private var requests: [Request] = []
+    private var requests: [IORequest<Data?>] = []
     private var ended = false
 
     init(runtime: LinuxRuntime, size: Size) throws(LinuxError) {
@@ -58,30 +48,13 @@ public final class LinuxTerminal: @unchecked Sendable {
         events.cancel()
     }
 
-    public func read(maxLength: Int = 65536) async -> Data? {
-        precondition(maxLength > 0)
-        let request = Request(maxLength: maxLength)
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                queue.async {
-                    if request.cancelled {
-                        continuation.resume(returning: nil)
-                        return
-                    }
-                    request.continuation = continuation
-                    self.requests.append(request)
-                    self.serve()
-                }
-            }
-        } onCancel: {
-            queue.async {
-                request.cancelled = true
-                if let continuation = request.continuation {
-                    request.continuation = nil
-                    self.requests.removeAll { $0 === request }
-                    continuation.resume(returning: nil)
-                }
-            }
+    public func read() async -> Data? {
+        let request = IORequest<Data?>()
+        return try? await request.submit(on: queue) {
+            self.requests.append(request)
+            self.serve()
+        } withdraw: {
+            self.requests.removeAll { $0 === request }
         }
     }
 
@@ -109,20 +82,18 @@ public final class LinuxTerminal: @unchecked Sendable {
     }
 
     private func complete(_ data: Data?) {
-        let request = requests.removeFirst()
-        request.continuation?.resume(returning: data)
-        request.continuation = nil
+        requests.removeFirst().complete(.success(data))
     }
 
     private func serve() {
         var byte: UInt8 = 0
         while Darwin.read(notifyDescriptor, &byte, 1) > 0 {}
-        while let request = requests.first {
+        while !requests.isEmpty {
             if ended {
                 complete(nil)
                 continue
             }
-            var data = Data(count: request.maxLength)
+            var data = Data(count: 65536)
             let count = data.withUnsafeMutableBytes { swipterm_terminal_read(handle, $0.baseAddress, $0.count) }
             if count > 0 {
                 data.count = count
@@ -138,8 +109,8 @@ public final class LinuxTerminal: @unchecked Sendable {
     }
 }
 
-extension LinuxTerminal {
-    public struct Output: AsyncSequence, Sendable {
+public extension LinuxTerminal {
+    struct Output: AsyncSequence, Sendable {
         public typealias Element = Data
 
         let terminal: LinuxTerminal

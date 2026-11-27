@@ -15,6 +15,7 @@ import (
 
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/swipt-automation/SwiptermKit/internal/tool"
 )
 
 const (
@@ -101,11 +102,8 @@ func (b *builder) build() error {
 	if err != nil {
 		return err
 	}
-	err = b.prepareSource(e2fsprogsURL, b.e2fsprogs)
-	if err != nil {
-		return err
-	}
 	for _, step := range []func() error{
+		b.prepareE2fsprogs,
 		b.buildE2fsprogs,
 		b.buildDaemons,
 		b.buildInitramfs,
@@ -118,40 +116,40 @@ func (b *builder) build() error {
 	return nil
 }
 
-func (b *builder) prepareSource(link string, directory string) error {
-	stamp, _ := os.ReadFile(filepath.Join(directory, sourceStamp))
-	if strings.TrimSpace(string(stamp)) == link {
+func (b *builder) prepareE2fsprogs() error {
+	stamp, _ := os.ReadFile(filepath.Join(b.e2fsprogs, sourceStamp))
+	if strings.TrimSpace(string(stamp)) == e2fsprogsURL {
 		return nil
 	}
-	tarball := filepath.Join(b.work, filepath.Base(link))
+	tarball := filepath.Join(b.work, filepath.Base(e2fsprogsURL))
 	if _, err := os.Stat(tarball); err != nil {
 		err = os.MkdirAll(b.work, 0o755)
 		if err != nil {
 			return err
 		}
-		os.Stderr.WriteString("download " + link + "\n")
+		os.Stderr.WriteString("download " + e2fsprogsURL + "\n")
 		for retry := 0; ; retry++ {
-			err = download(link, tarball)
+			err = download(e2fsprogsURL, tarball)
 			if err == nil || retry == downloadRetries {
 				break
 			}
 			time.Sleep(time.Second << retry)
 		}
 		if err != nil {
-			return E.Cause(err, "download ", link)
+			return E.Cause(err, "download ", e2fsprogsURL)
 		}
 	}
-	err := os.RemoveAll(directory)
+	err := os.RemoveAll(b.e2fsprogs)
 	if err == nil {
-		err = os.MkdirAll(directory, 0o755)
+		err = os.MkdirAll(b.e2fsprogs, 0o755)
 	}
 	if err == nil {
-		err = run(exec.Command("tar", "-xf", tarball, "-C", directory, "--strip-components=1"))
+		err = tool.Run(exec.Command("tar", "-xf", tarball, "-C", b.e2fsprogs, "--strip-components=1"))
 	}
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(directory, sourceStamp), []byte(link+"\n"), 0o644)
+	return os.WriteFile(filepath.Join(b.e2fsprogs, sourceStamp), []byte(e2fsprogsURL+"\n"), 0o644)
 }
 
 func (b *builder) buildE2fsprogs() error {
@@ -178,7 +176,7 @@ func (b *builder) buildE2fsprogs() error {
 		exec.Command("make", "-C", filepath.Join(directory, "misc"), "-s", "tune2fs.static"),
 		exec.Command("make", "-C", filepath.Join(directory, "e2fsck"), "-s", "e2fsck.static"),
 	} {
-		err = run(command)
+		err = tool.Run(command)
 		if err != nil {
 			return err
 		}
@@ -187,7 +185,11 @@ func (b *builder) buildE2fsprogs() error {
 		"tune2fs": filepath.Join(directory, "misc", "tune2fs.static"),
 		"e2fsck":  filepath.Join(directory, "e2fsck", "e2fsck.static"),
 	} {
-		err = installExecutable(built, filepath.Join(output, name))
+		installed := filepath.Join(output, name)
+		err = tool.CopyFile(built, installed, 0o755)
+		if err == nil {
+			err = tool.Run(exec.Command("strip", "-s", installed))
+		}
 		if err != nil {
 			return err
 		}
@@ -211,9 +213,9 @@ func (b *builder) buildDaemons() error {
 	for name, programSources := range programs {
 		output := filepath.Join(buildPath, name)
 		arguments := slices.Concat(b.compiler[1:], staticCFlags, programSources, []string{"-o", output}, staticLDFlags)
-		err = run(exec.Command(b.compiler[0], arguments...))
+		err = tool.Run(exec.Command(b.compiler[0], arguments...))
 		if err == nil {
-			err = run(exec.Command("strip", "-s", output))
+			err = tool.Run(exec.Command("strip", "-s", output))
 		}
 		if err != nil {
 			return err
@@ -235,19 +237,14 @@ func (b *builder) buildInitramfs() error {
 		}
 		entries = append(entries, cpioEntry{name: entry.path, mode: entry.mode, data: data})
 	}
-	return writeGzip(filepath.Join(buildPath, "initramfs.cpio.gz"), func(writer io.Writer) error {
-		return writeCPIO(writer, entries, b.epoch)
-	})
-}
-
-func writeGzip(path string, write func(io.Writer) error) error {
+	path := filepath.Join(buildPath, "initramfs.cpio.gz")
 	file, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	writer, err := gzip.NewWriterLevel(file, gzip.BestCompression)
 	if err == nil {
-		err = write(writer)
+		err = writeCPIO(writer, entries, b.epoch)
 		err = E.Errors(err, writer.Close())
 	}
 	err = E.Errors(err, file.Close())
@@ -255,26 +252,6 @@ func writeGzip(path string, write func(io.Writer) error) error {
 		os.Remove(path)
 	}
 	return err
-}
-
-func installExecutable(source string, destination string) error {
-	err := copyFile(source, destination, 0o755)
-	if err != nil {
-		return err
-	}
-	return run(exec.Command("strip", "-s", destination))
-}
-
-func run(command *exec.Cmd) error {
-	if command.Stdout == nil {
-		command.Stdout = os.Stdout
-	}
-	command.Stderr = os.Stderr
-	err := command.Run()
-	if err != nil {
-		return E.Cause(err, "run ", strings.Join(command.Args, " "))
-	}
-	return nil
 }
 
 func download(link string, destination string) error {

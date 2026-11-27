@@ -6,48 +6,31 @@ import Network
 public final class LinuxRuntime: @unchecked Sendable {
     public struct Configuration: Sendable {
         public enum InitMode: Hashable, Sendable {
-            /// The root's `/sbin/init` runs as PID 1 of a system container.
             case system
-            /// No guest init runs; the runtime supervises the processes it starts.
             case managed
         }
 
-        /// Booting throws `LinuxRuntime.KernelUnavailableError` when the selected kernel cannot boot this machine;
-        /// no other installed kernel is tried. `LinuxRootImage.installedKernels(at:)` lists the alternatives.
         public enum Kernel: Hashable, Sendable {
-            /// The newest kernel installed in the root.
             case installed
-            /// The installed kernel with this release.
             case release(String)
         }
 
-        public var root: URL
-        public var initMode: InitMode
-        public var kernel: Kernel
-        public var hostname: String?
-        public var hostCommandsDirectory: String?
-        public var memorySize: UInt64?
-        public var cpuCount: Int?
-        public var extraKernelArguments: String?
-        /// `nil` boots without a GPU.
-        public var gpu: GPUConfiguration?
-        public var consoleOutput: (@Sendable (Data) -> Void)?
-        public var panicHandler: (@Sendable (String) -> Void)?
-        public var haltHandler: (@Sendable (HaltReason) -> Void)?
-        public var clipboard: (any LinuxClipboard)?
+        let root: URL
+        let initMode: InitMode
+        let kernel: Kernel
+        let hostname: String
+        let gpu: GPUConfiguration?
+        let consoleOutput: (@Sendable (Data) -> Void)?
+        let haltHandler: (@Sendable (HaltReason) -> Void)?
+        let clipboard: (any LinuxClipboard)?
 
         public init(
             root: URL,
             initMode: InitMode = .system,
             kernel: Kernel = .installed,
-            hostname: String? = nil,
-            hostCommandsDirectory: String? = "/run/host-bin",
-            memorySize: UInt64? = nil,
-            cpuCount: Int? = nil,
-            extraKernelArguments: String? = nil,
+            hostname: String,
             gpu: GPUConfiguration? = nil,
             consoleOutput: (@Sendable (Data) -> Void)? = nil,
-            panicHandler: (@Sendable (String) -> Void)? = nil,
             haltHandler: (@Sendable (HaltReason) -> Void)? = nil,
             clipboard: (any LinuxClipboard)? = nil
         ) {
@@ -55,44 +38,24 @@ public final class LinuxRuntime: @unchecked Sendable {
             self.initMode = initMode
             self.kernel = kernel
             self.hostname = hostname
-            self.hostCommandsDirectory = hostCommandsDirectory
-            self.memorySize = memorySize
-            self.cpuCount = cpuCount
-            self.extraKernelArguments = extraKernelArguments
             self.gpu = gpu
             self.consoleOutput = consoleOutput
-            self.panicHandler = panicHandler
             self.haltHandler = haltHandler
             self.clipboard = clipboard
         }
     }
 
-    public struct BootedKernel: Hashable, Sendable {
-        public let release: String
-    }
-
     public struct KernelUnavailableError: LocalizedError, Sendable {
-        /// The release `Configuration.kernel` selected; `nil` when the root has no kernel installed or cannot be read.
-        public let release: String?
-        public let reason: String
+        let reason: String
 
         public var errorDescription: String? {
             reason.prefix(1).uppercased() + reason.dropFirst() + "."
         }
     }
 
-    public enum Readiness: Hashable, Sendable {
-        /// A root login can be opened.
-        case login
-        /// The guest init finished starting the system.
-        case system
-    }
-
-    /// The machine has stopped in every case; `reboot` reports that the guest asked to restart.
     public enum HaltReason: Hashable, Sendable {
         case reboot
         case powerOff
-        /// The guest init exited; `nil` when the machine stopped before the init reported its status.
         case exited(LinuxProcess.Termination?)
 
         init(_ reason: swipterm_halt_reason, waitStatus: Int32) {
@@ -109,16 +72,6 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
     }
 
-    public struct JITError: LocalizedError, Sendable {
-        public let message: String
-
-        public var errorDescription: String? {
-            message
-        }
-    }
-
-    /// While this and `isJITEnabled` are both `true`, guest code runs through the JIT, otherwise through the interpreter.
-    /// Running machines follow changes to either at the next vCPU safe point without restarting.
     public static var isJITPrepared: Bool {
         swipterm_jit_is_prepared()
     }
@@ -128,19 +81,15 @@ public final class LinuxRuntime: @unchecked Sendable {
         set { swipterm_jit_set_enabled(newValue) }
     }
 
-    /// Prepares the process-wide executable region once; later calls succeed immediately once prepared.
     /// On iOS the process must be attached to a debugger that answers `brk #0xf00d` (`x16 = 1` prepares the region,
     /// `x16 = 0` detaches), and the debugger is asked to detach before this returns.
     public static func prepareJIT() throws {
         var message: UnsafeMutablePointer<CChar>?
         guard swipterm_jit_prepare(&message) else {
-            defer { free(message) }
-            throw JITError(message: message.map { String(cString: $0) } ?? "Failed to prepare executable memory.")
+            throw MessageError(consuming: message)
         }
     }
 
-    public let defaultEnvironment: [String: String]
-    public let bootedKernel: BootedKernel
     public var fileSystem: LinuxFileSystem {
         LinuxFileSystem(runtime: self)
     }
@@ -160,27 +109,24 @@ public final class LinuxRuntime: @unchecked Sendable {
     private static let systemPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
     private static let readinessPollInterval = Duration.milliseconds(250)
 
-    private init(
-        configuration: Configuration,
-        handle: OpaquePointer,
-        network: LibswiptermNetwork,
-        callbacks: RuntimeCallbacks,
-        bootedKernel: BootedKernel
-    ) {
-        var path = Self.systemPath
-        if let directory = configuration.hostCommandsDirectory {
-            path += ":" + directory
-        }
-        defaultEnvironment = [
-            "HOME": "/root",
-            "PATH": path,
-            "TERM": "xterm-256color",
-            "WAYLAND_DISPLAY": "/run/host/wayland-0",
-        ]
+    private init(handle: OpaquePointer, network: LibswiptermNetwork, callbacks: RuntimeCallbacks) {
         self.handle = handle
         self.network = network
         self.callbacks = callbacks
-        self.bootedKernel = bootedKernel
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            guard let self else { return }
+            let previous = networkPath
+            networkPath = path
+            guard let previous,
+                  path.status != previous.status || path.availableInterfaces.first != previous.availableInterfaces.first
+            else { return }
+            try? withActiveHandle { _ in
+                self.network.resetNetwork()
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "SwiptermKit.PathMonitor"))
+        pathMonitor = monitor
     }
 
     deinit {
@@ -206,9 +152,6 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
     }
 
-    /// Stops the guest init, waits for the guest to unmount its storage, and powers the machine off.
-    /// Blocks the calling thread until the machine has stopped, and does not call `haltHandler`.
-    /// Releasing the last reference without calling it performs the same shutdown on a background thread.
     public func shutdown() {
         let state: (Bool, NWPathMonitor?) = stateCondition.withLock {
             if isShutDown {
@@ -255,10 +198,9 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
     }
 
-    /// `prepare` runs once the kernel is up and before the first guest process starts.
     public static func boot(
         _ configuration: Configuration,
-        prepare: @Sendable (LinuxRuntime) async throws -> Void = { _ in }
+        prepare: @Sendable (LinuxRuntime) async throws -> Void
     ) async throws -> LinuxRuntime {
         guard LinuxRootImage.isInstalled(at: configuration.root) else {
             throw LinuxError.ENOENT
@@ -267,7 +209,6 @@ public final class LinuxRuntime: @unchecked Sendable {
         let callbacks = RuntimeCallbacks(
             consoleOutput: configuration.initMode == .system ? configuration.consoleOutput : nil,
             haltHandler: configuration.haltHandler,
-            panicHandler: configuration.panicHandler,
             clipboard: configuration.clipboard
         )
         var networkError: NSError?
@@ -275,9 +216,9 @@ public final class LinuxRuntime: @unchecked Sendable {
             throw networkError!
         }
         let networkHandle = UnsafeSendable(value: network)
-        let booted: (handle: UnsafeSendable<OpaquePointer>, kernel: BootedKernel)
+        let handle: UnsafeSendable<OpaquePointer>
         do {
-            booted = try await blocking {
+            handle = try await blocking {
                 try bootKernel(configuration, callbacks: callbacks, network: networkHandle.value)
             }
         } catch {
@@ -285,41 +226,13 @@ public final class LinuxRuntime: @unchecked Sendable {
             throw error
         }
 
-        let runtime = LinuxRuntime(
-            configuration: configuration,
-            handle: booted.handle.value,
-            network: network,
-            callbacks: callbacks,
-            bootedKernel: booted.kernel
-        )
+        let runtime = LinuxRuntime(handle: handle.value, network: network, callbacks: callbacks)
         let initCommand: (path: String, arguments: [String], environment: [String])?
         switch configuration.initMode {
         case .managed:
             initCommand = nil
         case .system:
             initCommand = ("/sbin/init", ["/sbin/init"], ["PATH=\(Self.systemPath)", "TERM=linux"])
-        }
-
-        let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { [weak runtime] path in
-            guard let runtime else { return }
-            let previous = runtime.networkPath
-            runtime.networkPath = path
-            guard let previous,
-                  path.status != previous.status || path.availableInterfaces.first != previous.availableInterfaces.first
-            else { return }
-            try? runtime.withActiveHandle { _ in
-                runtime.network.resetNetwork()
-            }
-        }
-        monitor.start(queue: DispatchQueue(label: "SwiptermKit.PathMonitor"))
-        let installed = runtime.stateCondition.withLock { () -> Bool in
-            guard !runtime.isShutDown else { return false }
-            runtime.pathMonitor = monitor
-            return true
-        }
-        if !installed {
-            monitor.cancel()
         }
         do {
             try Task.checkCancellation()
@@ -356,63 +269,47 @@ public final class LinuxRuntime: @unchecked Sendable {
         _ configuration: Configuration,
         callbacks: RuntimeCallbacks,
         network: LibswiptermNetwork
-    ) throws -> (handle: UnsafeSendable<OpaquePointer>, kernel: BootedKernel) {
+    ) throws -> UnsafeSendable<OpaquePointer> {
         guard let initramfs = Bundle.module.url(forResource: "initramfs.cpio", withExtension: "gz") else {
             throw LinuxError.ENOENT
         }
-        let callbackTable = callbacks.makeTable(
-            includeConsoleOutput: callbacks.consoleOutput != nil,
-            includePanic: configuration.panicHandler != nil
-        )
         let selection: swipterm_kernel_selection
         let release: String?
         switch configuration.kernel {
         case .installed:
             selection = SWIPTERM_KERNEL_INSTALLED
             release = nil
-        case .release(let name):
+        case let .release(name):
             selection = SWIPTERM_KERNEL_RELEASE
             release = name
         }
         var handle: OpaquePointer?
-        var info = swipterm_boot_info()
         var message: UnsafeMutablePointer<CChar>?
         let code = configuration.root.withUnsafeFileSystemRepresentation { root in
             initramfs.withUnsafeFileSystemRepresentation { initramfsPath in
-                withOptionalCString(configuration.hostname) { hostname in
-                    withOptionalCString(configuration.hostCommandsDirectory) { hostCommandsDirectory in
-                        withOptionalCString(configuration.extraKernelArguments) { extraCmdline in
-                            withOptionalCString(release) { release in
-                                var options = swipterm_options(
-                                    root_path: root,
-                                    hostname: hostname,
-                                    host_commands_directory: hostCommandsDirectory,
-                                    ram_size: Int(truncatingIfNeeded: configuration.memorySize ?? 0),
-                                    cpu_count: UInt32(truncatingIfNeeded: configuration.cpuCount ?? 0),
-                                    callbacks: callbackTable,
-                                    initramfs_path: initramfsPath,
-                                    kernel: selection,
-                                    kernel_release: release,
-                                    extra_cmdline: extraCmdline,
-                                    network: OpaquePointer(bitPattern: Int(network.handle())),
-                                    gpu: configuration.gpu?.cValue ?? swipterm_gpu_options()
-                                )
-                                return swipterm_boot(&options, &handle, &info, &message)
-                            }
-                        }
+                configuration.hostname.withCString { hostname in
+                    withOptionalCString(release) { release in
+                        var options = swipterm_options(
+                            root_path: root,
+                            hostname: hostname,
+                            callbacks: callbacks.makeTable(),
+                            initramfs_path: initramfsPath,
+                            kernel: selection,
+                            kernel_release: release,
+                            network: OpaquePointer(bitPattern: Int(network.handle())),
+                            gpu: configuration.gpu?.cValue ?? swipterm_gpu_options()
+                        )
+                        return swipterm_boot(&options, &handle, &message)
                     }
                 }
             }
         }
-        let bootedRelease = withUnsafeBytes(of: &info.release) {
-            String(cString: $0.bindMemory(to: CChar.self).baseAddress!)
-        }
         if let message {
             defer { free(message) }
-            throw KernelUnavailableError(release: bootedRelease.isEmpty ? nil : bootedRelease, reason: String(cString: message))
+            throw KernelUnavailableError(reason: String(cString: message))
         }
         try check(code)
-        return (UnsafeSendable(value: handle!), BootedKernel(release: bootedRelease))
+        return UnsafeSendable(value: handle!)
     }
 
     public func suspend() {
@@ -423,24 +320,19 @@ public final class LinuxRuntime: @unchecked Sendable {
         try? withActiveHandle { swipterm_resume($0) }
     }
 
-    /// Throws `LinuxError.ETIMEDOUT` after `timeout`, and `LinuxError.ESRCH` when the guest init has exited.
-    public func waitReady(_ readiness: Readiness, timeout: Duration? = nil) async throws {
-        let level = readiness == .login ? SWIPTERM_READY_LOGIN : SWIPTERM_READY_SYSTEM
+    public func waitReady(timeout: Duration) async throws {
         let clock = ContinuousClock()
-        let deadline = timeout.map { clock.now.advanced(by: $0) }
+        let deadline = clock.now.advanced(by: timeout)
         while true {
             try Task.checkCancellation()
-            var interval = Self.readinessPollInterval
-            if let deadline {
-                let remaining = clock.now.duration(to: deadline)
-                guard remaining > .zero else {
-                    throw LinuxError.ETIMEDOUT
-                }
-                interval = min(interval, remaining)
+            let remaining = clock.now.duration(to: deadline)
+            guard remaining > .zero else {
+                throw LinuxError.ETIMEDOUT
             }
+            let interval = min(Self.readinessPollInterval, remaining)
             let milliseconds = Int32(max(1, interval.components.seconds * 1000 + interval.components.attoseconds / 1_000_000_000_000_000))
             let code = try await withActiveHandleBlocking { handle in
-                swipterm_wait_ready(handle, level, milliseconds)
+                swipterm_wait_ready(handle, milliseconds)
             }
             if code == 0 {
                 return
@@ -451,43 +343,20 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
     }
 
-    /// Opens the guest's own login for `user` on `terminal`, as a preauthenticated local login.
-    /// `user` names an account in the guest's `/etc/passwd`; a missing account throws `LinuxError.ENOENT`.
-    /// The guest keeps `TERM`, `COLORTERM`, `LANG`, `LANGUAGE`, `LC_*`, `TZ` and `BROWSER` from `environment`.
-    /// Until `waitReady(.login)` returns, the guest can refuse the login with `LinuxError.EAGAIN`.
+    public func spawn(_ configuration: LinuxProcess.Configuration) async throws -> LinuxProcess {
+        try await LinuxProcess(runtime: self, disk: 0, configuration, hostname: "", shell: false, invocation: nil)
+    }
+
     public func login(
-        user: String = "root",
+        user: String,
         on terminal: LinuxTerminal,
-        environment: [String: String] = [:]
+        environment: [String: String]
     ) async throws -> LinuxProcess {
         try await LinuxProcess(runtime: self, loginAs: user, on: terminal, environment: environment)
     }
 
     public func makeTerminal(size: LinuxTerminal.Size) throws(LinuxError) -> LinuxTerminal {
         try LinuxTerminal(runtime: self, size: size)
-    }
-
-    public func spawn(_ configuration: LinuxProcess.Configuration) async throws -> LinuxProcess {
-        try await LinuxProcess(runtime: self, configuration, environment: configuration.environment ?? defaultEnvironment)
-    }
-
-    public func run(_ configuration: LinuxProcess.Configuration, input: Data? = nil) async throws -> LinuxProcess.Output {
-        var configuration = configuration
-        configuration.standardInput = input != nil ? .pipe : .null
-        configuration.standardOutput = .pipe
-        configuration.standardError = .pipe
-        let process = try await spawn(configuration)
-        async let output = process.standardOutput!.readToEnd()
-        async let error = process.standardError!.readToEnd()
-        if let input, let standardInput = process.standardInput {
-            try? await standardInput.write(input)
-            standardInput.close()
-        }
-        return try await LinuxProcess.Output(
-            termination: process.termination,
-            standardOutput: output,
-            standardError: error
-        )
     }
 
     private func beginOperation() throws(LinuxError) {
@@ -526,76 +395,52 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
     }
 
-    public func mount(_ hostDirectory: URL, at guestPath: String, readOnly: Bool = false) async throws {
+    public func mount(_ hostDirectory: URL, at guestPath: String, readOnly: Bool) async throws {
         let hostPath = hostDirectory.path(percentEncoded: false)
         try await withActiveHandleBlocking { runtimeHandle in
             try check(swipterm_mount(runtimeHandle, hostPath, guestPath, readOnly))
         }
     }
 
-    public func unmount(at guestPath: String) async throws {
-        try await withActiveHandleBlocking { runtimeHandle in
-            try check(swipterm_unmount(runtimeHandle, guestPath))
-        }
-    }
-
-    /// Attaches the root image installed at `root` after checking its file system, replaying a journal an unclean
-    /// stop left behind. Throws `LinuxError.EBUSY` when the image is booted, attached, being built or being exported,
-    /// and `LinuxError.ENOSPC` when the machine has no room for another disk.
-    public func attachDisk(root: URL, readOnly: Bool = false) async throws -> LinuxDisk {
+    public func attachDisk(root: URL, readOnly: Bool) async throws -> LinuxDisk {
         try await LinuxDisk(runtime: self, root: root, readOnly: readOnly)
     }
 
-    /// Guest `execve` of `hostCommandsDirectory`/`name` runs `handler` instead of a guest program, and the
-    /// process exits with the returned status. SIGHUP, SIGINT, SIGQUIT, SIGTERM and SIGKILL cancel the
-    /// handler's task and terminate the process by that signal. Guest standard input is forwarded while
-    /// the command runs, including input typed on a terminal.
     public func registerCommand(
         named name: String,
         handler: @escaping @Sendable (HostCommandInvocation) async throws -> Int32
     ) async throws {
-        try beginOperation()
-        let command = Unmanaged.passRetained(CommandBox(name: name, handler: handler))
-        let context = UnsafeSendable(value: command.toOpaque())
-        let runtimeHandle = UnsafeSendable(value: handle)
-        do {
-            try await blocking {
-                try check(swipterm_register_command(runtimeHandle.value, name, context.value))
-            }
-        } catch {
-            endOperation()
-            command.release()
-            throw error
-        }
-        stateCondition.withLock {
-            registeredCommands.append(command)
-            activeOperations -= 1
-            if activeOperations == 0 {
-                stateCondition.broadcast()
-            }
+        try await register(CommandBox(name: name, handler: handler), in: \.registeredCommands) { runtimeHandle, context in
+            swipterm_register_command(runtimeHandle, name, context)
         }
     }
 
     public func registerDevice(at path: String, handler: some LinuxCharacterDevice) async throws {
+        try await register(DeviceBox(device: handler), in: \.registeredDevices) { runtimeHandle, context in
+            swipterm_register_device(runtimeHandle, path, context)
+        }
+    }
+
+    private func register<Box: AnyObject>(
+        _ box: Box,
+        in registry: ReferenceWritableKeyPath<LinuxRuntime, [Unmanaged<Box>]>,
+        _ body: @escaping @Sendable (OpaquePointer, UnsafeMutableRawPointer) -> Int32
+    ) async throws {
         try beginOperation()
-        let device = Unmanaged.passRetained(DeviceBox(device: handler))
-        let context = UnsafeSendable(value: device.toOpaque())
+        defer { endOperation() }
+        let registered = Unmanaged.passRetained(box)
+        let context = UnsafeSendable(value: registered.toOpaque())
         let runtimeHandle = UnsafeSendable(value: handle)
         do {
             try await blocking {
-                try check(swipterm_register_device(runtimeHandle.value, path, context.value))
+                try check(body(runtimeHandle.value, context.value))
             }
         } catch {
-            endOperation()
-            device.release()
+            registered.release()
             throw error
         }
         stateCondition.withLock {
-            registeredDevices.append(device)
-            activeOperations -= 1
-            if activeOperations == 0 {
-                stateCondition.broadcast()
-            }
+            self[keyPath: registry].append(registered)
         }
     }
 

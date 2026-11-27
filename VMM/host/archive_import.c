@@ -1,6 +1,8 @@
 #define _DARWIN_C_SOURCE
 
+#include "ext4_format.h"
 #include "host_internal.h"
+#include "host_util.h"
 
 #include <CommonCrypto/CommonDigest.h>
 #include <errno.h>
@@ -24,68 +26,6 @@ enum : uint32_t {
     RPM_HEADER_LIMIT = 256U << 20,
     BUILDER_READ_LIMIT = 256U << 20,
 };
-
-enum : uint8_t {
-    XATTR_INDEX_USER = 1,
-    XATTR_INDEX_POSIX_ACL_ACCESS = 2,
-    XATTR_INDEX_POSIX_ACL_DEFAULT = 3,
-    XATTR_INDEX_TRUSTED = 4,
-    XATTR_INDEX_SECURITY = 6,
-};
-
-enum : uint16_t {
-    ACL_USER_OBJ = 0x01,
-    ACL_USER = 0x02,
-    ACL_GROUP_OBJ = 0x04,
-    ACL_GROUP = 0x08,
-    ACL_MASK = 0x10,
-    ACL_OTHER = 0x20,
-};
-
-static const uint64_t DEFAULT_DISK_SIZE = 64ULL << 30;
-
-static inline void put_le16(uint8_t *p, uint16_t v) {
-    p[0] = (uint8_t)v;
-    p[1] = (uint8_t)(v >> 8);
-}
-
-static inline void put_le32(uint8_t *p, uint32_t v) {
-    p[0] = (uint8_t)v;
-    p[1] = (uint8_t)(v >> 8);
-    p[2] = (uint8_t)(v >> 16);
-    p[3] = (uint8_t)(v >> 24);
-}
-
-static inline uint16_t get_le16(const uint8_t *p) {
-    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
-}
-
-static inline uint32_t get_le32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
-static void set_error(char **error_message, const char *msg) {
-    if (error_message && !*error_message) {
-        *error_message = strdup(msg ? msg : "unknown error");
-    }
-}
-
-static void set_errno_error(char **error_message, const char *what, int err) {
-    if (error_message && !*error_message) {
-        char buf[512];
-        snprintf(buf, sizeof(buf), "%s: %s", what, strerror(err));
-        *error_message = strdup(buf);
-    }
-}
-
-static uint32_t fnv1a_32(const char *s, size_t len) {
-    uint32_t h = 2166136261U;
-    for (size_t i = 0; i < len; i++) {
-        h ^= (uint8_t)s[i];
-        h *= 16777619U;
-    }
-    return h;
-}
 
 vfs_node_t *vfs_node_new(uint32_t mode) {
     vfs_node_t *n = calloc(1, sizeof(*n));
@@ -409,12 +349,16 @@ static bool vfs_walk_dir_path(vfs_node_t *root, vfs_path_stack_t *st, const char
     return true;
 }
 
+static const char *strip_path(const char *path) {
+    while (*path == '/' || (path[0] == '.' && path[1] == '/')) {
+        path += *path == '/' ? 1 : 2;
+    }
+    return path[0] == '.' && path[1] == '\0' ? path + 1 : path;
+}
+
 static bool vfs_resolve_parent(vfs_node_t *root, vfs_path_stack_t *st, const char *raw_path, bool create_parents,
                                vfs_node_t **parent_out, const char **leaf_out, size_t *leaf_len_out) {
-    const char *p = raw_path;
-    while (*p == '/' || (p[0] == '.' && p[1] == '/')) {
-        p += (*p == '/') ? 1 : 2;
-    }
+    const char *p = strip_path(raw_path);
     size_t len = strlen(p);
     while (len > 0 && p[len - 1] == '/') {
         len--;
@@ -425,7 +369,7 @@ static bool vfs_resolve_parent(vfs_node_t *root, vfs_path_stack_t *st, const cha
     if (!vfs_path_set(st, 0, root)) {
         return false;
     }
-    if (len == 0 || (len == 1 && p[0] == '.')) {
+    if (len == 0) {
         return true;
     }
 
@@ -541,9 +485,9 @@ static uint8_t xattr_index_for(const char *name, const char **suffix_out) {
         size_t len;
         uint8_t index;
     } prefixes[] = {
-        {"user.", 5, XATTR_INDEX_USER},
-        {"trusted.", 8, XATTR_INDEX_TRUSTED},
-        {"security.", 9, XATTR_INDEX_SECURITY},
+        {"user.", 5, EXT4_XATTR_INDEX_USER},
+        {"trusted.", 8, EXT4_XATTR_INDEX_TRUSTED},
+        {"security.", 9, EXT4_XATTR_INDEX_SECURITY},
     };
     for (size_t i = 0; i < sizeof(prefixes) / sizeof(prefixes[0]); i++) {
         if (strncmp(name, prefixes[i].prefix, prefixes[i].len) == 0 && name[prefixes[i].len] != '\0') {
@@ -553,10 +497,10 @@ static uint8_t xattr_index_for(const char *name, const char **suffix_out) {
     }
     *suffix_out = "";
     if (strcmp(name, "system.posix_acl_access") == 0) {
-        return XATTR_INDEX_POSIX_ACL_ACCESS;
+        return EXT4_XATTR_INDEX_POSIX_ACL_ACCESS;
     }
     if (strcmp(name, "system.posix_acl_default") == 0) {
-        return XATTR_INDEX_POSIX_ACL_DEFAULT;
+        return EXT4_XATTR_INDEX_POSIX_ACL_DEFAULT;
     }
     return 0;
 }
@@ -611,21 +555,21 @@ static size_t encode_ext4_acl(acl_entry_t *entries, size_t count, uint8_t *out, 
     for (size_t i = 0; i < count; i++) {
         seen |= entries[i].tag;
     }
-    uint16_t required = ACL_USER_OBJ | ACL_GROUP_OBJ | ACL_OTHER;
-    if ((seen & required) != required || ((seen & (ACL_USER | ACL_GROUP)) && !(seen & ACL_MASK))) {
+    uint16_t required = EXT4_ACL_USER_OBJ | EXT4_ACL_GROUP_OBJ | EXT4_ACL_OTHER;
+    if ((seen & required) != required || ((seen & (EXT4_ACL_USER | EXT4_ACL_GROUP)) && !(seen & EXT4_ACL_MASK))) {
         return 0;
     }
-    put_le32(out, 1);
+    put_le32(out, EXT4_ACL_VERSION);
     size_t len = 4;
     *mask_out = -1;
     for (size_t i = 0; i < count; i++) {
-        if (entries[i].tag == ACL_MASK) {
+        if (entries[i].tag == EXT4_ACL_MASK) {
             *mask_out = entries[i].perm & 7U;
         }
         put_le16(out + len, entries[i].tag);
         put_le16(out + len + 2, entries[i].perm & 7U);
         len += 4;
-        if (entries[i].tag == ACL_USER || entries[i].tag == ACL_GROUP) {
+        if (entries[i].tag == EXT4_ACL_USER || entries[i].tag == EXT4_ACL_GROUP) {
             put_le32(out + len, entries[i].id);
             len += 4;
         }
@@ -641,7 +585,7 @@ static bool store_acl(vfs_node_t *node, uint8_t index, acl_entry_t *entries, siz
     int mask = -1;
     size_t len = count > 0 ? encode_ext4_acl(entries, count, encoded, &mask) : 0;
     bool ok = len == 0 || node_set_xattr(node, index, "", 0, encoded, len);
-    if (ok && len > 0 && index == XATTR_INDEX_POSIX_ACL_ACCESS && mask >= 0) {
+    if (ok && len > 0 && index == EXT4_XATTR_INDEX_POSIX_ACL_ACCESS && mask >= 0) {
         node->mode = (node->mode & ~070U) | ((uint32_t)mask << 3);
     }
     free(encoded);
@@ -649,7 +593,7 @@ static bool store_acl(vfs_node_t *node, uint8_t index, acl_entry_t *entries, siz
 }
 
 static bool set_posix_acl_xattr(vfs_node_t *node, uint8_t index, const uint8_t *value, size_t size) {
-    if (size < 4 || get_le32(value) != 2 || (size - 4) % 8 != 0) {
+    if (size < 4 || get_le32(value) != POSIX_ACL_XATTR_VERSION || (size - 4) % 8 != 0) {
         return true;
     }
     size_t count = (size - 4) / 8;
@@ -668,12 +612,12 @@ static bool set_posix_acl_xattr(vfs_node_t *node, uint8_t index, const uint8_t *
 
 static uint16_t acl_tag_from_archive(int tag) {
     switch (tag) {
-    case ARCHIVE_ENTRY_ACL_USER_OBJ: return ACL_USER_OBJ;
-    case ARCHIVE_ENTRY_ACL_USER: return ACL_USER;
-    case ARCHIVE_ENTRY_ACL_GROUP_OBJ: return ACL_GROUP_OBJ;
-    case ARCHIVE_ENTRY_ACL_GROUP: return ACL_GROUP;
-    case ARCHIVE_ENTRY_ACL_MASK: return ACL_MASK;
-    case ARCHIVE_ENTRY_ACL_OTHER: return ACL_OTHER;
+    case ARCHIVE_ENTRY_ACL_USER_OBJ: return EXT4_ACL_USER_OBJ;
+    case ARCHIVE_ENTRY_ACL_USER: return EXT4_ACL_USER;
+    case ARCHIVE_ENTRY_ACL_GROUP_OBJ: return EXT4_ACL_GROUP_OBJ;
+    case ARCHIVE_ENTRY_ACL_GROUP: return EXT4_ACL_GROUP;
+    case ARCHIVE_ENTRY_ACL_MASK: return EXT4_ACL_MASK;
+    case ARCHIVE_ENTRY_ACL_OTHER: return EXT4_ACL_OTHER;
     default: return 0;
     }
 }
@@ -719,7 +663,7 @@ static bool capture_entry_xattrs(struct archive_entry *entry, vfs_node_t *node) 
             const char *suffix = NULL;
             uint8_t index = name ? xattr_index_for(name, &suffix) : 0;
             bool ok = true;
-            if (index == XATTR_INDEX_POSIX_ACL_ACCESS || index == XATTR_INDEX_POSIX_ACL_DEFAULT) {
+            if (index == EXT4_XATTR_INDEX_POSIX_ACL_ACCESS || index == EXT4_XATTR_INDEX_POSIX_ACL_DEFAULT) {
                 ok = set_posix_acl_xattr(node, index, value, size);
             } else if (index != 0) {
                 ok = node_set_xattr(node, index, suffix, strlen(suffix), value, size);
@@ -729,8 +673,8 @@ static bool capture_entry_xattrs(struct archive_entry *entry, vfs_node_t *node) 
             }
         }
     }
-    return capture_archive_acl(entry, node, ARCHIVE_ENTRY_ACL_TYPE_ACCESS, XATTR_INDEX_POSIX_ACL_ACCESS) &&
-           capture_archive_acl(entry, node, ARCHIVE_ENTRY_ACL_TYPE_DEFAULT, XATTR_INDEX_POSIX_ACL_DEFAULT);
+    return capture_archive_acl(entry, node, ARCHIVE_ENTRY_ACL_TYPE_ACCESS, EXT4_XATTR_INDEX_POSIX_ACL_ACCESS) &&
+           capture_archive_acl(entry, node, ARCHIVE_ENTRY_ACL_TYPE_DEFAULT, EXT4_XATTR_INDEX_POSIX_ACL_DEFAULT);
 }
 
 static void set_node_attrs(vfs_node_t *node, struct archive_entry *entry, uint32_t mode) {
@@ -833,13 +777,13 @@ static bool resolve_deferred_hardlinks(vfs_node_t *root, vfs_path_stack_t *st, d
     return ok;
 }
 
-vfs_node_t *vfs_find(vfs_node_t *root, const char *path, bool follow_final) {
+vfs_node_t *vfs_find(vfs_node_t *root, const char *path) {
     vfs_path_stack_t st = {0};
     char *current = strdup(path);
     vfs_node_t *found = NULL;
     for (unsigned depth = 0; current && depth <= VFS_MAX_SYMLINKS; depth++) {
         vfs_node_t *node = vfs_lookup(root, &st, current);
-        if (!node || !follow_final || !S_ISLNK(node->mode)) {
+        if (!node || !S_ISLNK(node->mode)) {
             found = node;
             break;
         }
@@ -916,13 +860,6 @@ static bool report_progress(const import_job_t *job) {
     }
     set_error(job->error_message, strerror(ECANCELED));
     return false;
-}
-
-static const char *strip_path(const char *path) {
-    while (*path == '/' || (path[0] == '.' && path[1] == '/')) {
-        path += *path == '/' ? 1 : 2;
-    }
-    return path[0] == '.' && path[1] == '\0' ? path + 1 : path;
 }
 
 static void report_entry(const import_job_t *job, const char *pathname, uint32_t mode, const uint8_t *sha1) {
@@ -1031,7 +968,7 @@ static bool write_file_data(const import_job_t *job, struct archive *a, struct a
         }
         int rc = ext4_writer_write(writer, node, (uint64_t)offset, buf, size);
         if (rc < 0) {
-            set_errno_error(job->error_message, "failed to write root disk", -rc);
+            set_error_detail(job->error_message, "failed to write root disk", strerror(-rc));
             return false;
         }
         if (sha1) {
@@ -1050,7 +987,7 @@ static bool write_file_data(const import_job_t *job, struct archive *a, struct a
     }
     int rc = ext4_writer_end_file(writer, node, size);
     if (rc < 0) {
-        set_errno_error(job->error_message, "failed to write root disk", -rc);
+        set_error_detail(job->error_message, "failed to write root disk", strerror(-rc));
         return false;
     }
     if (sha1) {
@@ -1273,15 +1210,23 @@ static bool usable(swipterm_root_builder *b, char **error_message) {
     return false;
 }
 
-static bool import_archive(swipterm_root_builder *b, const archive_input_t *input, int (*format)(struct archive *),
-                           void *context, swipterm_progress_handler progress,
-                           const swipterm_package_callbacks *package, bool top_level_metadata, char **error_message) {
+static bool open_reader(struct archive **a_out, archive_stream_t *stream, int (*format)(struct archive *),
+                        const archive_input_t *input, char **error_message) {
     struct archive *a = archive_read_new();
-    archive_stream_t stream = {0};
-    bool ok = a && format(a) == ARCHIVE_OK && archive_stream_open(&stream, a, input) == ARCHIVE_OK;
+    *a_out = a;
+    bool ok = a && format(a) == ARCHIVE_OK && archive_stream_open(stream, a, input) == ARCHIVE_OK;
     if (!ok) {
         set_error(error_message, a ? archive_error_string(a) : "failed to allocate archive reader");
     }
+    return ok;
+}
+
+static bool import_archive(swipterm_root_builder *b, const archive_input_t *input, int (*format)(struct archive *),
+                           void *context, swipterm_progress_handler progress,
+                           const swipterm_package_callbacks *package, bool top_level_metadata, char **error_message) {
+    struct archive *a = NULL;
+    archive_stream_t stream = {0};
+    bool ok = open_reader(&a, &stream, format, input, error_message);
     import_job_t job = {
         .builder = b,
         .top_archive = a,
@@ -1301,13 +1246,9 @@ static bool import_archive(swipterm_root_builder *b, const archive_input_t *inpu
 
 static bool import_deb(swipterm_root_builder *b, const archive_input_t *input,
                        const swipterm_package_callbacks *callbacks, char **error_message) {
-    struct archive *outer = archive_read_new();
+    struct archive *outer = NULL;
     archive_stream_t outer_stream = {0};
-    bool ok = outer && archive_read_support_format_ar(outer) == ARCHIVE_OK &&
-              archive_stream_open(&outer_stream, outer, input) == ARCHIVE_OK;
-    if (!ok) {
-        set_error(error_message, outer ? archive_error_string(outer) : "failed to allocate archive reader");
-    }
+    bool ok = open_reader(&outer, &outer_stream, archive_read_support_format_ar, input, error_message);
     import_job_t job = {
         .builder = b,
         .top_archive = outer,
@@ -1327,14 +1268,10 @@ static bool import_deb(swipterm_root_builder *b, const archive_input_t *input,
         if (!control && !data) {
             continue;
         }
-        struct archive *inner = archive_read_new();
+        struct archive *inner = NULL;
         archive_stream_t inner_stream = {0};
         archive_input_t member = {.fd = -1, .entry = outer};
-        ok = inner && archive_read_support_format_tar(inner) == ARCHIVE_OK &&
-             archive_stream_open(&inner_stream, inner, &member) == ARCHIVE_OK;
-        if (!ok) {
-            set_error(error_message, inner ? archive_error_string(inner) : "failed to allocate archive reader");
-        }
+        ok = open_reader(&inner, &inner_stream, archive_read_support_format_tar, &member, error_message);
         ok = ok && (control ? read_control(&job, inner) : import_entries(&job, inner, false));
         has_data = has_data || data;
         archive_read_free(inner);
@@ -1352,10 +1289,6 @@ static bool import_deb(swipterm_root_builder *b, const archive_input_t *input,
     archive_stream_close(&outer_stream);
     b->failed = !ok;
     return ok;
-}
-
-static uint32_t get_be32(const uint8_t *p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
 }
 
 static bool rpm_payload_offset(int fd, uint64_t size, uint64_t *offset_out, char **error_message) {
@@ -1407,13 +1340,13 @@ swipterm_root_builder *swipterm_root_builder_create(const char *root_path, uint6
         return NULL;
     }
     if (mkdir(root_path, 0755) != 0 && errno != EEXIST) {
-        set_errno_error(error_message, "failed to create root directory", errno);
+        set_error_detail(error_message, "failed to create root directory", strerror(errno));
         swipterm_root_builder_free(b);
         return NULL;
     }
     b->root_fd = open(root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (b->root_fd < 0) {
-        set_errno_error(error_message, "failed to open root directory", errno);
+        set_error_detail(error_message, "failed to open root directory", strerror(errno));
         swipterm_root_builder_free(b);
         return NULL;
     }
@@ -1426,14 +1359,15 @@ swipterm_root_builder *swipterm_root_builder_create(const char *root_path, uint6
     }
     b->disk_fd = open(b->partial_path, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     if (b->disk_fd < 0) {
-        set_errno_error(error_message, "failed to create root disk", errno);
+        set_error_detail(error_message, "failed to create root disk", strerror(errno));
         swipterm_root_builder_free(b);
         return NULL;
     }
     b->root = vfs_node_new(S_IFDIR | 0755);
-    int rc = b->root ? ext4_writer_create(b->disk_fd, disk_size ? disk_size : DEFAULT_DISK_SIZE, &b->writer) : -ENOMEM;
+    int rc = b->root ? ext4_writer_create(b->disk_fd, disk_size, &b->writer) : -ENOMEM;
     if (rc < 0) {
-        set_errno_error(error_message, rc == -EINVAL ? "invalid disk size" : "failed to create root disk", -rc);
+        set_error_detail(error_message, rc == -EINVAL ? "invalid disk size" : "failed to create root disk",
+                         strerror(-rc));
         swipterm_root_builder_free(b);
         return NULL;
     }
@@ -1461,62 +1395,45 @@ void swipterm_root_builder_free(swipterm_root_builder *b) {
     free(b);
 }
 
-bool swipterm_root_builder_add_file(swipterm_root_builder *b, const char *archive_path, void *context,
-                                    swipterm_progress_handler progress, char **error_message) {
-    if (!usable(b, error_message)) {
-        return false;
-    }
-    int fd = open(archive_path, O_RDONLY | O_CLOEXEC);
+static bool open_input(const char *path, const char *what, archive_input_t *input, char **error_message) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
     struct stat st;
     if (fd < 0 || fstat(fd, &st) != 0) {
-        set_errno_error(error_message, "failed to open archive", errno);
+        set_error_detail(error_message, what, strerror(errno));
         if (fd >= 0) {
             close(fd);
         }
         return false;
     }
-    archive_input_t input = {.fd = fd, .size = (uint64_t)st.st_size};
-    bool ok = import_archive(b, &input, archive_read_support_format_tar, context, progress, NULL, false, error_message);
-    close(fd);
-    return ok;
+    *input = (archive_input_t){.fd = fd, .size = (uint64_t)st.st_size};
+    return true;
 }
 
-bool swipterm_root_builder_add_memory(swipterm_root_builder *b, const void *data, size_t size, void *context,
-                                      swipterm_progress_handler progress, char **error_message) {
-    if (!usable(b, error_message)) {
+bool swipterm_root_builder_add_file(swipterm_root_builder *b, const char *archive_path, void *context,
+                                    swipterm_progress_handler progress, char **error_message) {
+    archive_input_t input;
+    if (!usable(b, error_message) || !open_input(archive_path, "failed to open archive", &input, error_message)) {
         return false;
     }
-    if (!data || size == 0) {
-        set_error(error_message, "archive is empty");
-        return false;
-    }
-    archive_input_t input = {.fd = -1, .data = data, .size = size};
-    return import_archive(b, &input, archive_read_support_format_tar, context, progress, NULL, false, error_message);
+    bool ok = import_archive(b, &input, archive_read_support_format_tar, context, progress, NULL, false, error_message);
+    close(input.fd);
+    return ok;
 }
 
 bool swipterm_root_builder_add_package(swipterm_root_builder *b, const char *package_path,
                                        const swipterm_package_callbacks *callbacks, char **error_message) {
-    if (!usable(b, error_message)) {
-        return false;
-    }
-    int fd = open(package_path, O_RDONLY | O_CLOEXEC);
-    struct stat st;
-    if (fd < 0 || fstat(fd, &st) != 0) {
-        set_errno_error(error_message, "failed to open package", errno);
-        if (fd >= 0) {
-            close(fd);
-        }
+    archive_input_t input;
+    if (!usable(b, error_message) || !open_input(package_path, "failed to open package", &input, error_message)) {
         return false;
     }
     static const uint8_t rpm_magic[4] = {0xED, 0xAB, 0xEE, 0xDB};
     uint8_t magic[8] = {0};
-    ssize_t magic_len = pread(fd, magic, sizeof(magic), 0);
-    archive_input_t input = {.fd = fd, .size = (uint64_t)st.st_size};
+    ssize_t magic_len = pread(input.fd, magic, sizeof(magic), 0);
     bool ok;
     if (magic_len == (ssize_t)sizeof(magic) && memcmp(magic, "!<arch>\n", 8) == 0) {
         ok = import_deb(b, &input, callbacks, error_message);
     } else if (magic_len >= 4 && memcmp(magic, rpm_magic, sizeof(rpm_magic)) == 0) {
-        ok = rpm_payload_offset(fd, input.size, &input.offset, error_message);
+        ok = rpm_payload_offset(input.fd, input.size, &input.offset, error_message);
         input.size -= input.offset;
         ok = ok && import_archive(b, &input, archive_read_support_format_cpio, callbacks->context,
                                   callbacks->progress, callbacks, false, error_message);
@@ -1525,7 +1442,7 @@ bool swipterm_root_builder_add_package(swipterm_root_builder *b, const char *pac
         ok = import_archive(b, &input, archive_read_support_format_tar, callbacks->context, callbacks->progress,
                             callbacks, true, error_message);
     }
-    close(fd);
+    close(input.fd);
     return ok;
 }
 
@@ -1535,7 +1452,7 @@ int swipterm_root_builder_read(swipterm_root_builder *b, const char *path, void 
     if (b->failed || b->finished) {
         return -LINUX_EINVAL;
     }
-    vfs_node_t *node = vfs_find(b->root, path, true);
+    vfs_node_t *node = vfs_find(b->root, path);
     if (!node) {
         return -LINUX_ENOENT;
     }
@@ -1553,7 +1470,7 @@ int swipterm_root_builder_read(swipterm_root_builder *b, const char *path, void 
     if (!data) {
         return -LINUX_ENOMEM;
     }
-    if (ext4_writer_read(b->writer, node, 0, data, size) < 0) {
+    if (ext4_writer_read(b->writer, node, data) < 0) {
         free(data);
         return -LINUX_EIO;
     }
@@ -1568,7 +1485,7 @@ int swipterm_root_builder_list(swipterm_root_builder *b, const char *path, char 
     if (b->failed || b->finished) {
         return -LINUX_EINVAL;
     }
-    vfs_node_t *node = vfs_find(b->root, path, true);
+    vfs_node_t *node = vfs_find(b->root, path);
     if (!node) {
         return -LINUX_ENOENT;
     }
@@ -1614,40 +1531,20 @@ int swipterm_root_builder_write(swipterm_root_builder *b, const char *path, cons
     return 0;
 }
 
-static int fsync_path(const char *path) {
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) {
-        return -errno;
-    }
-    int rc = fsync(fd) == 0 ? 0 : -errno;
-    close(fd);
-    return rc;
-}
-
 static bool stage_metadata(const char *path, char **error_message) {
     static const char json[] = "{\"version\":2,\"disk\":\"root.ext4\"}\n";
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
     if (fd < 0) {
-        set_errno_error(error_message, "failed to write swipterm.json", errno);
+        set_error_detail(error_message, "failed to write swipterm.json", strerror(errno));
         return false;
     }
     bool ok = write(fd, json, sizeof(json) - 1) == (ssize_t)(sizeof(json) - 1) && fsync(fd) == 0;
     int err = errno;
     ok = close(fd) == 0 && ok;
     if (!ok) {
-        set_errno_error(error_message, "failed to write swipterm.json", err);
+        set_error_detail(error_message, "failed to write swipterm.json", strerror(err));
     }
     return ok;
-}
-
-static void remove_stale(const char *root_path) {
-    static const char *const names[] = {"lower.erofs", "upper.ext4", ".preboot_snapshot"};
-    for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
-        char path[1024];
-        if (snprintf(path, sizeof(path), "%s/%s", root_path, names[i]) < (int)sizeof(path)) {
-            (void)unlink(path);
-        }
-    }
 }
 
 bool swipterm_root_builder_finish(swipterm_root_builder *b, char **error_message) {
@@ -1657,47 +1554,49 @@ bool swipterm_root_builder_finish(swipterm_root_builder *b, char **error_message
     char *disk_path = NULL;
     char *metadata_partial_path = NULL;
     char *metadata_path = NULL;
+    char *snapshot_path = NULL;
     bool ok = asprintf(&disk_path, "%s/root.ext4", b->root_path) >= 0 &&
               asprintf(&metadata_partial_path, "%s/swipterm.json.partial", b->root_path) >= 0 &&
-              asprintf(&metadata_path, "%s/swipterm.json", b->root_path) >= 0;
+              asprintf(&metadata_path, "%s/swipterm.json", b->root_path) >= 0 &&
+              asprintf(&snapshot_path, "%s/.preboot_snapshot", b->root_path) >= 0;
     if (!ok) {
         set_error(error_message, strerror(ENOMEM));
     }
     int rc = ok ? module_index_build(b->writer, b->root) : 0;
     if (rc < 0) {
-        set_errno_error(error_message, "failed to index kernel modules", -rc);
+        set_error_detail(error_message, "failed to index kernel modules", strerror(-rc));
         ok = false;
     }
     if (ok) {
         rc = ext4_writer_finish(b->writer, b->root);
         if (rc < 0) {
-            set_errno_error(error_message, rc == -ENOSPC ? "the archive does not fit the disk size"
-                                                         : "failed to write root disk", -rc);
+            set_error_detail(error_message,
+                             rc == -ENOSPC ? "the archive does not fit the disk size" : "failed to write root disk",
+                             strerror(-rc));
             ok = false;
         }
     }
     if (ok && fsync(b->disk_fd) != 0) {
-        set_errno_error(error_message, "failed to write root disk", errno);
+        set_error_detail(error_message, "failed to write root disk", strerror(errno));
         ok = false;
     }
     if (close(b->disk_fd) != 0 && ok) {
-        set_errno_error(error_message, "failed to write root disk", errno);
+        set_error_detail(error_message, "failed to write root disk", strerror(errno));
         ok = false;
     }
     b->disk_fd = -1;
     ok = ok && stage_metadata(metadata_partial_path, error_message);
     if (ok && rename(b->partial_path, disk_path) != 0) {
-        set_errno_error(error_message, "failed to install root disk", errno);
+        set_error_detail(error_message, "failed to install root disk", strerror(errno));
         ok = false;
     }
     if (ok && rename(metadata_partial_path, metadata_path) != 0) {
-        set_errno_error(error_message, "failed to write swipterm.json", errno);
+        set_error_detail(error_message, "failed to write swipterm.json", strerror(errno));
         ok = false;
     }
     if (ok) {
-        remove_stale(b->root_path);
+        (void)unlink(snapshot_path);
         (void)fsync(b->root_fd);
-        (void)fsync_path(disk_path);
         close(b->root_fd);
         b->root_fd = -1;
         b->finished = true;
@@ -1710,5 +1609,6 @@ bool swipterm_root_builder_finish(swipterm_root_builder *b, char **error_message
     free(disk_path);
     free(metadata_partial_path);
     free(metadata_path);
+    free(snapshot_path);
     return ok;
 }

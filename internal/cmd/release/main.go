@@ -19,6 +19,7 @@ import (
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
+	"github.com/swipt-automation/SwiptermKit/internal/tool"
 )
 
 const manifestPath = "Package.swift"
@@ -27,8 +28,9 @@ var (
 	binaryInputs = []string{
 		"VMM", "Guest/swiptermd/protocol.h", "Guest/swiptermd/wire_format.h", "go.mod", "go.sum", "internal", "libswipterm",
 		":(exclude)internal/cmd/build_guest", ":(exclude)internal/cmd/build_vulkan", ":(exclude)internal/cmd/release",
+		":(exclude)internal/tool",
 	}
-	vulkanInputs     = []string{"internal/cmd/build_vulkan"}
+	vulkanInputs     = []string{"internal/cmd/build_vulkan", "internal/tool"}
 	binaryFrameworks = []string{"LibSwipterm"}
 	vulkanFrameworks = []string{"KosmicKrisp", "MoltenVK"}
 	versionPattern   = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
@@ -83,7 +85,7 @@ func resolve(arguments []string) error {
 	if len(arguments) == 1 {
 		requested = arguments[0]
 	}
-	remote, err := output("git", "ls-remote", "--tags", "--refs", "origin")
+	remote, err := tool.Output(exec.Command("git", "ls-remote", "--tags", "--refs", "origin"))
 	if err != nil {
 		return err
 	}
@@ -103,7 +105,7 @@ func resolve(arguments []string) error {
 		{"binary", binaryInputs},
 		{"vulkan", vulkanInputs},
 	} {
-		files, err := output("git", append([]string{"ls-files", "-s", "--"}, artifact.inputs...)...)
+		files, err := tool.Output(exec.Command("git", append([]string{"ls-files", "-s", "--"}, artifact.inputs...)...))
 		if err != nil {
 			return err
 		}
@@ -135,7 +137,9 @@ func resolveVersion(requested string, tags []string, now time.Time) (version, er
 	}))
 	var latest version
 	if len(versions) > 0 {
-		latest = slices.MaxFunc(versions, compareVersions)
+		latest = slices.MaxFunc(versions, func(left version, right version) int {
+			return slices.Compare(left[:], right[:])
+		})
 	}
 	var next version
 	if requested != "" {
@@ -163,14 +167,10 @@ func resolveVersion(requested string, tags []string, now time.Time) (version, er
 		}
 		next = version{latest[0], latest[1], patch}
 	}
-	if len(versions) > 0 && compareVersions(next, latest) <= 0 {
+	if len(versions) > 0 && slices.Compare(next[:], latest[:]) <= 0 {
 		return version{}, E.New("version must be newer than ", latest, ": ", next)
 	}
 	return next, nil
-}
-
-func compareVersions(left version, right version) int {
-	return slices.Compare(left[:], right[:])
 }
 
 func manifest(arguments []string) error {
@@ -224,14 +224,4 @@ func manifest(arguments []string) error {
 		}
 	}
 	return os.WriteFile(manifestPath, content, 0o644)
-}
-
-func output(name string, arguments ...string) (string, error) {
-	command := exec.Command(name, arguments...)
-	command.Stderr = os.Stderr
-	data, err := command.Output()
-	if err != nil {
-		return "", E.Cause(err, "run ", strings.Join(command.Args, " "))
-	}
-	return string(data), nil
 }

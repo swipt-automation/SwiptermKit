@@ -1,6 +1,8 @@
 #define _DARWIN_C_SOURCE
 
+#include "ext4_format.h"
 #include "host_internal.h"
+#include "host_util.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -14,56 +16,15 @@
 
 enum : uint32_t {
     EXT4_SUPER_OFFSET = 1024,
-    EXT4_SUPER_MAGIC = 0xEF53,
-    EXT4_ROOT_INO = 2,
-
-    EXT4_FEATURE_COMPAT_HAS_JOURNAL = 0x0004,
-    EXT4_FEATURE_COMPAT_SPARSE_SUPER2 = 0x0200,
-    EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER = 0x0001,
-    EXT4_FEATURE_INCOMPAT_FILETYPE = 0x0002,
-    EXT4_FEATURE_INCOMPAT_RECOVER = 0x0004,
-    EXT4_FEATURE_INCOMPAT_META_BG = 0x0010,
-    EXT4_FEATURE_INCOMPAT_EXTENTS = 0x0040,
-    EXT4_FEATURE_INCOMPAT_64BIT = 0x0080,
-    EXT4_FEATURE_INCOMPAT_MMP = 0x0100,
-    EXT4_FEATURE_INCOMPAT_FLEX_BG = 0x0200,
-    EXT4_FEATURE_INCOMPAT_EA_INODE = 0x0400,
-    EXT4_FEATURE_INCOMPAT_CSUM_SEED = 0x2000,
-    EXT4_FEATURE_INCOMPAT_LARGEDIR = 0x4000,
-
-    EXT4_GOOD_OLD_INODE_SIZE = 128,
     EXT4_N_DIRECT_BLOCKS = 12,
-    EXT4_FAST_SYMLINK_MAX = 60,
     EXT4_SYMLINK_MAX = 4096,
-    EXT4_EXTENTS_FL = 0x00080000,
-    EXT4_INLINE_DATA_FL = 0x10000000,
-    EXT4_EXTENT_MAGIC = 0xF30A,
     EXT4_EXTENT_MAX_DEPTH = 5,
-    EXT4_EXTENT_INIT_MAX_LEN = 32768,
-    EXT4_XATTR_MAGIC = 0xEA020000,
-    EXT4_XATTR_BLOCK_HEADER_SIZE = 32,
-    EXT4_XATTR_ENTRY_SIZE = 16,
     EXT4_XATTR_VALUE_MAX = 65536,
-    EXT4_XATTR_INDEX_USER = 1,
-    EXT4_XATTR_INDEX_POSIX_ACL_ACCESS = 2,
-    EXT4_XATTR_INDEX_POSIX_ACL_DEFAULT = 3,
-    EXT4_XATTR_INDEX_TRUSTED = 4,
-    EXT4_XATTR_INDEX_SECURITY = 6,
-    EXT4_ACL_VERSION = 1,
-    EXT4_ACL_USER = 0x02,
-    EXT4_ACL_GROUP = 0x08,
     EXT4_ACL_UNDEFINED_ID = 0xFFFFFFFF,
-    POSIX_ACL_XATTR_VERSION = 2,
     STREAM_CHUNK = 1024 * 1024,
     RESOLVE_MAX_SYMLINKS = 40,
     RESOLVE_MAX_DEPTH = 256,
 
-    JBD2_MAGIC = 0xC03B3998,
-    JBD2_DESCRIPTOR_BLOCK = 1,
-    JBD2_COMMIT_BLOCK = 2,
-    JBD2_SUPERBLOCK_V1 = 3,
-    JBD2_SUPERBLOCK_V2 = 4,
-    JBD2_REVOKE_BLOCK = 5,
     JBD2_FEATURE_INCOMPAT_REVOKE = 0x01,
     JBD2_FEATURE_INCOMPAT_64BIT = 0x02,
     JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT = 0x04,
@@ -88,61 +49,6 @@ static const uint32_t SUPPORTED_INCOMPAT =
     EXT4_FEATURE_INCOMPAT_FLEX_BG | EXT4_FEATURE_INCOMPAT_EA_INODE | EXT4_FEATURE_INCOMPAT_CSUM_SEED |
     EXT4_FEATURE_INCOMPAT_LARGEDIR;
 
-static inline void put_be32(uint8_t *p, uint32_t v) {
-    p[0] = (uint8_t)(v >> 24);
-    p[1] = (uint8_t)(v >> 16);
-    p[2] = (uint8_t)(v >> 8);
-    p[3] = (uint8_t)v;
-}
-
-static inline void put_le32(uint8_t *p, uint32_t v) {
-    p[0] = (uint8_t)v;
-    p[1] = (uint8_t)(v >> 8);
-    p[2] = (uint8_t)(v >> 16);
-    p[3] = (uint8_t)(v >> 24);
-}
-
-static inline uint16_t get_le16(const uint8_t *p) {
-    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
-}
-
-static inline uint32_t get_le32(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
-}
-
-static inline uint16_t get_be16(const uint8_t *p) {
-    return (uint16_t)(((uint16_t)p[0] << 8) | (uint16_t)p[1]);
-}
-
-static inline uint32_t get_be32(const uint8_t *p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
-}
-
-static inline uint64_t get_be64(const uint8_t *p) {
-    return ((uint64_t)get_be32(p) << 32) | get_be32(p + 4);
-}
-
-static int pread_all(int fd, void *buf, size_t len, off_t off) {
-    uint8_t *p = buf;
-    while (len > 0) {
-        ssize_t n = pread(fd, p, len, off);
-        if (n < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return -errno;
-        }
-        if (n == 0) {
-            memset(p, 0, len);
-            return 0;
-        }
-        p += (size_t)n;
-        len -= (size_t)n;
-        off += (off_t)n;
-    }
-    return 0;
-}
-
 typedef struct replay_block {
     uint64_t fs_block;
     uint64_t log_block;
@@ -165,8 +71,6 @@ struct ext4_fs {
     uint32_t backup_bgs[2];
     uint32_t journal_inum;
     uint64_t total_blocks;
-    uint64_t inodes_count;
-    uint64_t free_inodes;
     uint8_t *gdt;
     uint8_t *stream_buf;
     uint8_t *inode_buf;
@@ -189,46 +93,35 @@ static size_t replay_lower_bound(const ext4_fs_t *fs, uint64_t block) {
 }
 
 static int ext4_pread(const ext4_fs_t *fs, void *buf, size_t len, uint64_t off) {
-    if (fs->replay_count == 0) {
-        return pread_all(fs->fd, buf, len, (off_t)off);
-    }
     uint8_t *p = buf;
     while (len > 0) {
         uint64_t block = off / fs->block_size;
         size_t idx = replay_lower_bound(fs, block);
-        size_t chunk;
-        int rc;
-        if (idx == fs->replay_count || fs->replay[idx].fs_block != block) {
-            uint64_t end = idx == fs->replay_count ? UINT64_MAX : fs->replay[idx].fs_block * fs->block_size;
-            chunk = end - off < len ? (size_t)(end - off) : len;
-            rc = pread_all(fs->fd, p, chunk, (off_t)off);
-        } else {
-            const replay_block_t *e = &fs->replay[idx];
-            uint32_t in_block = (uint32_t)(off % fs->block_size);
+        const replay_block_t *e = idx < fs->replay_count && fs->replay[idx].fs_block == block ? &fs->replay[idx] : NULL;
+        uint32_t in_block = (uint32_t)(off % fs->block_size);
+        size_t chunk = len;
+        uint64_t src = off;
+        if (e) {
             chunk = fs->block_size - in_block < len ? fs->block_size - in_block : len;
-            rc = pread_all(fs->fd, p, chunk, (off_t)(e->log_block * fs->block_size + in_block));
-            if (rc == 0 && e->escaped && in_block < 4) {
-                uint8_t magic[4];
-                put_be32(magic, JBD2_MAGIC);
-                size_t n = 4 - in_block < chunk ? 4 - in_block : chunk;
-                memcpy(p, magic + in_block, n);
-            }
+            src = e->log_block * fs->block_size + in_block;
+        } else if (idx < fs->replay_count && fs->replay[idx].fs_block * fs->block_size - off < len) {
+            chunk = (size_t)(fs->replay[idx].fs_block * fs->block_size - off);
         }
-        if (rc < 0) {
-            return rc;
+        ssize_t n = pread_all(fs->fd, p, chunk, (off_t)src);
+        if (n < 0) {
+            return (int)n;
+        }
+        memset(p + n, 0, chunk - (size_t)n);
+        if (e && e->escaped && in_block < 4) {
+            uint8_t magic[4];
+            put_be32(magic, JBD2_MAGIC);
+            memcpy(p, magic + in_block, 4 - in_block < chunk ? 4 - in_block : chunk);
         }
         p += chunk;
         off += chunk;
         len -= chunk;
     }
     return 0;
-}
-
-static bool is_power_of(uint32_t n, uint32_t base) {
-    while (n > 1 && n % base == 0) {
-        n /= base;
-    }
-    return n == 1;
 }
 
 static bool group_has_super(const ext4_fs_t *fs, uint32_t group) {
@@ -282,8 +175,6 @@ static int ext4_load(ext4_fs_t *fs) {
     fs->backup_bgs[1] = get_le32(sb + 0x250);
     fs->desc_size = (fs->incompat & EXT4_FEATURE_INCOMPAT_64BIT) ? get_le16(sb + 0xFE) : 32U;
     fs->journal_inum = (fs->compat & EXT4_FEATURE_COMPAT_HAS_JOURNAL) ? get_le32(sb + 0xE0) : 0;
-    fs->inodes_count = get_le32(sb + 0x00);
-    fs->free_inodes = get_le32(sb + 0x10);
     if (fs->incompat & ~SUPPORTED_INCOMPAT) {
         return -ENOTSUP;
     }
@@ -323,6 +214,10 @@ static int ext4_load(ext4_fs_t *fs) {
         }
     }
     return 0;
+}
+
+static uint64_t inode_size_field(const uint8_t *inode) {
+    return (uint64_t)get_le32(inode + 0x04) | ((uint64_t)get_le32(inode + 0x6C) << 32);
 }
 
 static int ext4_read_inode(const ext4_fs_t *fs, uint32_t ino, uint8_t *buf) {
@@ -701,8 +596,7 @@ static int journal_replay(ext4_fs_t *fs) {
         rc = -EINVAL;
         goto out;
     }
-    uint64_t journal_bytes = (uint64_t)get_le32(inode + 0x04) | ((uint64_t)get_le32(inode + 0x6C) << 32);
-    uint64_t journal_blocks = journal_bytes / fs->block_size;
+    uint64_t journal_blocks = inode_size_field(inode) / fs->block_size;
     if (journal_blocks < 2 || journal_blocks > UINT32_MAX) {
         rc = -EINVAL;
         goto out;
@@ -717,7 +611,7 @@ static int journal_replay(ext4_fs_t *fs) {
         rc = -EIO;
     }
     if (rc == 0) {
-        rc = ext4_pread(fs, jsb, fs->block_size, s.log_map[0] * fs->block_size);
+        rc = journal_read(&s, 0, jsb);
     }
     if (rc < 0) {
         goto out;
@@ -822,14 +716,6 @@ void ext4_fs_close(ext4_fs_t *fs) {
     free(fs);
 }
 
-uint64_t ext4_fs_used_inodes(const ext4_fs_t *fs) {
-    return fs->inodes_count > fs->free_inodes ? fs->inodes_count - fs->free_inodes : 0;
-}
-
-static uint64_t inode_size_field(const uint8_t *inode) {
-    return (uint64_t)get_le32(inode + 0x04) | ((uint64_t)get_le32(inode + 0x6C) << 32);
-}
-
 static bool inode_has_extra(const ext4_fs_t *fs, const uint8_t *inode, size_t field_end) {
     return fs->inode_size > EXT4_GOOD_OLD_INODE_SIZE &&
            EXT4_GOOD_OLD_INODE_SIZE + (size_t)get_le16(inode + 0x80) >= field_end;
@@ -848,10 +734,6 @@ static int64_t inode_time(const ext4_fs_t *fs, const uint8_t *inode, size_t base
 }
 
 static void inode_to_node(const ext4_fs_t *fs, uint32_t ino, const uint8_t *inode, ext4_node_t *node) {
-    uint32_t mnsec = 0;
-    uint32_t cnsec = 0;
-    int64_t mtime = inode_time(fs, inode, 0x10, 0x88, &mnsec);
-    int64_t ctime = inode_time(fs, inode, 0x0C, 0x84, &cnsec);
     *node = (ext4_node_t){
         .ino = ino,
         .mode = get_le16(inode + 0x00),
@@ -860,12 +742,12 @@ static void inode_to_node(const ext4_fs_t *fs, uint32_t ino, const uint8_t *inod
         .nlink = get_le16(inode + 0x1A),
         .generation = get_le32(inode + 0x64),
         .size = inode_size_field(inode),
-        .mtime_ns = mtime * 1000000000LL + mnsec,
-        .ctime_ns = ctime * 1000000000LL + cnsec,
     };
+    node->mtime = inode_time(fs, inode, 0x10, 0x88, &node->mtime_nsec);
+    node->ctime = inode_time(fs, inode, 0x0C, 0x84, &node->ctime_nsec);
 }
 
-int ext4_fs_stat(ext4_fs_t *fs, uint32_t ino, ext4_node_t *node_out) {
+static int stat_inode(ext4_fs_t *fs, uint32_t ino, ext4_node_t *node_out) {
     int rc = ext4_read_inode(fs, ino, fs->inode_buf);
     if (rc < 0) {
         return rc;
@@ -1075,50 +957,29 @@ static int stream_block_map(stream_t *s, const uint8_t *inode) {
     return rc;
 }
 
-static int stream_inode(const ext4_fs_t *fs, const uint8_t *inode, uint64_t offset, uint64_t length,
-                        ext4_data_cb cb, ext4_extent_cb map, void *ctx) {
-    uint32_t flags = get_le32(inode + 0x20);
-    if (flags & EXT4_INLINE_DATA_FL) {
-        return -ENOTSUP;
-    }
+static int stream_inode(const ext4_fs_t *fs, const uint8_t *inode, uint64_t length, ext4_data_cb cb,
+                        ext4_extent_cb map, void *ctx) {
     uint64_t size = inode_size_field(inode);
-    uint64_t end = offset >= size ? offset : (length > size - offset ? size : offset + length);
-    stream_t s = {.fs = fs, .pos = offset, .end = end, .cb = cb, .map = map, .ctx = ctx};
-    if (s.pos >= s.end) {
+    stream_t s = {.fs = fs, .end = length < size ? length : size, .cb = cb, .map = map, .ctx = ctx};
+    if (s.end == 0) {
         return 0;
     }
-    int rc = (flags & EXT4_EXTENTS_FL) ? stream_extent_node(&s, inode + 0x28, 60, -1) : stream_block_map(&s, inode);
+    int rc = (get_le32(inode + 0x20) & EXT4_EXTENTS_FL) ? stream_extent_node(&s, inode + 0x28, 60, -1)
+                                                       : stream_block_map(&s, inode);
     if (rc >= 0 && !s.stopped) {
         rc = stream_zeros(&s, s.end);
     }
     return rc < 0 ? rc : 0;
 }
 
-int ext4_fs_stream(ext4_fs_t *fs, const ext4_node_t *node, uint64_t offset, uint64_t length,
-                   ext4_data_cb cb, void *ctx) {
-    uint8_t *inode = malloc(fs->inode_size);
-    if (!inode) {
-        return -ENOMEM;
-    }
-    int rc = ext4_read_inode(fs, node->ino, inode);
-    if (rc == 0) {
-        rc = stream_inode(fs, inode, offset, length, cb, NULL, ctx);
-    }
-    free(inode);
-    return rc;
+int ext4_fs_stream(ext4_fs_t *fs, const ext4_node_t *node, uint64_t length, ext4_data_cb cb, void *ctx) {
+    int rc = ext4_read_inode(fs, node->ino, fs->inode_buf);
+    return rc < 0 ? rc : stream_inode(fs, fs->inode_buf, length, cb, NULL, ctx);
 }
 
 int ext4_fs_map(ext4_fs_t *fs, const ext4_node_t *node, ext4_extent_cb cb, void *ctx) {
-    uint8_t *inode = malloc(fs->inode_size);
-    if (!inode) {
-        return -ENOMEM;
-    }
-    int rc = ext4_read_inode(fs, node->ino, inode);
-    if (rc == 0) {
-        rc = stream_inode(fs, inode, 0, UINT64_MAX, NULL, cb, ctx);
-    }
-    free(inode);
-    return rc;
+    int rc = ext4_read_inode(fs, node->ino, fs->inode_buf);
+    return rc < 0 ? rc : stream_inode(fs, fs->inode_buf, UINT64_MAX, NULL, cb, ctx);
 }
 
 typedef struct byte_buffer {
@@ -1142,7 +1003,7 @@ static int read_inode_data(const ext4_fs_t *fs, const uint8_t *inode, size_t siz
     if (!b.data) {
         return -ENOMEM;
     }
-    int rc = stream_inode(fs, inode, 0, size, byte_buffer_collect, NULL, &b);
+    int rc = stream_inode(fs, inode, size, byte_buffer_collect, NULL, &b);
     if (rc == 0 && b.len != size) {
         rc = -EIO;
     }
@@ -1158,15 +1019,10 @@ int ext4_fs_read(ext4_fs_t *fs, const ext4_node_t *node, size_t limit, uint8_t *
     if (node->size > limit) {
         return -EFBIG;
     }
-    uint8_t *inode = malloc(fs->inode_size);
-    if (!inode) {
-        return -ENOMEM;
-    }
-    int rc = ext4_read_inode(fs, node->ino, inode);
+    int rc = ext4_read_inode(fs, node->ino, fs->inode_buf);
     if (rc == 0) {
-        rc = read_inode_data(fs, inode, (size_t)node->size, data_out);
+        rc = read_inode_data(fs, fs->inode_buf, (size_t)node->size, data_out);
     }
-    free(inode);
     if (rc == 0) {
         *size_out = (size_t)node->size;
     }
@@ -1174,19 +1030,11 @@ int ext4_fs_read(ext4_fs_t *fs, const ext4_node_t *node, size_t limit, uint8_t *
 }
 
 static int read_small_inode(const ext4_fs_t *fs, uint32_t ino, uint64_t expected_size, uint8_t **data_out) {
-    uint8_t *inode = malloc(fs->inode_size);
-    if (!inode) {
-        return -ENOMEM;
-    }
-    int rc = ext4_read_inode(fs, ino, inode);
-    if (rc == 0 && inode_size_field(inode) != expected_size) {
+    int rc = ext4_read_inode(fs, ino, fs->inode_buf);
+    if (rc == 0 && inode_size_field(fs->inode_buf) != expected_size) {
         rc = -EIO;
     }
-    if (rc == 0) {
-        rc = read_inode_data(fs, inode, (size_t)expected_size, data_out);
-    }
-    free(inode);
-    return rc;
+    return rc < 0 ? rc : read_inode_data(fs, fs->inode_buf, (size_t)expected_size, data_out);
 }
 
 typedef struct xattr_list {
@@ -1387,7 +1235,7 @@ static int read_symlink(const ext4_fs_t *fs, const uint8_t *inode, char **target
     }
     uint32_t flags = get_le32(inode + 0x20);
     char *target;
-    if (size < EXT4_FAST_SYMLINK_MAX && !(flags & (EXT4_EXTENTS_FL | EXT4_INLINE_DATA_FL))) {
+    if (size < EXT4_FAST_SYMLINK_MAX && !(flags & EXT4_EXTENTS_FL)) {
         target = malloc((size_t)size + 1);
         if (!target) {
             return -ENOMEM;
@@ -1456,20 +1304,12 @@ static int dir_parse_chunk(void *ctx, const void *data, size_t len) {
 }
 
 static int list_inode(ext4_fs_t *fs, uint32_t ino, ext4_list_cb cb, void *ctx) {
-    uint8_t *inode = malloc(fs->inode_size);
-    if (!inode) {
-        return -ENOMEM;
-    }
-    int rc = ext4_read_inode(fs, ino, inode);
-    if (rc == 0 && !S_ISDIR(get_le16(inode))) {
+    int rc = ext4_read_inode(fs, ino, fs->inode_buf);
+    if (rc == 0 && !S_ISDIR(get_le16(fs->inode_buf))) {
         rc = -ENOTDIR;
     }
-    if (rc == 0) {
-        dir_parse_t d = {.block_size = fs->block_size, .cb = cb, .ctx = ctx};
-        rc = stream_inode(fs, inode, 0, UINT64_MAX, dir_parse_chunk, NULL, &d);
-    }
-    free(inode);
-    return rc;
+    dir_parse_t d = {.block_size = fs->block_size, .cb = cb, .ctx = ctx};
+    return rc < 0 ? rc : stream_inode(fs, fs->inode_buf, UINT64_MAX, dir_parse_chunk, NULL, &d);
 }
 
 int ext4_fs_list(ext4_fs_t *fs, const ext4_node_t *dir, ext4_list_cb cb, void *ctx) {
@@ -1504,7 +1344,7 @@ static int lookup_child(ext4_fs_t *fs, uint32_t dir_ino, const char *name, size_
     return 0;
 }
 
-int ext4_fs_resolve(ext4_fs_t *fs, const char *path, bool follow_final, ext4_node_t *node_out) {
+int ext4_fs_resolve(ext4_fs_t *fs, const char *path, ext4_node_t *node_out) {
     uint32_t *stack = malloc(RESOLVE_MAX_DEPTH * sizeof(*stack));
     char *rest = strdup(path);
     if (!stack || !rest) {
@@ -1516,9 +1356,8 @@ int ext4_fs_resolve(ext4_fs_t *fs, const char *path, bool follow_final, ext4_nod
     stack[0] = EXT4_ROOT_INO;
     unsigned hops = 0;
     size_t pos = 0;
-    int rc = 0;
     ext4_node_t current;
-    rc = ext4_fs_stat(fs, EXT4_ROOT_INO, &current);
+    int rc = stat_inode(fs, EXT4_ROOT_INO, &current);
     while (rc == 0) {
         while (rest[pos] == '/') {
             pos++;
@@ -1529,13 +1368,6 @@ int ext4_fs_resolve(ext4_fs_t *fs, const char *path, bool follow_final, ext4_nod
         size_t len = strcspn(rest + pos, "/");
         const char *name = rest + pos;
         size_t next = pos + len;
-        bool final = true;
-        for (size_t i = next; rest[i] != '\0'; i++) {
-            if (rest[i] != '/') {
-                final = false;
-                break;
-            }
-        }
         if (!S_ISDIR(current.mode)) {
             rc = -ENOTDIR;
             break;
@@ -1548,7 +1380,7 @@ int ext4_fs_resolve(ext4_fs_t *fs, const char *path, bool follow_final, ext4_nod
             if (depth > 1) {
                 depth--;
             }
-            rc = ext4_fs_stat(fs, stack[depth - 1], &current);
+            rc = stat_inode(fs, stack[depth - 1], &current);
             pos = next;
             continue;
         }
@@ -1560,12 +1392,12 @@ int ext4_fs_resolve(ext4_fs_t *fs, const char *path, bool follow_final, ext4_nod
         rc = lookup_child(fs, stack[depth - 1], name, len, &ino);
         ext4_node_t child;
         if (rc == 0) {
-            rc = ext4_fs_stat(fs, ino, &child);
+            rc = stat_inode(fs, ino, &child);
         }
         if (rc < 0) {
             break;
         }
-        if (S_ISLNK(child.mode) && (!final || follow_final)) {
+        if (S_ISLNK(child.mode)) {
             if (++hops > RESOLVE_MAX_SYMLINKS) {
                 rc = -ELOOP;
                 break;
@@ -1593,7 +1425,7 @@ int ext4_fs_resolve(ext4_fs_t *fs, const char *path, bool follow_final, ext4_nod
             free(rest);
             rest = joined;
             pos = 0;
-            rc = ext4_fs_stat(fs, stack[depth - 1], &current);
+            rc = stat_inode(fs, stack[depth - 1], &current);
             continue;
         }
         if (depth == RESOLVE_MAX_DEPTH) {
@@ -1679,44 +1511,6 @@ static void decode_rdev(const uint8_t *iblock, uint64_t *major, uint64_t *minor)
     *minor = (new_dev & 0xFFU) | ((new_dev >> 12) & 0xFFF00U);
 }
 
-typedef struct ino_set {
-    uint32_t *slots;
-    size_t cap;
-    size_t count;
-} ino_set_t;
-
-static int ino_set_insert(ino_set_t *s, uint32_t ino) {
-    if ((s->count + 1) * 2 > s->cap) {
-        size_t cap = s->cap ? s->cap * 2 : 256;
-        uint32_t *slots = calloc(cap, sizeof(*slots));
-        if (!slots) {
-            return -ENOMEM;
-        }
-        for (size_t i = 0; i < s->cap; i++) {
-            if (s->slots[i] != 0) {
-                size_t pos = (s->slots[i] * 2654435761U) & (cap - 1);
-                while (slots[pos] != 0) {
-                    pos = (pos + 1) & (cap - 1);
-                }
-                slots[pos] = s->slots[i];
-            }
-        }
-        free(s->slots);
-        s->slots = slots;
-        s->cap = cap;
-    }
-    size_t pos = (ino * 2654435761U) & (s->cap - 1);
-    while (s->slots[pos] != 0) {
-        if (s->slots[pos] == ino) {
-            return 0;
-        }
-        pos = (pos + 1) & (s->cap - 1);
-    }
-    s->slots[pos] = ino;
-    s->count++;
-    return 1;
-}
-
 static int visit_entry(ext4_fs_t *fs, uint32_t ino, const char *path, uint8_t *inode,
                        ext4_walk_cb cb, void *ctx, uint32_t *mode_out) {
     int rc = ext4_read_inode(fs, ino, inode);
@@ -1725,7 +1519,6 @@ static int visit_entry(ext4_fs_t *fs, uint32_t ino, const char *path, uint8_t *i
     }
     ext4_entry_info_t info = {0};
     inode_to_node(fs, ino, inode, &info.node);
-    info.mtime = inode_time(fs, inode, 0x10, 0x88, &info.mtime_nsec);
     *mode_out = info.node.mode;
 
     xattr_list_t xattrs = {0};
@@ -1781,10 +1574,11 @@ int ext4_fs_walk(ext4_fs_t *fs, ext4_walk_cb cb, void *ctx) {
         return -ENOMEM;
     }
     size_t depth = 0;
-    ino_set_t visited = {0};
+    ino_map_t visited = {0};
     uint32_t mode = 0;
-    int rc = ino_set_insert(&visited, EXT4_ROOT_INO);
-    if (rc >= 0) {
+    bool seen = false;
+    int rc = ino_map_slot(&visited, EXT4_ROOT_INO, &seen) ? 0 : -ENOMEM;
+    if (rc == 0) {
         rc = visit_entry(fs, EXT4_ROOT_INO, root_path, inode, cb, ctx, &mode);
     }
     if (rc == 0) {
@@ -1816,10 +1610,10 @@ int ext4_fs_walk(ext4_fs_t *fs, ext4_walk_cb cb, void *ctx) {
             free(path);
             continue;
         }
-        int inserted = ino_set_insert(&visited, item->ino);
-        if (inserted <= 0) {
+        char **slot = ino_map_slot(&visited, item->ino, &seen);
+        if (!slot || seen) {
             free(path);
-            rc = inserted < 0 ? inserted : -EIO;
+            rc = slot ? -EIO : -ENOMEM;
             continue;
         }
         if (depth == frames_cap) {
@@ -1841,7 +1635,7 @@ int ext4_fs_walk(ext4_fs_t *fs, ext4_walk_cb cb, void *ctx) {
         dir_listing_free(&frames[depth].listing);
         free(frames[depth].path);
     }
-    free(visited.slots);
+    ino_map_free(&visited);
     free(frames);
     free(inode);
     return rc;

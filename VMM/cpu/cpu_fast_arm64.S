@@ -1,5 +1,3 @@
-#if defined(__aarch64__)
-
 #include "cpu_fast_layout.h"
 
 .arch_extension crc
@@ -91,6 +89,18 @@ _cpu_fast_run:
 .macro WRITE_X src, field=IR_RD, index=w9
     ldrb \index, [x20, #\field]
     str \src, [x19, \index, uxtw #3]
+.endmacro
+
+.macro PAGE_CURRENT fail
+    ldr x9, [x19, #CPU_ICACHE]
+    ldr x10, [x9, #IC_CUR_EXEC_EPOCH]
+    ldr x11, [x19, #CPU_EXEC_EPOCH]
+    eor x10, x10, x11
+    cbnz x10, \fail
+    ldr x10, [x9, #IC_CUR_GEN]
+    ldur w11, [x25, #(PAGE_GEN - PAGE_INSNS)]
+    eor w10, w10, w11
+    cbnz w10, \fail
 .endmacro
 
 .macro COMMIT
@@ -235,7 +245,6 @@ Lcross_page:
     cbnz w9, Lcross_slow
     ASYNC 9, 10, 16
 
-Lcross_hit:
     ldr x9, [x19, #CPU_ICACHE]
     ldr x10, [x19, #CPU_EXEC_EPOCH]
     and x26, x13, #0xfffffffffffff000
@@ -252,15 +261,7 @@ Lcross_hit:
     LAND
 
 Lsame_page:
-    ldr x9, [x19, #CPU_ICACHE]
-    ldr x10, [x9, #IC_CUR_EXEC_EPOCH]
-    ldr x11, [x19, #CPU_EXEC_EPOCH]
-    eor x10, x10, x11
-    cbnz x10, Lcross_slow
-    ldr x10, [x9, #IC_CUR_GEN]
-    ldur w11, [x25, #(PAGE_GEN - PAGE_INSNS)]
-    eor w10, w10, w11
-    cbnz w10, Lcross_slow
+    PAGE_CURRENT Lcross_slow
     ASYNC 9, 10, 11
     and x9, x13, #0xffc
     add x20, x25, x9, lsl #3
@@ -413,23 +414,19 @@ SHIFT_IMM lsr_i64, lsr, x
 SHIFT_IMM asr_i32, asr, w
 SHIFT_IMM asr_i64, asr, x
 
-Lubfx_m32:
+.macro UBFX_MASK name, width
+L\name:
     READ_X x10, IR_RN, w9
     ldrh w11, [x20, #IR_OP]
     ldr x12, [x20, #IR_IMM]
-    lsr w14, w10, w11
-    and w14, w14, w12
+    lsr \width\()14, \width\()10, \width\()11
+    and \width\()14, \width\()14, \width\()12
     WRITE_X x14
     NEXT
+.endmacro
 
-Lubfx_m64:
-    READ_X x10, IR_RN, w9
-    ldrh w11, [x20, #IR_OP]
-    ldr x12, [x20, #IR_IMM]
-    lsr x14, x10, x11
-    and x14, x14, x12
-    WRITE_X x14
-    NEXT
+UBFX_MASK ubfx_m32, w
+UBFX_MASK ubfx_m64, x
 
 .macro BITFIELD name, width, shift, wrap
 L\name:
@@ -642,8 +639,7 @@ UNPRIV ldtrsw64, ldrsw, x, 4, load
 UNPRIV ldtrsb32, ldrsb, w, 1, load
 UNPRIV ldtrsh32, ldrsh, w, 2, load
 
-.macro ORDERED name, insn, width, bytes, dir, offset=0, extend=, extended=x
-L\name:
+.macro ATOMIC_BASE bank, bytes, cold, offset=0
     BASE
 .if \offset
     ldrsw x13, [x20, #IR_IMM_HI]
@@ -651,26 +647,33 @@ L\name:
 .endif
 .if \bytes > 1
     and x9, x10, #(\bytes - 1)
-    cbnz x9, Lcold
+    cbnz x9, \cold
 .endif
     mov x12, x10
+    TLB \bank, 1, 1, \cold
+.endmacro
+
+.macro WAKE_WAITERS
+    ldr x10, [x19, #CPU_VM]
+    add x11, x10, #VM_WFE_WAITERS
+    ldar w11, [x11]
+    cbnz w11, Lstlr_wake
+.endmacro
+
+.macro ORDERED name, insn, width, bytes, dir, offset=0, extend=, extended=x
+L\name:
 .ifc \dir, load
-    TLB x21, 1, 1
+    ATOMIC_BASE x21, \bytes, Lcold, \offset
     \insn \width\()15, [x12]
 .ifnb \extend
     \extend \extended\()15, w15
 .endif
     WRITE_X x15
 .else
-    TLB x22, 1, 1
+    ATOMIC_BASE x22, \bytes, Lcold, \offset
     READ_X x15, IR_RD
     \insn \width\()15, [x12]
-    ldr x10, [x19, #CPU_VM]
-    cbz x10, 1f
-    add x11, x10, #VM_WFE_WAITERS
-    ldar w11, [x11]
-    cbnz w11, Lstlr_wake
-1:
+    WAKE_WAITERS
 .endif
     NEXT
 .endmacro
@@ -855,13 +858,16 @@ L\name:
     NEXT
 .endmacro
 
+.macro SYSREG_WRITE name, offset
+L\name:
+    READ_X x14, IR_RD
+    str x14, [x19, #\offset]
+    NEXT
+.endmacro
+
 SYSREG_READ mrs_tpidr_el0, CPU_TPIDR_EL0
 SYSREG_READ mrs_tpidrro_el0, CPU_TPIDRRO_EL0
-
-Lmsr_tpidr_el0:
-    READ_X x14, IR_RD
-    str x14, [x19, #CPU_TPIDR_EL0]
-    NEXT
+SYSREG_WRITE msr_tpidr_el0, CPU_TPIDR_EL0
 
 Lmrs_tpidr_el1:
     ldrb w9, [x19, #CPU_EL]
@@ -870,15 +876,8 @@ Lmrs_tpidr_el1:
     WRITE_X x14
     NEXT
 
-Lmrs_tpidr_el2:
-    ldr x14, [x19, #CPU_TPIDR_EL2]
-    WRITE_X x14
-    NEXT
-
-Lmsr_tpidr_el2:
-    READ_X x14, IR_RD
-    str x14, [x19, #CPU_TPIDR_EL2]
-    NEXT
+SYSREG_READ mrs_tpidr_el2, CPU_TPIDR_EL2
+SYSREG_WRITE msr_tpidr_el2, CPU_TPIDR_EL2
 
 Lmrs_sp_el0:
     ldrb w9, [x19, #CPU_EL]
@@ -948,7 +947,6 @@ Lb:
     sub x9, x20, x13
     mov x20, x13
     tbnz x9, #63, Lland
-Lbranch_poll:
     ldr w9, [x19, #CPU_BUDGET]
     sub w9, w9, #1
     str w9, [x19, #CPU_BUDGET]
@@ -991,7 +989,6 @@ Lret_target:
     cbnz w9, Lcross_page
     ASYNC 9, 16, 17
 
-Lret_hit:
     mov w28, w15
     ldr x9, [x19, #CPU_EXEC_EPOCH]
     stp x12, x9, [x14, #IC_CUR_PAGE]
@@ -1013,18 +1010,16 @@ ZERO_BRANCH cbz64, x, cbz
 ZERO_BRANCH cbnz32, w, cbnz
 ZERO_BRANCH cbnz64, x, cbnz
 
-Ltbz:
+.macro TEST_BRANCH name, cond
+L\name:
     READ_X x10, IR_RD
     ldrh w11, [x20, #IR_OP]
     lsr x10, x10, x11
-    tbz x10, #0, Lbranch_taken
+    \cond x10, #0, Lbranch_taken
     NEXT
-Ltbnz:
-    READ_X x10, IR_RD
-    ldrh w11, [x20, #IR_OP]
-    lsr x10, x10, x11
-    tbnz x10, #0, Lbranch_taken
-    NEXT
+.endmacro
+TEST_BRANCH tbz, tbz
+TEST_BRANCH tbnz, tbnz
 
 .macro COND name, cc
 L\name:
@@ -1322,6 +1317,7 @@ VMEM_FORMS ldr128, q, 16, load
 Lv\name:
     VFP_CHECK
     ldr x12, [x20, #IR_IMM]
+    add x12, x12, x26
     TLB x21, \bytes, \bytes, Lvcold
     ldr \reg\()0, [x12]
     ldrb w9, [x20, #IR_RD]
@@ -2006,21 +2002,12 @@ Lbarrier:
     dmb ish
     ldrb w9, [x19, #CPU_ICACHE_SHOOTDOWN]
     cbnz w9, Lpt_cold
-    ldr x9, [x19, #CPU_ICACHE]
-    ldr x10, [x9, #IC_CUR_EXEC_EPOCH]
-    ldr x11, [x19, #CPU_EXEC_EPOCH]
-    eor x10, x10, x11
-    cbnz x10, Lpt_cold
-    ldr x10, [x9, #IC_CUR_GEN]
-    ldur w11, [x25, #(PAGE_GEN - PAGE_INSNS)]
-    eor w10, w10, w11
-    cbnz w10, Lpt_cold
+    PAGE_CURRENT Lpt_cold
     NEXT
 
 Lclrex:
     strb wzr, [x19, #CPU_EXCL_VALID]
-    add x9, x19, #CPU_EXCL_HVA_PAGE, lsl #12
-    str xzr, [x9, #CPU_EXCL_HVA]
+    str xzr, [x19, #CPU_EXCL_HVA]
     NEXT
 
 Lmsr_daifset:
@@ -2032,14 +2019,18 @@ Lmsr_daifset:
     str w11, [x19, #CPU_DAIF]
     NEXT
 
-Lmsr_daifclr:
-    ldrb w9, [x19, #CPU_EL]
-    cbz w9, Lpt_cold
+.macro IRQ_UNMASKED fail
     add x9, x19, #CPU_IRQ
     ldar w9, [x9]
     ldrb w10, [x19, #CPU_IRQ_MASK]
     and w9, w9, w10
-    cbnz w9, Lpt_cold
+    cbnz w9, \fail
+.endmacro
+
+Lmsr_daifclr:
+    ldrb w9, [x19, #CPU_EL]
+    cbz w9, Lpt_cold
+    IRQ_UNMASKED Lpt_cold
     ldrb w10, [x20, #IR_RA]
     ldr w11, [x19, #CPU_DAIF]
     bic w11, w11, w10, lsl #6
@@ -2060,11 +2051,7 @@ Lmsr_daif:
     READ_X x14, IR_RD
     and w14, w14, #0x3c0
     tbnz w14, #7, 1f
-    add x9, x19, #CPU_IRQ
-    ldar w9, [x9]
-    ldrb w10, [x19, #CPU_IRQ_MASK]
-    and w9, w9, w10
-    cbnz w9, Lpt_cold
+    IRQ_UNMASKED Lpt_cold
 1:
     str w14, [x19, #CPU_DAIF]
     NEXT
@@ -2177,7 +2164,7 @@ Lmsr_fpcr:
     ldrb w9, [x19, #CPU_FP_ACTIVE]
     cbz w9, Lpt_fp
     READ_X x14, IR_RD
-    mov w10, #0x07c80000
+    mov w10, #CPU_FPCR_MASK
     and w14, w14, w10
     str w14, [x19, #CPU_FPCR]
     msr fpcr, x14
@@ -2190,8 +2177,8 @@ Lmrs_fpsr:
     mrs x14, fpsr
     ldr w10, [x19, #CPU_FPSR]
     orr w14, w14, w10
-    mov w10, #0x009f
-    movk w10, #0x0800, lsl #16
+    mov w10, #(CPU_FPSR_MASK & 0xffff)
+    movk w10, #(CPU_FPSR_MASK >> 16), lsl #16
     and w14, w14, w10
     str w14, [x19, #CPU_FPSR]
     WRITE_X x14
@@ -2202,8 +2189,8 @@ Lmsr_fpsr:
     ldrb w9, [x19, #CPU_FP_ACTIVE]
     cbz w9, Lpt_fp
     READ_X x14, IR_RD
-    mov w10, #0x009f
-    movk w10, #0x0800, lsl #16
+    mov w10, #(CPU_FPSR_MASK & 0xffff)
+    movk w10, #(CPU_FPSR_MASK >> 16), lsl #16
     and w14, w14, w10
     str w14, [x19, #CPU_FPSR]
     msr fpsr, x14
@@ -2234,26 +2221,15 @@ L\name:
 ADRP_LOAD adrp_ldr32, w, 4
 ADRP_LOAD adrp_ldr64, x, 8
 
-.macro EXCLUSIVE_BASE bank, bytes
-    BASE
-.if \bytes > 1
-    and x9, x10, #(\bytes - 1)
-    cbnz x9, Lpt_cold
-.endif
-    mov x12, x10
-    TLB \bank, 1, 1, Lpt_cold
-.endmacro
-
 .macro EXCLUSIVE_LOAD name, insn, width, bytes
 L\name:
-    EXCLUSIVE_BASE x21, \bytes
+    ATOMIC_BASE x21, \bytes, Lpt_cold
     \insn \width\()15, [x12]
     mov w9, #1
     strb w9, [x19, #CPU_EXCL_VALID]
     mov w9, #\bytes
     strb w9, [x19, #CPU_EXCL_SIZE]
-    add x9, x19, #CPU_EXCL_HVA_PAGE, lsl #12
-    str x12, [x9, #CPU_EXCL_HVA]
+    str x12, [x19, #CPU_EXCL_HVA]
     str x15, [x19, #CPU_EXCL_VAL]
     str xzr, [x19, #(CPU_EXCL_VAL + 8)]
     WRITE_X x15
@@ -2271,15 +2247,14 @@ EXCLUSIVE_LOAD ldaxr64, ldar, x, 8
 
 .macro EXCLUSIVE_STORE name, insn, width, bytes
 L\name:
-    EXCLUSIVE_BASE x22, \bytes
+    ATOMIC_BASE x22, \bytes, Lpt_cold
     mov w13, #1
-    add x16, x19, #CPU_EXCL_HVA_PAGE, lsl #12
     ldrb w9, [x19, #CPU_EXCL_VALID]
     cbz w9, 2f
     ldrb w9, [x19, #CPU_EXCL_SIZE]
     eor w9, w9, #\bytes
     cbnz w9, 2f
-    ldr x9, [x16, #CPU_EXCL_HVA]
+    ldr x9, [x19, #CPU_EXCL_HVA]
     eor x9, x9, x12
     cbnz x9, 2f
     ldr x14, [x19, #CPU_EXCL_VAL]
@@ -2294,15 +2269,11 @@ L\name:
     mov w13, #0
 2:
     strb wzr, [x19, #CPU_EXCL_VALID]
-    str xzr, [x16, #CPU_EXCL_HVA]
+    str xzr, [x19, #CPU_EXCL_HVA]
     ldrb w9, [x20, #IR_RM]
     str x13, [x19, x9, lsl #3]
     cbnz w13, 3f
-    ldr x10, [x19, #CPU_VM]
-    cbz x10, 3f
-    add x11, x10, #VM_WFE_WAITERS
-    ldar w11, [x11]
-    cbnz w11, Lstlr_wake
+    WAKE_WAITERS
 3:
     NEXT
 .endmacro
@@ -2358,5 +2329,3 @@ _cpu_fast_offsets:
 #include "cpu_fast_ops.inc"
 
 .subsections_via_symbols
-
-#endif

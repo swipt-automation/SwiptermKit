@@ -34,10 +34,9 @@ typedef enum {
     SWIPTERM_NETWORK_WAKE_COUNT = 3,
 } swipterm_network_wake;
 
-typedef enum {
+enum {
     SWIPTERM_NETWORK_LISTENER_ADDED = 1,
-    SWIPTERM_NETWORK_LISTENER_REMOVED = 2,
-} swipterm_network_listener_action;
+};
 
 typedef struct {
     uint8_t family;
@@ -46,8 +45,14 @@ typedef struct {
     uint8_t address[16];
 } swipterm_network_listener;
 
+typedef struct virtio_dev virtio_dev_t;
+
 swipterm_network *swipterm_network_create(void);
+void swipterm_network_retain(swipterm_network *network);
 void swipterm_network_release(swipterm_network *network);
+void swipterm_network_attach_device(swipterm_network *network, virtio_dev_t *net);
+void swipterm_network_detach_device(swipterm_network *network, virtio_dev_t *net);
+void swipterm_network_signal(swipterm_network *network, swipterm_network_wake wake);
 int swipterm_network_wake_fd(swipterm_network *network, swipterm_network_wake wake);
 size_t swipterm_network_pop_tx(swipterm_network *network, uint8_t *arena, size_t capacity,
                                uint32_t *lengths, size_t max_frames);

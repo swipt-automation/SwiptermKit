@@ -184,8 +184,8 @@ static int exec_account_shell(const char *user, const login_account_t *account, 
     static char shell_env[PATH_MAX + 8];
     static char path_env[sizeof(TRUSTED_PATH) + sizeof(g_daemon.host_cmd_dir) + 8];
     if (snprintf(shell_env, sizeof(shell_env), "SHELL=%s", account->shell) >= (int)sizeof(shell_env) ||
-        snprintf(path_env, sizeof(path_env), "PATH=" TRUSTED_PATH ":%s", g_daemon.host_cmd_dir) >=
-            (int)sizeof(path_env))
+        snprintf(path_env, sizeof(path_env), "PATH=" TRUSTED_PATH "%s%s", g_daemon.host_cmd_dir[0] ? ":" : "",
+                 g_daemon.host_cmd_dir) >= (int)sizeof(path_env))
         return -ENAMETOOLONG;
     env[count++] = shell_env;
     env[count++] = path_env;
@@ -275,20 +275,9 @@ bool login_available(void) {
 }
 
 int sessions_anchor_main(void) {
-    int fd = open("/proc/self/cgroup", O_RDONLY | O_CLOEXEC);
-    if (fd < 0)
+    char group[PATH_MAX];
+    if (!cgroup_membership("/proc/self/cgroup", group, sizeof(group)))
         return 1;
-    char membership[PATH_MAX];
-    ssize_t n = read(fd, membership, sizeof(membership) - 1);
-    close(fd);
-    if (n <= 0)
-        return 1;
-    membership[n] = '\0';
-    char *group = strstr(membership, "0::");
-    if (!group)
-        return 1;
-    group += 3;
-    group[strcspn(group, "\n")] = '\0';
     char service[PATH_MAX];
     if (snprintf(service, sizeof(service), "/sys/fs/cgroup%s", group) >= (int)sizeof(service))
         return 1;
@@ -301,20 +290,7 @@ int sessions_anchor_main(void) {
         close(dir);
         return 1;
     }
-    int controllers_fd = openat(dir, "cgroup.controllers", O_RDONLY | O_CLOEXEC);
-    char controllers[512];
-    ssize_t len = controllers_fd >= 0 ? read(controllers_fd, controllers, sizeof(controllers) - 1) : -1;
-    if (controllers_fd >= 0)
-        close(controllers_fd);
-    if (len > 0) {
-        controllers[len] = '\0';
-        char *save = NULL;
-        for (char *name = strtok_r(controllers, " \n", &save); name; name = strtok_r(NULL, " \n", &save)) {
-            char request[64];
-            if (snprintf(request, sizeof(request), "+%s", name) < (int)sizeof(request))
-                (void)write_file(dir, "cgroup.subtree_control", request, 0, 0);
-        }
-    }
+    cgroup_enable_controllers(dir);
     close(dir);
 
     sigset_t stop;
@@ -327,7 +303,7 @@ int sessions_anchor_main(void) {
     struct sockaddr_un addr = {.sun_family = AF_UNIX};
     snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", GUEST_NOTIFY_SOCKET);
     int sock = socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
-    static const char message[] = "X_SWIPTERM_SESSIONS=1";
+    static const char message[] = SESSIONS_READY_MESSAGE;
     if (sock < 0 ||
         sendto(sock, message, sizeof(message) - 1, MSG_NOSIGNAL, (struct sockaddr *)&addr, sizeof(addr)) < 0)
         return 1;

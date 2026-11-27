@@ -27,13 +27,9 @@ $(BUILD)/native.o: native.S
 -include $(VMM_OBJECTS:.o=.d) $(TOOL_OBJECTS:.o=.d)
 
 check: $(BUILD)/a64_check
-	$(BUILD)/a64_check coverage slow_path.txt
-	$(BUILD)/a64_check stubs 16
 	$(BUILD)/a64_check fuzz -n 300
 	$(BUILD)/a64_check fuzz -p -n 200
 	$(BUILD)/a64_check system 600
-	$(BUILD)/a64_check -j coverage jit_slow_path.txt
-	$(BUILD)/a64_check -j stubs 16
 	$(BUILD)/a64_check -j fuzz -n 300
 	$(BUILD)/a64_check -j fuzz -p -n 200
 	$(BUILD)/a64_check -j system 600

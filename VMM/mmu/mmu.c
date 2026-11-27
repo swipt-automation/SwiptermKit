@@ -270,9 +270,6 @@ bool mmu_poll_shootdown(vcpu_t *cpu) {
 }
 
 void *mmu_gpa_to_hva(const vmm_machine_t *vm, uint64_t gpa, size_t len) {
-    if (!vm) {
-        return NULL;
-    }
     if (vm->ram && gpa >= VMM_RAM_BASE) {
         uint64_t off = gpa - VMM_RAM_BASE;
         if (off <= vm->ram_size && len <= vm->ram_size - off) {
@@ -624,10 +621,6 @@ static walk_detail_t mmu_walk(vcpu_t *cpu, uint64_t va, mmu_access_t access, uin
 
     uint32_t stride = granule_shift - 3;
     int start_level = 3 - (int)((ia_bits - granule_shift - 1) / stride);
-    if (start_level < 0 || start_level > 3) {
-        out.res.fault_fsc = 0x04;
-        return out;
-    }
 
     uint32_t ips_bits = mmu_pa_bits(nvhe ? (tcr >> 16) : (tcr >> 32));
     uint32_t start_shift = granule_shift + (uint32_t)(3 - start_level) * stride;
@@ -635,7 +628,7 @@ static walk_detail_t mmu_walk(vcpu_t *cpu, uint64_t va, mmu_access_t access, uin
     uint64_t baddr_align_mask = ~((1ULL << (start_idx_bits + 3)) - 1ULL);
     uint64_t ttbr_table_pa = ttbr & 0x0000ffffffffffffULL & baddr_align_mask;
 
-    if (ips_bits < 48 && (ttbr_table_pa >> ips_bits) != 0) {
+    if ((ttbr_table_pa >> ips_bits) != 0) {
         out.res.fault_fsc = 0x00;
         return out;
     }
@@ -673,7 +666,7 @@ retry:;
 
         if (level < 3 && type == 3ULL) {
             uint64_t next_pa = desc & 0x0000ffffffffffffULL & ~((1ULL << granule_shift) - 1ULL);
-            if (ips_bits < 48 && (next_pa >> ips_bits) != 0) {
+            if ((next_pa >> ips_bits) != 0) {
                 out.res.fault_fsc = 0x00U + (uint32_t)level;
                 return out;
             }
@@ -693,7 +686,7 @@ retry:;
                 return out;
             }
             uint64_t block_base = desc & 0x0000ffffffffffffULL & ~((1ULL << shift) - 1ULL);
-            if (ips_bits < 48 && (block_base >> ips_bits) != 0) {
+            if ((block_base >> ips_bits) != 0) {
                 out.res.fault_fsc = 0x00U + (uint32_t)level;
                 return out;
             }
@@ -707,7 +700,7 @@ retry:;
             return out;
         }
         uint64_t page_base = desc & 0x0000ffffffffffffULL & ~((1ULL << granule_shift) - 1ULL);
-        if (ips_bits < 48 && (page_base >> ips_bits) != 0) {
+        if ((page_base >> ips_bits) != 0) {
             out.res.fault_fsc = 0x03U;
             return out;
         }
@@ -794,8 +787,8 @@ mmu_translation_t mmu_translate(vcpu_t *cpu, uint64_t va, mmu_access_t access, u
 }
 
 static void mmu_tlb_fill(vcpu_t *cpu, uint64_t va, uint8_t el, const walk_detail_t *w) {
-    if ((cpu->sctlr_el1 & 1ULL) == 0 || !w->res.ok || w->res.is_mmio || w->is_device ||
-        !w->canonical_untagged || (w->is_ttbr1 && (w->non_global || (el == 1 && w->el0_accessible)))) {
+    if (w->is_device || !w->canonical_untagged ||
+        (w->is_ttbr1 && (w->non_global || (el == 1 && w->el0_accessible)))) {
         return;
     }
 
@@ -850,24 +843,20 @@ bool mmu_translate_and_fill(vcpu_t *cpu, uint64_t va, mmu_access_t access, uint8
 bool mmu_translate_exec(vcpu_t *cpu, uint64_t va_page, uint8_t el, mmu_translation_t *out, bool *cacheable_out) {
     walk_detail_t w = mmu_walk(cpu, va_page, MMU_ACCESS_EXEC, el, true, mmu_stages(cpu));
     *out = w.res;
-    if (!w.res.ok || w.res.is_mmio) {
-        *cacheable_out = false;
+    if (!w.res.ok) {
         return false;
     }
     bool mmu_on = (cpu->sctlr_el1 & 1ULL) != 0;
     if (mmu_on) {
-        *cacheable_out = !w.is_device && w.canonical_untagged && !(w.is_ttbr1 && w.non_global) &&
-                         mmu_gpa_to_hva(cpu->vm, w.res.pa & ~(uint64_t)VMM_PAGE_MASK, VMM_PAGE_SIZE) != NULL;
+        *cacheable_out = !w.is_device && w.canonical_untagged && !(w.is_ttbr1 && w.non_global);
     } else {
-        *cacheable_out = (va_page >> 48) == 0ULL &&
-                         mmu_gpa_to_hva(cpu->vm, w.res.pa & ~(uint64_t)VMM_PAGE_MASK, VMM_PAGE_SIZE) != NULL;
+        *cacheable_out = (va_page >> 48) == 0ULL;
     }
     return true;
 }
 
-bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va, uint64_t *pa_out) {
+bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va_page, uint64_t *pa_out) {
     const vmm_machine_t *vm = cpu->vm;
-    uint64_t va_page = va & ~(uint64_t)VMM_PAGE_MASK;
     uint32_t first = cpu->el ? SOFTTLB_EL1_R : SOFTTLB_EL0_R;
     for (uint32_t b = first; b <= first + 1U; ++b) {
         uintptr_t hva;
@@ -875,11 +864,11 @@ bool mmu_resolve_va_pa(vcpu_t *cpu, uint64_t va, uint64_t *pa_out) {
             continue;
         }
         if (vm->ram && hva - (uintptr_t)vm->ram < vm->ram_size) {
-            *pa_out = VMM_RAM_BASE + (hva - (uintptr_t)vm->ram) + (va & VMM_PAGE_MASK);
+            *pa_out = VMM_RAM_BASE + (hva - (uintptr_t)vm->ram);
             return true;
         }
     }
-    walk_detail_t w = mmu_walk(cpu, va, MMU_ACCESS_RESOLVE, cpu->el, false, mmu_stages(cpu));
+    walk_detail_t w = mmu_walk(cpu, va_page, MMU_ACCESS_RESOLVE, cpu->el, false, mmu_stages(cpu));
     if (!w.res.ok) {
         return false;
     }
@@ -937,7 +926,7 @@ void vcpu_raise_abort(vcpu_t *cpu, uint64_t va, const mmu_translation_t *tr, boo
     vcpu_raise_exception(cpu, (ec << 26) | (1U << 25) | (!fetch && is_write ? 1U << 6 : 0U) | fsc, va, elr);
 }
 
-static bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out) {
+bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out) {
     bool unaligned = size > 1 && (va & (size - 1)) != 0;
     if (unaligned && (cpu->sctlr_el1 & 2ULL) != 0) {
         vcpu_raise_abort(cpu, va, NULL, false, cpu->pc, false);
@@ -958,11 +947,11 @@ static bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out) 
         if (w.res.is_mmio) {
             cpu_fp_leave_guest(cpu);
             if (size <= 8) {
-                uint64_t v = vmm_mmio_read(cpu->vm, cpu, w.res.pa, size);
+                uint64_t v = vmm_mmio_read(cpu, w.res.pa, size);
                 memcpy(out, &v, size);
             } else {
-                uint64_t lo = vmm_mmio_read(cpu->vm, cpu, w.res.pa, 8);
-                uint64_t hi = vmm_mmio_read(cpu->vm, cpu, w.res.pa + 8, 8);
+                uint64_t lo = vmm_mmio_read(cpu, w.res.pa, 8);
+                uint64_t hi = vmm_mmio_read(cpu, w.res.pa + 8, 8);
                 memcpy(out, &lo, 8);
                 memcpy((uint8_t *)out + 8, &hi, 8);
             }
@@ -1012,7 +1001,7 @@ static bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out) 
     } else {
         cpu_fp_leave_guest(cpu);
         for (uint32_t i = 0; i < n1; i++) {
-            dst[i] = (uint8_t)vmm_mmio_read(cpu->vm, cpu, w1.res.pa + i, 1);
+            dst[i] = (uint8_t)vmm_mmio_read(cpu, w1.res.pa + i, 1);
         }
     }
     if (!w2.res.is_mmio) {
@@ -1021,13 +1010,13 @@ static bool mmu_read_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, void *out) 
     } else {
         cpu_fp_leave_guest(cpu);
         for (uint32_t i = 0; i < n2; i++) {
-            dst[n1 + i] = (uint8_t)vmm_mmio_read(cpu->vm, cpu, w2.res.pa + i, 1);
+            dst[n1 + i] = (uint8_t)vmm_mmio_read(cpu, w2.res.pa + i, 1);
         }
     }
     return true;
 }
 
-static bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void *in) {
+bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void *in) {
     bool unaligned = size > 1 && (va & (size - 1)) != 0;
     if (unaligned && (cpu->sctlr_el1 & 2ULL) != 0) {
         vcpu_raise_abort(cpu, va, NULL, true, cpu->pc, false);
@@ -1050,13 +1039,13 @@ static bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void
             if (size <= 8) {
                 uint64_t v = 0;
                 memcpy(&v, in, size);
-                vmm_mmio_write(cpu->vm, cpu, w.res.pa, size, v);
+                vmm_mmio_write(cpu, w.res.pa, size, v);
             } else {
                 uint64_t lo, hi;
                 memcpy(&lo, in, 8);
                 memcpy(&hi, (const uint8_t *)in + 8, 8);
-                vmm_mmio_write(cpu->vm, cpu, w.res.pa, 8, lo);
-                vmm_mmio_write(cpu->vm, cpu, w.res.pa + 8, 8, hi);
+                vmm_mmio_write(cpu, w.res.pa, 8, lo);
+                vmm_mmio_write(cpu, w.res.pa + 8, 8, hi);
             }
             return true;
         }
@@ -1104,7 +1093,7 @@ static bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void
     } else {
         cpu_fp_leave_guest(cpu);
         for (uint32_t i = 0; i < n1; i++) {
-            vmm_mmio_write(cpu->vm, cpu, w1.res.pa + i, 1, src[i]);
+            vmm_mmio_write(cpu, w1.res.pa + i, 1, src[i]);
         }
     }
     if (!w2.res.is_mmio) {
@@ -1113,26 +1102,10 @@ static bool mmu_write_slow_n(vcpu_t *cpu, uint64_t va, uint32_t size, const void
     } else {
         cpu_fp_leave_guest(cpu);
         for (uint32_t i = 0; i < n2; i++) {
-            vmm_mmio_write(cpu->vm, cpu, w2.res.pa + i, 1, src[n1 + i]);
+            vmm_mmio_write(cpu, w2.res.pa + i, 1, src[n1 + i]);
         }
     }
     return true;
-}
-
-bool mmu_read_8_slow(vcpu_t *cpu, uint64_t va, uint8_t *out) {
-    return mmu_read_slow_n(cpu, va, 1, out);
-}
-
-bool mmu_read_16_slow(vcpu_t *cpu, uint64_t va, uint16_t *out) {
-    return mmu_read_slow_n(cpu, va, 2, out);
-}
-
-bool mmu_read_32_slow(vcpu_t *cpu, uint64_t va, uint32_t *out) {
-    return mmu_read_slow_n(cpu, va, 4, out);
-}
-
-bool mmu_read_64_slow(vcpu_t *cpu, uint64_t va, uint64_t *out) {
-    return mmu_read_slow_n(cpu, va, 8, out);
 }
 
 bool mmu_read_pair_64_slow(vcpu_t *cpu, uint64_t va, uint64_t *out1, uint64_t *out2) {
@@ -1144,8 +1117,8 @@ bool mmu_read_pair_64_slow(vcpu_t *cpu, uint64_t va, uint64_t *out1, uint64_t *o
         }
         if (w.res.is_mmio) {
             cpu_fp_leave_guest(cpu);
-            *out1 = vmm_mmio_read(cpu->vm, cpu, w.res.pa, 8);
-            *out2 = vmm_mmio_read(cpu->vm, cpu, w.res.pa + 8, 8);
+            *out1 = vmm_mmio_read(cpu, w.res.pa, 8);
+            *out2 = vmm_mmio_read(cpu, w.res.pa + 8, 8);
             return true;
         }
         mmu_tlb_fill(cpu, va, cpu->el, &w);
@@ -1153,32 +1126,12 @@ bool mmu_read_pair_64_slow(vcpu_t *cpu, uint64_t va, uint64_t *out1, uint64_t *o
         return true;
     }
     uint64_t v1 = 0, v2 = 0;
-    if (!mmu_read_64_slow(cpu, va, &v1) || !mmu_read_64_slow(cpu, va + 8ULL, &v2)) {
+    if (!mmu_read_slow_n(cpu, va, 8, &v1) || !mmu_read_slow_n(cpu, va + 8ULL, 8, &v2)) {
         return false;
     }
     *out1 = v1;
     *out2 = v2;
     return true;
-}
-
-bool mmu_read_128_slow(vcpu_t *cpu, uint64_t va, __uint128_t *out) {
-    return mmu_read_slow_n(cpu, va, 16, out);
-}
-
-bool mmu_write_8_slow(vcpu_t *cpu, uint64_t va, uint8_t val) {
-    return mmu_write_slow_n(cpu, va, 1, &val);
-}
-
-bool mmu_write_16_slow(vcpu_t *cpu, uint64_t va, uint16_t val) {
-    return mmu_write_slow_n(cpu, va, 2, &val);
-}
-
-bool mmu_write_32_slow(vcpu_t *cpu, uint64_t va, uint32_t val) {
-    return mmu_write_slow_n(cpu, va, 4, &val);
-}
-
-bool mmu_write_64_slow(vcpu_t *cpu, uint64_t va, uint64_t val) {
-    return mmu_write_slow_n(cpu, va, 8, &val);
 }
 
 bool mmu_write_pair_64_slow(vcpu_t *cpu, uint64_t va, uint64_t val1, uint64_t val2) {
@@ -1190,17 +1143,13 @@ bool mmu_write_pair_64_slow(vcpu_t *cpu, uint64_t va, uint64_t val1, uint64_t va
         }
         if (w.res.is_mmio) {
             cpu_fp_leave_guest(cpu);
-            vmm_mmio_write(cpu->vm, cpu, w.res.pa, 8, val1);
-            vmm_mmio_write(cpu->vm, cpu, w.res.pa + 8, 8, val2);
+            vmm_mmio_write(cpu, w.res.pa, 8, val1);
+            vmm_mmio_write(cpu, w.res.pa + 8, 8, val2);
             return true;
         }
         mmu_tlb_fill(cpu, va, cpu->el, &w);
         __asm__ volatile("stp %0, %1, [%2]" : : "r"(val1), "r"(val2), "r"(w.res.hva) : "memory");
         return true;
     }
-    return mmu_write_64_slow(cpu, va, val1) && mmu_write_64_slow(cpu, va + 8ULL, val2);
-}
-
-bool mmu_write_128_slow(vcpu_t *cpu, uint64_t va, __uint128_t val) {
-    return mmu_write_slow_n(cpu, va, 16, &val);
+    return mmu_write_slow_n(cpu, va, 8, &val1) && mmu_write_slow_n(cpu, va + 8ULL, 8, &val2);
 }

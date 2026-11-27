@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"embed"
 	"errors"
-	"io"
 	"io/fs"
 	"log"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -16,7 +16,9 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/swipt-automation/SwiptermKit/internal/tool"
 )
 
 const (
@@ -41,7 +43,7 @@ var (
 	spirvTools          = repository{"SPIRV-Tools", "https://github.com/KhronosGroup/SPIRV-Tools.git", "ef96ed763b43b59b33b31b362f09a02b729fa1c9"}
 	spirvLLVMTranslator = repository{"SPIRV-LLVM-Translator", "https://github.com/KhronosGroup/SPIRV-LLVM-Translator.git", "b5b8fce1604ee82ab8f5bced7e7c7961b5bd4de4"}
 
-	hostTools    = []string{"mesa_clc", "vtn_bindgen2", "kk_clc"}
+	hostTools    = []string{"src/compiler/clc/mesa_clc", "src/compiler/spirv/vtn_bindgen2", "src/kosmickrisp/clc/kk_clc"}
 	icdExports   = []string{"_vk_icdGetInstanceProcAddr", "_vk_icdGetPhysicalDeviceProcAddr", "_vk_icdNegotiateLoaderICDInterfaceVersion"}
 	frameworks   = []string{kosmicKrisp, moltenVK}
 	nullableName = regexp.MustCompile(`^_[a-z][a-z0-9_]*_[A-Z][A-Za-z0-9]*$`)
@@ -190,7 +192,7 @@ func (b *builder) buildHostTools() error {
 	}
 	llvmPrefix := os.Getenv("LLVM_PREFIX")
 	if llvmPrefix == "" {
-		llvmPrefix, err = output(exec.Command("brew", "--prefix", llvmFormula))
+		llvmPrefix, err = tool.Output(exec.Command("brew", "--prefix", llvmFormula))
 		if err != nil {
 			return err
 		}
@@ -217,12 +219,12 @@ func (b *builder) buildHostTools() error {
 		}},
 	} {
 		directory := filepath.Join(b.build, "host-"+project.repo.directory)
-		err = run(exec.Command("cmake", append([]string{
+		err = tool.Run(exec.Command("cmake", append([]string{
 			"-S", filepath.Join(b.source, project.repo.directory), "-B", directory, "-G", "Ninja",
 			"-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_INSTALL_PREFIX=" + b.host, "-DCMAKE_OSX_ARCHITECTURES=arm64",
 		}, project.arguments...)...))
 		if err == nil {
-			err = run(exec.Command("cmake", "--build", directory, "--target", "install"))
+			err = tool.Run(exec.Command("cmake", "--build", directory, "--target", "install"))
 		}
 		if err != nil {
 			return err
@@ -249,17 +251,16 @@ func (b *builder) buildHostTools() error {
 		"-Dprecomp-compiler=enabled", "-Dinstall-precomp-compiler=true",
 	)
 	setup.Env = append(os.Environ(), "PKG_CONFIG_PATH="+filepath.Join(b.host, "lib/pkgconfig"))
-	err = run(setup)
+	err = tool.Run(setup)
 	if err != nil {
 		return err
 	}
-	targets := []string{"src/compiler/clc/mesa_clc", "src/compiler/spirv/vtn_bindgen2", "src/kosmickrisp/clc/kk_clc"}
-	err = run(exec.Command("ninja", append([]string{"-C", mesaBuild}, targets...)...))
+	err = tool.Run(exec.Command("ninja", append([]string{"-C", mesaBuild}, hostTools...)...))
 	if err != nil {
 		return err
 	}
-	for _, target := range targets {
-		err = copyFile(filepath.Join(mesaBuild, target), filepath.Join(b.host, "bin", path.Base(target)), 0o755)
+	for _, target := range hostTools {
+		err = tool.CopyFile(filepath.Join(mesaBuild, target), filepath.Join(b.host, "bin", path.Base(target)), 0o755)
 		if err != nil {
 			return err
 		}
@@ -268,10 +269,10 @@ func (b *builder) buildHostTools() error {
 }
 
 func (b *builder) buildKosmicKrisp() error {
-	for _, tool := range hostTools {
-		_, err := os.Stat(filepath.Join(b.host, "bin", tool))
+	for _, target := range hostTools {
+		_, err := os.Stat(filepath.Join(b.host, "bin", path.Base(target)))
 		if err != nil {
-			return E.Cause(err, "missing ", tool, ", run build_vulkan host-tools")
+			return E.Cause(err, "missing ", path.Base(target), ", run build_vulkan host-tools")
 		}
 	}
 	err := b.pythonEnvironment()
@@ -300,14 +301,14 @@ func (b *builder) buildKosmicKrisp() error {
 
 func (b *builder) buildKosmicKrispSlice(slice slice, mesaSource string, version string) (string, error) {
 	tools := make(map[string]string)
-	for _, tool := range []string{"clang", "clang++", "ar", "strip"} {
-		toolPath, err := output(exec.Command("xcrun", "--sdk", slice.sdk, "--find", tool))
+	for _, name := range []string{"clang", "clang++", "ar", "strip"} {
+		toolPath, err := tool.Output(exec.Command("xcrun", "--sdk", slice.sdk, "--find", name))
 		if err != nil {
 			return "", err
 		}
-		tools[tool] = toolPath
+		tools[name] = toolPath
 	}
-	sysroot, err := output(exec.Command("xcrun", "--sdk", slice.sdk, "--show-sdk-path"))
+	sysroot, err := tool.Output(exec.Command("xcrun", "--sdk", slice.sdk, "--show-sdk-path"))
 	if err != nil {
 		return "", err
 	}
@@ -331,7 +332,7 @@ func (b *builder) buildKosmicKrispSlice(slice slice, mesaSource string, version 
 	mesaBuild := filepath.Join(b.build, "mesa-"+slice.sdk)
 	err = os.RemoveAll(mesaBuild)
 	if err == nil {
-		err = run(exec.Command("meson", "setup", mesaBuild, mesaSource, "--cross-file", crossPath,
+		err = tool.Run(exec.Command("meson", "setup", mesaBuild, mesaSource, "--cross-file", crossPath,
 			"--buildtype=release", "-Db_ndebug=true", "-Dplatforms=", "-Dvulkan-drivers=kosmickrisp", "-Dgallium-drivers=",
 			"-Dvulkan-layers=", "-Dtools=", "-Dopengl=false", "-Degl=disabled", "-Dglx=disabled", "-Dgles1=disabled",
 			"-Dgles2=disabled", "-Dgbm=disabled", "-Dllvm=disabled", "-Dspirv-tools=disabled", "-Dmesa-clc=system",
@@ -344,7 +345,7 @@ func (b *builder) buildKosmicKrispSlice(slice slice, mesaSource string, version 
 		return "", err
 	}
 	const dylib = "src/kosmickrisp/vulkan/libvulkan_kosmickrisp.dylib"
-	query, err := output(exec.Command("ninja", "-C", mesaBuild, "-t", "query", dylib))
+	query, err := tool.Output(exec.Command("ninja", "-C", mesaBuild, "-t", "query", dylib))
 	if err != nil {
 		return "", err
 	}
@@ -363,29 +364,29 @@ func (b *builder) buildKosmicKrispSlice(slice slice, mesaSource string, version 
 			}
 		}
 	}
-	err = run(exec.Command("ninja", append([]string{"-C", mesaBuild}, archives...)...))
+	err = tool.Run(exec.Command("ninja", append([]string{"-C", mesaBuild}, archives...)...))
 	if err != nil {
 		return "", err
 	}
 	nullEntrypoints := filepath.Join(mesaBuild, "src/kosmickrisp/vulkan/kk_null_entrypoints")
 	err = writeNullEntrypoints(mesaBuild, nullEntrypoints+".s", archives)
 	if err == nil {
-		err = run(exec.Command(tools["clang"], "-target", slice.triple, "-isysroot", sysroot, "-c", nullEntrypoints+".s", "-o", nullEntrypoints+".o"))
+		err = tool.Run(exec.Command(tools["clang"], "-target", slice.triple, "-isysroot", sysroot, "-c", nullEntrypoints+".s", "-o", nullEntrypoints+".o"))
 	}
 	if err == nil {
-		err = run(exec.Command("ninja", "-C", mesaBuild, dylib))
+		err = tool.Run(exec.Command("ninja", "-C", mesaBuild, dylib))
 	}
 	if err != nil {
 		return "", err
 	}
 	framework := filepath.Join(mesaBuild, "framework", kosmicKrisp+".framework")
 	binary := filepath.Join(framework, kosmicKrisp)
-	err = copyFile(filepath.Join(mesaBuild, dylib), binary, 0o755)
+	err = tool.CopyFile(filepath.Join(mesaBuild, dylib), binary, 0o755)
 	if err == nil {
-		err = run(exec.Command("strip", "-x", binary))
+		err = tool.Run(exec.Command("strip", "-x", binary))
 	}
 	if err == nil {
-		err = copyFile(filepath.Join(mesaSource, "docs/license.rst"), filepath.Join(framework, "LICENSE.rst"), 0o644)
+		err = tool.CopyFile(filepath.Join(mesaSource, "docs/license.rst"), filepath.Join(framework, "LICENSE.rst"), 0o644)
 	}
 	if err != nil {
 		return "", err
@@ -406,7 +407,7 @@ func (b *builder) buildKosmicKrispSlice(slice slice, mesaSource string, version 
 func writeNullEntrypoints(directory string, outputPath string, archives []string) error {
 	command := exec.Command("nm", append([]string{"-m"}, archives...)...)
 	command.Dir = directory
-	symbols, err := output(command)
+	symbols, err := tool.Output(command)
 	if err != nil {
 		return err
 	}
@@ -422,13 +423,9 @@ func writeNullEntrypoints(directory string, outputPath string, archives []string
 			defined[name] = true
 		}
 	}
-	var missing []string
-	for name := range weakUndefined {
-		if !defined[name] && nullableName.MatchString(name) {
-			missing = append(missing, name)
-		}
-	}
-	slices.Sort(missing)
+	missing := common.Filter(slices.Sorted(maps.Keys(weakUndefined)), func(name string) bool {
+		return !defined[name] && nullableName.MatchString(name)
+	})
 	var assembly strings.Builder
 	for _, name := range missing {
 		assembly.WriteString(".globl " + name + "\n.private_extern " + name + "\n" + name + " = 0\n")
@@ -445,7 +442,7 @@ func (b *builder) buildMoltenVK() error {
 	moltenVKSourcePath := filepath.Join(b.source, moltenVKSource.directory)
 	fetch := exec.Command("./fetchDependencies", "--ios", "--iossim")
 	fetch.Dir = moltenVKSourcePath
-	err = run(fetch)
+	err = tool.Run(fetch)
 	if err != nil {
 		return err
 	}
@@ -459,7 +456,7 @@ func (b *builder) buildMoltenVK() error {
 		products := filepath.Join(b.build, "moltenvk-"+slice.sdk)
 		err = os.RemoveAll(products)
 		if err == nil {
-			err = run(exec.Command("xcodebuild", "build", "-quiet",
+			err = tool.Run(exec.Command("xcodebuild", "build", "-quiet",
 				"-project", filepath.Join(moltenVKSourcePath, "MoltenVK/MoltenVK.xcodeproj"),
 				"-target", "MoltenVK-iOS-dynamic",
 				"-configuration", "Release",
@@ -481,7 +478,7 @@ func (b *builder) buildMoltenVK() error {
 			return err
 		}
 		framework := filepath.Join(products, "Products", "Release-"+slice.sdk, moltenVK+".framework")
-		err = run(exec.Command("strip", "-x", filepath.Join(framework, moltenVK)))
+		err = tool.Run(exec.Command("strip", "-x", filepath.Join(framework, moltenVK)))
 		if err != nil {
 			return err
 		}
@@ -495,7 +492,7 @@ func createXCFramework(name string, createArguments []string) error {
 	archive := filepath.Join(buildPath, name+".xcframework.zip")
 	err := os.RemoveAll(xcframework)
 	if err == nil {
-		err = run(exec.Command("xcodebuild", append(append([]string{"-create-xcframework"}, createArguments...), "-output", xcframework)...))
+		err = tool.Run(exec.Command("xcodebuild", append(append([]string{"-create-xcframework"}, createArguments...), "-output", xcframework)...))
 	}
 	if err == nil {
 		err = os.MkdirAll(buildPath, 0o755)
@@ -506,7 +503,7 @@ func createXCFramework(name string, createArguments []string) error {
 	if err != nil {
 		return err
 	}
-	return run(exec.Command("ditto", "-c", "-k", "--norsrc", "--noextattr", "--keepParent", xcframework, archive))
+	return tool.Run(exec.Command("ditto", "-c", "-k", "--norsrc", "--noextattr", "--keepParent", xcframework, archive))
 }
 
 func (b *builder) pythonEnvironment() error {
@@ -514,31 +511,31 @@ func (b *builder) pythonEnvironment() error {
 	if err == nil {
 		return nil
 	}
-	err = run(exec.Command("python3", "-m", "venv", b.venv))
+	err = tool.Run(exec.Command("python3", "-m", "venv", b.venv))
 	if err != nil {
 		return err
 	}
-	return run(exec.Command(filepath.Join(b.venv, "bin", "pip"), "install", "-q", "mako", "pyyaml", "packaging", "meson>=1.9.1"))
+	return tool.Run(exec.Command(filepath.Join(b.venv, "bin", "pip"), "install", "-q", "mako", "pyyaml", "packaging", "meson>=1.9.1"))
 }
 
 func (b *builder) checkout(repo repository) error {
 	directory := filepath.Join(b.source, repo.directory)
 	_, err := os.Stat(filepath.Join(directory, ".git"))
 	if err != nil {
-		err = run(exec.Command("git", "clone", "--filter=blob:none", "--no-checkout", repo.url, directory))
+		err = tool.Run(exec.Command("git", "clone", "--filter=blob:none", "--no-checkout", repo.url, directory))
 		if err != nil {
 			return err
 		}
 	}
 	if exec.Command("git", "-C", directory, "cat-file", "-e", repo.commit+"^{commit}").Run() != nil {
-		err = run(exec.Command("git", "-C", directory, "fetch", "--filter=blob:none", "origin", repo.commit))
+		err = tool.Run(exec.Command("git", "-C", directory, "fetch", "--filter=blob:none", "origin", repo.commit))
 		if err != nil {
 			return err
 		}
 	}
-	err = run(exec.Command("git", "-C", directory, "checkout", "--force", "--detach", repo.commit))
+	err = tool.Run(exec.Command("git", "-C", directory, "checkout", "--force", "--detach", repo.commit))
 	if err == nil {
-		err = run(exec.Command("git", "-C", directory, "clean", "-fdx", "-q"))
+		err = tool.Run(exec.Command("git", "-C", directory, "clean", "-fdx", "-q"))
 	}
 	if err != nil {
 		return err
@@ -557,51 +554,10 @@ func (b *builder) checkout(repo repository) error {
 		}
 		apply := exec.Command("git", "-C", directory, "apply", "--whitespace=nowarn", "-")
 		apply.Stdin = bytes.NewReader(patch)
-		err = run(apply)
+		err = tool.Run(apply)
 		if err != nil {
 			return E.Cause(err, "apply ", entry.Name())
 		}
-	}
-	return nil
-}
-
-func copyFile(source string, destination string, mode os.FileMode) error {
-	input, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
-	err = os.MkdirAll(filepath.Dir(destination), 0o755)
-	if err != nil {
-		return err
-	}
-	output, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(output, input)
-	err = E.Errors(err, output.Close())
-	if err != nil {
-		return err
-	}
-	return os.Chmod(destination, mode)
-}
-
-func output(command *exec.Cmd) (string, error) {
-	command.Stderr = os.Stderr
-	data, err := command.Output()
-	if err != nil {
-		return "", E.Cause(err, "run ", strings.Join(command.Args, " "))
-	}
-	return strings.TrimSpace(string(data)), nil
-}
-
-func run(command *exec.Cmd) error {
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	err := command.Run()
-	if err != nil {
-		return E.Cause(err, "run ", strings.Join(command.Args, " "))
 	}
 	return nil
 }

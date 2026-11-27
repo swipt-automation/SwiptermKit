@@ -14,7 +14,6 @@
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
-#include <sys/sysmacros.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -23,8 +22,6 @@
 #define POLICY_RC_D "usr/sbin/policy-rc.d"
 
 enum {
-    DISK_SLOT_FIRST = 9,
-    DISK_SLOT_COUNT = 4,
     RELEASE_TIMEOUT_MS = 10000,
     RELEASE_POLL_MS = 10,
     SANDBOX_STACK_SIZE = 64 * 1024,
@@ -127,7 +124,7 @@ static int block_node(unsigned mmio_addr, char *node, size_t cap) {
     return snprintf(node, cap, "/dev/%s", name) < (int)cap ? 0 : -ENAMETOOLONG;
 }
 
-static int release_device(const char *node, int timeout_ms) {
+static int release_device(const char *node) {
     for (int waited = 0;; waited += RELEASE_POLL_MS) {
         int fd = open(node, O_RDWR | O_EXCL | O_CLOEXEC);
         if (fd >= 0) {
@@ -138,7 +135,7 @@ static int release_device(const char *node, int timeout_ms) {
         }
         if (errno != EBUSY)
             return -errno;
-        if (waited >= timeout_ms)
+        if (waited >= RELEASE_TIMEOUT_MS)
             return -EBUSY;
         usleep(RELEASE_POLL_MS * 1000);
     }
@@ -167,7 +164,7 @@ static disk_job_result_t detach_run(const disk_t *disk) {
         }
         result.mounted = false;
     }
-    result.rc = release_device(disk->node, RELEASE_TIMEOUT_MS);
+    result.rc = release_device(disk->node);
     return result;
 }
 
@@ -227,8 +224,8 @@ void disk_handle_attach(uint32_t req_id, const uint8_t *body, uint32_t len) {
     uint32_t id;
     uint32_t slot;
     bool read_only;
-    if (!swiptermd_dec_disk_attach_req(body, len, &id, &slot, &read_only) || slot < DISK_SLOT_FIRST ||
-        slot >= DISK_SLOT_FIRST + DISK_SLOT_COUNT || disk_find(id)) {
+    if (!swiptermd_dec_disk_attach_req(body, len, &id, &slot, &read_only) || slot < VIRTIO_SLOT_DISK_BASE ||
+        slot >= VIRTIO_SLOT_DISK_BASE + VIRTIO_SLOT_DISK_COUNT || disk_find(id)) {
         ctrl_send_err_reply(SWIPTERMD_OP_DISK_ATTACH, req_id, -EINVAL);
         return;
     }
@@ -239,13 +236,13 @@ void disk_handle_attach(uint32_t req_id, const uint8_t *body, uint32_t len) {
     }
     disk->id = id;
     disk->read_only = read_only;
-    disk->mmio_addr = 0x0a000000U + slot * 0x200U;
+    disk->mmio_addr = VIRTIO_MMIO_ADDR(slot);
     snprintf(disk->base, sizeof(disk->base), GUEST_DISKS "/%u", id);
     disk->next = g_disks;
     g_disks = disk;
 
     int rc = virtio_mmio_bind(disk->mmio_addr);
-    if (rc == 0)
+    if (rc >= 0)
         rc = block_node(disk->mmio_addr, disk->node, sizeof(disk->node));
     if (rc == 0 && ((mkdir(GUEST_DISKS, 0755) < 0 && errno != EEXIST) || mkdir(disk->base, 0755) < 0))
         rc = -errno;
@@ -269,7 +266,8 @@ static int unmount_bind(disk_t *disk, size_t index) {
 }
 
 void disk_handle_detach(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    disk_t *disk = len >= SWIPTERMD_DISK_DETACH_REQ_SIZE ? disk_find(swiptermd_get_be32(body)) : NULL;
+    uint32_t id;
+    disk_t *disk = swiptermd_dec_u32(body, len, &id) ? disk_find(id) : NULL;
     int rc = !disk ? -ENODEV : disk->busy || disk->sandboxes > 0 ? -EBUSY : 0;
     while (rc == 0 && disk->bind_count > 0)
         rc = unmount_bind(disk, disk->bind_count - 1);
@@ -280,7 +278,7 @@ void disk_handle_detach(uint32_t req_id, const uint8_t *body, uint32_t len) {
 }
 
 void disk_handle_mount(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     disk_t *disk = disk_find(swiptermd_r_u32(&r));
     char guest_path[PATH_MAX];
     if (!swiptermd_r_str_copy(&r, guest_path, sizeof(guest_path))) {
@@ -313,7 +311,7 @@ void disk_handle_mount(uint32_t req_id, const uint8_t *body, uint32_t len) {
 }
 
 void disk_handle_unmount(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     disk_t *disk = disk_find(swiptermd_r_u32(&r));
     char guest_path[PATH_MAX];
     char norm[PATH_MAX];
@@ -348,33 +346,9 @@ static int sandbox_mount_api(void) {
         mount("tmpfs", "/run", "tmpfs", MS_NOSUID | MS_NODEV, "mode=0755") < 0 ||
         mount("tmpfs", "/tmp", "tmpfs", MS_NOSUID | MS_NODEV, "mode=1777") < 0)
         return -errno;
-
-    static const struct {
-        const char *path;
-        unsigned major_number;
-        unsigned minor_number;
-    } nodes[] = {
-        {"/dev/null", 1, 3}, {"/dev/zero", 1, 5},    {"/dev/full", 1, 7},
-        {"/dev/random", 1, 8}, {"/dev/urandom", 1, 9}, {"/dev/tty", 5, 0},
-    };
-    for (size_t i = 0; i < sizeof(nodes) / sizeof(nodes[0]); i++) {
-        if (mknod(nodes[i].path, S_IFCHR | 0666, makedev(nodes[i].major_number, nodes[i].minor_number)) < 0)
-            return -errno;
-    }
-    static const struct {
-        const char *target;
-        const char *path;
-    } links[] = {
-        {"pts/ptmx", "/dev/ptmx"},
-        {"/proc/self/fd", "/dev/fd"},
-        {"/proc/self/fd/0", "/dev/stdin"},
-        {"/proc/self/fd/1", "/dev/stdout"},
-        {"/proc/self/fd/2", "/dev/stderr"},
-    };
-    for (size_t i = 0; i < sizeof(links) / sizeof(links[0]); i++) {
-        if (symlink(links[i].target, links[i].path) < 0)
-            return -errno;
-    }
+    int rc = dev_populate("/dev");
+    if (rc < 0)
+        return rc;
     if (mkdir("/dev/pts", 0755) < 0 || mkdir("/dev/shm", 01777) < 0 || mkdir("/run/host", 0755) < 0 ||
         mount("tmpfs", "/dev/shm", "tmpfs", MS_NOSUID | MS_NODEV, "mode=1777") < 0)
         return -errno;
@@ -455,10 +429,7 @@ static int sandbox_entry(void *arg) {
     if (result < 0)
         _exit(127);
     close_other_fds(NULL, 0);
-    int null_fd = open("/dev/null", O_RDWR);
-    dup2(null_fd, 0);
-    dup2(null_fd, 1);
-    dup2(null_fd, 2);
+    redirect_stdio(open("/dev/null", O_RDWR));
     sigset_t all;
     sigfillset(&all);
     sigprocmask(SIG_SETMASK, &all, NULL);
@@ -466,12 +437,6 @@ static int sandbox_entry(void *arg) {
         (void)sigwaitinfo(&all, NULL);
         while (waitpid(-1, NULL, WNOHANG) > 0) {}
     }
-}
-
-static int open_namespace(pid_t pid, const char *name) {
-    char path[64];
-    snprintf(path, sizeof(path), "/proc/%d/ns/%s", (int)pid, name);
-    return open(path, O_RDONLY | O_CLOEXEC);
 }
 
 static void sandbox_kill(disk_sandbox_t *sandbox) {
@@ -536,11 +501,11 @@ int disk_sandbox_open(uint32_t disk_id, const char *hostname, launch_target_t *t
     disk->sandboxes++;
     *target = (launch_target_t){
         .net_ns_fd = dup(network_guest_fd()),
-        .ipc_ns_fd = open_namespace(pid, "ipc"),
-        .uts_ns_fd = open_namespace(pid, "uts"),
-        .mnt_ns_fd = open_namespace(pid, "mnt"),
-        .pid_ns_fd = open_namespace(pid, "pid"),
-        .cgroup_ns_fd = open_namespace(pid, "cgroup"),
+        .ipc_ns_fd = namespace_open(pid, "ipc"),
+        .uts_ns_fd = namespace_open(pid, "uts"),
+        .mnt_ns_fd = namespace_open(pid, "mnt"),
+        .pid_ns_fd = namespace_open(pid, "pid"),
+        .cgroup_ns_fd = namespace_open(pid, "cgroup"),
         .procs_fd = disk_procs_fd(),
     };
     if (result < 0 || target->net_ns_fd < 0 || target->ipc_ns_fd < 0 || target->uts_ns_fd < 0 ||
@@ -581,10 +546,8 @@ void disk_shutdown(void) {
             boot_err_log(disk->base, -errno);
             (void)umount2(disk->base, MNT_DETACH);
         }
-        int rc = release_device(disk->node, RELEASE_TIMEOUT_MS);
-        if (rc < 0) {
+        int rc = release_device(disk->node);
+        if (rc < 0)
             boot_err_log(disk->node, rc);
-            g_daemon.stop_flags |= SWIPTERMD_STOP_STORAGE_ERROR;
-        }
     }
 }

@@ -14,40 +14,17 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+enum {
+    ROOT_FILE_MAX = 64 * 1024,
+};
+
 typedef struct active_mount {
     char *guest_path;
-    char dev_name[32];
+    unsigned mmio_addr;
 } active_mount_t;
 
 static active_mount_t *g_mounts;
 static size_t g_mount_count;
-
-static bool write_sysfs_str(const char *path, const char *val) {
-    int fd = open(path, O_WRONLY | O_CLOEXEC);
-    if (fd < 0)
-        return false;
-    ssize_t len = (ssize_t)strlen(val);
-    ssize_t n = write(fd, val, (size_t)len);
-    close(fd);
-    return n == len;
-}
-
-static void bind_virtio_fs_slots(char bound_dev[32]) {
-    bound_dev[0] = '\0';
-    for (unsigned slot = 5; slot < 9; slot++) {
-        char dev[32];
-        char drv[128];
-        snprintf(dev, sizeof(dev), "%x.virtio_mmio", 0xa000000U + slot * 0x200U);
-        snprintf(drv, sizeof(drv), "/sys/bus/platform/devices/%s/driver", dev);
-        struct stat st;
-        if (lstat(drv, &st) == 0)
-            continue;
-        if (write_sysfs_str("/sys/bus/platform/drivers/virtio-mmio/bind", dev)) {
-            if (bound_dev[0] == '\0')
-                strcpy(bound_dev, dev);
-        }
-    }
-}
 
 int fs_open_in_root(const char *rel, uint64_t flags, uint64_t mode) {
     struct open_how how;
@@ -59,6 +36,24 @@ int fs_open_in_root(const char *rel, uint64_t flags, uint64_t mode) {
     if (fd < 0)
         return -errno;
     return (int)fd;
+}
+
+char *fs_read_root_file(const char *rel, struct stat *st) {
+    int fd = fs_open_in_root(rel, O_RDONLY | O_NOFOLLOW, 0);
+    if (fd < 0)
+        return NULL;
+    char *data = NULL;
+    if (fstat(fd, st) == 0 && S_ISREG(st->st_mode) && st->st_size <= ROOT_FILE_MAX &&
+        (data = malloc((size_t)st->st_size + 1))) {
+        if (read_all_blocking(fd, data, (size_t)st->st_size) == 0) {
+            data[st->st_size] = '\0';
+        } else {
+            free(data);
+            data = NULL;
+        }
+    }
+    close(fd);
+    return data;
 }
 
 int fs_normalize_path(const char *in, char *out, size_t cap) {
@@ -146,13 +141,6 @@ static int split_parent_name(const char *guest_path, char *parent_out, size_t pc
         strcpy(parent_out, norm);
     }
     return 0;
-}
-
-static bool path_contains(const char *ancestor, const char *path) {
-    if (strcmp(ancestor, "/") == 0)
-        return true;
-    size_t len = strlen(ancestor);
-    return strncmp(ancestor, path, len) == 0 && (path[len] == '/' || path[len] == '\0');
 }
 
 int fs_mkdir_p_jailed(const char *guest_path, uint32_t mode) {
@@ -263,16 +251,14 @@ int fs_write_file_jailed(const char *guest_path, const uint8_t *data, size_t len
 }
 
 void fs_handle_stat(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
-    bool follow = swiptermd_r_u8(&r) != 0;
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     char path[PATH_MAX];
     if (!swiptermd_r_str_copy(&r, path, sizeof(path))) {
         ctrl_send_err_reply(SWIPTERMD_OP_FS_STAT, req_id, -EINVAL);
         return;
     }
 
-    uint64_t flags = O_PATH | (follow ? 0 : O_NOFOLLOW);
-    int fd = fs_open_in_root(to_rel_path(path), flags, 0);
+    int fd = fs_open_in_root(to_rel_path(path), O_PATH, 0);
     if (fd < 0) {
         ctrl_send_err_reply(SWIPTERMD_OP_FS_STAT, req_id, fd);
         return;
@@ -287,32 +273,16 @@ void fs_handle_stat(uint32_t req_id, const uint8_t *body, uint32_t len) {
     }
     close(fd);
 
-    swiptermd_stat_wire_t wire = {
-        .mode = st.st_mode,
-        .uid = st.st_uid,
-        .gid = st.st_gid,
-        .nlink = (uint32_t)st.st_nlink,
-        .size = (uint64_t)st.st_size,
-        .inode = (uint64_t)st.st_ino,
-        .rdev = (uint64_t)st.st_rdev,
-        .atime_sec = st.st_atim.tv_sec,
-        .atime_nsec = st.st_atim.tv_nsec,
-        .mtime_sec = st.st_mtim.tv_sec,
-        .mtime_nsec = st.st_mtim.tv_nsec,
-        .ctime_sec = st.st_ctim.tv_sec,
-        .ctime_nsec = st.st_ctim.tv_nsec,
-    };
-
-    uint8_t out[SWIPTERMD_ERR_REPLY_SIZE + SWIPTERMD_STAT_WIRE_SIZE];
-    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, sizeof(out));
-    swiptermd_w_i32(&w, 0);
-    swiptermd_stat_encode(&w, &wire);
+    uint8_t out[SWIPTERMD_ERR_REPLY_SIZE + SWIPTERMD_U32_MSG_SIZE];
+    swiptermd_buf_w_t w = {.data = out, .cap = sizeof(out)};
+    swiptermd_w_u32(&w, 0);
+    swiptermd_w_u32(&w, st.st_mode);
     ctrl_send_frame((uint16_t)(SWIPTERMD_OP_FS_STAT | SWIPTERMD_OP_REPLY_FLAG),
                     req_id, out, (uint32_t)w.len);
 }
 
 void fs_handle_read(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     char path[PATH_MAX];
     if (!swiptermd_r_str_copy(&r, path, sizeof(path))) {
         ctrl_send_err_reply(SWIPTERMD_OP_FS_READ, req_id, -EINVAL);
@@ -398,7 +368,7 @@ void fs_handle_read(uint32_t req_id, const uint8_t *body, uint32_t len) {
 }
 
 void fs_handle_write(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     uint32_t mode = swiptermd_r_u32(&r);
     uint32_t flags = swiptermd_r_u32(&r);
     char path[PATH_MAX];
@@ -429,83 +399,8 @@ void fs_handle_write(uint32_t req_id, const uint8_t *body, uint32_t len) {
     ctrl_send_err_reply(SWIPTERMD_OP_FS_WRITE, req_id, err);
 }
 
-void fs_handle_list(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
-    char path[PATH_MAX];
-    if (!swiptermd_r_str_copy(&r, path, sizeof(path))) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_LIST, req_id, -EINVAL);
-        return;
-    }
-
-    int dfd = fs_open_in_root(to_rel_path(path), O_RDONLY | O_DIRECTORY, 0);
-    if (dfd < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_LIST, req_id, dfd);
-        return;
-    }
-    DIR *dir = fdopendir(dfd);
-    if (!dir) {
-        int err = -errno;
-        close(dfd);
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_LIST, req_id, err);
-        return;
-    }
-
-    size_t cap = 4096;
-    uint8_t *out = malloc(cap);
-    if (!out) {
-        closedir(dir);
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_LIST, req_id, -ENOMEM);
-        return;
-    }
-    size_t pos = 8;
-    uint32_t count = 0;
-
-    struct dirent *de;
-    errno = 0;
-    while ((de = readdir(dir)) != NULL) {
-        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
-            continue;
-        struct stat st;
-        memset(&st, 0, sizeof(st));
-        (void)fstatat(dfd, de->d_name, &st, AT_SYMLINK_NOFOLLOW);
-
-        uint32_t nlen = (uint32_t)strlen(de->d_name);
-        size_t need = 8 + (size_t)nlen;
-        if (pos + need > cap) {
-            while (pos + need > cap)
-                cap *= 2;
-            uint8_t *nb = realloc(out, cap);
-            if (!nb) {
-                free(out);
-                closedir(dir);
-                ctrl_send_err_reply(SWIPTERMD_OP_FS_LIST, req_id, -ENOMEM);
-                return;
-            }
-            out = nb;
-        }
-        swiptermd_buf_w_t ew = swiptermd_buf_w_init(out + pos, cap - pos);
-        swiptermd_fs_list_entry_encode(&ew, st.st_mode, de->d_name);
-        pos += ew.len;
-        count++;
-        errno = 0;
-    }
-    int rerr = errno;
-    closedir(dir);
-    if (rerr != 0) {
-        free(out);
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_LIST, req_id, -rerr);
-        return;
-    }
-
-    swiptermd_put_be32(out + 0, 0);
-    swiptermd_put_be32(out + 4, count);
-    ctrl_send_frame((uint16_t)(SWIPTERMD_OP_FS_LIST | SWIPTERMD_OP_REPLY_FLAG),
-                    req_id, out, (uint32_t)pos);
-    free(out);
-}
-
 void fs_handle_mkdir(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     uint32_t mode = swiptermd_r_u32(&r);
     bool intermediates = swiptermd_r_u8(&r) != 0;
     char path[PATH_MAX];
@@ -533,111 +428,6 @@ void fs_handle_mkdir(uint32_t req_id, const uint8_t *body, uint32_t len) {
         }
     }
     ctrl_send_err_reply(SWIPTERMD_OP_FS_MKDIR, req_id, err);
-}
-
-static int remove_dir_contents(int dirfd) {
-    int dupfd = dup(dirfd);
-    if (dupfd < 0)
-        return -errno;
-    DIR *dir = fdopendir(dupfd);
-    if (!dir) {
-        int err = -errno;
-        close(dupfd);
-        return err;
-    }
-
-    int err = 0;
-    struct dirent *de;
-    while (err == 0 && (de = readdir(dir)) != NULL) {
-        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0)
-            continue;
-        struct stat st;
-        if (fstatat(dirfd, de->d_name, &st, AT_SYMLINK_NOFOLLOW) < 0) {
-            err = -errno;
-            break;
-        }
-        if (S_ISDIR(st.st_mode)) {
-            int cfd = openat(dirfd, de->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-            if (cfd < 0) {
-                err = -errno;
-                break;
-            }
-            err = remove_dir_contents(cfd);
-            close(cfd);
-            if (err == 0 && unlinkat(dirfd, de->d_name, AT_REMOVEDIR) < 0)
-                err = -errno;
-        } else {
-            if (unlinkat(dirfd, de->d_name, 0) < 0)
-                err = -errno;
-        }
-    }
-    closedir(dir);
-    return err;
-}
-
-void fs_handle_remove(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
-    bool recursive = swiptermd_r_u8(&r) != 0;
-    char path[PATH_MAX];
-    if (!swiptermd_r_str_copy(&r, path, sizeof(path))) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, -EINVAL);
-        return;
-    }
-
-    char norm[PATH_MAX];
-    int err = fs_normalize_path(path, norm, sizeof(norm));
-    if (err < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, err);
-        return;
-    }
-    if (strcmp(norm, "/") == 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, -EBUSY);
-        return;
-    }
-
-    for (size_t i = 0; i < g_mount_count; i++) {
-        if (path_contains(norm, g_mounts[i].guest_path)) {
-            ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, -EBUSY);
-            return;
-        }
-    }
-
-    char parent[PATH_MAX];
-    char name[NAME_MAX + 1];
-    err = split_parent_name(norm, parent, sizeof(parent), name, sizeof(name));
-    if (err < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, err);
-        return;
-    }
-
-    int pfd = fs_open_in_root(to_rel_path(parent), O_PATH | O_DIRECTORY, 0);
-    if (pfd < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, pfd);
-        return;
-    }
-
-    struct stat st;
-    if (fstatat(pfd, name, &st, AT_SYMLINK_NOFOLLOW) < 0) {
-        err = -errno;
-    } else if (!S_ISDIR(st.st_mode)) {
-        if (unlinkat(pfd, name, 0) < 0)
-            err = -errno;
-    } else {
-        if (recursive) {
-            int dfd = openat(pfd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-            if (dfd < 0) {
-                err = -errno;
-            } else {
-                err = remove_dir_contents(dfd);
-                close(dfd);
-            }
-        }
-        if (err == 0 && unlinkat(pfd, name, AT_REMOVEDIR) < 0)
-            err = -errno;
-    }
-
-    close(pfd);
-    ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, err);
 }
 
 static int check_dir_empty(const char *guest_path) {
@@ -695,9 +485,8 @@ int fs_prepare_mountpoint(const char *guest_path, char norm[PATH_MAX]) {
 }
 
 void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
+    swiptermd_buf_r_t r = {.data = body, .len = len};
     bool read_only = swiptermd_r_u8(&r) != 0;
-    (void)swiptermd_r_u8(&r);
     char tag[256];
     char guest_path[PATH_MAX];
     if (!swiptermd_r_str_copy(&r, tag, sizeof(tag)) ||
@@ -713,8 +502,11 @@ void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len
         return;
     }
 
-    char bound_dev[32];
-    bind_virtio_fs_slots(bound_dev);
+    unsigned bound_addr = 0;
+    for (unsigned slot = VIRTIO_SLOT_FS_BASE; slot < VIRTIO_SLOT_FS_BASE + VIRTIO_SLOT_FS_COUNT; slot++) {
+        if (virtio_mmio_bind(VIRTIO_MMIO_ADDR(slot)) > 0 && bound_addr == 0)
+            bound_addr = VIRTIO_MMIO_ADDR(slot);
+    }
 
     char target[32];
     snprintf(target, sizeof(target), "/proc/self/fd/%d", fd);
@@ -722,8 +514,8 @@ void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len
     int err = mount(tag, target, "virtiofs", mflags, NULL) < 0 ? -errno : 0;
     close(fd);
     if (err < 0) {
-        if (bound_dev[0] != '\0')
-            (void)write_sysfs_str("/sys/bus/platform/drivers/virtio-mmio/unbind", bound_dev);
+        if (bound_addr != 0)
+            virtio_mmio_unbind(bound_addr);
         ctrl_send_err_reply(SWIPTERMD_OP_FS_MOUNT_VIRTIOFS, req_id, err);
         return;
     }
@@ -733,7 +525,7 @@ void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len
     if (grown) {
         g_mounts = grown;
         g_mounts[g_mount_count].guest_path = dup_path;
-        strcpy(g_mounts[g_mount_count].dev_name, bound_dev);
+        g_mounts[g_mount_count].mmio_addr = bound_addr;
         g_mount_count++;
     } else {
         free(dup_path);
@@ -745,63 +537,14 @@ void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len
 void fs_unmount_all(void) {
     while (g_mount_count > 0) {
         size_t i = --g_mount_count;
-        if (g_mounts[i].guest_path) {
-            char full[PATH_MAX];
-            if (snprintf(full, sizeof(full), "%s%s", GUEST_ROOT, g_mounts[i].guest_path) < (int)sizeof(full)) {
-                if (umount2(full, 0) < 0)
-                    (void)umount2(full, MNT_DETACH);
-            }
-            free(g_mounts[i].guest_path);
-        }
-        if (g_mounts[i].dev_name[0] != '\0')
-            (void)write_sysfs_str("/sys/bus/platform/drivers/virtio-mmio/unbind", g_mounts[i].dev_name);
+        char full[PATH_MAX];
+        if (snprintf(full, sizeof(full), "%s%s", GUEST_ROOT, g_mounts[i].guest_path) < (int)sizeof(full) &&
+            umount2(full, 0) < 0)
+            (void)umount2(full, MNT_DETACH);
+        free(g_mounts[i].guest_path);
+        if (g_mounts[i].mmio_addr != 0)
+            virtio_mmio_unbind(g_mounts[i].mmio_addr);
     }
     free(g_mounts);
     g_mounts = NULL;
-}
-
-void fs_handle_unmount(uint32_t req_id, const uint8_t *body, uint32_t len) {
-    swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
-    char guest_path[PATH_MAX];
-    if (!swiptermd_r_str_copy(&r, guest_path, sizeof(guest_path))) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_UNMOUNT, req_id, -EINVAL);
-        return;
-    }
-
-    char norm[PATH_MAX];
-    int err = fs_normalize_path(guest_path, norm, sizeof(norm));
-    if (err < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_UNMOUNT, req_id, err);
-        return;
-    }
-
-    ssize_t idx = -1;
-    for (size_t i = 0; i < g_mount_count; i++) {
-        if (strcmp(g_mounts[i].guest_path, norm) == 0) {
-            idx = (ssize_t)i;
-            break;
-        }
-    }
-    if (idx < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_UNMOUNT, req_id, -EINVAL);
-        return;
-    }
-
-    char full[PATH_MAX];
-    if (snprintf(full, sizeof(full), "%s%s", GUEST_ROOT, norm) >= (int)sizeof(full)) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_UNMOUNT, req_id, -ENAMETOOLONG);
-        return;
-    }
-
-    if (umount2(full, 0) < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_UNMOUNT, req_id, -errno);
-        return;
-    }
-
-    if (g_mounts[idx].dev_name[0] != '\0')
-        (void)write_sysfs_str("/sys/bus/platform/drivers/virtio-mmio/unbind", g_mounts[idx].dev_name);
-
-    free(g_mounts[idx].guest_path);
-    g_mounts[idx] = g_mounts[--g_mount_count];
-    ctrl_send_err_reply(SWIPTERMD_OP_FS_UNMOUNT, req_id, 0);
 }

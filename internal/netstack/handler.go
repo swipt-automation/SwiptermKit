@@ -40,9 +40,7 @@ func (s *Stack) JudgeFlow(network uint8, source netip.AddrPort, destination neti
 
 func (s *Stack) NewDNSPacket(payload []byte, source M.Socksaddr, destination M.Socksaddr, writer N.PacketWriter) {
 	var query mDNS.Msg
-	err := query.Unpack(payload)
-	if err != nil {
-		s.logger.DebugContext(s.ctx, "dns: parse query from ", source, ": ", err)
+	if query.Unpack(payload) != nil {
 		return
 	}
 	go func() {
@@ -55,22 +53,19 @@ func (s *Stack) NewDNSPacket(payload []byte, source M.Socksaddr, destination M.S
 		response.Truncate(maxLength)
 		packet, err := response.Pack()
 		if err == nil {
-			err = writer.WritePacket(buf.As(packet), destination)
-		}
-		if err != nil {
-			s.logger.DebugContext(s.ctx, "dns: write response to ", source, ": ", err)
+			writer.WritePacket(buf.As(packet), destination)
 		}
 	}()
 }
 
 func (s *Stack) NewConnectionEx(ctx context.Context, conn net.Conn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
 	if destination.Addr == inet4DNS || destination.Addr == inet6DNS {
-		s.connections.closeHandler(ctx, conn, onClose)(s.serveDNSStream(ctx, conn))
+		closeHandler(conn, onClose)(s.serveDNSStream(ctx, conn))
 		return
 	}
-	s.connections.NewConnection(ctx, conn, destination, onClose)
+	newConnection(ctx, conn, destination, onClose)
 }
 
 func (s *Stack) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	s.connections.NewPacketConnection(ctx, conn, destination, onClose)
+	newPacketConnection(ctx, conn, destination, onClose)
 }

@@ -17,6 +17,7 @@ import (
 	_ "github.com/sagernet/gomobile"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/swipt-automation/SwiptermKit/internal/tool"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -148,7 +149,7 @@ func installGomobile() error {
 		return gomobileModule + "/cmd/" + tool + "@" + module.Version
 	})...)...)
 	install.Env = append(os.Environ(), "GOBIN="+binDirectory)
-	return run(install)
+	return tool.Run(install)
 }
 
 func gomobileBinDirectory() string {
@@ -177,11 +178,11 @@ func buildLibraries() error {
 	if err != nil {
 		return err
 	}
-	clang, err := output(exec.Command("xcrun", "--find", "clang"))
+	clang, err := tool.Output(exec.Command("xcrun", "--find", "clang"))
 	if err != nil {
 		return err
 	}
-	libtool, err := output(exec.Command("xcrun", "--find", "libtool"))
+	libtool, err := tool.Output(exec.Command("xcrun", "--find", "libtool"))
 	if err != nil {
 		return err
 	}
@@ -195,7 +196,7 @@ func buildLibraries() error {
 	flagFiles := make([]string, len(platforms))
 	flags := make([]string, len(platforms))
 	for index, platform := range platforms {
-		sdkPath, err := output(exec.Command("xcrun", "--sdk", platform.sdk, "--show-sdk-path"))
+		sdkPath, err := tool.Output(exec.Command("xcrun", "--sdk", platform.sdk, "--show-sdk-path"))
 		if err != nil {
 			return err
 		}
@@ -243,7 +244,7 @@ func buildLibraries() error {
 					if err != nil {
 						return err
 					}
-					return run(exec.Command(clang, append(slices.Clone(unit.arguments), "-MMD", "-MP", "-c", source, "-o", object)...))
+					return tool.Run(exec.Command(clang, append(slices.Clone(unit.arguments), "-MMD", "-MP", "-c", source, "-o", object)...))
 				})
 			}
 		}
@@ -255,7 +256,7 @@ func buildLibraries() error {
 	for index, platform := range platforms {
 		library := filepath.Join(buildPath, platform.sdk, "libvmm.a")
 		os.Remove(library)
-		err = run(exec.Command(libtool, append([]string{"-static", "-no_warning_for_no_symbols", "-o", library}, objects[index]...)...))
+		err = tool.Run(exec.Command(libtool, append([]string{"-static", "-no_warning_for_no_symbols", "-o", library}, objects[index]...)...))
 		if err != nil {
 			return err
 		}
@@ -324,11 +325,11 @@ func bind() error {
 		"./libswipterm",
 	)
 	command.Env = append(os.Environ(), "PATH="+binDirectory+string(os.PathListSeparator)+os.Getenv("PATH"))
-	return run(command)
+	return tool.Run(command)
 }
 
 func assemble() error {
-	libtool, err := output(exec.Command("xcrun", "--find", "libtool"))
+	libtool, err := tool.Output(exec.Command("xcrun", "--find", "libtool"))
 	if err != nil {
 		return err
 	}
@@ -353,7 +354,7 @@ func assemble() error {
 		if err != nil {
 			return err
 		}
-		err = run(exec.Command(libtool, "-static", "-no_warning_for_no_symbols", "-o", filepath.Join(contents, frameworkName),
+		err = tool.Run(exec.Command(libtool, "-static", "-no_warning_for_no_symbols", "-o", filepath.Join(contents, frameworkName),
 			filepath.Join(source, frameworkName), filepath.Join(buildPath, platform.sdk, "libvmm.a")))
 		if err != nil {
 			return err
@@ -396,7 +397,7 @@ func assemble() error {
 	if err != nil {
 		return err
 	}
-	err = run(exec.Command("xcodebuild", append(createArguments, "-output", outputPath)...))
+	err = tool.Run(exec.Command("xcodebuild", append(createArguments, "-output", outputPath)...))
 	if err != nil {
 		return err
 	}
@@ -404,24 +405,5 @@ func assemble() error {
 	if err != nil {
 		return err
 	}
-	return run(exec.Command("ditto", "-c", "-k", "--norsrc", "--noextattr", "--keepParent", outputPath, archivePath))
-}
-
-func output(command *exec.Cmd) (string, error) {
-	command.Stderr = os.Stderr
-	data, err := command.Output()
-	if err != nil {
-		return "", E.Cause(err, "run ", strings.Join(command.Args, " "))
-	}
-	return strings.TrimSpace(string(data)), nil
-}
-
-func run(command *exec.Cmd) error {
-	command.Stdout = os.Stdout
-	command.Stderr = os.Stderr
-	err := command.Run()
-	if err != nil {
-		return E.Cause(err, "run ", strings.Join(command.Args, " "))
-	}
-	return nil
+	return tool.Run(exec.Command("ditto", "-c", "-k", "--norsrc", "--noextattr", "--keepParent", outputPath, archivePath))
 }

@@ -21,16 +21,10 @@ static const char *const gpu_backend_names[GPU_BACKEND_COUNT] = {
     [SWIPTERM_GPU_BACKEND_KOSMICKRISP] = "KosmicKrisp",
 };
 
-static pthread_mutex_t g_renderer_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t g_retire_lock = PTHREAD_MUTEX_INITIALIZER;
 static void *g_retire_owner;
 static gpu_retire_fn g_retire;
 static bool g_renderer_ready;
-
-static void gpu_write_fence(void *cookie, uint32_t fence) {
-    (void)cookie;
-    (void)fence;
-}
 
 static void gpu_write_context_fence(void *cookie, uint32_t ctx_id, uint32_t ring_idx, uint64_t fence_id) {
     (void)cookie;
@@ -43,7 +37,6 @@ static void gpu_write_context_fence(void *cookie, uint32_t ctx_id, uint32_t ring
 
 static struct virgl_renderer_callbacks g_callbacks = {
     .version = 3,
-    .write_fence = gpu_write_fence,
     .write_context_fence = gpu_write_context_fence,
 };
 
@@ -98,14 +91,6 @@ bool gpu_acquire(swipterm_gpu_backend requested) {
     return true;
 }
 
-void gpu_lock(void) {
-    pthread_mutex_lock(&g_renderer_lock);
-}
-
-void gpu_unlock(void) {
-    pthread_mutex_unlock(&g_renderer_lock);
-}
-
 void gpu_set_retire(void *owner, gpu_retire_fn retire) {
     pthread_mutex_lock(&g_retire_lock);
     g_retire_owner = owner;
@@ -122,8 +107,8 @@ void gpu_clear_retire(void *owner) {
     pthread_mutex_unlock(&g_retire_lock);
 }
 
-bool swipterm_gpu_suspend(void) {
-    return vkr_swipterm_suspend(GPU_SUSPEND_TIMEOUT_MS);
+void swipterm_gpu_suspend(void) {
+    (void)vkr_swipterm_suspend(GPU_SUSPEND_TIMEOUT_MS);
 }
 
 void swipterm_gpu_resume(void) {

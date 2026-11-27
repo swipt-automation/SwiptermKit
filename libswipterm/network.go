@@ -1,7 +1,6 @@
 package libswipterm
 
 import (
-	"github.com/sagernet/sing/common/logger"
 	"github.com/swipt-automation/SwiptermKit/internal/netstack"
 )
 
@@ -10,7 +9,7 @@ type Network struct {
 }
 
 func CreateNetwork() (*Network, error) {
-	stack, err := netstack.New(logger.NOP())
+	stack, err := netstack.New()
 	if err != nil {
 		return nil, err
 	}

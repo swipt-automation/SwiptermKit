@@ -5,29 +5,26 @@ final class RuntimeCallbacks: Sendable {
     let queue = DispatchQueue(label: "SwiptermKit.Callbacks")
     let consoleOutput: (@Sendable (Data) -> Void)?
     let haltHandler: (@Sendable (LinuxRuntime.HaltReason) -> Void)?
-    let panicHandler: (@Sendable (String) -> Void)?
     let clipboard: (any LinuxClipboard)?
 
     init(
         consoleOutput: (@Sendable (Data) -> Void)?,
         haltHandler: (@Sendable (LinuxRuntime.HaltReason) -> Void)?,
-        panicHandler: (@Sendable (String) -> Void)?,
         clipboard: (any LinuxClipboard)?
     ) {
         self.consoleOutput = consoleOutput
         self.haltHandler = haltHandler
-        self.panicHandler = panicHandler
         self.clipboard = clipboard
     }
 
-    func makeTable(includeConsoleOutput: Bool, includePanic: Bool) -> swipterm_callbacks {
+    func makeTable() -> swipterm_callbacks {
         swipterm_callbacks(
             context: Unmanaged.passUnretained(self).toOpaque(),
-            console_output: includeConsoleOutput ? { context, data, length in
+            console_output: consoleOutput != nil ? { context, data, length in
                 let callbacks = Unmanaged<RuntimeCallbacks>.fromOpaque(context!).takeUnretainedValue()
                 let chunk = Data(bytes: data!, count: length)
                 callbacks.queue.async {
-                    callbacks.consoleOutput?(chunk)
+                    callbacks.consoleOutput!(chunk)
                 }
             } : nil,
             halt: { context, reason, waitStatus in
@@ -37,19 +34,12 @@ final class RuntimeCallbacks: Sendable {
                     callbacks.haltHandler?(haltReason)
                 }
             },
-            panic: includePanic ? { context, message in
-                let callbacks = Unmanaged<RuntimeCallbacks>.fromOpaque(context!).takeUnretainedValue()
-                let text = String(cString: message!)
-                callbacks.queue.async {
-                    callbacks.panicHandler?(text)
-                }
-            } : nil,
             process_exit: { context, status in
                 Unmanaged<LinuxProcess.State>.fromOpaque(context!).takeRetainedValue().exit(status: status)
             },
             command_start: { context, invocation, argc, argv, envp, workingDirectory, input, output, error in
                 let command = Unmanaged<CommandBox>.fromOpaque(context!).takeUnretainedValue()
-                let arguments = (0..<argc).map { String(cString: argv![$0]!) }
+                let arguments = (0 ..< argc).map { String(cString: argv![$0]!) }
                 var environment: [String: String] = [:]
                 var entry = envp!
                 while let pointer = entry.pointee {
@@ -85,7 +75,7 @@ final class RuntimeCallbacks: Sendable {
                     let file = try device.open(access: access)
                     return Unmanaged.passRetained(DeviceFileBox(file: file)).toOpaque()
                 } catch {
-                    errorOut!.pointee = -((error as? LinuxError) ?? .EIO).rawValue
+                    errorOut!.pointee = -LinuxError(error).rawValue
                     return nil
                 }
             },
@@ -96,7 +86,7 @@ final class RuntimeCallbacks: Sendable {
                     data.copyBytes(to: buffer!.assumingMemoryBound(to: UInt8.self), count: count)
                     return count
                 } catch {
-                    return -Int(((error as? LinuxError) ?? .EIO).rawValue)
+                    return -Int(LinuxError(error).rawValue)
                 }
             },
             device_write: { file, buffer, length in
@@ -104,7 +94,7 @@ final class RuntimeCallbacks: Sendable {
                     let data = Data(bytes: buffer!, count: length)
                     return try Unmanaged<DeviceFileBox>.fromOpaque(file!).takeUnretainedValue().file.write(data)
                 } catch {
-                    return -Int(((error as? LinuxError) ?? .EIO).rawValue)
+                    return -Int(LinuxError(error).rawValue)
                 }
             },
             device_close: { file in
@@ -127,7 +117,7 @@ final class RuntimeCallbacks: Sendable {
                     lengthOut!.pointee = data.count
                     return 0
                 } catch {
-                    return -((error as? LinuxError) ?? .EIO).rawValue
+                    return -LinuxError(error).rawValue
                 }
             } : nil,
             clipboard_write: clipboard != nil ? { context, count, items in
@@ -135,7 +125,7 @@ final class RuntimeCallbacks: Sendable {
                 var decoded: [LinuxClipboardItem] = []
                 decoded.reserveCapacity(count)
                 if let items {
-                    for index in 0..<count {
+                    for index in 0 ..< count {
                         let item = items[index]
                         let mime = String(cString: item.mime!)
                         let data = item.length > 0 && item.data != nil ? Data(bytes: item.data!, count: item.length) : Data()

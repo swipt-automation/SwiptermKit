@@ -15,111 +15,34 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "guest_ipc.h"
+#include "wire_format.h"
+
 extern char **environ;
 
-enum {
-    STUB_MSG_EXIT = 1,
-    STUB_MSG_CANCEL = 2,
-};
-
-struct stub_ctl_msg {
-    uint32_t type;
-    int32_t value;
-};
-
-static int write_all(int fd, const void *buf, size_t len) {
-    const uint8_t *p = buf;
-    while (len > 0) {
-        ssize_t n = write(fd, p, len);
-        if (n < 0) {
-            if (errno == EINTR)
-                continue;
-            return -1;
-        }
-        p += (size_t)n;
-        len -= (size_t)n;
-    }
-    return 0;
-}
-
-static int read_all(int fd, void *buf, size_t len) {
-    uint8_t *p = buf;
-    while (len > 0) {
-        ssize_t n = read(fd, p, len);
-        if (n < 0) {
-            if (errno == EINTR)
-                continue;
-            return -1;
-        }
-        if (n == 0)
-            return -1;
-        p += (size_t)n;
-        len -= (size_t)n;
-    }
-    return 0;
-}
-
-static int append_u32(uint8_t **buf, size_t *len, size_t *cap, uint32_t v) {
-    if (*len + 4 > *cap) {
-        size_t ncap = *cap ? *cap * 2 : 4096;
-        while (ncap < *len + 4)
-            ncap *= 2;
-        uint8_t *nb = realloc(*buf, ncap);
-        if (!nb)
-            return -1;
-        *buf = nb;
-        *cap = ncap;
-    }
-    (*buf)[*len + 0] = (uint8_t)(v >> 24);
-    (*buf)[*len + 1] = (uint8_t)(v >> 16);
-    (*buf)[*len + 2] = (uint8_t)(v >> 8);
-    (*buf)[*len + 3] = (uint8_t)v;
-    *len += 4;
-    return 0;
-}
-
-static int append_str(uint8_t **buf, size_t *len, size_t *cap, const char *s) {
-    uint32_t slen = s ? (uint32_t)strlen(s) : 0;
-    if (append_u32(buf, len, cap, slen) < 0)
-        return -1;
-    if (slen == 0)
-        return 0;
-    if (*len + slen > *cap) {
-        size_t ncap = *cap ? *cap * 2 : 4096;
-        while (ncap < *len + slen)
-            ncap *= 2;
-        uint8_t *nb = realloc(*buf, ncap);
-        if (!nb)
-            return -1;
-        *buf = nb;
-        *cap = ncap;
-    }
-    memcpy(*buf + *len, s, slen);
-    *len += slen;
-    return 0;
-}
-
-static void resolve_sock_path(char *out, size_t cap) {
+static int resolve_sock_path(char *out, size_t cap) {
     char exe[PATH_MAX];
     ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
-    if (n > 0) {
-        exe[n] = '\0';
-        char *slash = strrchr(exe, '/');
-        if (slash) {
-            *slash = '\0';
-            if ((size_t)snprintf(out, cap, "%s/.sock", exe) < cap)
-                return;
-        }
-    }
-    snprintf(out, cap, "/run/host-bin/.sock");
+    if (n <= 0)
+        return -1;
+    exe[n] = '\0';
+    char *slash = strrchr(exe, '/');
+    if (!slash)
+        return -1;
+    *slash = '\0';
+    return snprintf(out, cap, "%s/" HOST_CMD_SOCKET_NAME, exe) < (int)cap ? 0 : -1;
+}
+
+static size_t strv_wire_size(char *const *vec, uint32_t count) {
+    size_t size = 4;
+    for (uint32_t i = 0; i < count; i++)
+        size += 4 + strlen(vec[i]);
+    return size;
 }
 
 static int send_stdio_fds(int sock, uint32_t payload_len) {
     uint8_t hdr[4];
-    hdr[0] = (uint8_t)(payload_len >> 24);
-    hdr[1] = (uint8_t)(payload_len >> 16);
-    hdr[2] = (uint8_t)(payload_len >> 8);
-    hdr[3] = (uint8_t)payload_len;
+    swiptermd_put_be32(hdr, payload_len);
 
     int fds[3];
     int opened[3] = {-1, -1, -1};
@@ -188,7 +111,8 @@ int main(int argc, char **argv) {
         _exit(127);
 
     char sock_path[PATH_MAX];
-    resolve_sock_path(sock_path, sizeof(sock_path));
+    if (resolve_sock_path(sock_path, sizeof(sock_path)) < 0)
+        _exit(127);
 
     int sock = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (sock < 0)
@@ -208,35 +132,20 @@ int main(int argc, char **argv) {
     if (!getcwd(cwd, sizeof(cwd)))
         strcpy(cwd, "/");
 
-    uint8_t *payload = NULL;
-    size_t plen = 0;
-    size_t pcap = 0;
-
-    if (append_str(&payload, &plen, &pcap, name) < 0 ||
-        append_str(&payload, &plen, &pcap, cwd) < 0)
-        _exit(127);
-
     uint32_t nargs = argc > 1 ? (uint32_t)(argc - 1) : 0;
-    if (append_u32(&payload, &plen, &pcap, nargs) < 0)
-        _exit(127);
-    for (uint32_t i = 0; i < nargs; i++) {
-        if (append_str(&payload, &plen, &pcap, argv[i + 1]) < 0)
-            _exit(127);
-    }
-
     uint32_t nenv = 0;
-    if (environ) {
-        while (environ[nenv])
-            nenv++;
-    }
-    if (append_u32(&payload, &plen, &pcap, nenv) < 0)
+    while (environ && environ[nenv])
+        nenv++;
+    size_t plen = 8 + strlen(name) + strlen(cwd) + strv_wire_size(argv + 1, nargs) + strv_wire_size(environ, nenv);
+    uint8_t *payload = malloc(plen);
+    if (!payload)
         _exit(127);
-    for (uint32_t i = 0; i < nenv; i++) {
-        if (append_str(&payload, &plen, &pcap, environ[i]) < 0)
-            _exit(127);
-    }
-
-    if (send_stdio_fds(sock, (uint32_t)plen) < 0 || write_all(sock, payload, plen) < 0)
+    swiptermd_buf_w_t w = {.data = payload, .cap = plen};
+    swiptermd_w_str(&w, name);
+    swiptermd_w_str(&w, cwd);
+    swiptermd_w_strv(&w, (const char *const *)argv + 1, nargs);
+    swiptermd_w_strv(&w, (const char *const *)environ, nenv);
+    if (send_stdio_fds(sock, (uint32_t)w.len) < 0 || write_all_blocking(sock, payload, w.len) < 0)
         _exit(127);
     free(payload);
 
@@ -256,11 +165,11 @@ int main(int argc, char **argv) {
         if (pfds[1].revents & POLLIN) {
             struct signalfd_siginfo si;
             if (read(sfd, &si, sizeof(si)) == (ssize_t)sizeof(si)) {
-                struct stub_ctl_msg msg = {
+                stub_ctl_msg_t msg = {
                     .type = STUB_MSG_CANCEL,
                     .value = (int32_t)si.ssi_signo,
                 };
-                (void)write_all(sock, &msg, sizeof(msg));
+                (void)write_all_blocking(sock, &msg, sizeof(msg));
                 close(sock);
                 close(sfd);
 
@@ -275,8 +184,8 @@ int main(int argc, char **argv) {
         }
 
         if (pfds[0].revents & (POLLIN | POLLHUP | POLLERR)) {
-            struct stub_ctl_msg msg;
-            if (read_all(sock, &msg, sizeof(msg)) < 0)
+            stub_ctl_msg_t msg;
+            if (read_all_blocking(sock, &msg, sizeof(msg)) < 0)
                 _exit(127);
             if (msg.type == STUB_MSG_EXIT)
                 _exit(msg.value & 0xff);

@@ -1,5 +1,3 @@
-#include "cpu_fast_layout.h"
-
 #define CHECK_OFFSET(type, field, offset) static_assert(offsetof(type, field) == offset)
 CHECK_OFFSET(ir_insn_t, target_or_imm, IR_IMM);
 CHECK_OFFSET(ir_insn_t, op, IR_OP);
@@ -26,9 +24,7 @@ CHECK_OFFSET(vcpu_t, fpsr, CPU_FPSR);
 CHECK_OFFSET(vcpu_t, icache_shootdown_pending, CPU_ICACHE_SHOOTDOWN);
 CHECK_OFFSET(vcpu_t, excl_val, CPU_EXCL_VAL);
 CHECK_OFFSET(vcpu_t, cntkctl_el1, CPU_CNTKCTL);
-CHECK_OFFSET(vcpu_t, excl_hva, (CPU_EXCL_HVA_PAGE << 12) + CPU_EXCL_HVA);
-static_assert(CPU_FPCR_MASK == 0x07C80000U);
-static_assert(CPU_FPSR_MASK == 0x0800009FU);
+CHECK_OFFSET(vcpu_t, excl_hva, CPU_EXCL_HVA);
 CHECK_OFFSET(vcpu_t, backedge_budget, CPU_BUDGET);
 CHECK_OFFSET(vcpu_t, irq_pending, CPU_IRQ);
 CHECK_OFFSET(vcpu_t, stop_requested, CPU_STOP);
@@ -36,7 +32,6 @@ CHECK_OFFSET(vcpu_t, shootdown, CPU_SHOOTDOWN);
 CHECK_OFFSET(vcpu_t, irq_mask, CPU_IRQ_MASK);
 CHECK_OFFSET(vcpu_t, irq_force, CPU_IRQ_MASK + 1);
 CHECK_OFFSET(vcpu_t, tlb_asid_salt, CPU_SALT);
-CHECK_OFFSET(vcpu_t, tlb_epoch_local, CPU_TLB_EPOCH);
 CHECK_OFFSET(vcpu_t, vm, CPU_VM);
 CHECK_OFFSET(vcpu_t, icache, CPU_ICACHE);
 CHECK_OFFSET(vcpu_t, exec_epoch, CPU_EXEC_EPOCH);
@@ -120,7 +115,6 @@ typedef enum cpu_fast_op {
 } cpu_fast_op_t;
 
 extern const uint32_t cpu_fast_offsets[FAST_COUNT];
-extern void cpu_fast_run(vcpu_t *cpu);
 
 typedef enum cpu_pt_kind : uint8_t {
     CPU_PT_NONE,
@@ -145,24 +139,27 @@ typedef struct cpu_pt_leaf {
 
 extern const uint32_t cpu_pt_offsets[CPU_PT_STUB_COUNT];
 
-static void cpu_fast_decode_passthrough(ir_insn_t *ir) {
-    const uint32_t word = (uint32_t)ir->target_or_imm;
-    const int32_t index = cpu_pt_find(word);
+static const cpu_pt_leaf_t *cpu_pt_lookup(uint32_t word, uint32_t *offset) {
+    int32_t index = cpu_pt_find(word);
     if (index < 0) {
-        return;
+        return nullptr;
     }
     const cpu_pt_leaf_t *leaf = &cpu_pt_leaves[index];
-    if (leaf->features & ~cpu_host_features()) {
-        return;
-    }
     uint32_t stub = leaf->base;
     for (uint32_t mask = leaf->var_mask, bit = 1; mask != 0; mask &= mask - 1U, bit <<= 1) {
         if (word & mask & -mask) {
             stub += bit;
         }
     }
-    const uint32_t offset = cpu_pt_offsets[stub];
-    if (offset == 0U) {
+    *offset = cpu_pt_offsets[stub];
+    return *offset != 0 ? leaf : nullptr;
+}
+
+static void cpu_fast_decode_passthrough(ir_insn_t *ir) {
+    const uint32_t word = (uint32_t)ir->target_or_imm;
+    uint32_t offset;
+    const cpu_pt_leaf_t *leaf = cpu_pt_lookup(word, &offset);
+    if (!leaf || (leaf->features & ~cpu_host_features())) {
         return;
     }
     uint8_t *slots = &ir->fast_rd;
@@ -182,18 +179,8 @@ static void cpu_fast_decode_passthrough(ir_insn_t *ir) {
     ir->fast_offset = offset & ~(uint32_t)CPU_PT_WIDE_RM;
 }
 
-static bool predecode_native(uint32_t word, ir_insn_t *out) {
-    const int32_t index = cpu_pt_find(word);
-    if (index < 0 || (cpu_pt_leaves[index].features & CPU_HOST_NATIVE) == 0U) {
-        return false;
-    }
-    out->handler = (cpu_pt_leaves[index].features & ~cpu_host_features()) ? op_undef : cpu_op_native;
-    out->target_or_imm = word;
-    return true;
-}
-
-void cpu_op_native(vcpu_t *cpu, const ir_insn_t *ir,
-                   softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
+static void cpu_op_native(vcpu_t *cpu, const ir_insn_t *ir,
+                          softtlb_entry_t *tlb_r, softtlb_entry_t *tlb_w) {
     if (!cpu_fp_enabled(cpu)) {
         cpu->pc = cpu_ir_pc(cpu, ir);
         vcpu_raise_fp_trap(cpu, cpu->pc);
@@ -205,12 +192,22 @@ void cpu_op_native(vcpu_t *cpu, const ir_insn_t *ir,
     };
     cpu_fast_decode_passthrough(&native[0]);
     if (native[0].fast_offset == 0U) {
-        vcpu_raise_undef(cpu, cpu_ir_pc(cpu, ir));
+        vcpu_raise_exception(cpu, 1U << 25, 0, cpu_ir_pc(cpu, ir));
         return;
     }
     cpu_fp_ensure_guest(cpu);
     ((void (*)(vcpu_t *, const ir_insn_t *))(cpu_fast_base() + cpu_fast_offsets[FAST_native_entry]))(cpu, native);
     CPU_NEXT(cpu, ir + 1, tlb_r, tlb_w);
+}
+
+static bool predecode_native(uint32_t word, ir_insn_t *out) {
+    const int32_t index = cpu_pt_find(word);
+    if (index < 0 || (cpu_pt_leaves[index].features & CPU_HOST_NATIVE) == 0U) {
+        return false;
+    }
+    out->handler = (cpu_pt_leaves[index].features & ~cpu_host_features()) ? op_undef : cpu_op_native;
+    out->target_or_imm = word;
+    return true;
 }
 
 #define WIDTH(op) {FAST_##op##32, FAST_##op##64}

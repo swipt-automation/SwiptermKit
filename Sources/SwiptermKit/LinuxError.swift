@@ -11,42 +11,17 @@ public struct LinuxError: RawRepresentable, Hashable, Sendable, LocalizedError {
         rawValue = -code
     }
 
-    public static let EPERM = LinuxError(rawValue: 1)
     public static let ENOENT = LinuxError(rawValue: 2)
     public static let ESRCH = LinuxError(rawValue: 3)
-    public static let EINTR = LinuxError(rawValue: 4)
-    public static let EIO = LinuxError(rawValue: 5)
-    public static let ENXIO = LinuxError(rawValue: 6)
-    public static let E2BIG = LinuxError(rawValue: 7)
-    public static let ENOEXEC = LinuxError(rawValue: 8)
+    static let EIO = LinuxError(rawValue: 5)
     public static let EBADF = LinuxError(rawValue: 9)
-    public static let ECHILD = LinuxError(rawValue: 10)
-    public static let EAGAIN = LinuxError(rawValue: 11)
-    public static let ENOMEM = LinuxError(rawValue: 12)
-    public static let EACCES = LinuxError(rawValue: 13)
-    public static let EFAULT = LinuxError(rawValue: 14)
+    static let ENOMEM = LinuxError(rawValue: 12)
     public static let EBUSY = LinuxError(rawValue: 16)
-    public static let EEXIST = LinuxError(rawValue: 17)
-    public static let EXDEV = LinuxError(rawValue: 18)
     public static let ENODEV = LinuxError(rawValue: 19)
-    public static let ENOTDIR = LinuxError(rawValue: 20)
-    public static let EISDIR = LinuxError(rawValue: 21)
-    public static let EINVAL = LinuxError(rawValue: 22)
-    public static let ENFILE = LinuxError(rawValue: 23)
-    public static let EMFILE = LinuxError(rawValue: 24)
-    public static let ENOTTY = LinuxError(rawValue: 25)
-    public static let EFBIG = LinuxError(rawValue: 27)
     public static let ENOSPC = LinuxError(rawValue: 28)
-    public static let ESPIPE = LinuxError(rawValue: 29)
-    public static let EROFS = LinuxError(rawValue: 30)
-    public static let EMLINK = LinuxError(rawValue: 31)
     public static let EPIPE = LinuxError(rawValue: 32)
-    public static let ERANGE = LinuxError(rawValue: 34)
-    public static let ENAMETOOLONG = LinuxError(rawValue: 36)
-    public static let ENOSYS = LinuxError(rawValue: 38)
     public static let ENOTEMPTY = LinuxError(rawValue: 39)
-    public static let ELOOP = LinuxError(rawValue: 40)
-    public static let ETIMEDOUT = LinuxError(rawValue: 110)
+    static let ETIMEDOUT = LinuxError(rawValue: 110)
 
     private static let descriptions: [Int32: String] = [
         1: "Operation not permitted",
@@ -89,6 +64,12 @@ public struct LinuxError: RawRepresentable, Hashable, Sendable, LocalizedError {
 
     public var errorDescription: String? {
         Self.descriptions[rawValue] ?? "Linux error \(rawValue)"
+    }
+}
+
+extension LinuxError {
+    init(_ error: any Error) {
+        self = error as? LinuxError ?? .EIO
     }
 }
 

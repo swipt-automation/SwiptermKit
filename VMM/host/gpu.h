@@ -10,9 +10,6 @@ typedef void (*gpu_retire_fn)(void *owner, uint32_t ctx_id, uint32_t ring_idx, u
 
 bool gpu_acquire(swipterm_gpu_backend requested);
 
-void gpu_lock(void);
-void gpu_unlock(void);
-
 void gpu_set_retire(void *owner, gpu_retire_fn retire);
 void gpu_clear_retire(void *owner);
 

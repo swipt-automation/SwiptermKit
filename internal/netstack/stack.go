@@ -37,33 +37,29 @@ var (
 type Stack struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
-	logger         logger.ContextLogger
 	network        *vmm.Network
 	tun            *tun.MemoryTun
 	stack          *tun.Go
 	icmp           *ping.Port
 	dns            *dnsResolver
-	connections    *ConnectionManager
 	mirror         *portMirror
 	outboundAccess sync.Mutex
 	closed         bool
 	loops          sync.WaitGroup
 }
 
-func New(logger logger.ContextLogger) (*Stack, error) {
+func New() (*Stack, error) {
 	network, err := vmm.NewNetwork()
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Stack{
-		ctx:         ctx,
-		cancel:      cancel,
-		logger:      logger,
-		network:     network,
-		icmp:        ping.NewPort(ctx, logger, nil, udpTimeout, icmpFlowMax),
-		dns:         &dnsResolver{ctx: ctx, queries: make(map[uint64]*dnsPendingQuery)},
-		connections: &ConnectionManager{logger: logger},
+		ctx:     ctx,
+		cancel:  cancel,
+		network: network,
+		icmp:    ping.NewPort(ctx, logger.NOP(), nil, udpTimeout, icmpFlowMax),
+		dns:     &dnsResolver{ctx: ctx, queries: make(map[uint64]*dnsPendingQuery)},
 	}
 	s.tun = tun.NewMemoryTun(tun.MemoryTunOptions{
 		MTU:             vmm.MTU,
@@ -86,7 +82,7 @@ func New(logger logger.ContextLogger) (*Stack, error) {
 		UDPMapping:    tun.NATMappingEndpointIndependent,
 		UDPFiltering:  tun.NATFilteringEndpointIndependent,
 		Handler:       s,
-		Logger:        logger,
+		Logger:        logger.NOP(),
 		BufferProfile: tun.BufferProfileFull,
 	})
 	if err == nil {
@@ -124,7 +120,7 @@ func (s *Stack) Close() error {
 	s.closed = true
 	s.outboundAccess.Unlock()
 	err = E.Errors(err, s.icmp.Close())
-	s.network.Close()
+	s.network.Release()
 	return err
 }
 

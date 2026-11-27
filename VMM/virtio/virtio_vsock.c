@@ -353,35 +353,12 @@ static void vsock_drain_g2h_locked(virtio_vsock_t *vs, vsock_stream_t *s) {
     }
 }
 
-static int vsock_payload_iov(const virtio_iov_t *iov, size_t count, bool writable,
-                             size_t length, struct iovec spans[VSOCK_MAX_IOV]) {
-    size_t skip = sizeof(virtio_vsock_hdr_t);
-    int used = 0;
-    for (size_t i = 0; i < count && length > 0; i++) {
-        if (iov[i].write != writable) {
-            continue;
-        }
-        if (skip >= iov[i].len) {
-            skip -= iov[i].len;
-            continue;
-        }
-        size_t span = iov[i].len - skip;
-        if (span > length) {
-            span = length;
-        }
-        spans[used++] = (struct iovec){.iov_base = (uint8_t *)iov[i].base + skip, .iov_len = span};
-        length -= span;
-        skip = 0;
-    }
-    return used;
-}
-
 static void vsock_append_g2h_locked(virtio_vsock_t *vs, vsock_stream_t *s,
                                     const virtio_iov_t *iov, size_t count, size_t len) {
     size_t off = 0;
     if (s->g2h_len == 0) {
         struct iovec spans[VSOCK_MAX_IOV];
-        int used = vsock_payload_iov(iov, count, false, len, spans);
+        int used = virtio_iov_spans(iov, count, false, sizeof(virtio_vsock_hdr_t), len, spans);
         ssize_t n;
         do {
             n = writev(s->host_fd, spans, used);
@@ -452,8 +429,7 @@ static void vsock_push_locked(virtio_vsock_t *vs, vsock_stream_t *s, uint16_t he
 static void vsock_flush_ctrl_locked(virtio_vsock_t *vs) {
     virtio_dev_t *dev = vs->dev;
     virtqueue_t *vq = &dev->queues[VSOCK_VQ_RX];
-    if (!atomic_load_explicit(&vq->ready, memory_order_acquire) ||
-        !(atomic_load_explicit(&dev->status, memory_order_acquire) & VIRTIO_STATUS_DRIVER_OK)) {
+    if (!virtqueue_active(dev, vq)) {
         return;
     }
     uint16_t old_used = vq->used_idx;
@@ -461,16 +437,15 @@ static void vsock_flush_ctrl_locked(virtio_vsock_t *vs) {
     while (!TAILQ_EMPTY(&vs->ctrl)) {
         virtio_iov_t iov[VSOCK_MAX_IOV];
         uint16_t head = 0;
-        size_t out_cnt = 0;
-        size_t in_cnt = 0;
-        if (virtqueue_pop(dev, vq, iov, VSOCK_MAX_IOV, &head, &out_cnt, &in_cnt) <= 0) {
+        size_t count = 0;
+        if (virtqueue_pop(dev, vq, iov, VSOCK_MAX_IOV, &head, &count) <= 0) {
             break;
         }
         vsock_stream_t *s = TAILQ_FIRST(&vs->ctrl);
         uint16_t op = s->ctrl_op;
         TAILQ_REMOVE(&vs->ctrl, s, ctrl_entry);
         s->ctrl_op = VIRTIO_VSOCK_OP_INVALID;
-        vsock_push_locked(vs, s, head, iov, out_cnt + in_cnt, op, 0, 0);
+        vsock_push_locked(vs, s, head, iov, count, op, 0, 0);
         if (op == VIRTIO_VSOCK_OP_RESPONSE) {
             s->state = VSOCK_STATE_ESTABLISHED;
         } else if (op == VIRTIO_VSOCK_OP_RST && !s->connect_waiter) {
@@ -486,8 +461,7 @@ static void vsock_flush_ctrl_locked(virtio_vsock_t *vs) {
 static void vsock_drain_tx_locked(virtio_vsock_t *vs) {
     virtio_dev_t *dev = vs->dev;
     virtqueue_t *vq = &dev->queues[VSOCK_VQ_TX];
-    if (!atomic_load_explicit(&vq->ready, memory_order_acquire) ||
-        !(atomic_load_explicit(&dev->status, memory_order_acquire) & VIRTIO_STATUS_DRIVER_OK)) {
+    if (!virtqueue_active(dev, vq)) {
         return;
     }
 
@@ -496,21 +470,17 @@ static void vsock_drain_tx_locked(virtio_vsock_t *vs) {
     for (; budget < 64; budget++) {
         virtio_iov_t iov[VSOCK_MAX_IOV];
         uint16_t head = 0;
-        size_t out_cnt = 0;
-        size_t in_cnt = 0;
-        if (virtqueue_pop(dev, vq, iov, VSOCK_MAX_IOV, &head, &out_cnt, &in_cnt) <= 0) {
+        size_t total_iov = 0;
+        if (virtqueue_pop(dev, vq, iov, VSOCK_MAX_IOV, &head, &total_iov) <= 0) {
             break;
         }
 
-        size_t total_iov = out_cnt + in_cnt;
         virtio_vsock_hdr_t hdr;
         bool valid_hdr = virtio_iov_read(iov, total_iov, 0, &hdr, sizeof(hdr)) == sizeof(hdr);
 
         virtio_vsock_accept_cb pending_cb = NULL;
         void *pending_cb_ctx = NULL;
         int pending_client_fd = -1;
-        uint32_t pending_guest_port = 0;
-        uint32_t pending_host_port = 0;
 
         if (valid_hdr && hdr.type == VIRTIO_VSOCK_TYPE_STREAM && hdr.dst_cid == VSOCK_HOST_CID) {
             uint32_t guest_port = hdr.src_port;
@@ -543,8 +513,6 @@ static void vsock_drain_tx_locked(virtio_vsock_t *vs) {
                     pending_cb = lst->cb;
                     pending_cb_ctx = lst->ctx;
                     pending_client_fd = sv[1];
-                    pending_guest_port = guest_port;
-                    pending_host_port = host_port;
                 } else {
                     uint32_t tail = (lst->pending_head + lst->pending_count) % VSOCK_ACCEPT_BACKLOG;
                     lst->pending_fds[tail] = sv[1];
@@ -626,7 +594,7 @@ static void vsock_drain_tx_locked(virtio_vsock_t *vs) {
                 virtio_raise_irq(dev, VIRTIO_MMIO_INT_VRING);
             }
             pthread_mutex_unlock(&vs->lock);
-            pending_cb(pending_cb_ctx, pending_client_fd, pending_guest_port, pending_host_port);
+            pending_cb(pending_cb_ctx, pending_client_fd);
             pthread_mutex_lock(&vs->lock);
             old_used = vq->used_idx;
         }
@@ -637,25 +605,6 @@ static void vsock_drain_tx_locked(virtio_vsock_t *vs) {
     if (budget == 64) {
         vsock_wake(vs);
     }
-}
-
-static bool vsock_rx_has_avail_locked(virtio_vsock_t *vs) {
-    virtio_dev_t *dev = vs->dev;
-    virtqueue_t *vq = &dev->queues[VSOCK_VQ_RX];
-    uint32_t status = atomic_load_explicit(&dev->status, memory_order_acquire);
-    if (!atomic_load_explicit(&vq->ready, memory_order_acquire) ||
-        vq->num == 0 ||
-        (status & (VIRTIO_STATUS_DRIVER_OK | VIRTIO_STATUS_DEVICE_NEEDS_RESET)) != VIRTIO_STATUS_DRIVER_OK) {
-        return false;
-    }
-    size_t avail_sz = sizeof(vring_avail_t) + (size_t)vq->num * sizeof(uint16_t);
-    const vring_avail_t *avail = mmu_gpa_to_hva(dev->vm, vq->avail_gpa, avail_sz);
-    if (!avail) {
-        return false;
-    }
-    atomic_thread_fence(memory_order_seq_cst);
-    uint16_t avail_idx = atomic_load_explicit((_Atomic uint16_t *)&avail->idx, memory_order_acquire);
-    return avail_idx != vq->last_avail_idx;
 }
 
 static void vsock_read_stream_to_rx_locked(virtio_vsock_t *vs, vsock_stream_t *s) {
@@ -674,13 +623,11 @@ static void vsock_read_stream_to_rx_locked(virtio_vsock_t *vs, vsock_stream_t *s
 
         virtio_iov_t iov[VSOCK_MAX_IOV];
         uint16_t head = 0;
-        size_t out_cnt = 0;
-        size_t in_cnt = 0;
+        size_t total_iov = 0;
         uint16_t saved_avail = vq->last_avail_idx;
-        if (virtqueue_pop(dev, vq, iov, VSOCK_MAX_IOV, &head, &out_cnt, &in_cnt) <= 0) {
+        if (virtqueue_pop(dev, vq, iov, VSOCK_MAX_IOV, &head, &total_iov) <= 0) {
             break;
         }
-        size_t total_iov = out_cnt + in_cnt;
         size_t cap = virtio_iov_total(iov, total_iov, true);
         if (cap <= sizeof(virtio_vsock_hdr_t)) {
             virtqueue_push(dev, vq, head, 0);
@@ -706,7 +653,7 @@ static void vsock_read_stream_to_rx_locked(virtio_vsock_t *vs, vsock_stream_t *s
         }
 
         struct iovec spans[VSOCK_MAX_IOV];
-        int used = vsock_payload_iov(iov, total_iov, true, max_read, spans);
+        int used = virtio_iov_spans(iov, total_iov, true, sizeof(virtio_vsock_hdr_t), max_read, spans);
         ssize_t n;
         do {
             n = readv(s->host_fd, spans, used);
@@ -764,7 +711,7 @@ static void *vsock_io_thread(void *arg) {
         if (vs->stream_count >= vs->poll_capacity) {
             vsock_reserve_poll(vs, vs->stream_count * 2);
         }
-        bool rx_ready = vsock_rx_has_avail_locked(vs);
+        bool rx_ready = virtqueue_has_avail(vs->dev, &vs->dev->queues[VSOCK_VQ_RX]);
         nfds_t nfds = 0;
         vs->pfds[nfds++] = (struct pollfd){ .fd = vs->wake_pipe[0], .events = POLLIN, .revents = 0 };
 
@@ -775,7 +722,7 @@ static void *vsock_io_thread(void *arg) {
             }
             if (rx_ready && s->prefix_off < s->prefix_len) {
                 vsock_read_stream_to_rx_locked(vs, s);
-                rx_ready = vsock_rx_has_avail_locked(vs);
+                rx_ready = virtqueue_has_avail(vs->dev, &vs->dev->queues[VSOCK_VQ_RX]);
                 if (s->state != VSOCK_STATE_ESTABLISHED) {
                     continue;
                 }
@@ -840,9 +787,7 @@ static uint64_t virtio_vsock_read_config(virtio_dev_t *dev, uint32_t offset, uin
 }
 
 static void virtio_vsock_queue_notify(virtio_dev_t *dev, uint32_t queue_idx) {
-    if (queue_idx >= dev->num_queues) {
-        return;
-    }
+    (void)queue_idx;
     vsock_wake(dev->priv);
 }
 
@@ -860,15 +805,8 @@ static void virtio_vsock_reset(virtio_dev_t *dev) {
 
 static void virtio_vsock_destroy(virtio_dev_t *dev) {
     virtio_vsock_t *vs = dev->priv;
-    if (!vs) {
-        return;
-    }
     atomic_store_explicit(&vs->stop, true, memory_order_release);
-    if (vs->wake_pipe[1] >= 0) {
-        uint8_t b = 1;
-        ssize_t r = write(vs->wake_pipe[1], &b, 1);
-        (void)r;
-    }
+    vsock_wake(vs);
     pthread_mutex_lock(&vs->lock);
     pthread_cond_broadcast(&vs->cond);
     pthread_mutex_unlock(&vs->lock);
@@ -892,19 +830,14 @@ static void virtio_vsock_destroy(virtio_dev_t *dev) {
     }
     pthread_mutex_unlock(&vs->lock);
 
-    if (vs->wake_pipe[0] >= 0) {
-        close(vs->wake_pipe[0]);
-    }
-    if (vs->wake_pipe[1] >= 0) {
-        close(vs->wake_pipe[1]);
-    }
+    close(vs->wake_pipe[0]);
+    close(vs->wake_pipe[1]);
     pthread_cond_destroy(&vs->cond);
     pthread_mutex_destroy(&vs->lock);
     free(vs->listeners);
     free(vs->buckets);
     free(vs->pfds);
     free(vs);
-    dev->priv = NULL;
 }
 
 static const virtio_dev_ops_t virtio_vsock_ops = {
@@ -915,15 +848,10 @@ static const virtio_dev_ops_t virtio_vsock_ops = {
 };
 
 virtio_dev_t *virtio_vsock_create(vmm_machine_t *vm, uint32_t slot, uint64_t guest_cid) {
-    if (!vm || guest_cid <= VSOCK_HOST_CID) {
-        return NULL;
-    }
     virtio_vsock_t *vs = calloc(1, sizeof(*vs));
     if (!vs) {
         return NULL;
     }
-    vs->wake_pipe[0] = -1;
-    vs->wake_pipe[1] = -1;
     vs->config.guest_cid = guest_cid;
     vs->next_ephemeral_port = VSOCK_EPHEMERAL_PORT;
     TAILQ_INIT(&vs->streams);
@@ -941,9 +869,9 @@ virtio_dev_t *virtio_vsock_create(vmm_machine_t *vm, uint32_t slot, uint64_t gue
     pthread_cond_init(&vs->cond, NULL);
 
     const uint32_t qsizes[3] = {
-        VSOCK_QUEUE_SIZE,
-        VSOCK_QUEUE_SIZE,
-        VSOCK_EVENT_QUEUE_SIZE,
+        [VSOCK_VQ_RX] = VSOCK_QUEUE_SIZE,
+        [VSOCK_VQ_TX] = VSOCK_QUEUE_SIZE,
+        [VSOCK_VQ_EVENT] = VSOCK_EVENT_QUEUE_SIZE,
     };
     virtio_dev_t *dev = virtio_dev_alloc(vm, slot, VIRTIO_ID_VSOCK, 3, qsizes, &virtio_vsock_ops, vs);
     if (!dev) {
@@ -979,8 +907,19 @@ static uint32_t vsock_alloc_port_locked(virtio_vsock_t *vs, uint32_t guest_port)
     }
 }
 
-static int vsock_initiate_connect(virtio_vsock_t *vs, uint32_t guest_port, int internal_fd,
-                                  const void *prefix, size_t prefix_length) {
+int virtio_vsock_bridge_fd(virtio_dev_t *vsock, uint32_t guest_port, int peer_fd,
+                           const void *prefix, size_t prefix_length) {
+    if (peer_fd < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    int one = 1;
+    setsockopt(peer_fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+    int fl = fcntl(peer_fd, F_GETFL, 0);
+    if (fl >= 0) {
+        fcntl(peer_fd, F_SETFL, fl | O_NONBLOCK);
+    }
+    virtio_vsock_t *vs = vsock->priv;
     pthread_mutex_lock(&vs->lock);
     vsock_stream_t *s = vsock_new_stream_locked(vs, vsock_alloc_port_locked(vs, guest_port), guest_port,
                                                 prefix, prefix_length);
@@ -990,7 +929,7 @@ static int vsock_initiate_connect(virtio_vsock_t *vs, uint32_t guest_port, int i
         return -1;
     }
     s->state = VSOCK_STATE_CONNECTING;
-    s->host_fd = internal_fd;
+    s->host_fd = peer_fd;
     s->connect_waiter = true;
     vsock_queue_ctrl_locked(vs, s, VIRTIO_VSOCK_OP_REQUEST);
     vsock_wake(vs);
@@ -1029,46 +968,8 @@ static int vsock_initiate_connect(virtio_vsock_t *vs, uint32_t guest_port, int i
     return -1;
 }
 
-int virtio_vsock_connect_host(virtio_dev_t *vsock, uint32_t guest_port) {
-    if (!vsock || !vsock->priv) {
-        errno = EINVAL;
-        return -1;
-    }
-    int sv[2];
-    if (vsock_make_socketpair(sv) < 0) {
-        return -1;
-    }
-    if (vsock_initiate_connect(vsock->priv, guest_port, sv[0], NULL, 0) < 0) {
-        int saved = errno;
-        close(sv[0]);
-        close(sv[1]);
-        errno = saved;
-        return -1;
-    }
-    return sv[1];
-}
-
-int virtio_vsock_bridge_fd(virtio_dev_t *vsock, uint32_t guest_port, int peer_fd,
-                           const void *prefix, size_t prefix_length) {
-    if (!vsock || !vsock->priv || peer_fd < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    int one = 1;
-    setsockopt(peer_fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
-    int fl = fcntl(peer_fd, F_GETFL, 0);
-    if (fl >= 0) {
-        fcntl(peer_fd, F_SETFL, fl | O_NONBLOCK);
-    }
-    return vsock_initiate_connect(vsock->priv, guest_port, peer_fd, prefix, prefix_length);
-}
-
 int virtio_vsock_listen_host(virtio_dev_t *vsock, uint32_t host_port,
                              virtio_vsock_accept_cb cb, void *ctx) {
-    if (!vsock || !vsock->priv) {
-        errno = EINVAL;
-        return -1;
-    }
     virtio_vsock_t *vs = vsock->priv;
     pthread_mutex_lock(&vs->lock);
     if (vsock_find_listener_locked(vs, host_port)) {
@@ -1086,16 +987,10 @@ int virtio_vsock_listen_host(virtio_dev_t *vsock, uint32_t host_port,
 }
 
 void virtio_vsock_unlisten_host(virtio_dev_t *vsock, uint32_t host_port) {
-    if (!vsock || !vsock->priv) {
-        return;
-    }
     virtio_vsock_t *vs = vsock->priv;
     pthread_mutex_lock(&vs->lock);
     vsock_listener_t *lst = vsock_find_listener_locked(vs, host_port);
     if (lst) {
-        for (uint32_t i = 0; i < lst->pending_count; i++) {
-            close(lst->pending_fds[(lst->pending_head + i) % VSOCK_ACCEPT_BACKLOG]);
-        }
         *lst = vs->listeners[--vs->listener_count];
         pthread_cond_broadcast(&vs->cond);
     }
@@ -1103,47 +998,24 @@ void virtio_vsock_unlisten_host(virtio_dev_t *vsock, uint32_t host_port) {
 }
 
 int virtio_vsock_accept_control(virtio_dev_t *vsock, uint32_t host_port, int timeout_ms) {
-    if (!vsock || !vsock->priv) {
-        errno = EINVAL;
-        return -1;
-    }
     virtio_vsock_t *vs = vsock->priv;
     pthread_mutex_lock(&vs->lock);
 
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += timeout_ms / 1000;
+    deadline.tv_nsec += (long)(timeout_ms % 1000) * 1000000L;
+    if (deadline.tv_nsec >= 1000000000L) {
+        deadline.tv_sec += 1;
+        deadline.tv_nsec -= 1000000000L;
+    }
+
     vsock_listener_t *lst = vsock_find_listener_locked(vs, host_port);
-    if (!lst) {
-        lst = vsock_add_listener_locked(vs, host_port, NULL, NULL);
-    }
-    if (!lst) {
-        pthread_mutex_unlock(&vs->lock);
-        errno = ENOMEM;
-        return -1;
-    }
-
-    struct timespec deadline = {0};
-    if (timeout_ms > 0) {
-        clock_gettime(CLOCK_REALTIME, &deadline);
-        deadline.tv_sec += timeout_ms / 1000;
-        deadline.tv_nsec += (long)(timeout_ms % 1000) * 1000000L;
-        if (deadline.tv_nsec >= 1000000000L) {
-            deadline.tv_sec += 1;
-            deadline.tv_nsec -= 1000000000L;
-        }
-    }
-
     int rc = 0;
     while (lst && lst->pending_count == 0 &&
            !atomic_load_explicit(&vs->stop, memory_order_acquire) &&
            !atomic_load_explicit(&vs->halted, memory_order_acquire)) {
-        if (timeout_ms == 0) {
-            rc = ETIMEDOUT;
-            break;
-        }
-        if (timeout_ms < 0) {
-            pthread_cond_wait(&vs->cond, &vs->lock);
-        } else {
-            rc = pthread_cond_timedwait(&vs->cond, &vs->lock, &deadline);
-        }
+        rc = pthread_cond_timedwait(&vs->cond, &vs->lock, &deadline);
         lst = vsock_find_listener_locked(vs, host_port);
         if (rc == ETIMEDOUT) {
             break;
@@ -1164,9 +1036,6 @@ int virtio_vsock_accept_control(virtio_dev_t *vsock, uint32_t host_port, int tim
 }
 
 void virtio_vsock_notify_halt(virtio_dev_t *vsock) {
-    if (!vsock || !vsock->priv) {
-        return;
-    }
     virtio_vsock_t *vs = vsock->priv;
     atomic_store_explicit(&vs->halted, true, memory_order_release);
     pthread_mutex_lock(&vs->lock);

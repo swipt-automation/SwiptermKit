@@ -214,8 +214,6 @@ SYSOPS_WANTED = [
 ]
 
 
-ALL_FEATURES = False
-
 
 def bit_pattern(val_obj):
     pattern = val_obj["value"].strip("'")
@@ -227,7 +225,7 @@ def bit_pattern(val_obj):
     )
 
 
-def eval_feature_ast(cond):
+def eval_feature_ast(cond, all_features):
     if cond is None:
         return True
     t = cond["_type"]
@@ -235,21 +233,21 @@ def eval_feature_ast(cond):
         return cond["value"]
     if t == "AST.Function":
         if cond["name"] == "IsFeatureImplemented":
-            return ALL_FEATURES or cond["arguments"][0]["value"] in PROFILE_FEATURES
+            return all_features or cond["arguments"][0]["value"] in PROFILE_FEATURES
         return None
     if t == "AST.BinaryOp":
         op = cond["op"]
         if op == "&&":
-            l = eval_feature_ast(cond["left"])
-            r = eval_feature_ast(cond["right"])
+            l = eval_feature_ast(cond["left"], all_features)
+            r = eval_feature_ast(cond["right"], all_features)
             if l is False or r is False:
                 return False
             if l is True and r is True:
                 return True
             return None
         if op == "||":
-            l = eval_feature_ast(cond["left"])
-            r = eval_feature_ast(cond["right"])
+            l = eval_feature_ast(cond["left"], all_features)
+            r = eval_feature_ast(cond["right"], all_features)
             if l is True or r is True:
                 return True
             if l is False and r is False:
@@ -257,30 +255,30 @@ def eval_feature_ast(cond):
             return None
         return None
     if t == "AST.UnaryOp" and cond["op"] == "!":
-        sub = eval_feature_ast(cond["expr"])
+        sub = eval_feature_ast(cond["expr"], all_features)
         if sub is None:
             return None
         return not sub
     return None
 
 
-def compile_guard_ast(cond, fields):
+def compile_guard_ast(cond, fields, all_features):
     if cond is None:
         return "true"
-    st = eval_feature_ast(cond)
+    st = eval_feature_ast(cond, all_features)
     if st is True:
         return "true"
     if st is False:
         return "false"
     t = cond["_type"]
     if t == "AST.UnaryOp" and cond["op"] == "!":
-        sub = compile_guard_ast(cond["expr"], fields)
+        sub = compile_guard_ast(cond["expr"], fields, all_features)
         return f"!({sub})"
     if t == "AST.BinaryOp":
         op = cond["op"]
         if op in ("&&", "||"):
-            l = compile_guard_ast(cond["left"], fields)
-            r = compile_guard_ast(cond["right"], fields)
+            l = compile_guard_ast(cond["left"], fields, all_features)
+            r = compile_guard_ast(cond["right"], fields, all_features)
             if op == "&&":
                 if l == "true":
                     return r
@@ -337,7 +335,7 @@ def feature_names(cond):
 def eval_guard_ast(cond, fields, word):
     if cond is None:
         return True
-    st = eval_feature_ast(cond)
+    st = eval_feature_ast(cond, False)
     if st is not None:
         return st
     t = cond["_type"]
@@ -393,8 +391,8 @@ class DecEntry:
         return " && ".join(checks) if checks else "true"
 
 
-def map_opcode(subgroup, name):
-    if ALL_FEATURES:
+def map_opcode(subgroup, name, all_features):
+    if all_features:
         return "A64_DEC_UNDEF"
     if subgroup in FAMILY_OPCODE_SUBGROUPS:
         return FAMILY_OPCODE_SUBGROUPS[subgroup]
@@ -411,11 +409,11 @@ def map_opcode(subgroup, name):
     raise ValueError(f"Unmapped subgroup {subgroup} ({name})")
 
 
-def collect_instructions(a64_root):
+def collect_instructions(a64_root, all_features):
     entries = []
 
     def walk(node, parents=()):
-        if eval_feature_ast(node.get("condition")) is False:
+        if eval_feature_ast(node.get("condition"), all_features) is False:
             return
         if node["_type"] == "Instruction.Instruction":
             subgroup = "/".join(p["name"] for p in parents[1:])
@@ -450,7 +448,7 @@ def collect_instructions(a64_root):
             conds = []
             features = set()
             for p in (*parents, node):
-                g = compile_guard_ast(p.get("condition"), scope)
+                g = compile_guard_ast(p.get("condition"), scope, all_features)
                 if g == "false":
                     return
                 features |= feature_names(p.get("condition"))
@@ -460,7 +458,7 @@ def collect_instructions(a64_root):
             if subgroup == "ldst/memcms":
                 guards.append("((word >> 30) & 3u) == 0x0u")
             guard = " && ".join(guards) if guards else "true"
-            opcode = map_opcode(subgroup, node["name"])
+            opcode = map_opcode(subgroup, node["name"], all_features)
             prio = 1 if node["name"] == "HINT_HM_hints" else 0
             entries.append(DecEntry(node["name"], subgroup, opcode, mask, value, guard, prio, fields,
                                     conds, frozenset(features), scope))
@@ -506,14 +504,9 @@ def emit_tree(entries, lines, indent, tested=0):
 
 
 def load_instructions(aarchmrs_dir: pathlib.Path):
-    global ALL_FEATURES
     doc = json.loads((aarchmrs_dir / "Instructions.json").read_bytes())
     [a64] = [n for n in doc["instructions"] if n["name"] == "A64"]
-    profile = collect_instructions(a64)
-    ALL_FEATURES = True
-    full = collect_instructions(a64)
-    ALL_FEATURES = False
-    return profile, full
+    return collect_instructions(a64, False), collect_instructions(a64, True)
 
 
 def generate_leaves_inc(entries, out_path: pathlib.Path):
@@ -734,7 +727,6 @@ def main():
     (out_dir / "a64_passthrough.inc").write_text(pt.emit_table(emit_tree), encoding="utf-8")
     (out_dir / "a64_passthrough_code.inc").write_text(pt.emit_code(), encoding="utf-8")
     (out_dir / "a64_passthrough_offsets.inc").write_text(pt.emit_offsets(), encoding="utf-8")
-    (tool_dir / "a64_passthrough_words.inc").write_text(pt.emit_words(), encoding="utf-8")
     for name in pt.uncovered:
         print(f"no passthrough encoding for {name}", file=sys.stderr)
     n_sysregs, n_sysops = generate_sysreg_inc(aarchmrs_dir, out_dir / "a64_sysreg_gen.inc")

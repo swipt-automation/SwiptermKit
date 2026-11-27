@@ -139,7 +139,6 @@ func (m *portMirror) applyLocked(key mirrorKey, binding mirrorBinding) {
 	}
 	listener, err := net.ListenTCP(network, net.TCPAddrFromAddrPort(netip.AddrPortFrom(binding.bind, key.port)))
 	if err != nil {
-		m.stack.logger.Debug("mirror: listen ", netip.AddrPortFrom(binding.bind, key.port), ": ", err)
 		return
 	}
 	entry := &mirrorListener{listener: listener, bind: binding.bind}
@@ -169,10 +168,7 @@ func (m *portMirror) loopAccept(entry *mirrorListener) {
 
 func (m *portMirror) forward(conn *net.TCPConn, binding *mirrorBinding) {
 	if binding.bridge {
-		err := m.bridge(conn, binding.target)
-		if err != nil {
-			m.stack.logger.Debug("mirror: bridge ", binding.target, ": ", err)
-		}
+		m.bridge(conn, binding.target)
 		return
 	}
 	source := inet4Gateway
@@ -184,17 +180,16 @@ func (m *portMirror) forward(conn *net.TCPConn, binding *mirrorBinding) {
 	cancel()
 	if err != nil {
 		conn.Close()
-		m.stack.logger.Debug("mirror: connect ", binding.target, ": ", err)
 		return
 	}
-	m.stack.connections.splice(m.stack.ctx, goConn, conn, nil)
+	splice(m.stack.ctx, goConn, conn, nil)
 }
 
-func (m *portMirror) bridge(conn *net.TCPConn, target netip.AddrPort) error {
+func (m *portMirror) bridge(conn *net.TCPConn, target netip.AddrPort) {
 	raw, err := conn.SyscallConn()
 	if err != nil {
 		conn.Close()
-		return err
+		return
 	}
 	fd := -1
 	var dupErr error
@@ -202,24 +197,21 @@ func (m *portMirror) bridge(conn *net.TCPConn, target netip.AddrPort) error {
 		fd, dupErr = unix.FcntlInt(descriptor, unix.F_DUPFD_CLOEXEC, 0)
 	})
 	conn.Close()
-	err = E.Errors(err, dupErr)
-	if err != nil {
-		return err
+	if E.Errors(err, dupErr) != nil {
+		return
 	}
-	err = m.stack.network.Bridge(target.Addr().Is6(), fd, target.Port())
-	if err != nil {
+	if m.stack.network.Bridge(target.Addr().Is6(), fd, target.Port()) != nil {
 		unix.Close(fd)
 	}
-	return err
 }
 
 func (m *portMirror) close() {
 	m.access.Lock()
 	m.closed = true
-	for key, entry := range m.hosts {
+	for _, entry := range m.hosts {
 		entry.listener.Close()
-		delete(m.hosts, key)
 	}
+	clear(m.hosts)
 	m.access.Unlock()
 	m.workers.Wait()
 }

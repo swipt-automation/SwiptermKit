@@ -1,5 +1,4 @@
 #include "board_internal.h"
-#include "machine.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -65,13 +64,16 @@ static void buf_put_bytes(fdt_buf_t *b, const void *src, size_t n) {
     b->len += n;
 }
 
+static void put_be32(uint8_t *dst, uint32_t v) {
+    dst[0] = (uint8_t)(v >> 24);
+    dst[1] = (uint8_t)(v >> 16);
+    dst[2] = (uint8_t)(v >> 8);
+    dst[3] = (uint8_t)v;
+}
+
 static void buf_put_be32(fdt_buf_t *b, uint32_t v) {
-    uint8_t tmp[4] = {
-        (uint8_t)(v >> 24),
-        (uint8_t)(v >> 16),
-        (uint8_t)(v >> 8),
-        (uint8_t)v,
-    };
+    uint8_t tmp[4];
+    put_be32(tmp, v);
     buf_put_bytes(b, tmp, 4);
 }
 
@@ -115,31 +117,22 @@ static void fdt_prop(fdt_writer_t *w, const char *name, const void *val, size_t 
 }
 
 static void fdt_prop_u32(fdt_writer_t *w, const char *name, uint32_t v) {
-    uint8_t tmp[4] = {
-        (uint8_t)(v >> 24),
-        (uint8_t)(v >> 16),
-        (uint8_t)(v >> 8),
-        (uint8_t)v,
-    };
+    uint8_t tmp[4];
+    put_be32(tmp, v);
     fdt_prop(w, name, tmp, 4);
 }
 
 static void fdt_prop_u64(fdt_writer_t *w, const char *name, uint64_t v) {
-    uint8_t tmp[8] = {
-        (uint8_t)(v >> 56), (uint8_t)(v >> 48), (uint8_t)(v >> 40), (uint8_t)(v >> 32),
-        (uint8_t)(v >> 24), (uint8_t)(v >> 16), (uint8_t)(v >> 8),  (uint8_t)v,
-    };
+    uint8_t tmp[8];
+    put_be32(tmp, (uint32_t)(v >> 32));
+    put_be32(tmp + 4, (uint32_t)v);
     fdt_prop(w, name, tmp, 8);
 }
 
 static void fdt_prop_cells(fdt_writer_t *w, const char *name, const uint32_t *cells, size_t count) {
     uint8_t tmp[64];
     for (size_t i = 0; i < count; i++) {
-        uint32_t v = cells[i];
-        tmp[i * 4 + 0] = (uint8_t)(v >> 24);
-        tmp[i * 4 + 1] = (uint8_t)(v >> 16);
-        tmp[i * 4 + 2] = (uint8_t)(v >> 8);
-        tmp[i * 4 + 3] = (uint8_t)v;
+        put_be32(tmp + i * 4, cells[i]);
     }
     fdt_prop(w, name, tmp, count * 4);
 }
@@ -163,12 +156,8 @@ static uint32_t host_sysctl_u32(const char *name) {
     return (uint32_t)value;
 }
 
-int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
-              void *buf, size_t buf_size, size_t *out_size) {
-    if (!vm || !buf) {
-        return -EINVAL;
-    }
-
+int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config, uint64_t initrd_start,
+              void *buf, size_t buf_size) {
     uint32_t cpu_count = vm->cpu_count;
 
     fdt_writer_t w = {0};
@@ -193,18 +182,10 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     fdt_prop_u32(&w, "interrupt-parent", FDT_PHANDLE_GIC);
 
     fdt_begin_node(&w, "chosen");
-    const char *cmdline = (config && config->cmdline && config->cmdline[0] != '\0')
-                              ? config->cmdline
-                              : "console=ttyAMA0 earlycon=pl011,0x09000000";
-    fdt_prop(&w, "bootargs", cmdline, strlen(cmdline) + 1);
+    fdt_prop(&w, "bootargs", config->cmdline, strlen(config->cmdline) + 1);
     fdt_prop(&w, "stdout-path", "/pl011@9000000", sizeof("/pl011@9000000"));
-    if (config && config->initramfs && config->initramfs_size > 0) {
-        uint64_t start = vmm_initrd_addr(vm->ram_size, config->initramfs_size);
-        if (start != 0) {
-            fdt_prop_u64(&w, "linux,initrd-start", start);
-            fdt_prop_u64(&w, "linux,initrd-end", start + (uint64_t)config->initramfs_size);
-        }
-    }
+    fdt_prop_u64(&w, "linux,initrd-start", initrd_start);
+    fdt_prop_u64(&w, "linux,initrd-end", initrd_start + (uint64_t)config->initramfs_size);
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
 
     fdt_begin_node(&w, "cpus");
@@ -246,8 +227,7 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     fdt_begin_node(&w, "psci");
     static const char psci_compat[] = "arm,psci-1.0\0arm,psci-0.2";
     fdt_prop(&w, "compatible", psci_compat, sizeof(psci_compat));
-    const char *conduit = config && config->el2 ? "smc" : "hvc";
-    fdt_prop(&w, "method", conduit, strlen(conduit) + 1);
+    fdt_prop(&w, "method", "smc", sizeof("smc"));
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
 
     fdt_begin_node(&w, "apb-pclk");
@@ -274,12 +254,9 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
         (uint32_t)(VMM_GICV_BASE >> 32), (uint32_t)VMM_GICV_BASE,
         (uint32_t)(VMM_GICV_SIZE >> 32), (uint32_t)VMM_GICV_SIZE,
     };
-    bool el2 = config && config->el2;
-    fdt_prop_cells(&w, "reg", gic_reg, el2 ? 16 : 8);
-    if (el2) {
-        uint32_t maint_irq[3] = {1, VMM_IRQ_GIC_MAINT - VMM_IRQ_PPI_BASE, (((1U << cpu_count) - 1U) << 8) | 4U};
-        fdt_prop_cells(&w, "interrupts", maint_irq, 3);
-    }
+    fdt_prop_cells(&w, "reg", gic_reg, 16);
+    uint32_t maint_irq[3] = {1, VMM_IRQ_GIC_MAINT - VMM_IRQ_PPI_BASE, (((1U << cpu_count) - 1U) << 8) | 4U};
+    fdt_prop_cells(&w, "interrupts", maint_irq, 3);
     fdt_prop_u32(&w, "phandle", FDT_PHANDLE_GIC);
     buf_put_be32(&w.dt_struct, FDT_END_NODE);
 
@@ -301,7 +278,7 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     static const char pl011_compat[] = "arm,pl011\0arm,primecell";
     fdt_prop(&w, "compatible", pl011_compat, sizeof(pl011_compat));
     fdt_prop_reg2(&w, VMM_UART0_BASE, VMM_UART0_SIZE);
-    uint32_t uart_irq[3] = {0, VMM_IRQ_UART0_SPI, 4};
+    uint32_t uart_irq[3] = {0, VMM_IRQ_UART0 - VMM_IRQ_SPI_BASE, 4};
     fdt_prop_cells(&w, "interrupts", uart_irq, 3);
     uint32_t uart_clks[2] = {FDT_PHANDLE_CLK, FDT_PHANDLE_CLK};
     fdt_prop_cells(&w, "clocks", uart_clks, 2);
@@ -313,7 +290,7 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     static const char pl031_compat[] = "arm,pl031\0arm,primecell";
     fdt_prop(&w, "compatible", pl031_compat, sizeof(pl031_compat));
     fdt_prop_reg2(&w, VMM_RTC_BASE, VMM_RTC_SIZE);
-    uint32_t rtc_irq[3] = {0, VMM_IRQ_RTC_SPI, 4};
+    uint32_t rtc_irq[3] = {0, VMM_IRQ_RTC - VMM_IRQ_SPI_BASE, 4};
     fdt_prop_cells(&w, "interrupts", rtc_irq, 3);
     fdt_prop_u32(&w, "clocks", FDT_PHANDLE_CLK);
     fdt_prop(&w, "clock-names", "apb_pclk", sizeof("apb_pclk"));
@@ -326,7 +303,7 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
         fdt_begin_node(&w, name);
         fdt_prop(&w, "compatible", "virtio,mmio", sizeof("virtio,mmio"));
         fdt_prop_reg2(&w, addr, VMM_VIRTIO_MMIO_STRIDE);
-        uint32_t irq[3] = {0, VMM_IRQ_VIRTIO_SPI_BASE + slot, 4};
+        uint32_t irq[3] = {0, VMM_IRQ_VIRTIO_BASE - VMM_IRQ_SPI_BASE + slot, 4};
         fdt_prop_cells(&w, "interrupts", irq, 3);
         fdt_prop(&w, "dma-coherent", NULL, 0);
         buf_put_be32(&w.dt_struct, FDT_END_NODE);
@@ -355,9 +332,6 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
     uint32_t strings_size = (uint32_t)w.dt_strings.len;
     uint32_t total_size = (strings_off + strings_size + 7U) & ~7U;
 
-    if (out_size) {
-        *out_size = total_size;
-    }
     if (total_size > buf_size) {
         free(w.dt_struct.data);
         free(w.dt_strings.data);
@@ -380,11 +354,7 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
         struct_size,
     };
     for (size_t i = 0; i < 10; i++) {
-        uint32_t v = hdr[i];
-        dst[i * 4 + 0] = (uint8_t)(v >> 24);
-        dst[i * 4 + 1] = (uint8_t)(v >> 16);
-        dst[i * 4 + 2] = (uint8_t)(v >> 8);
-        dst[i * 4 + 3] = (uint8_t)v;
+        put_be32(dst + i * 4, hdr[i]);
     }
     memcpy(dst + struct_off, w.dt_struct.data, struct_size);
     memcpy(dst + strings_off, w.dt_strings.data, strings_size);

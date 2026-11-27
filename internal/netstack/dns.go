@@ -78,7 +78,6 @@ func (s *Stack) exchangeDNS(ctx context.Context, query *mDNS.Msg) *mDNS.Msg {
 	defer cancel()
 	answers, rcode, err := s.dns.lookup(ctx, query.Question[0])
 	if err != nil {
-		s.logger.DebugContext(ctx, "dns: exchange ", query.Question[0].Name, ": ", err)
 		rcode = mDNS.RcodeServerFailure
 	}
 	response.SetRcode(query, rcode)
@@ -241,9 +240,6 @@ func (r *dnsResolver) loopReceive(conn net.Conn) {
 	}
 }
 
-// On a shared connection MoreComing applies collectively to all operations (dns_sd.h "Collective
-// kDNSServiceFlagsMoreComing flag"): the daemon sets it whenever another reply, for any query, is queued behind
-// this one.
 func (r *dnsResolver) handleReply(operation uint32, queryID uint64, data []byte) error {
 	r.queryAccess.Lock()
 	defer r.queryAccess.Unlock()

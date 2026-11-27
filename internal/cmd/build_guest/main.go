@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	E "github.com/sagernet/sing/common/exceptions"
+	"github.com/swipt-automation/SwiptermKit/internal/tool"
 )
 
 const (
@@ -18,6 +19,7 @@ const (
 	lockPath      = guestPath + "/artifacts.lock"
 	resourcesPath = "Sources/SwiptermKit/Resources"
 	toolPath      = "internal/cmd/build_guest"
+	sharedPath    = "internal/tool"
 )
 
 var artifacts = []string{"initramfs.cpio.gz"}
@@ -55,7 +57,7 @@ func install() error {
 		return err
 	}
 	for _, artifact := range artifacts {
-		err = copyFile(filepath.Join(buildPath, artifact), filepath.Join(resourcesPath, artifact), 0o644)
+		err = tool.CopyFile(filepath.Join(buildPath, artifact), filepath.Join(resourcesPath, artifact), 0o644)
 		if err != nil {
 			return err
 		}
@@ -89,7 +91,7 @@ func check() error {
 
 func computeLock() (string, error) {
 	var inputs []string
-	for _, pattern := range []string{toolPath + "/*.go", guestPath + "/swiptermd/*.[ch]"} {
+	for _, pattern := range []string{toolPath + "/*.go", sharedPath + "/*.go", guestPath + "/swiptermd/*.[ch]"} {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			return "", err
@@ -129,26 +131,4 @@ func fileSHA256(path string) (string, error) {
 		return "", E.Cause(err, "read ", path)
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-func copyFile(source string, destination string, mode os.FileMode) error {
-	input, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
-	err = os.MkdirAll(filepath.Dir(destination), 0o755)
-	if err != nil {
-		return err
-	}
-	output, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-	if err != nil {
-		return err
-	}
-	_, err = io.Copy(output, input)
-	err = E.Errors(err, output.Close())
-	if err != nil {
-		return err
-	}
-	return os.Chmod(destination, mode)
 }

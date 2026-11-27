@@ -5,7 +5,7 @@ public struct HostCommandInvocation: Sendable {
     public let arguments: [String]
     public let environment: [String: String]
     public let workingDirectory: String
-    public let standardInput: LinuxPipeReader
+    let standardInput: LinuxPipeReader
     public let standardOutput: LinuxPipeWriter
     public let standardError: LinuxPipeWriter
     let handle: UnsafeSendable<OpaquePointer>
