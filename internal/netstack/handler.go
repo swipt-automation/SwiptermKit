@@ -29,11 +29,16 @@ func (s *Stack) JudgeFlow(network uint8, source netip.AddrPort, destination neti
 	if !virtual {
 		return tun.FlowVerdict{Action: tun.ActionAccept}
 	}
-	if (address == inet4DNS || address == inet6DNS) && destination.Port() == dnsPort {
-		if network == uint8(header.UDPProtocolNumber) {
-			return tun.FlowVerdict{Action: tun.ActionHijackDNS}
+	if address == inet4Gateway || address == inet6Gateway {
+		if destination.Port() == dnsPort {
+			if network == uint8(header.UDPProtocolNumber) {
+				return tun.FlowVerdict{Action: tun.ActionHijackDNS}
+			}
+			return tun.FlowVerdict{Action: tun.ActionAccept}
 		}
-		return tun.FlowVerdict{Action: tun.ActionAccept}
+		if network == uint8(header.TCPProtocolNumber) && !s.mirror.hasHostListener(address.Is6(), destination.Port()) {
+			return tun.FlowVerdict{Action: tun.ActionAccept}
+		}
 	}
 	return tun.FlowVerdict{Action: tun.ActionReject}
 }
@@ -59,9 +64,19 @@ func (s *Stack) NewDNSPacket(payload []byte, source M.Socksaddr, destination M.S
 }
 
 func (s *Stack) NewConnectionEx(ctx context.Context, conn net.Conn, source M.Socksaddr, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
-	if destination.Addr == inet4DNS || destination.Addr == inet6DNS {
-		closeHandler(conn, onClose)(s.serveDNSStream(ctx, conn))
-		return
+	switch destination.Addr {
+	case inet4Gateway:
+		if destination.Port == dnsPort {
+			closeHandler(conn, onClose)(s.serveDNSStream(ctx, conn))
+			return
+		}
+		destination.Addr = netip.AddrFrom4([4]byte{127, 0, 0, 1})
+	case inet6Gateway:
+		if destination.Port == dnsPort {
+			closeHandler(conn, onClose)(s.serveDNSStream(ctx, conn))
+			return
+		}
+		destination.Addr = netip.IPv6Loopback()
 	}
 	newConnection(ctx, conn, destination, onClose)
 }

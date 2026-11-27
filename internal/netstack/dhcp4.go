@@ -152,7 +152,7 @@ func dhcp4Reply(request []byte) []byte {
 		}
 		frame = binary.BigEndian.AppendUint32(append(frame, dhcpOptionSubnetMask, 4), ^uint32(0)<<(32-inet4Prefix.Bits()))
 		frame = append(append(frame, dhcpOptionRouter, 4), inet4Gateway.AsSlice()...)
-		frame = append(append(frame, dhcpOptionDNS, 4), inet4DNS.AsSlice()...)
+		frame = append(append(frame, dhcpOptionDNS, 4), inet4Gateway.AsSlice()...)
 		frame = binary.BigEndian.AppendUint16(append(frame, dhcpOptionMTU, 2), vmm.MTU)
 	}
 	frame = append(frame, dhcpOptionEnd)

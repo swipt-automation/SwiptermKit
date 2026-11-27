@@ -130,10 +130,10 @@ static bool is_mirrorable_addr(uint8_t family, const uint8_t addr[16]) {
             return true;
         if (addr[0] == 127)
             return true;
-        return addr[0] == 10 && addr[1] == 0 && addr[2] == 2 && addr[3] == 15;
+        return addr[0] == 100 && addr[1] == 115 && addr[2] == 92 && addr[3] == 2;
     }
     if (family == SWIPTERMD_MIRROR_AF_INET6) {
-        static const uint8_t guest6[16] = {0xfd, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x15};
+        static const uint8_t guest6[16] = {0xfd, 0x53, 0x77, 0x69, 0x70, 0x74, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2};
         return memcmp(addr, any_addr, 16) == 0 || memcmp(addr, loopback6, 16) == 0 || memcmp(addr, guest6, 16) == 0;
     }
     return false;

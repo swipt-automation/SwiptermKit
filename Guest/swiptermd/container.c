@@ -1,4 +1,5 @@
 #include "swiptermd.h"
+#include "connect_bpf.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -194,6 +195,41 @@ bool cgroup_membership(const char *proc_cgroup, char *group, size_t cap) {
     return snprintf(group, cap, "%s", line) < (int)cap;
 }
 
+static void connect_policy_attach(void) {
+    static const struct {
+        const uint64_t *insns;
+        uint32_t cnt;
+        uint32_t attach_type;
+    } programs[] = {
+        {connect4_prog, sizeof(connect4_prog) / sizeof(connect4_prog[0]), BPF_CGROUP_INET4_CONNECT},
+        {connect6_prog, sizeof(connect6_prog) / sizeof(connect6_prog[0]), BPF_CGROUP_INET6_CONNECT},
+    };
+    static const char license[] = "GPL";
+    int cgroup = open(CGROUP_MACHINE, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (cgroup < 0)
+        return;
+    for (size_t i = 0; i < sizeof(programs) / sizeof(programs[0]); i++) {
+        union bpf_attr attr;
+        memset(&attr, 0, sizeof(attr));
+        attr.prog_type = BPF_PROG_TYPE_CGROUP_SOCK_ADDR;
+        attr.expected_attach_type = programs[i].attach_type;
+        attr.insns = (uint64_t)(uintptr_t)programs[i].insns;
+        attr.insn_cnt = programs[i].cnt;
+        attr.license = (uint64_t)(uintptr_t)license;
+        int prog = (int)syscall(SYS_bpf, BPF_PROG_LOAD, &attr, sizeof(attr));
+        if (prog < 0)
+            continue;
+        memset(&attr, 0, sizeof(attr));
+        attr.target_fd = (uint32_t)cgroup;
+        attr.attach_bpf_fd = (uint32_t)prog;
+        attr.attach_type = programs[i].attach_type;
+        attr.attach_flags = BPF_F_ALLOW_MULTI;
+        (void)syscall(SYS_bpf, BPF_PROG_ATTACH, &attr, sizeof(attr));
+        close(prog);
+    }
+    close(cgroup);
+}
+
 int cgroup_setup(void) {
     if (mount("cgroup2", CGROUP_ROOT, "cgroup2", api_mount_flags, "nsdelegate") < 0)
         return -errno;
@@ -208,7 +244,10 @@ int cgroup_setup(void) {
         cgroup_enable_controllers(root);
         close(root);
     }
-    return device_policy_attach();
+    rc = device_policy_attach();
+    if (rc == 0)
+        connect_policy_attach();
+    return rc;
 }
 
 static int make_device(const char *path, mode_t mode, unsigned major_number, unsigned minor_number) {
@@ -377,8 +416,8 @@ static int assemble_run(void) {
         "DHCP=ipv4\n"
         "IPv6AcceptRA=yes\n"
         "KeepConfiguration=static\n"
-        "DNS=10.0.2.3\n"
-        "DNS=fd00::3\n";
+        "DNS=" GUEST_IPV4_GATEWAY "\n"
+        "DNS=" GUEST_IPV6_GATEWAY "\n";
     const int create = O_CREAT | O_EXCL;
     int rc = write_file(AT_FDCWD, GUEST_ROOT GUEST_RUN_HOST "/container-manager", "lxc\n", create, 0444);
     if (rc == 0)

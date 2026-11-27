@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -80,6 +82,7 @@ func (s *Stack) exchangeDNS(ctx context.Context, query *mDNS.Msg) *mDNS.Msg {
 	if err != nil {
 		rcode = mDNS.RcodeServerFailure
 	}
+	rewriteLocalAnswers(answers)
 	response.SetRcode(query, rcode)
 	response.RecursionAvailable = true
 	response.Answer = answers
@@ -88,6 +91,44 @@ func (s *Stack) exchangeDNS(ctx context.Context, query *mDNS.Msg) *mDNS.Msg {
 		response.SetEdns0(opt.UDPSize(), false)
 	}
 	return response
+}
+
+func rewriteLocalAnswers(answers []mDNS.RR) {
+	var hostAddrs []netip.Addr
+	loaded := false
+	isLocalHost := func(addr netip.Addr) bool {
+		addr = addr.Unmap()
+		if addr.IsLoopback() {
+			return true
+		}
+		if !loaded {
+			loaded = true
+			interfaces, _ := net.InterfaceAddrs()
+			for _, item := range interfaces {
+				if ipNet, ok := item.(*net.IPNet); ok {
+					if parsed, valid := netip.AddrFromSlice(ipNet.IP); valid {
+						hostAddrs = append(hostAddrs, parsed.Unmap())
+					}
+				}
+			}
+		}
+		return slices.Contains(hostAddrs, addr)
+	}
+	for _, record := range answers {
+		if !strings.HasSuffix(strings.ToLower(record.Header().Name), ".local.") {
+			continue
+		}
+		switch typed := record.(type) {
+		case *mDNS.A:
+			if addr, ok := netip.AddrFromSlice(typed.A.To4()); ok && isLocalHost(addr) {
+				typed.A = net.IP(inet4Gateway.AsSlice())
+			}
+		case *mDNS.AAAA:
+			if addr, ok := netip.AddrFromSlice(typed.AAAA.To16()); ok && !addr.Is4In6() && isLocalHost(addr) {
+				typed.AAAA = net.IP(inet6Gateway.AsSlice())
+			}
+		}
+	}
 }
 
 func (s *Stack) serveDNSStream(ctx context.Context, conn net.Conn) error {
