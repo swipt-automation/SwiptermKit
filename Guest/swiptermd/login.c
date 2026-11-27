@@ -198,6 +198,20 @@ static int exec_account_shell(const char *user, const login_account_t *account, 
     return -errno;
 }
 
+static int identity_environment(const char *user, const login_account_t *account, char **env, size_t *count) {
+    static char home_env[PATH_MAX + 8];
+    static char user_env[LOGIN_USER_CAP + 8];
+    static char logname_env[LOGIN_USER_CAP + 16];
+    if (snprintf(home_env, sizeof(home_env), "HOME=%s", account->home) >= (int)sizeof(home_env) ||
+        snprintf(user_env, sizeof(user_env), "USER=%s", user) >= (int)sizeof(user_env) ||
+        snprintf(logname_env, sizeof(logname_env), "LOGNAME=%s", user) >= (int)sizeof(logname_env))
+        return -ENAMETOOLONG;
+    env[(*count)++] = home_env;
+    env[(*count)++] = user_env;
+    env[(*count)++] = logname_env;
+    return 0;
+}
+
 int login_exec(const char *user, char *const envp[], bool managed) {
     static login_account_t account;
     int rc = read_account(user, &account);
@@ -205,18 +219,11 @@ int login_exec(const char *user, char *const envp[], bool managed) {
         return rc;
     char *env[LOGIN_ENV_MAX + 8];
     size_t count = login_environment(envp, env, LOGIN_ENV_MAX);
-    static char home_env[PATH_MAX + 8];
-    static char user_env[LOGIN_USER_CAP + 8];
-    static char logname_env[LOGIN_USER_CAP + 16];
     static char runtime_env[64];
     char runtime_dir[32];
-    if (snprintf(home_env, sizeof(home_env), "HOME=%s", account.home) >= (int)sizeof(home_env) ||
-        snprintf(user_env, sizeof(user_env), "USER=%s", user) >= (int)sizeof(user_env) ||
-        snprintf(logname_env, sizeof(logname_env), "LOGNAME=%s", user) >= (int)sizeof(logname_env))
-        return -ENAMETOOLONG;
-    env[count++] = home_env;
-    env[count++] = user_env;
-    env[count++] = logname_env;
+    rc = identity_environment(user, &account, env, &count);
+    if (rc < 0)
+        return rc;
     static char gpu_env[] = GPU_VENUS_ENV;
     if (g_daemon.gpu)
         env[count++] = gpu_env;
@@ -233,6 +240,24 @@ int login_exec(const char *user, char *const envp[], bool managed) {
             return -errno;
     }
     return managed ? exec_account_shell(user, &account, env, count) : -ENOENT;
+}
+
+int shell_exec(const char *user, char *const envp[]) {
+    static login_account_t account;
+    int rc = read_account(user, &account);
+    if (rc < 0) {
+        if (strcmp(user, "root") != 0)
+            return rc;
+        account = (login_account_t){.home = "/root", .shell = "/bin/sh"};
+    }
+    char *env[LOGIN_ENV_MAX + 8];
+    size_t count = login_environment(envp, env, LOGIN_ENV_MAX);
+    rc = identity_environment(user, &account, env, &count);
+    if (rc < 0)
+        return rc;
+    static char container_env[] = "container=lxc";
+    env[count++] = container_env;
+    return exec_account_shell(user, &account, env, count);
 }
 
 bool login_available(void) {

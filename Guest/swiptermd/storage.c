@@ -54,8 +54,8 @@ static void decode_super(const uint8_t *sb, bool backup_only, root_info_t *info)
         info->free_blocks |= (uint64_t)get_le32(sb + 0x158) << 32;
 }
 
-static int probe_root(root_info_t *info) {
-    int fd = open(ROOT_DEVICE, O_RDONLY | O_CLOEXEC);
+static int probe(const char *device, root_info_t *info) {
+    int fd = open(device, O_RDONLY | O_CLOEXEC);
     if (fd < 0)
         return -errno;
     uint8_t block[EXT4_PROBE_SIZE];
@@ -96,16 +96,17 @@ static int run_program(char *const argv[]) {
     return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
 
-static int check_root(bool from_backup) {
+static int check(const char *device_path, bool from_backup) {
+    char *device = (char *)device_path;
     char backup_block[16];
     snprintf(backup_block, sizeof(backup_block), "%d", EXT4_BACKUP_SUPER_BLOCK);
-    char *const preen[] = {"/sbin/e2fsck", "-p", ROOT_DEVICE, NULL};
-    char *const preen_backup[] = {"/sbin/e2fsck", "-p", "-b", backup_block, ROOT_DEVICE, NULL};
+    char *const preen[] = {"/sbin/e2fsck", "-p", device, NULL};
+    char *const preen_backup[] = {"/sbin/e2fsck", "-p", "-b", backup_block, device, NULL};
     int status = run_program(from_backup ? preen_backup : preen);
     if (status >= 0 && (status & E2FSCK_UNCORRECTED)) {
         boot_err_log("e2fsck -p", status);
-        char *const repair[] = {"/sbin/e2fsck", "-f", "-y", ROOT_DEVICE, NULL};
-        char *const repair_backup[] = {"/sbin/e2fsck", "-f", "-y", "-b", backup_block, ROOT_DEVICE, NULL};
+        char *const repair[] = {"/sbin/e2fsck", "-f", "-y", device, NULL};
+        char *const repair_backup[] = {"/sbin/e2fsck", "-f", "-y", "-b", backup_block, device, NULL};
         status = run_program(from_backup ? repair_backup : repair);
     }
     if (status < 0)
@@ -120,7 +121,7 @@ static int check_root(bool from_backup) {
 static int add_journal(void) {
     for (size_t i = 0; i < sizeof(journal_sizes_mib) / sizeof(journal_sizes_mib[0]); i++) {
         root_info_t info;
-        int rc = probe_root(&info);
+        int rc = probe(ROOT_DEVICE, &info);
         if (rc < 0)
             return rc;
         if (info.backup_only || info.block_size == 0)
@@ -140,7 +141,7 @@ static int add_journal(void) {
             return 0;
         }
         boot_err_log("tune2fs -j", status);
-        rc = check_root(false);
+        rc = check(ROOT_DEVICE, false);
         if (rc < 0)
             return rc;
     }
@@ -148,19 +149,28 @@ static int add_journal(void) {
     return -ENOSPC;
 }
 
-static int prepare_root(void) {
+int storage_check(const char *device) {
     root_info_t info;
-    int rc = probe_root(&info);
+    int rc = probe(device, &info);
     if (rc < 0)
         return rc;
-    rc = check_root(info.backup_only);
+    rc = check(device, info.backup_only);
     if (rc < 0)
         return rc;
-    rc = probe_root(&info);
+    rc = probe(device, &info);
     if (rc < 0)
         return rc;
-    if (info.backup_only)
-        return -EUCLEAN;
+    return info.backup_only ? -EUCLEAN : 0;
+}
+
+static int prepare_root(void) {
+    int rc = storage_check(ROOT_DEVICE);
+    if (rc < 0)
+        return rc;
+    root_info_t info;
+    rc = probe(ROOT_DEVICE, &info);
+    if (rc < 0)
+        return rc;
     return info.has_journal ? 0 : add_journal();
 }
 

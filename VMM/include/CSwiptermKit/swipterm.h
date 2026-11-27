@@ -35,6 +35,7 @@ bool swipterm_root_builder_add_package(swipterm_root_builder *builder, const cha
 int swipterm_root_builder_read(swipterm_root_builder *builder, const char *path, void **data_out, size_t *size_out);
 int swipterm_root_builder_write(swipterm_root_builder *builder, const char *path, const void *data, size_t size,
                                 uint32_t mode);
+int swipterm_root_builder_list(swipterm_root_builder *builder, const char *path, char ***names_out, size_t *count_out);
 bool swipterm_root_builder_finish(swipterm_root_builder *builder, char **error_message);
 void swipterm_root_builder_free(swipterm_root_builder *builder);
 
@@ -123,7 +124,9 @@ bool swipterm_gpu_suspend(void);
 void swipterm_gpu_resume(void);
 
 int swipterm_root_kernels(const char *root_path, char ***releases_out, size_t *count_out);
-void swipterm_free_kernels(char **releases, size_t count);
+void swipterm_free_strings(char **strings, size_t count);
+int swipterm_root_read(const char *root_path, const char *path, void **data_out, size_t *size_out);
+int swipterm_root_stat(const char *root_path, const char *path, uint32_t *mode_out);
 
 int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_out, swipterm_boot_info *info_out,
                   char **error_message);
@@ -171,6 +174,10 @@ typedef struct {
     const char *working_directory;
     swipterm_stdio stdio[3];
     void *context;
+    uint32_t disk;
+    const char *hostname;
+    bool shell;
+    swipterm_invocation *stdio_invocation;
 } swipterm_spawn_options;
 
 int swipterm_spawn(swipterm_runtime *runtime, const swipterm_spawn_options *options,
@@ -226,6 +233,11 @@ int swipterm_create_directory(swipterm_runtime *runtime, const char *path, uint3
 int swipterm_remove(swipterm_runtime *runtime, const char *path, bool recursive);
 int swipterm_mount(swipterm_runtime *runtime, const char *host_path, const char *guest_path, bool read_only);
 int swipterm_unmount(swipterm_runtime *runtime, const char *guest_path);
+
+int swipterm_disk_attach(swipterm_runtime *runtime, const char *root_path, bool read_only, uint32_t *disk_out);
+int swipterm_disk_detach(swipterm_runtime *runtime, uint32_t disk);
+int swipterm_disk_mount(swipterm_runtime *runtime, uint32_t disk, const char *guest_path);
+int swipterm_disk_unmount(swipterm_runtime *runtime, uint32_t disk, const char *guest_path);
 
 int swipterm_register_command(swipterm_runtime *runtime, const char *name, void *context);
 void swipterm_invocation_finish(swipterm_invocation *invocation, int status);

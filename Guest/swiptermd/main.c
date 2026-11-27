@@ -479,7 +479,7 @@ static int apply_host_boot_info(void) {
     return rc < 0 ? rc : seed_rc;
 }
 
-static int bind_boot_virtio(unsigned addr) {
+int virtio_mmio_bind(unsigned addr) {
     char name[32];
     int len = snprintf(name, sizeof(name), "%x.virtio_mmio", addr);
     char driver[80];
@@ -498,6 +498,12 @@ static int bind_boot_virtio(unsigned addr) {
     }
     close(fd);
     return rc;
+}
+
+void virtio_mmio_unbind(unsigned addr) {
+    char name[32];
+    snprintf(name, sizeof(name), "%x.virtio_mmio", addr);
+    (void)write_file(AT_FDCWD, "/sys/bus/platform/drivers/virtio-mmio/unbind", name, 0, 0);
 }
 
 static bool has_render_node(void) {
@@ -547,7 +553,7 @@ static int reseed_boot_random(void) {
 }
 
 static int setup_boot_devices(void) {
-    int rc = bind_boot_virtio(0x0a000800);
+    int rc = virtio_mmio_bind(0x0a000800);
     if (rc == -ENODEV && access("/sys/bus/virtio/drivers/virtio_rng", F_OK) != 0)
         rc = 0;
     if (rc < 0)
@@ -556,11 +562,11 @@ static int setup_boot_devices(void) {
     if (rc < 0)
         return rc;
     for (unsigned addr = 0x0a000000; addr < 0x0a000800; addr += 0x200) {
-        rc = bind_boot_virtio(addr);
+        rc = virtio_mmio_bind(addr);
         if (rc < 0)
             return rc;
     }
-    g_daemon.gpu = bind_boot_virtio(0x0a001a00) == 0 && has_render_node();
+    g_daemon.gpu = virtio_mmio_bind(0x0a001a00) == 0 && has_render_node();
     return 0;
 }
 
@@ -682,6 +688,7 @@ static void finish(void) {
     clipboard_shutdown();
     notify_close();
     sessions_shutdown();
+    disk_shutdown();
     reap_children(REAP_GRACE_MS);
     ns_close_namespaces();
     if (g_daemon.root_fd >= 0) {
@@ -813,6 +820,21 @@ static void dispatch_ctrl_frame(const swiptermd_frame_hdr_t *hdr, const uint8_t 
         break;
     case SWIPTERMD_OP_CLIPBOARD_OFFER:
         clipboard_handle_offer(body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_DISK_ATTACH:
+        disk_handle_attach(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_DISK_DETACH:
+        disk_handle_detach(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_DISK_MOUNT:
+        disk_handle_mount(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_DISK_UNMOUNT:
+        disk_handle_unmount(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_DISK_SPAWN:
+        proc_handle_disk_spawn(hdr->req_id, body, hdr->body_len);
         break;
     default:
         ctrl_send_err_reply(hdr->opcode, hdr->req_id, -ENOSYS);

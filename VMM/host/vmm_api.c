@@ -40,6 +40,7 @@ enum {
     FS_WRITE_CHUNK_SIZE = 4 * 1024 * 1024,
     MAX_CLIPBOARD_MIMES = 64,
     MAX_CLIPBOARD_MIME_LEN = 256,
+    ROOT_READ_LIMIT = 64 * 1024 * 1024,
 };
 
 typedef struct pending_req {
@@ -80,6 +81,13 @@ typedef struct mount_entry {
     uint32_t slot;
     struct mount_entry *next;
 } mount_entry_t;
+
+typedef struct disk_entry {
+    uint32_t id;
+    uint32_t slot;
+    int lock_fd;
+    struct disk_entry *next;
+} disk_entry_t;
 
 typedef struct command_entry {
     char *name;
@@ -181,6 +189,7 @@ struct swipterm_runtime {
     _Atomic uint32_t next_proc_id;
     _Atomic uint32_t next_pty_id;
     _Atomic uint32_t next_mount_id;
+    _Atomic uint32_t next_disk_id;
     _Atomic uint32_t next_dev_id;
     _Atomic uint64_t next_file_id;
 
@@ -207,6 +216,7 @@ struct swipterm_runtime {
     swipterm_process *processes;
     swipterm_terminal *terminals;
     mount_entry_t *mounts;
+    disk_entry_t *disks;
     command_entry_t *commands;
     swipterm_invocation *invocations;
     device_entry_t *devices;
@@ -2464,6 +2474,8 @@ void swipterm_shutdown(swipterm_runtime *rt) {
     rt->terminals = NULL;
     mount_entry_t *mounts = rt->mounts;
     rt->mounts = NULL;
+    disk_entry_t *disks = rt->disks;
+    rt->disks = NULL;
     command_entry_t *commands = rt->commands;
     rt->commands = NULL;
     swipterm_invocation *invocations = rt->invocations;
@@ -2527,6 +2539,12 @@ void swipterm_shutdown(swipterm_runtime *rt) {
         mounts = m->next;
         free(m->guest_path);
         free(m);
+    }
+    while (disks) {
+        disk_entry_t *d = disks;
+        disks = d->next;
+        close(d->lock_fd);
+        free(d);
     }
     while (commands) {
         command_entry_t *c = commands;
@@ -2683,11 +2701,89 @@ int swipterm_root_kernels(const char *root_path, char ***releases_out, size_t *c
     return host_error(rc);
 }
 
-void swipterm_free_kernels(char **releases, size_t count) {
+void swipterm_free_strings(char **strings, size_t count) {
     for (size_t i = 0; i < count; i++) {
-        free(releases[i]);
+        free(strings[i]);
     }
-    free(releases);
+    free(strings);
+}
+
+static int open_idle_root(const char *root_path, int *lock_fd_out, int *disk_fd_out, ext4_fs_t **fs_out) {
+    char disk_path[1024];
+    if (snprintf(disk_path, sizeof(disk_path), "%s/root.ext4", root_path) >= (int)sizeof(disk_path)) {
+        return -LINUX_EINVAL;
+    }
+    int lock_fd = open(root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (lock_fd < 0) {
+        return errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
+    }
+    if (flock(lock_fd, LOCK_SH | LOCK_NB) < 0) {
+        int rc = errno == EWOULDBLOCK ? -LINUX_EBUSY : -LINUX_EIO;
+        close(lock_fd);
+        return rc;
+    }
+    int disk_fd = open(disk_path, O_RDONLY | O_CLOEXEC);
+    if (disk_fd < 0) {
+        int rc = errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
+        close(lock_fd);
+        return rc;
+    }
+    int rc = host_error(ext4_fs_open(disk_fd, fs_out));
+    if (rc < 0) {
+        close(disk_fd);
+        close(lock_fd);
+        return rc;
+    }
+    *lock_fd_out = lock_fd;
+    *disk_fd_out = disk_fd;
+    return 0;
+}
+
+int swipterm_root_read(const char *root_path, const char *path, void **data_out, size_t *size_out) {
+    *data_out = NULL;
+    *size_out = 0;
+    int lock_fd;
+    int disk_fd;
+    ext4_fs_t *fs;
+    int rc = open_idle_root(root_path, &lock_fd, &disk_fd, &fs);
+    if (rc < 0) {
+        return rc;
+    }
+    ext4_node_t node;
+    uint8_t *data = NULL;
+    rc = host_error(ext4_fs_resolve(fs, path, true, &node));
+    if (rc == 0 && !S_ISREG(node.mode)) {
+        rc = S_ISDIR(node.mode) ? -LINUX_EISDIR : -LINUX_EINVAL;
+    }
+    if (rc == 0) {
+        rc = host_error(ext4_fs_read(fs, &node, ROOT_READ_LIMIT, &data, size_out));
+    }
+    if (rc == 0) {
+        *data_out = data;
+    }
+    ext4_fs_close(fs);
+    close(disk_fd);
+    close(lock_fd);
+    return rc;
+}
+
+int swipterm_root_stat(const char *root_path, const char *path, uint32_t *mode_out) {
+    int lock_fd;
+    int disk_fd;
+    ext4_fs_t *fs;
+    int rc = open_idle_root(root_path, &lock_fd, &disk_fd, &fs);
+    if (rc < 0) {
+        return rc;
+    }
+    ext4_node_t node;
+    rc = host_error(ext4_fs_resolve(fs, path, true, &node));
+    if (rc == 0) {
+        *mode_out = node.mode;
+    }
+    ext4_fs_close(fs);
+    close(disk_fd);
+    close(lock_fd);
+    return rc;
 }
 
 bool swipterm_gpu_is_active(swipterm_runtime *rt) {
@@ -2829,7 +2925,7 @@ int swipterm_spawn(swipterm_runtime *rt, const swipterm_spawn_options *options,
 
     uint32_t argc32 = options->argv ? (uint32_t)options->argc : 0;
     uint32_t envc = rpc_cstr_list_count(options->envp);
-    size_t req_size = 4 + 4 + 12 + 24 +
+    size_t req_size = 12 + rpc_str_wire_size(options->hostname) + 4 + 4 + 12 + 24 +
                       rpc_str_wire_size(options->path) +
                       rpc_str_wire_size(options->working_directory) +
                       rpc_strv_wire_size(options->argv, argc32) +
@@ -2838,9 +2934,15 @@ int swipterm_spawn(swipterm_runtime *rt, const swipterm_spawn_options *options,
         return -LINUX_EINVAL;
     }
 
+    swipterm_stdio_kind kinds[3];
+    for (int i = 0; i < 3; i++) {
+        kinds[i] = !options->stdio_invocation ? options->stdio[i].kind
+                   : i == 0                   ? SWIPTERM_STDIO_PIPE
+                                              : SWIPTERM_STDIO_NULL;
+    }
     swipterm_terminal *used_term = NULL;
     for (int i = 0; i < 3; i++) {
-        if (options->stdio[i].kind == SWIPTERM_STDIO_TERMINAL) {
+        if (kinds[i] == SWIPTERM_STDIO_TERMINAL) {
             swipterm_terminal *t = options->stdio[i].terminal;
             if (!t || (used_term && used_term != t)) {
                 return -LINUX_EINVAL;
@@ -2866,7 +2968,7 @@ int swipterm_spawn(swipterm_runtime *rt, const swipterm_spawn_options *options,
     uint8_t *req_buf = malloc(req_size);
     int rc = req_buf ? 0 : -LINUX_ENOMEM;
     for (int i = 0; i < 3 && rc == 0; i++) {
-        if (options->stdio[i].kind != SWIPTERM_STDIO_PIPE) {
+        if (kinds[i] != SWIPTERM_STDIO_PIPE) {
             continue;
         }
         int sp[2];
@@ -2896,20 +2998,25 @@ int swipterm_spawn(swipterm_runtime *rt, const swipterm_spawn_options *options,
         uint8_t stdio_mode[3] = {SWIPTERMD_STDIO_NULL, SWIPTERMD_STDIO_NULL, SWIPTERMD_STDIO_NULL};
         uint32_t stdio_pty_id[3] = {0, 0, 0};
         for (int i = 0; i < 3; i++) {
-            if (options->stdio[i].kind == SWIPTERM_STDIO_PIPE) {
+            if (kinds[i] == SWIPTERM_STDIO_PIPE) {
                 stdio_mode[i] = SWIPTERMD_STDIO_PIPE;
-            } else if (options->stdio[i].kind == SWIPTERM_STDIO_TERMINAL) {
+            } else if (kinds[i] == SWIPTERM_STDIO_TERMINAL) {
                 stdio_mode[i] = SWIPTERMD_STDIO_PTY;
                 stdio_pty_id[i] = options->stdio[i].terminal->pty_id;
             }
         }
         uint32_t proc_id = atomic_fetch_add(&rt->next_proc_id, 1) + 1;
         swiptermd_buf_w_t w = swiptermd_buf_w_init(req_buf, req_size);
+        if (options->disk != 0) {
+            swiptermd_enc_disk_spawn_prefix(&w, options->disk,
+                                            options->stdio_invocation ? options->stdio_invocation->inv_id : 0,
+                                            options->shell ? SWIPTERMD_DISK_SPAWN_SHELL : 0, options->hostname);
+        }
         swiptermd_enc_spawn_req(&w, proc_id, stdio_mode, stdio_pty_id, tokens,
                                 options->path, options->working_directory,
                                 options->argv, argc32, options->envp, envc);
-        rc = launch_process(rt, SWIPTERMD_OP_SPAWN, proc_id, used_term, options->context,
-                            req_buf, (uint32_t)w.len, process_out, pid_out);
+        rc = launch_process(rt, options->disk != 0 ? SWIPTERMD_OP_DISK_SPAWN : SWIPTERMD_OP_SPAWN, proc_id, used_term,
+                            options->context, req_buf, (uint32_t)w.len, process_out, pid_out);
     } else {
         terminal_unclaim(used_term);
     }
@@ -3600,6 +3707,120 @@ int swipterm_unmount(swipterm_runtime *rt, const char *guest_path) {
         vmm_detach_virtio_fs(rt->vm, slot);
     }
     return 0;
+}
+
+int swipterm_disk_attach(swipterm_runtime *rt, const char *root_path, bool read_only, uint32_t *disk_out) {
+    if (!rt || !rt->vm || !root_path || !disk_out) {
+        return -LINUX_EINVAL;
+    }
+    char disk_path[1024];
+    if (snprintf(disk_path, sizeof(disk_path), "%s/root.ext4", root_path) >= (int)sizeof(disk_path)) {
+        return -LINUX_EINVAL;
+    }
+    disk_entry_t *entry = calloc(1, sizeof(*entry));
+    if (!entry) {
+        return -LINUX_ENOMEM;
+    }
+    entry->lock_fd = open(root_path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (entry->lock_fd < 0) {
+        int rc = errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
+        free(entry);
+        return rc;
+    }
+    int rc = flock(entry->lock_fd, LOCK_EX | LOCK_NB) == 0 ? 0 : errno == EWOULDBLOCK ? -LINUX_EBUSY : -LINUX_EIO;
+    int disk_fd = -1;
+    if (rc == 0) {
+        disk_fd = open(disk_path, O_RDWR | O_CLOEXEC);
+        if (disk_fd < 0) {
+            rc = errno == ENOENT ? -LINUX_ENOENT : -LINUX_EIO;
+        }
+    }
+    if (rc == 0) {
+        int attach_rc = vmm_attach_virtio_blk(rt->vm, disk_fd, &entry->slot);
+        rc = attach_rc == 0 ? 0 : attach_rc == -ENOSPC ? -LINUX_ENOSPC : -LINUX_ENOMEM;
+    }
+    if (disk_fd >= 0) {
+        close(disk_fd);
+    }
+    if (rc < 0) {
+        close(entry->lock_fd);
+        free(entry);
+        return rc;
+    }
+
+    entry->id = atomic_fetch_add(&rt->next_disk_id, 1) + 1;
+    uint8_t req[SWIPTERMD_DISK_ATTACH_REQ_SIZE];
+    swiptermd_enc_disk_attach_req(req, entry->id, entry->slot, read_only);
+    rc = control_rpc_status(rt, SWIPTERMD_OP_DISK_ATTACH, req, sizeof(req));
+    if (rc < 0) {
+        vmm_detach_virtio_blk(rt->vm, entry->slot);
+        close(entry->lock_fd);
+        free(entry);
+        return rc;
+    }
+
+    pthread_mutex_lock(&rt->state_lock);
+    entry->next = rt->disks;
+    rt->disks = entry;
+    pthread_mutex_unlock(&rt->state_lock);
+    *disk_out = entry->id;
+    return 0;
+}
+
+int swipterm_disk_detach(swipterm_runtime *rt, uint32_t disk) {
+    if (!rt || !rt->vm) {
+        return -LINUX_EINVAL;
+    }
+    uint8_t req[SWIPTERMD_DISK_DETACH_REQ_SIZE];
+    swiptermd_put_be32(req, disk);
+    int rc = control_rpc_status(rt, SWIPTERMD_OP_DISK_DETACH, req, sizeof(req));
+    if (rc < 0) {
+        return rc;
+    }
+
+    disk_entry_t *entry = NULL;
+    pthread_mutex_lock(&rt->state_lock);
+    for (disk_entry_t **pp = &rt->disks; *pp; pp = &(*pp)->next) {
+        if ((*pp)->id == disk) {
+            entry = *pp;
+            *pp = entry->next;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&rt->state_lock);
+    if (entry) {
+        vmm_detach_virtio_blk(rt->vm, entry->slot);
+        close(entry->lock_fd);
+        free(entry);
+    }
+    return 0;
+}
+
+static int disk_path_rpc(swipterm_runtime *rt, uint16_t opcode, uint32_t disk, const char *guest_path) {
+    if (!rt || !rt->vm || !guest_path) {
+        return -LINUX_EINVAL;
+    }
+    size_t req_size = 4 + rpc_str_wire_size(guest_path);
+    if (req_size > SWIPTERMD_MAX_BODY_LEN) {
+        return -LINUX_EINVAL;
+    }
+    uint8_t *req_buf = malloc(req_size);
+    if (!req_buf) {
+        return -LINUX_ENOMEM;
+    }
+    swiptermd_buf_w_t w = swiptermd_buf_w_init(req_buf, req_size);
+    swiptermd_enc_disk_path_req(&w, disk, guest_path);
+    int rc = control_rpc_status(rt, opcode, req_buf, (uint32_t)w.len);
+    free(req_buf);
+    return rc;
+}
+
+int swipterm_disk_mount(swipterm_runtime *rt, uint32_t disk, const char *guest_path) {
+    return disk_path_rpc(rt, SWIPTERMD_OP_DISK_MOUNT, disk, guest_path);
+}
+
+int swipterm_disk_unmount(swipterm_runtime *rt, uint32_t disk, const char *guest_path) {
+    return disk_path_rpc(rt, SWIPTERMD_OP_DISK_UNMOUNT, disk, guest_path);
 }
 
 int swipterm_register_command(swipterm_runtime *rt, const char *name, void *context) {

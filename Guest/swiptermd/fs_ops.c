@@ -34,7 +34,7 @@ static bool write_sysfs_str(const char *path, const char *val) {
 
 static void bind_virtio_fs_slots(char bound_dev[32]) {
     bound_dev[0] = '\0';
-    for (unsigned slot = 5; slot < 13; slot++) {
+    for (unsigned slot = 5; slot < 9; slot++) {
         char dev[32];
         char drv[128];
         snprintf(dev, sizeof(dev), "%x.virtio_mmio", 0xa000000U + slot * 0x200U);
@@ -61,7 +61,7 @@ int fs_open_in_root(const char *rel, uint64_t flags, uint64_t mode) {
     return (int)fd;
 }
 
-static int normalize_guest_path(const char *in, char *out, size_t cap) {
+int fs_normalize_path(const char *in, char *out, size_t cap) {
     if (!in || in[0] == '\0')
         return -EINVAL;
     char tmp[PATH_MAX];
@@ -124,7 +124,7 @@ static const char *to_rel_path(const char *guest_path) {
 static int split_parent_name(const char *guest_path, char *parent_out, size_t pcap,
                              char *name_out, size_t ncap) {
     char norm[PATH_MAX];
-    int err = normalize_guest_path(guest_path, norm, sizeof(norm));
+    int err = fs_normalize_path(guest_path, norm, sizeof(norm));
     if (err < 0)
         return err;
     if (strcmp(norm, "/") == 0)
@@ -157,7 +157,7 @@ static bool path_contains(const char *ancestor, const char *path) {
 
 int fs_mkdir_p_jailed(const char *guest_path, uint32_t mode) {
     char norm[PATH_MAX];
-    int err = normalize_guest_path(guest_path, norm, sizeof(norm));
+    int err = fs_normalize_path(guest_path, norm, sizeof(norm));
     if (err < 0)
         return err;
     if (strcmp(norm, "/") == 0)
@@ -585,7 +585,7 @@ void fs_handle_remove(uint32_t req_id, const uint8_t *body, uint32_t len) {
     }
 
     char norm[PATH_MAX];
-    int err = normalize_guest_path(path, norm, sizeof(norm));
+    int err = fs_normalize_path(path, norm, sizeof(norm));
     if (err < 0) {
         ctrl_send_err_reply(SWIPTERMD_OP_FS_REMOVE, req_id, err);
         return;
@@ -662,6 +662,38 @@ static int check_dir_empty(const char *guest_path) {
     return empty ? 0 : -ENOTEMPTY;
 }
 
+int fs_prepare_mountpoint(const char *guest_path, char norm[PATH_MAX]) {
+    int err = fs_normalize_path(guest_path, norm, PATH_MAX);
+    if (err < 0)
+        return err;
+    if (strcmp(norm, "/") == 0)
+        return -EBUSY;
+    for (size_t i = 0; i < g_mount_count; i++) {
+        if (strcmp(g_mounts[i].guest_path, norm) == 0)
+            return -EBUSY;
+    }
+
+    int fd = fs_open_in_root(to_rel_path(norm), O_PATH, 0);
+    if (fd == -ENOENT) {
+        err = fs_mkdir_p_jailed(norm, 0755);
+        return err < 0 ? err : fs_open_in_root(to_rel_path(norm), O_PATH | O_DIRECTORY, 0);
+    }
+    if (fd < 0)
+        return fd;
+    struct stat st;
+    if (fstatat(fd, "", &st, AT_EMPTY_PATH) < 0)
+        err = -errno;
+    else if (!S_ISDIR(st.st_mode))
+        err = -ENOTDIR;
+    else
+        err = check_dir_empty(norm);
+    if (err < 0) {
+        close(fd);
+        return err;
+    }
+    return fd;
+}
+
 void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len) {
     swiptermd_buf_r_t r = swiptermd_buf_r_init(body, len);
     bool read_only = swiptermd_r_u8(&r) != 0;
@@ -675,45 +707,9 @@ void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len
     }
 
     char norm[PATH_MAX];
-    int err = normalize_guest_path(guest_path, norm, sizeof(norm));
-    if (err < 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_MOUNT_VIRTIOFS, req_id, err);
-        return;
-    }
-    if (strcmp(norm, "/") == 0) {
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_MOUNT_VIRTIOFS, req_id, -EBUSY);
-        return;
-    }
-
-    for (size_t i = 0; i < g_mount_count; i++) {
-        if (strcmp(g_mounts[i].guest_path, norm) == 0) {
-            ctrl_send_err_reply(SWIPTERMD_OP_FS_MOUNT_VIRTIOFS, req_id, -EBUSY);
-            return;
-        }
-    }
-
-    int fd = fs_open_in_root(to_rel_path(norm), O_PATH, 0);
-    if (fd == -ENOENT) {
-        err = fs_mkdir_p_jailed(norm, 0755);
-        fd = err == 0 ? fs_open_in_root(to_rel_path(norm), O_PATH | O_DIRECTORY, 0) : -1;
-        if (err == 0 && fd < 0)
-            err = fd;
-    } else if (fd >= 0) {
-        struct stat st;
-        if (fstatat(fd, "", &st, AT_EMPTY_PATH) < 0)
-            err = -errno;
-        else if (!S_ISDIR(st.st_mode))
-            err = -ENOTDIR;
-        if (err == 0)
-            err = check_dir_empty(norm);
-    } else {
-        err = fd;
-    }
-
-    if (err < 0) {
-        if (fd >= 0)
-            close(fd);
-        ctrl_send_err_reply(SWIPTERMD_OP_FS_MOUNT_VIRTIOFS, req_id, err);
+    int fd = fs_prepare_mountpoint(guest_path, norm);
+    if (fd < 0) {
+        ctrl_send_err_reply(SWIPTERMD_OP_FS_MOUNT_VIRTIOFS, req_id, fd);
         return;
     }
 
@@ -723,7 +719,7 @@ void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len
     char target[32];
     snprintf(target, sizeof(target), "/proc/self/fd/%d", fd);
     unsigned long mflags = read_only ? MS_RDONLY : 0;
-    err = mount(tag, target, "virtiofs", mflags, NULL) < 0 ? -errno : 0;
+    int err = mount(tag, target, "virtiofs", mflags, NULL) < 0 ? -errno : 0;
     close(fd);
     if (err < 0) {
         if (bound_dev[0] != '\0')
@@ -773,7 +769,7 @@ void fs_handle_unmount(uint32_t req_id, const uint8_t *body, uint32_t len) {
     }
 
     char norm[PATH_MAX];
-    int err = normalize_guest_path(guest_path, norm, sizeof(norm));
+    int err = fs_normalize_path(guest_path, norm, sizeof(norm));
     if (err < 0) {
         ctrl_send_err_reply(SWIPTERMD_OP_FS_UNMOUNT, req_id, err);
         return;

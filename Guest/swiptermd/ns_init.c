@@ -474,9 +474,9 @@ static int container_init_entry(void *arg) {
     if (a->hostname && a->hostname[0] != '\0')
         (void)sethostname(a->hostname, strlen(a->hostname));
 
-    int rc = container_enter();
-    if (rc == 0 && (chdir(GUEST_ROOT) < 0 || mount(".", "/", NULL, MS_MOVE, NULL) < 0 || chroot(".") < 0 ||
-                    chdir("/") < 0))
+    int rc = container_enter(false);
+    if (rc == 0 && (umount2("/run", MNT_DETACH) < 0 || chdir(GUEST_ROOT) < 0 ||
+                    mount(".", "/", NULL, MS_MOVE, NULL) < 0 || chroot(".") < 0 || chdir("/") < 0))
         rc = -errno;
     if (rc == 0)
         rc = container_mount_api();

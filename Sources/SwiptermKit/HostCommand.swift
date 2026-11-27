@@ -8,6 +8,7 @@ public struct HostCommandInvocation: Sendable {
     public let standardInput: LinuxPipeReader
     public let standardOutput: LinuxPipeWriter
     public let standardError: LinuxPipeWriter
+    let handle: UnsafeSendable<OpaquePointer>
 }
 
 final class CommandBox: Sendable {
@@ -32,9 +33,10 @@ final class CommandBox: Sendable {
             workingDirectory: workingDirectory,
             standardInput: LinuxPipeReader(fileDescriptor: descriptors.0),
             standardOutput: LinuxPipeWriter(fileDescriptor: descriptors.1),
-            standardError: LinuxPipeWriter(fileDescriptor: descriptors.2)
+            standardError: LinuxPipeWriter(fileDescriptor: descriptors.2),
+            handle: UnsafeSendable(value: invocation)
         )
-        let handle = UnsafeSendable(value: invocation)
+        let handle = context.handle
         let task = Task { [name, handler] in
             var status: Int32
             do {

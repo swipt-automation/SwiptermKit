@@ -1448,6 +1448,17 @@ int vmm_start(vmm_machine_t *vm) {
     return 0;
 }
 
+static void flush_block_devices(vmm_machine_t *vm) {
+    vmm_machine_priv_t *priv = vmm_priv(vm);
+    virtio_blk_flush_host(vm->virtio_devs[VMM_VIRTIO_SLOT_BLK]);
+    pthread_mutex_lock(&priv->state_lock);
+    for (uint32_t slot = VMM_VIRTIO_SLOT_DISK_BASE; slot < VMM_VIRTIO_SLOT_DISK_BASE + VMM_VIRTIO_SLOT_DISK_COUNT;
+         slot++) {
+        virtio_blk_flush_host(vm->virtio_devs[slot]);
+    }
+    pthread_mutex_unlock(&priv->state_lock);
+}
+
 int vmm_suspend(vmm_machine_t *vm) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
     if (!priv) {
@@ -1487,7 +1498,7 @@ int vmm_suspend(vmm_machine_t *vm) {
         pthread_cond_wait(&priv->suspend_cond, &priv->state_lock);
     }
     pthread_mutex_unlock(&priv->state_lock);
-    virtio_blk_flush_host(vm->virtio_devs[VMM_VIRTIO_SLOT_BLK]);
+    flush_block_devices(vm);
     return 0;
 }
 
@@ -1553,7 +1564,7 @@ void vmm_stop(vmm_machine_t *vm) {
             pthread_join(to_join[i], NULL);
         }
     }
-    virtio_blk_flush_host(vm->virtio_devs[VMM_VIRTIO_SLOT_BLK]);
+    flush_block_devices(vm);
 }
 
 void vmm_destroy(vmm_machine_t *vm) {
@@ -1748,6 +1759,31 @@ int vmm_save_snapshot(vmm_machine_t *vm, const char *path) {
     return rc;
 }
 
+static uint32_t free_virtio_slot(const vmm_machine_t *vm, uint32_t base, uint32_t count) {
+    for (uint32_t slot = base; slot < base + count; slot++) {
+        if (!vm->virtio_devs[slot]) {
+            return slot;
+        }
+    }
+    return VMM_VIRTIO_MMIO_SLOTS;
+}
+
+static void detach_virtio(vmm_machine_t *vm, uint32_t base, uint32_t count, uint32_t slot) {
+    vmm_machine_priv_t *priv = vmm_priv(vm);
+    if (!priv || slot < base || slot >= base + count) {
+        return;
+    }
+
+    pthread_mutex_lock(&priv->state_lock);
+    virtio_dev_t *dev = vm->virtio_devs[slot];
+    vm->virtio_devs[slot] = NULL;
+    pthread_mutex_unlock(&priv->state_lock);
+
+    if (dev) {
+        virtio_dev_destroy(dev);
+    }
+}
+
 int vmm_attach_virtio_fs(vmm_machine_t *vm, const char *tag, const char *host_root,
                          bool read_only, uint32_t *slot_out) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
@@ -1756,14 +1792,7 @@ int vmm_attach_virtio_fs(vmm_machine_t *vm, const char *tag, const char *host_ro
     }
 
     pthread_mutex_lock(&priv->state_lock);
-    uint32_t chosen = VMM_VIRTIO_MMIO_SLOTS;
-    for (uint32_t i = 0; i < VMM_VIRTIO_SLOT_FS_COUNT; i++) {
-        uint32_t slot = VMM_VIRTIO_SLOT_FS_BASE + i;
-        if (!vm->virtio_devs[slot]) {
-            chosen = slot;
-            break;
-        }
-    }
+    uint32_t chosen = free_virtio_slot(vm, VMM_VIRTIO_SLOT_FS_BASE, VMM_VIRTIO_SLOT_FS_COUNT);
     if (chosen >= VMM_VIRTIO_MMIO_SLOTS) {
         pthread_mutex_unlock(&priv->state_lock);
         return -ENOSPC;
@@ -1784,18 +1813,34 @@ int vmm_attach_virtio_fs(vmm_machine_t *vm, const char *tag, const char *host_ro
 }
 
 void vmm_detach_virtio_fs(vmm_machine_t *vm, uint32_t slot) {
+    detach_virtio(vm, VMM_VIRTIO_SLOT_FS_BASE, VMM_VIRTIO_SLOT_FS_COUNT, slot);
+}
+
+int vmm_attach_virtio_blk(vmm_machine_t *vm, int fd, uint32_t *slot_out) {
     vmm_machine_priv_t *priv = vmm_priv(vm);
-    if (!priv || slot < VMM_VIRTIO_SLOT_FS_BASE ||
-        slot >= VMM_VIRTIO_SLOT_FS_BASE + VMM_VIRTIO_SLOT_FS_COUNT) {
-        return;
+    if (!priv || fd < 0 || !slot_out) {
+        return -EINVAL;
     }
 
     pthread_mutex_lock(&priv->state_lock);
-    virtio_dev_t *dev = vm->virtio_devs[slot];
-    vm->virtio_devs[slot] = NULL;
+    uint32_t chosen = free_virtio_slot(vm, VMM_VIRTIO_SLOT_DISK_BASE, VMM_VIRTIO_SLOT_DISK_COUNT);
+    if (chosen >= VMM_VIRTIO_MMIO_SLOTS) {
+        pthread_mutex_unlock(&priv->state_lock);
+        return -ENOSPC;
+    }
+
+    virtio_dev_t *dev = virtio_blk_create(vm, chosen, fd, false);
+    if (!dev) {
+        pthread_mutex_unlock(&priv->state_lock);
+        return -ENOMEM;
+    }
+    vm->virtio_devs[chosen] = dev;
     pthread_mutex_unlock(&priv->state_lock);
 
-    if (dev) {
-        virtio_dev_destroy(dev);
-    }
+    *slot_out = chosen;
+    return 0;
+}
+
+void vmm_detach_virtio_blk(vmm_machine_t *vm, uint32_t slot) {
+    detach_virtio(vm, VMM_VIRTIO_SLOT_DISK_BASE, VMM_VIRTIO_SLOT_DISK_COUNT, slot);
 }

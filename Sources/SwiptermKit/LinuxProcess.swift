@@ -99,13 +99,32 @@ public final class LinuxProcess: @unchecked Sendable {
         let descriptors: [Int32]
     }
 
-    convenience init(runtime: LinuxRuntime, _ configuration: Configuration, environment: [String: String]) async throws {
-        let terminals = [configuration.standardInput, configuration.standardOutput, configuration.standardError]
-            .compactMap { io -> LinuxTerminal? in
-                if case .terminal(let terminal) = io { terminal } else { nil }
-            }
+    struct Target: Sendable {
+        var disk: UInt32 = 0
+        var hostname: String?
+        var shell = false
+        var invocation: UnsafeSendable<OpaquePointer>?
+    }
+
+    convenience init(
+        runtime: LinuxRuntime,
+        _ configuration: Configuration,
+        environment: [String: String],
+        target: Target = Target()
+    ) async throws {
+        let terminals = target.invocation != nil ? [] : [
+            configuration.standardInput, configuration.standardOutput, configuration.standardError,
+        ].compactMap { io -> LinuxTerminal? in
+            if case .terminal(let terminal) = io { terminal } else { nil }
+        }
         try await self.init(runtime: runtime, terminals: terminals) { runtimeHandle, context in
-            try Self.spawn(runtimeHandle: runtimeHandle, configuration, environment: environment, context: context)
+            try Self.spawn(
+                runtimeHandle: runtimeHandle,
+                configuration,
+                environment: environment,
+                target: target,
+                context: context
+            )
         }
     }
 
@@ -171,6 +190,7 @@ public final class LinuxProcess: @unchecked Sendable {
         runtimeHandle: OpaquePointer,
         _ configuration: Configuration,
         environment: [String: String],
+        target: Target,
         context: UnsafeSendable<UnsafeMutableRawPointer>
     ) throws -> Launch {
         func stdio(_ io: StandardIO) -> swipterm_stdio {
@@ -192,21 +212,27 @@ public final class LinuxProcess: @unchecked Sendable {
             withCStringArray(environment) { envp in
                 configuration.executablePath.withCString { path in
                     withOptionalCString(configuration.workingDirectory) { workingDirectory in
-                        var options = swipterm_spawn_options(
-                            path: path,
-                            argc: arguments.count,
-                            argv: argv,
-                            envp: envp,
-                            working_directory: workingDirectory,
-                            stdio: (
-                                stdio(configuration.standardInput),
-                                stdio(configuration.standardOutput),
-                                stdio(configuration.standardError)
-                            ),
-                            context: context.value
-                        )
-                        return descriptors.withUnsafeMutableBufferPointer {
-                            swipterm_spawn(runtimeHandle, &options, &handle, &pid, $0.baseAddress)
+                        withOptionalCString(target.hostname) { hostname in
+                            var options = swipterm_spawn_options(
+                                path: path,
+                                argc: arguments.count,
+                                argv: argv,
+                                envp: envp,
+                                working_directory: workingDirectory,
+                                stdio: (
+                                    stdio(configuration.standardInput),
+                                    stdio(configuration.standardOutput),
+                                    stdio(configuration.standardError)
+                                ),
+                                context: context.value,
+                                disk: target.disk,
+                                hostname: hostname,
+                                shell: target.shell,
+                                stdio_invocation: target.invocation?.value
+                            )
+                            return descriptors.withUnsafeMutableBufferPointer {
+                                swipterm_spawn(runtimeHandle, &options, &handle, &pid, $0.baseAddress)
+                            }
                         }
                     }
                 }

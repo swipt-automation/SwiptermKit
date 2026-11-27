@@ -539,6 +539,13 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
     }
 
+    /// Attaches the root image installed at `root` after checking its file system, replaying a journal an unclean
+    /// stop left behind. Throws `LinuxError.EBUSY` when the image is booted, attached, being built or being exported,
+    /// and `LinuxError.ENOSPC` when the machine has no room for another disk.
+    public func attachDisk(root: URL, readOnly: Bool = false) async throws -> LinuxDisk {
+        try await LinuxDisk(runtime: self, root: root, readOnly: readOnly)
+    }
+
     /// Guest `execve` of `hostCommandsDirectory`/`name` runs `handler` instead of a guest program, and the
     /// process exits with the returned status. SIGHUP, SIGINT, SIGQUIT, SIGTERM and SIGKILL cancel the
     /// handler's task and terminate the process by that signal. Guest standard input is forwarded while

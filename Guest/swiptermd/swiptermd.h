@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <limits.h>
 #include <stdint.h>
 #include <sys/epoll.h>
 #include <sys/types.h>
@@ -84,10 +85,13 @@ int ctrl_send_frame(uint16_t opcode, uint32_t req_id, const void *body, uint32_t
 int ctrl_send_err_reply(uint16_t opcode, uint32_t req_id, int32_t err);
 uint32_t ctrl_alloc_req_id(void);
 void ready_announce(uint32_t level);
+int virtio_mmio_bind(unsigned addr);
+void virtio_mmio_unbind(unsigned addr);
 void shutdown_begin(bool reboot);
 void shutdown_check_done(void);
 
 int storage_mount_root(void);
+int storage_check(const char *device);
 bool storage_teardown(void);
 
 int network_setup(void);
@@ -98,7 +102,8 @@ int guest_socket(int family, int type, int protocol);
 
 int cgroup_setup(void);
 int container_assemble(void);
-int container_enter(void);
+int container_enter(bool disk);
+int disk_procs_fd(void);
 int container_mount_api(void);
 int sessions_procs_fd(void);
 void sessions_register(pid_t sender);
@@ -112,6 +117,7 @@ int notify_signals_level(void);
 
 bool login_name_valid(const char *name);
 int login_exec(const char *user, char *const envp[], bool fallback_shell);
+int shell_exec(const char *user, char *const envp[]);
 bool login_available(void);
 int sessions_anchor_main(void);
 
@@ -128,9 +134,23 @@ _Noreturn void managed_init_main(void);
 int readiness_start(void);
 void readiness_stop(void);
 
+typedef struct launch_target {
+    int net_ns_fd;
+    int ipc_ns_fd;
+    int uts_ns_fd;
+    int mnt_ns_fd;
+    int pid_ns_fd;
+    int cgroup_ns_fd;
+    int procs_fd;
+} launch_target_t;
+
+typedef struct disk_sandbox disk_sandbox_t;
+
+void launch_target_close(launch_target_t *target);
 void proc_pty_init(void);
 void proc_pty_shutdown(void);
 void proc_handle_spawn(uint32_t req_id, const uint8_t *body, uint32_t len);
+void proc_handle_disk_spawn(uint32_t req_id, const uint8_t *body, uint32_t len);
 void proc_handle_login(uint32_t req_id, const uint8_t *body, uint32_t len);
 void proc_handle_signal(uint32_t req_id, const uint8_t *body, uint32_t len);
 int proc_run_in_container(char *const argv[], void (*exit_handler)(int status));
@@ -147,12 +167,23 @@ void fs_handle_remove(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_mount_virtiofs(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_handle_unmount(uint32_t req_id, const uint8_t *body, uint32_t len);
 void fs_unmount_all(void);
+int fs_normalize_path(const char *in, char *out, size_t cap);
+int fs_prepare_mountpoint(const char *guest_path, char norm[PATH_MAX]);
 int fs_open_in_root(const char *rel, uint64_t flags, uint64_t mode);
 int fs_open_parent(const char *guest_path, char *name_out, size_t name_cap);
 int fs_write_file_jailed(const char *guest_path, const uint8_t *data, size_t len, uint32_t mode, bool sync);
 int fs_mkdir_p_jailed(const char *guest_path, uint32_t mode);
 
+void disk_handle_attach(uint32_t req_id, const uint8_t *body, uint32_t len);
+void disk_handle_detach(uint32_t req_id, const uint8_t *body, uint32_t len);
+void disk_handle_mount(uint32_t req_id, const uint8_t *body, uint32_t len);
+void disk_handle_unmount(uint32_t req_id, const uint8_t *body, uint32_t len);
+int disk_sandbox_open(uint32_t disk_id, const char *hostname, launch_target_t *target, disk_sandbox_t **sandbox_out);
+void disk_sandbox_close(disk_sandbox_t *sandbox);
+void disk_shutdown(void);
+
 int host_cmd_setup(const char *guest_dir);
+int host_cmd_borrow_stdio(uint32_t invocation_id, int fds[3]);
 void host_cmd_cuse_shutdown(void);
 void host_cmd_handle_register(uint32_t req_id, const uint8_t *body, uint32_t len);
 void host_cmd_handle_finish(const uint8_t *body, uint32_t len);

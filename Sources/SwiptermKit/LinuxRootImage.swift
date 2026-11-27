@@ -52,8 +52,33 @@ public struct LinuxRootImage: Sendable {
         try root.withUnsafeFileSystemRepresentation { rootPath in
             try check(swipterm_root_kernels(rootPath, &releases, &count))
         }
-        defer { swipterm_free_kernels(releases, count) }
+        defer { swipterm_free_strings(releases, count) }
         return (0..<count).map { String(cString: releases![$0]!) }
+    }
+
+    /// The contents of the regular file at `path` in the image at `root`, following symbolic links; `nil` when nothing
+    /// exists there. Throws `LinuxError.EBUSY` while the image is booted, attached or being built.
+    public static func contents(of path: String, at root: URL) throws -> Data? {
+        var data: UnsafeMutableRawPointer?
+        var size = 0
+        let code = root.withUnsafeFileSystemRepresentation { swipterm_root_read($0, path, &data, &size) }
+        if code == -LinuxError.ENOENT.rawValue {
+            return nil
+        }
+        try check(code)
+        return Data(bytesNoCopy: data!, count: size, deallocator: .free)
+    }
+
+    /// The type of the file at `path` in the image at `root`, following symbolic links; `nil` when nothing exists there.
+    /// Throws `LinuxError.EBUSY` while the image is booted, attached or being built.
+    public static func fileType(of path: String, at root: URL) throws -> LinuxFileType? {
+        var mode: UInt32 = 0
+        let code = root.withUnsafeFileSystemRepresentation { swipterm_root_stat($0, path, &mode) }
+        if code == -LinuxError.ENOENT.rawValue {
+            return nil
+        }
+        try check(code)
+        return LinuxFileType(mode: mode)
     }
 
     /// Replaces an image already installed at `root` once the new one is complete.
@@ -239,6 +264,19 @@ public final class LinuxRootImageBuilder: @unchecked Sendable {
         }
         try check(code)
         return Data(bytesNoCopy: data!, count: size, deallocator: .free)
+    }
+
+    /// The names in the directory at `path`, following symbolic links; `nil` when nothing exists there.
+    public func contentsOfDirectory(at path: String) throws -> [String]? {
+        var names: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
+        var count = 0
+        let code = swipterm_root_builder_list(handle, path, &names, &count)
+        if code == -LinuxError.ENOENT.rawValue {
+            return nil
+        }
+        try check(code)
+        defer { swipterm_free_strings(names, count) }
+        return (0..<count).map { String(cString: names![$0]!) }
     }
 
     /// Creates missing parent directories.

@@ -18,6 +18,7 @@
 #define CGROUP_ROOT "/sys/fs/cgroup"
 #define CGROUP_HOST CGROUP_ROOT "/host"
 #define CGROUP_MACHINE CGROUP_ROOT "/machine"
+#define CGROUP_DISKS CGROUP_ROOT "/disks"
 #define CGROUP_PLAIN_SESSIONS CGROUP_MACHINE "/swipterm-sessions"
 #define SESSIONS_UNIT "swipterm-sessions.service"
 #define SYSTEMD_CONTROL GUEST_ROOT "/run/systemd/system.control"
@@ -141,19 +142,22 @@ static int device_policy_attach(void) {
     int prog = (int)bpf_call(BPF_PROG_LOAD, &attr);
     if (prog < 0)
         return -errno;
-    int cgroup = open(CGROUP_MACHINE, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (cgroup < 0) {
-        int err = -errno;
-        close(prog);
-        return err;
+    static const char *const groups[] = {CGROUP_MACHINE, CGROUP_DISKS};
+    int rc = 0;
+    for (size_t i = 0; i < sizeof(groups) / sizeof(groups[0]) && rc == 0; i++) {
+        int cgroup = open(groups[i], O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        if (cgroup < 0) {
+            rc = -errno;
+            break;
+        }
+        memset(&attr, 0, sizeof(attr));
+        attr.target_fd = (uint32_t)cgroup;
+        attr.attach_bpf_fd = (uint32_t)prog;
+        attr.attach_type = BPF_CGROUP_DEVICE;
+        attr.attach_flags = BPF_F_ALLOW_MULTI;
+        rc = bpf_call(BPF_PROG_ATTACH, &attr) < 0 ? -errno : 0;
+        close(cgroup);
     }
-    memset(&attr, 0, sizeof(attr));
-    attr.target_fd = (uint32_t)cgroup;
-    attr.attach_bpf_fd = (uint32_t)prog;
-    attr.attach_type = BPF_CGROUP_DEVICE;
-    attr.attach_flags = BPF_F_ALLOW_MULTI;
-    int rc = bpf_call(BPF_PROG_ATTACH, &attr) < 0 ? -errno : 0;
-    close(cgroup);
     close(prog);
     return rc;
 }
@@ -179,7 +183,8 @@ static void enable_root_controllers(void) {
 int cgroup_setup(void) {
     if (mount("cgroup2", CGROUP_ROOT, "cgroup2", api_mount_flags, "nsdelegate") < 0)
         return -errno;
-    if ((mkdir(CGROUP_HOST, 0755) < 0 && errno != EEXIST) || (mkdir(CGROUP_MACHINE, 0755) < 0 && errno != EEXIST))
+    if ((mkdir(CGROUP_HOST, 0755) < 0 && errno != EEXIST) || (mkdir(CGROUP_MACHINE, 0755) < 0 && errno != EEXIST) ||
+        (mkdir(CGROUP_DISKS, 0755) < 0 && errno != EEXIST))
         return -errno;
     int rc = write_file(AT_FDCWD, CGROUP_HOST "/cgroup.procs", "0", 0, 0);
     if (rc < 0)
@@ -407,10 +412,10 @@ int container_assemble(void) {
     return rc;
 }
 
-int container_enter(void) {
+int container_enter(bool disk) {
     if (setns(network_guest_fd(), CLONE_NEWNET) < 0)
         return -errno;
-    int rc = write_file(AT_FDCWD, CGROUP_MACHINE "/cgroup.procs", "0", 0, 0);
+    int rc = write_file(AT_FDCWD, disk ? CGROUP_DISKS "/cgroup.procs" : CGROUP_MACHINE "/cgroup.procs", "0", 0, 0);
     if (rc < 0)
         return rc;
     return unshare(CLONE_NEWCGROUP) < 0 ? -errno : 0;
@@ -424,6 +429,11 @@ int container_mount_api(void) {
         mount(NULL, "/", NULL, MS_REC | MS_SHARED, NULL) < 0)
         return -errno;
     return 0;
+}
+
+int disk_procs_fd(void) {
+    int fd = open(CGROUP_DISKS "/cgroup.procs", O_WRONLY | O_CLOEXEC);
+    return fd < 0 ? -errno : fd;
 }
 
 int sessions_procs_fd(void) {

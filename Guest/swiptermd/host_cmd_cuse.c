@@ -441,6 +441,23 @@ static void cmd_start(int cfd, const int guest_fds[3], const uint8_t *payload, u
         cmd_chan_pump(&inv->chans[0]);
 }
 
+int host_cmd_borrow_stdio(uint32_t invocation_id, int fds[3]) {
+    for (cmd_invocation_t *inv = g_invocations; inv; inv = inv->next) {
+        if (inv->invocation_id != invocation_id)
+            continue;
+        cmd_chan_t *input = &inv->chans[0];
+        if (input->guest_fd >= 0 && isatty(input->guest_fd)) {
+            ev_del(&input->guest_ev);
+            ev_del(&input->vsock_ev);
+            input->eof = true;
+        }
+        for (int i = 0; i < 3; i++)
+            fds[i] = inv->chans[i].guest_fd;
+        return 0;
+    }
+    return -ESRCH;
+}
+
 static void cmd_request_detach(cmd_request_t *req) {
     for (cmd_request_t **pp = &g_cmd_requests; *pp; pp = &(*pp)->next) {
         if (*pp == req) {

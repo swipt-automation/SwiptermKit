@@ -101,5 +101,7 @@ int fdt_build(const vmm_machine_t *vm, const vmm_config_t *config,
 int vmm_attach_virtio_fs(vmm_machine_t *vm, const char *tag, const char *host_root,
                          bool read_only, uint32_t *slot_out);
 void vmm_detach_virtio_fs(vmm_machine_t *vm, uint32_t slot);
+int vmm_attach_virtio_blk(vmm_machine_t *vm, int fd, uint32_t *slot_out);
+void vmm_detach_virtio_blk(vmm_machine_t *vm, uint32_t slot);
 
 #endif

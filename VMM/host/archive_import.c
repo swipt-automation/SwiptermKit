@@ -1562,6 +1562,35 @@ int swipterm_root_builder_read(swipterm_root_builder *b, const char *path, void 
     return 0;
 }
 
+int swipterm_root_builder_list(swipterm_root_builder *b, const char *path, char ***names_out, size_t *count_out) {
+    *names_out = NULL;
+    *count_out = 0;
+    if (b->failed || b->finished) {
+        return -LINUX_EINVAL;
+    }
+    vfs_node_t *node = vfs_find(b->root, path, true);
+    if (!node) {
+        return -LINUX_ENOENT;
+    }
+    if (!S_ISDIR(node->mode)) {
+        return -LINUX_ENOTDIR;
+    }
+    char **names = calloc(node->child_count > 0 ? node->child_count : 1, sizeof(*names));
+    if (!names) {
+        return -LINUX_ENOMEM;
+    }
+    for (size_t i = 0; i < node->child_count; i++) {
+        names[i] = strdup(node->children[i].name);
+        if (!names[i]) {
+            swipterm_free_strings(names, i);
+            return -LINUX_ENOMEM;
+        }
+    }
+    *names_out = names;
+    *count_out = node->child_count;
+    return 0;
+}
+
 int swipterm_root_builder_write(swipterm_root_builder *b, const char *path, const void *data, size_t size,
                                 uint32_t mode) {
     if (b->failed || b->finished) {

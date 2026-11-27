@@ -32,6 +32,8 @@ enum {
     SWIPTERMD_DEV_READ_REQ_SIZE = 16,
     SWIPTERMD_DEV_WRITE_REPLY_SIZE = 8,
     SWIPTERMD_DEV_CLOSE_REQ_SIZE = 12,
+    SWIPTERMD_DISK_ATTACH_REQ_SIZE = 9,
+    SWIPTERMD_DISK_DETACH_REQ_SIZE = 4,
 };
 
 enum {
@@ -410,6 +412,41 @@ static inline bool swiptermd_enc_spawn_req(swiptermd_buf_w_t *w, uint32_t proces
     swiptermd_w_str(w, working_dir);
     swiptermd_w_strv(w, argv, argc);
     swiptermd_w_strv(w, envp, envc);
+    return !w->overflow;
+}
+
+static inline size_t swiptermd_enc_disk_attach_req(uint8_t out[SWIPTERMD_DISK_ATTACH_REQ_SIZE], uint32_t disk_id,
+                                                   uint32_t slot, bool read_only) {
+    swiptermd_buf_w_t w = swiptermd_buf_w_init(out, SWIPTERMD_DISK_ATTACH_REQ_SIZE);
+    swiptermd_w_u32(&w, disk_id);
+    swiptermd_w_u32(&w, slot);
+    swiptermd_w_u8(&w, read_only ? 1 : 0);
+    return w.len;
+}
+
+static inline bool swiptermd_dec_disk_attach_req(const uint8_t *in, size_t len, uint32_t *disk_id, uint32_t *slot,
+                                                 bool *read_only) {
+    if (len < SWIPTERMD_DISK_ATTACH_REQ_SIZE)
+        return false;
+    swiptermd_buf_r_t r = swiptermd_buf_r_init(in, len);
+    *disk_id = swiptermd_r_u32(&r);
+    *slot = swiptermd_r_u32(&r);
+    *read_only = swiptermd_r_u8(&r) != 0;
+    return true;
+}
+
+static inline bool swiptermd_enc_disk_path_req(swiptermd_buf_w_t *w, uint32_t disk_id, const char *guest_path) {
+    swiptermd_w_u32(w, disk_id);
+    swiptermd_w_str(w, guest_path);
+    return !w->overflow;
+}
+
+static inline bool swiptermd_enc_disk_spawn_prefix(swiptermd_buf_w_t *w, uint32_t disk_id, uint32_t invocation_id,
+                                                   uint32_t flags, const char *hostname) {
+    swiptermd_w_u32(w, disk_id);
+    swiptermd_w_u32(w, invocation_id);
+    swiptermd_w_u32(w, flags);
+    swiptermd_w_str(w, hostname);
     return !w->overflow;
 }
 

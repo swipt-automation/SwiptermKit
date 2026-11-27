@@ -61,6 +61,12 @@ typedef enum swiptermd_opcode {
     SWIPTERMD_OP_MIRROR_UPDATE = 0x0070,
 
     SWIPTERMD_OP_CLIPBOARD_OFFER = 0x0080,
+
+    SWIPTERMD_OP_DISK_ATTACH = 0x0090,
+    SWIPTERMD_OP_DISK_DETACH = 0x0091,
+    SWIPTERMD_OP_DISK_MOUNT = 0x0092,
+    SWIPTERMD_OP_DISK_UNMOUNT = 0x0093,
+    SWIPTERMD_OP_DISK_SPAWN = 0x0094,
 } swiptermd_opcode_t;
 
 typedef enum swiptermd_stream_role {
@@ -106,6 +112,10 @@ typedef enum swiptermd_stdio_mode {
     SWIPTERMD_STDIO_PIPE = 1,
     SWIPTERMD_STDIO_PTY = 2,
 } swiptermd_stdio_mode_t;
+
+typedef enum swiptermd_disk_spawn_flag {
+    SWIPTERMD_DISK_SPAWN_SHELL = 1U << 0,
+} swiptermd_disk_spawn_flag_t;
 
 typedef enum swiptermd_mirror_family {
     SWIPTERMD_MIRROR_AF_INET = 4,
