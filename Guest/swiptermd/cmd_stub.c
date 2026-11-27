@@ -103,6 +103,7 @@ int main(int argc, char **argv) {
     sigaddset(&mask, SIGINT);
     sigaddset(&mask, SIGQUIT);
     sigaddset(&mask, SIGTERM);
+    sigaddset(&mask, SIGWINCH);
     sigprocmask(SIG_BLOCK, &mask, NULL);
     signal(SIGPIPE, SIG_IGN);
 
@@ -165,6 +166,11 @@ int main(int argc, char **argv) {
         if (pfds[1].revents & POLLIN) {
             struct signalfd_siginfo si;
             if (read(sfd, &si, sizeof(si)) == (ssize_t)sizeof(si)) {
+                if (si.ssi_signo == SIGWINCH) {
+                    stub_ctl_msg_t winch = {.type = STUB_MSG_WINCH};
+                    (void)write_all_blocking(sock, &winch, sizeof(winch));
+                    continue;
+                }
                 stub_ctl_msg_t msg = {
                     .type = STUB_MSG_CANCEL,
                     .value = (int32_t)si.ssi_signo,

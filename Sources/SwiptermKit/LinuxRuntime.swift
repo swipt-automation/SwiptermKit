@@ -107,7 +107,6 @@ public final class LinuxRuntime: @unchecked Sendable {
     private var isShutdownComplete = false
 
     private static let systemPath = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-    private static let readinessPollInterval = Duration.milliseconds(250)
 
     private init(handle: OpaquePointer, network: LibswiptermNetwork, callbacks: RuntimeCallbacks) {
         self.handle = handle
@@ -321,25 +320,16 @@ public final class LinuxRuntime: @unchecked Sendable {
     }
 
     public func waitReady(timeout: Duration) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while true {
-            try Task.checkCancellation()
-            let remaining = clock.now.duration(to: deadline)
-            guard remaining > .zero else {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                try await self.callbacks.readiness.wait()
+            }
+            group.addTask {
+                try await Task.sleep(for: timeout)
                 throw LinuxError.ETIMEDOUT
             }
-            let interval = min(Self.readinessPollInterval, remaining)
-            let milliseconds = Int32(max(1, interval.components.seconds * 1000 + interval.components.attoseconds / 1_000_000_000_000_000))
-            let code = try await withActiveHandleBlocking { handle in
-                swipterm_wait_ready(handle, milliseconds)
-            }
-            if code == 0 {
-                return
-            }
-            if code != -LinuxError.ETIMEDOUT.rawValue {
-                try check(code)
-            }
+            _ = try await group.next()
+            group.cancelAll()
         }
     }
 
@@ -452,4 +442,5 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
         try check(code)
     }
+
 }

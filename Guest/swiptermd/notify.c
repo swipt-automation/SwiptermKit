@@ -16,9 +16,10 @@ static void handle_init_message(char *message) {
     char *save = NULL;
     for (char *line = strtok_r(message, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
         int level = 0;
-        if (strcmp(line, "READY=1") == 0)
+        if (strcmp(line, "READY=1") == 0) {
             ready_announce(SWIPTERMD_READY_SYSTEM);
-        else if (sscanf(line, "X_SYSTEMD_SIGNALS_LEVEL=%d", &level) == 1 && level > 0)
+            readiness_stop();
+        } else if (sscanf(line, "X_SYSTEMD_SIGNALS_LEVEL=%d", &level) == 1 && level > 0)
             g_signals_level = level;
     }
 }

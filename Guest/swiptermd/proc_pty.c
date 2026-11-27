@@ -12,7 +12,6 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/timerfd.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
@@ -61,13 +60,11 @@ typedef struct pipe_relay {
 } pipe_relay_t;
 
 typedef struct tty_bridge {
+    uint32_t invocation_id;
     int tty_fd;
     int master_fd;
-    int timer_fd;
     int pts_num;
-    ev_node_t timer_ev;
     struct termios saved;
-    struct winsize size;
     pipe_relay_t *input;
     pipe_relay_t *output;
 } tty_bridge_t;
@@ -472,15 +469,16 @@ static pipe_relay_t *pipe_relay_start(int src_fd, int dst_fd, bool dst_is_socket
     return r;
 }
 
-static void on_bridge_timer(ev_node_t *node, uint32_t events) {
-    (void)events;
-    tty_bridge_t *bridge = node->ctx;
-    uint64_t expirations;
-    (void)read(bridge->timer_fd, &expirations, sizeof(expirations));
+static void tty_bridge_sync_size(tty_bridge_t *bridge) {
     struct winsize size;
-    if (ioctl(bridge->tty_fd, TIOCGWINSZ, &size) == 0 && memcmp(&size, &bridge->size, sizeof(size)) != 0) {
-        bridge->size = size;
+    if (ioctl(bridge->tty_fd, TIOCGWINSZ, &size) == 0)
         (void)ioctl(bridge->master_fd, TIOCSWINSZ, &size);
+}
+
+void proc_bridge_resize(uint32_t invocation_id) {
+    for (proc_entry_t *proc = g_procs; proc; proc = proc->next) {
+        if (proc->bridge && proc->bridge->invocation_id == invocation_id)
+            tty_bridge_sync_size(proc->bridge);
     }
 }
 
@@ -489,9 +487,6 @@ static void tty_bridge_close(tty_bridge_t *bridge) {
         on_pipe_relay_event(&bridge->output->src_ev, 0);
     pipe_relay_destroy(bridge->input);
     pipe_relay_destroy(bridge->output);
-    ev_del(&bridge->timer_ev);
-    if (bridge->timer_fd >= 0)
-        close(bridge->timer_fd);
     if (bridge->master_fd >= 0)
         close(bridge->master_fd);
     if (bridge->tty_fd >= 0) {
@@ -501,12 +496,12 @@ static void tty_bridge_close(tty_bridge_t *bridge) {
     free(bridge);
 }
 
-static int tty_bridge_open(int terminal_fd, tty_bridge_t **bridge_out) {
+static int tty_bridge_open(int terminal_fd, uint32_t invocation_id, tty_bridge_t **bridge_out) {
     tty_bridge_t *bridge = calloc(1, sizeof(*bridge));
     if (!bridge)
         return -ENOMEM;
+    bridge->invocation_id = invocation_id;
     bridge->master_fd = -1;
-    bridge->timer_fd = -1;
     char path[32];
     snprintf(path, sizeof(path), "/proc/self/fd/%d", terminal_fd);
     bridge->tty_fd = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
@@ -517,20 +512,17 @@ static int tty_bridge_open(int terminal_fd, tty_bridge_t **bridge_out) {
         free(bridge);
         return err;
     }
-    struct itimerspec interval = {.it_interval = {.tv_nsec = 250 * 1000 * 1000}, .it_value = {.tv_nsec = 1}};
     struct termios raw = bridge->saved;
     cfmakeraw(&raw);
     int input_dst = -1;
     int output_src = -1;
     int output_dst = -1;
     bridge->master_fd = pty_open_master(&bridge->pts_num);
-    bridge->timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
     int input_src = fcntl(bridge->tty_fd, F_DUPFD_CLOEXEC, 0);
-    if (bridge->master_fd < 0 || bridge->timer_fd < 0 || input_src < 0 ||
+    if (bridge->master_fd < 0 || input_src < 0 ||
         (input_dst = fcntl(bridge->master_fd, F_DUPFD_CLOEXEC, 0)) < 0 ||
         (output_src = fcntl(bridge->master_fd, F_DUPFD_CLOEXEC, 0)) < 0 ||
         (output_dst = fcntl(bridge->tty_fd, F_DUPFD_CLOEXEC, 0)) < 0 ||
-        timerfd_settime(bridge->timer_fd, 0, &interval, NULL) < 0 ||
         tcsetattr(bridge->tty_fd, TCSANOW, &raw) < 0) {
         int err = -errno;
         int fds[] = {input_src, input_dst, output_src, output_dst};
@@ -547,7 +539,7 @@ static int tty_bridge_open(int terminal_fd, tty_bridge_t **bridge_out) {
         bridge->input->owner = &bridge->input;
     if (bridge->output)
         bridge->output->owner = &bridge->output;
-    ev_add(&bridge->timer_ev, bridge->timer_fd, EPOLLIN, on_bridge_timer, bridge);
+    tty_bridge_sync_size(bridge);
     *bridge_out = bridge;
     return 0;
 }
@@ -571,6 +563,8 @@ static void on_proc_exit_event(ev_node_t *node, uint32_t events) {
     }
     if (proc->bridge)
         tty_bridge_close(proc->bridge);
+    if (!proc->sandbox && g_daemon.init_mode == SWIPTERMD_INIT_MANAGED && g_daemon.container_init_pid > 0)
+        kill(g_daemon.container_init_pid, SIGCHLD);
 
     for (int i = 0; i < proc->bound_pty_count; i++) {
         pty_session_t *p = pty_find(proc->bound_pty_ids[i]);
@@ -1059,7 +1053,7 @@ void proc_handle_disk_spawn(uint32_t req_id, const uint8_t *body, uint32_t len) 
         if (err == 0 && invocation_id != 0) {
             err = host_cmd_borrow_stdio(invocation_id, spec.stdio_fd);
             if (err == 0 && spec.stdio_fd[0] >= 0 && isatty(spec.stdio_fd[0]))
-                err = tty_bridge_open(spec.stdio_fd[0], &spec.bridge);
+                err = tty_bridge_open(spec.stdio_fd[0], invocation_id, &spec.bridge);
             for (int i = 0; i < 3 && err == 0; i++) {
                 if (spec.bridge && spec.stdio_fd[i] >= 0 && isatty(spec.stdio_fd[i]))
                     spec.stdio_mode[i] = LAUNCH_STDIO_BRIDGE;

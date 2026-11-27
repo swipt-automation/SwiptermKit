@@ -20,6 +20,7 @@ enum {
 enum {
     STUB_MSG_EXIT = 1,
     STUB_MSG_CANCEL = 2,
+    STUB_MSG_WINCH = 3,
 };
 
 typedef struct stub_ctl_msg {

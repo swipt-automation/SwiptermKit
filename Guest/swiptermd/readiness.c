@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/inotify.h>
 #include <sys/stat.h>
 #include <sys/timerfd.h>
 #include <unistd.h>
@@ -24,8 +25,10 @@ enum {
     UTMP_DEAD_PROCESS = 8,
 };
 
-static ev_node_t g_probe_ev;
-static int g_probe_fd = -1;
+static ev_node_t g_timer_ev;
+static ev_node_t g_watch_ev;
+static int g_timer_fd = -1;
+static int g_watch_fd = -1;
 static unsigned g_probe_count;
 static unsigned g_probe_hits;
 
@@ -149,18 +152,15 @@ static bool sysvinit_settled(void) {
 }
 
 static bool system_settled(void) {
-    char init[NAME_MAX + 1];
-    if (!ns_init_executable(init, sizeof(init)) || strcmp(init, "systemd") == 0)
-        return false;
-    return openrc_settled() || (strcmp(init, "runit") == 0 && runit_stage2()) || sysvinit_settled();
+    return g_watch_fd < 0 ? runit_stage2() : openrc_settled() || sysvinit_settled();
 }
 
-static void on_probe(ev_node_t *node, uint32_t events) {
+static void on_timer(ev_node_t *node, uint32_t events) {
     (void)events;
     uint64_t expirations;
-    (void)read(node->fd, &expirations, sizeof(expirations));
-    if ((g_daemon.ready_mask & (1U << SWIPTERMD_READY_SYSTEM)) || g_daemon.stopping ||
-        g_daemon.container_init_pid <= 0 || ++g_probe_count > PROBE_LIMIT) {
+    if (read(node->fd, &expirations, sizeof(expirations)) < 0)
+        return;
+    if (g_watch_fd < 0 && ++g_probe_count > PROBE_LIMIT) {
         readiness_stop();
         return;
     }
@@ -173,29 +173,67 @@ static void on_probe(ev_node_t *node, uint32_t events) {
     }
 }
 
-int readiness_start(void) {
-    int fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
-    if (fd < 0)
-        return -errno;
-    struct itimerspec interval = {
-        .it_value = {.tv_nsec = PROBE_INTERVAL_MS * 1000000L},
-        .it_interval = {.tv_nsec = PROBE_INTERVAL_MS * 1000000L},
-    };
-    int rc = timerfd_settime(fd, 0, &interval, NULL) < 0 ? -errno : ev_add(&g_probe_ev, fd, EPOLLIN, on_probe, NULL);
-    if (rc < 0) {
+static void on_watch(ev_node_t *node, uint32_t events) {
+    (void)events;
+    char drained[4096];
+    while (read(node->fd, drained, sizeof(drained)) > 0) {}
+    static const char *const dirs[] = {"run", "run/openrc", "var", "var/run"};
+    for (size_t i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
+        int fd = fs_open_in_root(dirs[i], O_PATH | O_DIRECTORY, 0);
+        if (fd < 0)
+            continue;
+        char path[32];
+        snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
+        (void)inotify_add_watch(node->fd, path,
+                                IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_MODIFY | IN_MOVED_FROM | IN_MOVED_TO);
         close(fd);
-        return rc;
     }
-    g_probe_fd = fd;
+    bool settled = system_settled();
+    if (settled && g_probe_hits > 0)
+        return;
+    g_probe_hits = settled;
+    struct itimerspec confirm = {.it_value = {.tv_nsec = settled ? PROBE_INTERVAL_MS * 1000000L : 0}};
+    (void)timerfd_settime(g_timer_fd, 0, &confirm, NULL);
+}
+
+int readiness_start(void) {
+    char init[NAME_MAX + 1];
+    if (!ns_init_executable(init, sizeof(init)) || strcmp(init, "systemd") == 0)
+        return 0;
+    bool runit = strcmp(init, "runit") == 0 || strcmp(init, "runit-init") == 0;
     g_probe_count = 0;
     g_probe_hits = 0;
+    g_timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+    int rc = g_timer_fd < 0 ? -errno : ev_add(&g_timer_ev, g_timer_fd, EPOLLIN, on_timer, NULL);
+    if (rc == 0 && runit) {
+        struct itimerspec interval = {
+            .it_value = {.tv_nsec = PROBE_INTERVAL_MS * 1000000L},
+            .it_interval = {.tv_nsec = PROBE_INTERVAL_MS * 1000000L},
+        };
+        if (timerfd_settime(g_timer_fd, 0, &interval, NULL) < 0)
+            rc = -errno;
+    } else if (rc == 0) {
+        g_watch_fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+        rc = g_watch_fd < 0 ? -errno : ev_add(&g_watch_ev, g_watch_fd, EPOLLIN, on_watch, NULL);
+    }
+    if (rc < 0) {
+        readiness_stop();
+        return rc;
+    }
+    if (!runit)
+        on_watch(&g_watch_ev, 0);
     return 0;
 }
 
 void readiness_stop(void) {
-    if (g_probe_fd < 0)
-        return;
-    ev_del(&g_probe_ev);
-    close(g_probe_fd);
-    g_probe_fd = -1;
+    ev_del(&g_timer_ev);
+    ev_del(&g_watch_ev);
+    if (g_timer_fd >= 0) {
+        close(g_timer_fd);
+        g_timer_fd = -1;
+    }
+    if (g_watch_fd >= 0) {
+        close(g_watch_fd);
+        g_watch_fd = -1;
+    }
 }

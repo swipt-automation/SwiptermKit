@@ -3,6 +3,7 @@ import Foundation
 
 final class RuntimeCallbacks: Sendable {
     let queue = DispatchQueue(label: "SwiptermKit.Callbacks")
+    let readiness = RuntimeReadiness()
     let consoleOutput: (@Sendable (Data) -> Void)?
     let haltHandler: (@Sendable (LinuxRuntime.HaltReason) -> Void)?
     let clipboard: (any LinuxClipboard)?
@@ -33,6 +34,10 @@ final class RuntimeCallbacks: Sendable {
                 callbacks.queue.async {
                     callbacks.haltHandler?(haltReason)
                 }
+            },
+            ready: { context, status in
+                let callbacks = Unmanaged<RuntimeCallbacks>.fromOpaque(context!).takeUnretainedValue()
+                callbacks.readiness.resolve(Result { try check(status) })
             },
             process_exit: { context, status in
                 Unmanaged<LinuxProcess.State>.fromOpaque(context!).takeRetainedValue().exit(status: status)

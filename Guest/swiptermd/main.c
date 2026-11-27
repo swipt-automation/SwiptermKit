@@ -665,6 +665,7 @@ void shutdown_begin(bool reboot) {
         return;
     g_daemon.stopping = true;
     g_daemon.reboot_requested = reboot;
+    readiness_stop();
     if (g_daemon.container_init_pid <= 0) {
         g_daemon.shutdown_requested = true;
         return;

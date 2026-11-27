@@ -61,6 +61,7 @@ typedef struct {
     void *context;
     void (*console_output)(void *context, const void *data, size_t length);
     void (*halt)(void *context, swipterm_halt_reason reason, int wait_status);
+    void (*ready)(void *context, int status);
     void (*process_exit)(void *context, int status);
     void *(*command_start)(void *context, swipterm_invocation *invocation,
                            size_t argc, const char *const *argv, const char *const *envp,
@@ -122,8 +123,6 @@ int swipterm_start_init(swipterm_runtime *runtime, const char *path,
                         size_t argc, const char *const *argv, const char *const *envp);
 void swipterm_suspend(swipterm_runtime *runtime);
 void swipterm_resume(swipterm_runtime *runtime);
-
-int swipterm_wait_ready(swipterm_runtime *runtime, int timeout_ms);
 
 typedef enum {
     SWIPTERM_STDIO_NULL = 0,

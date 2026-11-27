@@ -322,6 +322,7 @@ struct swipterm_runtime {
     _Atomic bool finalized;
     _Atomic bool halted;
     _Atomic bool vm_powered_off;
+    _Atomic bool ready_resolved;
     _Atomic uint32_t next_req_id;
     _Atomic uint64_t next_token;
     _Atomic uint32_t next_proc_id;
@@ -336,7 +337,7 @@ struct swipterm_runtime {
     uint64_t clipboard_write_seq;
     pthread_cond_t hello_cond;
     pthread_cond_t halt_cond;
-    pthread_cond_t ready_cond;
+    pthread_cond_t stopped_cond;
     pthread_cond_t console_cond;
     pthread_cond_t workers_cond;
     size_t active_workers;
@@ -345,7 +346,6 @@ struct swipterm_runtime {
     bool control_rx_done;
     uint64_t session_nonce;
     uint32_t guest_caps;
-    uint32_t ready_mask;
     halt_info_t halt_info;
     bool gpu_active;
 
@@ -365,6 +365,12 @@ static bool guest_has_capability(swipterm_runtime *rt, uint32_t capability) {
     bool supported = (rt->guest_caps & capability) != 0;
     pthread_mutex_unlock(&rt->state_lock);
     return supported;
+}
+
+static void resolve_ready(swipterm_runtime *rt, int status) {
+    if (!atomic_load(&rt->booting) && !atomic_exchange(&rt->ready_resolved, true) && rt->callbacks.ready) {
+        rt->callbacks.ready(rt->callbacks.context, status);
+    }
 }
 
 void swipterm_process_release(swipterm_process *proc) {
@@ -1564,9 +1570,6 @@ static void *guest_rpc_worker(void *arg) {
         if (!atomic_exchange(&rt->halted, true) && !atomic_load(&rt->shutting_down) && rt->callbacks.halt) {
             rt->callbacks.halt(rt->callbacks.context, info.reason, info.wait_status);
         }
-        pthread_mutex_lock(&rt->state_lock);
-        pthread_cond_broadcast(&rt->ready_cond);
-        pthread_mutex_unlock(&rt->state_lock);
         worker_leave(rt);
         return NULL;
     }
@@ -1649,22 +1652,16 @@ static void handle_guest_frame(swipterm_runtime *rt, const swiptermd_frame_hdr_t
         uint32_t level = 0;
         bool ok = swiptermd_dec_u32(body, hdr->body_len, &level);
         free(body);
-        if (!ok) {
-            break;
+        if (ok && level == SWIPTERMD_READY_LOGIN) {
+            resolve_ready(rt, 0);
         }
-        pthread_mutex_lock(&rt->state_lock);
-        if (level < 32) {
-            rt->ready_mask |= 1U << level;
-        }
-        pthread_cond_broadcast(&rt->ready_cond);
-        pthread_mutex_unlock(&rt->state_lock);
         break;
     }
     case SWIPTERMD_OP_STOPPED:
         free(body);
         pthread_mutex_lock(&rt->state_lock);
         rt->halt_info.shutdown_complete = true;
-        pthread_cond_broadcast(&rt->ready_cond);
+        pthread_cond_broadcast(&rt->stopped_cond);
         pthread_mutex_unlock(&rt->state_lock);
         break;
     case SWIPTERMD_OP_PROCESS_EXIT: {
@@ -1765,8 +1762,8 @@ static void handle_guest_frame(swipterm_runtime *rt, const swiptermd_frame_hdr_t
                                                                                   : SWIPTERM_HALT_EXIT;
                 rt->halt_info.wait_status = status;
             }
-            pthread_cond_broadcast(&rt->ready_cond);
             pthread_mutex_unlock(&rt->state_lock);
+            resolve_ready(rt, -LINUX_ESRCH);
         }
         spawn_guest_rpc_worker(rt, hdr, body);
         break;
@@ -1789,7 +1786,7 @@ static void fail_all_pending_reqs(swipterm_runtime *rt) {
     pending_req_t *list = rt->pending_reqs;
     rt->pending_reqs = NULL;
     pthread_cond_broadcast(&rt->hello_cond);
-    pthread_cond_broadcast(&rt->ready_cond);
+    pthread_cond_broadcast(&rt->stopped_cond);
     pthread_mutex_unlock(&rt->state_lock);
 
     while (list) {
@@ -1817,6 +1814,7 @@ static void *control_rx_main(void *arg) {
     rt->control_rx_done = true;
     pthread_mutex_unlock(&rt->state_lock);
     fail_all_pending_reqs(rt);
+    resolve_ready(rt, -LINUX_ESRCH);
     return NULL;
 }
 
@@ -1828,6 +1826,7 @@ static void vmm_on_halt(void *ctx) {
     pthread_cond_broadcast(&rt->halt_cond);
     pthread_mutex_unlock(&rt->state_lock);
     fail_all_pending_reqs(rt);
+    resolve_ready(rt, -LINUX_ESRCH);
     if (rt->vsock) {
         virtio_vsock_notify_halt(rt->vsock);
     }
@@ -2127,7 +2126,6 @@ static void discard_machine(swipterm_runtime *rt) {
     rt->control_rx_done = false;
     rt->session_nonce = 0;
     rt->guest_caps = 0;
-    rt->ready_mask = 0;
     rt->halt_info = (halt_info_t){0};
     pthread_mutex_unlock(&rt->state_lock);
 }
@@ -2264,7 +2262,7 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
     pthread_mutex_init(&rt->clipboard_write_lock, NULL);
     pthread_cond_init(&rt->hello_cond, NULL);
     pthread_cond_init(&rt->halt_cond, NULL);
-    pthread_cond_init(&rt->ready_cond, NULL);
+    pthread_cond_init(&rt->stopped_cond, NULL);
     pthread_cond_init(&rt->console_cond, NULL);
     pthread_cond_init(&rt->workers_cond, NULL);
     if (pipe(rt->shutdown_pipe) != 0) {
@@ -2332,6 +2330,7 @@ void swipterm_begin_shutdown(swipterm_runtime *rt) {
         return;
     }
     atomic_store(&rt->shutting_down, true);
+    resolve_ready(rt, -LINUX_ECANCELED);
 
     if (rt->vm != NULL && rt->control_fd >= 0 && !atomic_load(&rt->vm_powered_off)) {
         vmm_resume(rt->vm);
@@ -2348,7 +2347,7 @@ void swipterm_begin_shutdown(swipterm_runtime *rt) {
             clock_gettime(CLOCK_REALTIME, &deadline);
             deadline.tv_sec += STOP_REPORT_TIMEOUT_SEC;
             while (!rt->halt_info.shutdown_complete && !rt->control_rx_done) {
-                if (pthread_cond_timedwait(&rt->ready_cond, &rt->state_lock, &deadline) == ETIMEDOUT) {
+                if (pthread_cond_timedwait(&rt->stopped_cond, &rt->state_lock, &deadline) == ETIMEDOUT) {
                     break;
                 }
             }
@@ -2357,7 +2356,6 @@ void swipterm_begin_shutdown(swipterm_runtime *rt) {
     }
 
     pthread_mutex_lock(&rt->state_lock);
-    pthread_cond_broadcast(&rt->ready_cond);
     if (rt->shutdown_pipe[1] >= 0) {
         close(rt->shutdown_pipe[1]);
         rt->shutdown_pipe[1] = -1;
@@ -2516,7 +2514,7 @@ void swipterm_shutdown(swipterm_runtime *rt) {
     pthread_mutex_destroy(&rt->clipboard_write_lock);
     pthread_cond_destroy(&rt->hello_cond);
     pthread_cond_destroy(&rt->halt_cond);
-    pthread_cond_destroy(&rt->ready_cond);
+    pthread_cond_destroy(&rt->stopped_cond);
     pthread_cond_destroy(&rt->console_cond);
     pthread_cond_destroy(&rt->workers_cond);
     swipterm_network_release(rt->network);
@@ -2590,38 +2588,6 @@ void swipterm_resume(swipterm_runtime *rt) {
     uint8_t req[SWIPTERMD_RESUME_REQ_SIZE];
     swiptermd_enc_resume_req(req, (int64_t)now.tv_sec * 1000000000LL + now.tv_nsec);
     (void)control_send(rt, SWIPTERMD_OP_RESUME, 0, req, sizeof(req));
-}
-
-int swipterm_wait_ready(swipterm_runtime *rt, int timeout_ms) {
-    if (!rt) {
-        return -LINUX_EINVAL;
-    }
-    uint32_t bit = 1U << SWIPTERMD_READY_LOGIN;
-    struct timespec deadline;
-    clock_gettime(CLOCK_REALTIME, &deadline);
-    deadline.tv_sec += timeout_ms / 1000;
-    deadline.tv_nsec += (long)(timeout_ms % 1000) * 1000000L;
-    if (deadline.tv_nsec >= 1000000000L) {
-        deadline.tv_sec++;
-        deadline.tv_nsec -= 1000000000L;
-    }
-    int rc = 0;
-    pthread_mutex_lock(&rt->state_lock);
-    while (rc == 0 && !(rt->ready_mask & bit)) {
-        if (atomic_load(&rt->shutting_down)) {
-            rc = -LINUX_ECANCELED;
-        } else if (atomic_load(&rt->halted) || rt->control_rx_done || rt->halt_info.reason != SWIPTERM_HALT_NONE) {
-            rc = -LINUX_ESRCH;
-        } else if (timeout_ms == 0) {
-            rc = -LINUX_EAGAIN;
-        } else if (timeout_ms < 0) {
-            pthread_cond_wait(&rt->ready_cond, &rt->state_lock);
-        } else if (pthread_cond_timedwait(&rt->ready_cond, &rt->state_lock, &deadline) == ETIMEDOUT) {
-            rc = (rt->ready_mask & bit) ? 0 : -LINUX_ETIMEDOUT;
-        }
-    }
-    pthread_mutex_unlock(&rt->state_lock);
-    return rc;
 }
 
 int swipterm_root_kernels(const char *root_path, char ***releases_out, size_t *count_out) {
@@ -3616,3 +3582,4 @@ int swipterm_set_clipboard_offers(swipterm_runtime *rt, size_t count, const char
     free(buf);
     return ok ? 0 : -LINUX_EIO;
 }
+

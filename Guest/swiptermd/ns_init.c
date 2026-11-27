@@ -27,7 +27,6 @@
 
 enum {
     MANAGED_INIT_GRACE_MS = 15000,
-    MANAGED_INIT_POLL_NS = 5 * 1000 * 1000,
 };
 
 typedef struct console_state {
@@ -385,8 +384,9 @@ static _Noreturn void managed_init_halt(const sigset_t *waited, bool restart) {
         long elapsed_ms = (now.tv_sec - start.tv_sec) * 1000 + (now.tv_nsec - start.tv_nsec) / 1000000;
         if (elapsed_ms >= MANAGED_INIT_GRACE_MS)
             break;
-        struct timespec slice = {.tv_nsec = MANAGED_INIT_POLL_NS};
-        if (managed_init_poweroff_signal(sigtimedwait(waited, NULL, &slice)))
+        long remaining_ms = MANAGED_INIT_GRACE_MS - elapsed_ms;
+        struct timespec remaining = {.tv_sec = remaining_ms / 1000, .tv_nsec = remaining_ms % 1000 * 1000000L};
+        if (managed_init_poweroff_signal(sigtimedwait(waited, NULL, &remaining)))
             restart = false;
     }
     (void)reboot(restart ? RB_AUTOBOOT : RB_POWER_OFF);

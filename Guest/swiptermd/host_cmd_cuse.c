@@ -266,6 +266,10 @@ static void on_stub_event(ev_node_t *node, uint32_t events) {
     if (events & EPOLLIN) {
         stub_ctl_msg_t msg;
         ssize_t n = read(inv->stub_fd, &msg, sizeof(msg));
+        if (n == (ssize_t)sizeof(msg) && msg.type == STUB_MSG_WINCH) {
+            proc_bridge_resize(inv->invocation_id);
+            return;
+        }
         if (n == (ssize_t)sizeof(msg) && msg.type == STUB_MSG_CANCEL) {
             cmd_send_cancel(inv, msg.value);
             cmd_invocation_destroy(inv);

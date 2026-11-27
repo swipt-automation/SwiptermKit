@@ -170,6 +170,7 @@ void proc_pty_shutdown(void);
 void proc_handle_disk_spawn(uint32_t req_id, const uint8_t *body, uint32_t len);
 void proc_handle_login(uint32_t req_id, const uint8_t *body, uint32_t len);
 void proc_handle_signal(uint32_t req_id, const uint8_t *body, uint32_t len);
+void proc_bridge_resize(uint32_t invocation_id);
 int proc_run_in_container(char *const argv[], void (*exit_handler)(int status));
 void pty_handle_create(uint32_t req_id, const uint8_t *body, uint32_t len);
 void pty_handle_resize(uint32_t req_id, const uint8_t *body, uint32_t len);
