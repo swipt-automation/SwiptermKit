@@ -23,14 +23,12 @@ const (
 )
 
 var (
-	inet4Prefix  = netip.MustParsePrefix("10.0.2.0/24")
-	inet6Prefix  = netip.MustParsePrefix("fd00::/64")
-	inet4Gateway = netip.MustParseAddr("10.0.2.2")
-	inet6Gateway = netip.MustParseAddr("fd00::2")
-	inet4DNS     = netip.MustParseAddr("10.0.2.3")
-	inet6DNS     = netip.MustParseAddr("fd00::3")
-	inet4Guest   = netip.MustParseAddr("10.0.2.15")
-	inet6Guest   = netip.MustParseAddr("fd00::15")
+	inet4Prefix  = netip.MustParsePrefix("172.19.0.0/30")
+	inet6Prefix  = netip.MustParsePrefix("fdfe:dcba:9876::/126")
+	inet4Gateway = netip.MustParseAddr("172.19.0.1")
+	inet6Gateway = netip.MustParseAddr("fdfe:dcba:9876::1")
+	inet4Guest   = netip.MustParseAddr("172.19.0.2")
+	inet6Guest   = netip.MustParseAddr("fdfe:dcba:9876::2")
 	gatewayMAC   = net.HardwareAddr{0x52, 0x54, 0x00, 0x53, 0x57, 0x02}
 )
 

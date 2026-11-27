@@ -2,6 +2,8 @@ package main
 
 import (
 	"compress/gzip"
+	"debug/elf"
+	"encoding/binary"
 	"io"
 	"net/http"
 	"os"
@@ -105,6 +107,7 @@ func (b *builder) build() error {
 	for _, step := range []func() error{
 		b.prepareE2fsprogs,
 		b.buildE2fsprogs,
+		b.buildBPF,
 		b.buildDaemons,
 		b.buildInitramfs,
 	} {
@@ -197,6 +200,45 @@ func (b *builder) buildE2fsprogs() error {
 	return os.WriteFile(stampPath, []byte(configuration), 0o644)
 }
 
+func (b *builder) buildBPF() error {
+	object := filepath.Join(buildPath, "connect.bpf.o")
+	defer os.Remove(object)
+	err := tool.Run(exec.Command(
+		"clang", "-target", "bpfel", "-mcpu=v2", "-O2", "-Wall", "-Wextra", "-Werror",
+		"-c", filepath.Join(guestPath, "swiptermd", "connect.bpf.c"), "-o", object,
+	))
+	if err != nil {
+		return err
+	}
+	file, err := elf.Open(object)
+	if err != nil {
+		return E.Cause(err, "open BPF object")
+	}
+	defer file.Close()
+	var header strings.Builder
+	header.WriteString("#include <stdint.h>\n")
+	for _, name := range []string{"connect4", "connect6"} {
+		section := file.Section(name)
+		if section == nil {
+			return E.New("missing BPF section ", name)
+		}
+		data, err := section.Data()
+		if err != nil {
+			return E.Cause(err, "read BPF section ", name)
+		}
+		if len(data) == 0 || len(data)%8 != 0 {
+			return E.New("invalid BPF section ", name, " length ", len(data))
+		}
+		header.WriteString("\nstatic const uint64_t " + name + "_prog[] = {\n")
+		for offset := 0; offset < len(data); offset += 8 {
+			word := binary.LittleEndian.Uint64(data[offset : offset+8])
+			header.WriteString("    0x" + strconv.FormatUint(word, 16) + "ULL,\n")
+		}
+		header.WriteString("};\n")
+	}
+	return os.WriteFile(filepath.Join(buildPath, "connect_bpf.h"), []byte(header.String()), 0o644)
+}
+
 func (b *builder) buildDaemons() error {
 	sources, err := filepath.Glob(filepath.Join(guestPath, "swiptermd", "*.c"))
 	if err != nil {
@@ -204,7 +246,8 @@ func (b *builder) buildDaemons() error {
 	}
 	standalone := []string{"cmd_stub", "guest_clip", "modprobe"}
 	daemon := common.Filter(sources, func(source string) bool {
-		return !slices.Contains(standalone, strings.TrimSuffix(filepath.Base(source), ".c"))
+		base := filepath.Base(source)
+		return !strings.HasSuffix(base, ".bpf.c") && !slices.Contains(standalone, strings.TrimSuffix(base, ".c"))
 	})
 	programs := map[string][]string{"swiptermd": daemon}
 	for _, name := range standalone {
@@ -212,7 +255,7 @@ func (b *builder) buildDaemons() error {
 	}
 	for name, programSources := range programs {
 		output := filepath.Join(buildPath, name)
-		arguments := slices.Concat(b.compiler[1:], staticCFlags, programSources, []string{"-o", output}, staticLDFlags)
+		arguments := slices.Concat(b.compiler[1:], staticCFlags, []string{"-I" + buildPath}, programSources, []string{"-o", output}, staticLDFlags)
 		err = tool.Run(exec.Command(b.compiler[0], arguments...))
 		if err == nil {
 			err = tool.Run(exec.Command("strip", "-s", output))

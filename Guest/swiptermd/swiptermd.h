@@ -19,7 +19,13 @@
 #define GUEST_NOTIFY_SOCKET GUEST_RUN_HOST "/notify"
 #define GUEST_WAYLAND_SOCKET GUEST_RUN_HOST "/wayland-0"
 #define GUEST_TOOL_PATH GUEST_RUN_HOST "/swiptermd"
-#define GUEST_DEFAULT_RESOLV_CONF "nameserver 10.0.2.3\nnameserver fd00::3\n"
+#define GUEST_IPV4_GATEWAY "172.19.0.1"
+#define GUEST_IPV4_ADDR "172.19.0.2"
+#define GUEST_IPV4_PREFIXLEN 30
+#define GUEST_IPV6_GATEWAY "fdfe:dcba:9876::1"
+#define GUEST_IPV6_ADDR "fdfe:dcba:9876::2"
+#define GUEST_IPV6_PREFIXLEN 126
+#define GUEST_DEFAULT_RESOLV_CONF "nameserver " GUEST_IPV4_GATEWAY "\nnameserver " GUEST_IPV6_GATEWAY "\n"
 #define SESSIONS_ANCHOR_COMMAND "sessions-anchor"
 #define SESSIONS_READY_MESSAGE "X_SWIPTERM_SESSIONS=1"
 #define MANAGED_INIT_NAME "init"

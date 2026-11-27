@@ -205,6 +205,12 @@ func (m *portMirror) bridge(conn *net.TCPConn, target netip.AddrPort) {
 	}
 }
 
+func (m *portMirror) hasHostListener(inet6 bool, port uint16) bool {
+	m.access.Lock()
+	defer m.access.Unlock()
+	return m.hosts[mirrorKey{inet6: inet6, port: port}] != nil
+}
+
 func (m *portMirror) close() {
 	m.access.Lock()
 	m.closed = true
