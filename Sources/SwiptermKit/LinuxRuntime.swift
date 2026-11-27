@@ -53,6 +53,18 @@ public final class LinuxRuntime: @unchecked Sendable {
         }
     }
 
+    public struct ProcessEnergySample: Sendable, Equatable {
+        public let name: String
+        public let energyNanojoules: UInt64
+        public let cpuMicroseconds: UInt64
+
+        public init(name: String, energyNanojoules: UInt64, cpuMicroseconds: UInt64) {
+            self.name = name
+            self.energyNanojoules = energyNanojoules
+            self.cpuMicroseconds = cpuMicroseconds
+        }
+    }
+
     public enum HaltReason: Hashable, Sendable {
         case reboot
         case powerOff
@@ -443,4 +455,30 @@ public final class LinuxRuntime: @unchecked Sendable {
         try check(code)
     }
 
+    private final class UsageCollectorBox {
+        var samples: [ProcessEnergySample] = []
+    }
+
+    public func collectProcessEnergy(minimumCPUNanoseconds: UInt64 = 0) async throws -> [ProcessEnergySample] {
+        try await withActiveHandleBlocking { runtimeHandle in
+            let box = UsageCollectorBox()
+            let code = withExtendedLifetime(box) {
+                swipterm_collect_usage(runtimeHandle, minimumCPUNanoseconds, Unmanaged.passUnretained(box).toOpaque()) { context, count, names, energy, cpu in
+                    guard let context, let names, let energy, let cpu else { return }
+                    let collector = Unmanaged<UsageCollectorBox>.fromOpaque(context).takeUnretainedValue()
+                    collector.samples.reserveCapacity(count)
+                    for i in 0 ..< count {
+                        guard let cName = names[i] else { continue }
+                        collector.samples.append(ProcessEnergySample(
+                            name: String(cString: cName),
+                            energyNanojoules: energy[i],
+                            cpuMicroseconds: cpu[i]
+                        ))
+                    }
+                }
+            }
+            try check(code)
+            return box.samples
+        }
+    }
 }

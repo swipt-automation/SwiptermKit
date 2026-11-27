@@ -502,10 +502,39 @@ static void *vcpu_thread_main(void *arg) {
     }
 
     atomic_store_explicit(&cpu->halted_wfi, true, memory_order_release);
+    thread_t self_port = mach_thread_self();
+    thread_extended_info_data_t info;
+    mach_msg_type_number_t count = THREAD_EXTENDED_INFO_COUNT;
+    uint64_t self_cpu_ns = 0;
+    if (thread_info(self_port, THREAD_EXTENDED_INFO, (thread_info_t)&info, &count) == KERN_SUCCESS) {
+        self_cpu_ns = info.pth_user_time + info.pth_system_time;
+    }
+    mach_port_deallocate(mach_task_self(), self_port);
+
     pthread_mutex_lock(&priv->state_lock);
+    priv->retired_vcpu_time_ns += self_cpu_ns;
+    priv->thread_exited[id] = true;
     pthread_cond_broadcast(&priv->suspend_cond);
     pthread_mutex_unlock(&priv->state_lock);
     return NULL;
+}
+
+uint64_t vmm_sample_cpu_time_ns(vmm_machine_t *vm) {
+    vmm_machine_priv_t *priv = vmm_priv(vm);
+    pthread_mutex_lock(&priv->state_lock);
+    uint64_t total = priv->retired_vcpu_time_ns;
+    for (uint32_t i = 0; i < vm->cpu_count; i++) {
+        if (priv->thread_started[i] && !priv->thread_exited[i]) {
+            thread_extended_info_data_t info;
+            mach_msg_type_number_t count = THREAD_EXTENDED_INFO_COUNT;
+            if (thread_info(pthread_mach_thread_np(priv->threads[i]), THREAD_EXTENDED_INFO,
+                            (thread_info_t)&info, &count) == KERN_SUCCESS) {
+                total += info.pth_user_time + info.pth_system_time;
+            }
+        }
+    }
+    pthread_mutex_unlock(&priv->state_lock);
+    return total;
 }
 
 void vmm_vcpu_wake(vmm_machine_t *vm, uint32_t cpu_id) {
@@ -917,6 +946,7 @@ void vmm_handle_psci(vcpu_t *cpu) {
 
         int rc = 0;
         if (atomic_load_explicit(&vm->running, memory_order_acquire)) {
+            priv->thread_exited[target_id] = false;
             rc = pthread_create(&priv->threads[target_id], NULL, vcpu_thread_main, target);
             if (rc == 0) {
                 priv->thread_started[target_id] = true;
@@ -1426,6 +1456,7 @@ int vmm_start(vmm_machine_t *vm) {
         if (!atomic_load_explicit(&priv->cpu_online[i], memory_order_acquire)) {
             continue;
         }
+        priv->thread_exited[i] = false;
         int rc = pthread_create(&priv->threads[i], NULL, vcpu_thread_main, vm->cpus[i]);
         if (rc != 0) {
             pthread_mutex_unlock(&priv->state_lock);

@@ -719,6 +719,7 @@ static void finish(void) {
     notify_close();
     sessions_shutdown();
     disk_shutdown();
+    usage_shutdown();
     reap_children(REAP_GRACE_MS);
     ns_close_namespaces();
     if (g_daemon.root_fd >= 0) {
@@ -847,6 +848,9 @@ static void dispatch_ctrl_frame(const swiptermd_frame_hdr_t *hdr, const uint8_t 
         break;
     case SWIPTERMD_OP_DISK_SPAWN:
         proc_handle_disk_spawn(hdr->req_id, body, hdr->body_len);
+        break;
+    case SWIPTERMD_OP_READ_USAGE:
+        usage_handle_read(hdr->req_id);
         break;
     default:
         ctrl_send_err_reply(hdr->opcode, hdr->req_id, -ENOSYS);
@@ -1074,6 +1078,7 @@ int main(int argc, char **argv) {
         finish();
         return 1;
     }
+    usage_setup();
 
     bool clipboard_ok = true;
     boot_rc = clipboard_setup();
@@ -1112,7 +1117,7 @@ int main(int argc, char **argv) {
 
     sock_mirror_init();
 
-    uint32_t caps = 0;
+    uint32_t caps = SWIPTERMD_CAP_USAGE;
     if (cuse_available())
         caps |= SWIPTERMD_CAP_DEVICES;
     if (virtiofs_available())

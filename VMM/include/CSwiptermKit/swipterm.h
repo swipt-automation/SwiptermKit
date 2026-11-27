@@ -191,4 +191,9 @@ void swipterm_invocation_release(swipterm_invocation *invocation);
 int swipterm_register_device(swipterm_runtime *runtime, const char *path, void *context);
 int swipterm_set_clipboard_offers(swipterm_runtime *runtime, size_t count, const char *const *mimes);
 
+typedef void (*swipterm_usage_handler)(void *context, size_t count, const char *const *names,
+                                       const uint64_t *energy_nanojoules, const uint64_t *cpu_microseconds);
+int swipterm_collect_usage(swipterm_runtime *runtime, uint64_t min_vcpu_ns, void *context,
+                           swipterm_usage_handler handler);
+
 #endif

@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <mach/mach.h>
+#include <mach/mach_time.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -334,6 +335,11 @@ struct swipterm_runtime {
 
     pthread_mutex_t state_lock;
     pthread_mutex_t clipboard_write_lock;
+    pthread_mutex_t usage_lock;
+    uint64_t last_task_energy_nj;
+    uint64_t last_task_cpu_ns;
+    uint64_t last_vcpu_cpu_ns;
+    uint64_t carry_energy_nj;
     uint64_t clipboard_write_seq;
     pthread_cond_t hello_cond;
     pthread_cond_t halt_cond;
@@ -2260,6 +2266,7 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
     pthread_mutex_init(&rt->control_tx_lock, NULL);
     pthread_mutex_init(&rt->state_lock, NULL);
     pthread_mutex_init(&rt->clipboard_write_lock, NULL);
+    pthread_mutex_init(&rt->usage_lock, NULL);
     pthread_cond_init(&rt->hello_cond, NULL);
     pthread_cond_init(&rt->halt_cond, NULL);
     pthread_cond_init(&rt->stopped_cond, NULL);
@@ -2512,6 +2519,7 @@ void swipterm_shutdown(swipterm_runtime *rt) {
     pthread_mutex_destroy(&rt->control_tx_lock);
     pthread_mutex_destroy(&rt->state_lock);
     pthread_mutex_destroy(&rt->clipboard_write_lock);
+    pthread_mutex_destroy(&rt->usage_lock);
     pthread_cond_destroy(&rt->hello_cond);
     pthread_cond_destroy(&rt->halt_cond);
     pthread_cond_destroy(&rt->stopped_cond);
@@ -2521,11 +2529,43 @@ void swipterm_shutdown(swipterm_runtime *rt) {
     free(rt);
 }
 
+static mach_timebase_info_data_t g_usage_timebase;
+static pthread_once_t g_usage_timebase_once = PTHREAD_ONCE_INIT;
+
+static void init_usage_timebase(void) {
+    mach_timebase_info(&g_usage_timebase);
+}
+
+static bool sample_task_power(uint64_t *task_cpu_ns_out, uint64_t *task_energy_nj_out) {
+    pthread_once(&g_usage_timebase_once, init_usage_timebase);
+    task_power_info_v2_data_t info;
+    mach_msg_type_number_t count = TASK_POWER_INFO_V2_COUNT;
+    if (task_info(mach_task_self(), TASK_POWER_INFO_V2, (task_info_t)&info, &count) != KERN_SUCCESS) {
+        return false;
+    }
+    uint64_t ticks = info.cpu_energy.total_user + info.cpu_energy.total_system;
+    *task_cpu_ns_out = (uint64_t)(((__uint128_t)ticks * g_usage_timebase.numer) / g_usage_timebase.denom);
+    *task_energy_nj_out = info.task_energy;
+    return true;
+}
+
+static void reset_usage_baseline(swipterm_runtime *rt) {
+    pthread_mutex_lock(&rt->usage_lock);
+    rt->carry_energy_nj = 0;
+    rt->last_vcpu_cpu_ns = rt->vm ? vmm_sample_cpu_time_ns(rt->vm) : 0;
+    if (!sample_task_power(&rt->last_task_cpu_ns, &rt->last_task_energy_nj)) {
+        rt->last_task_cpu_ns = 0;
+        rt->last_task_energy_nj = 0;
+    }
+    pthread_mutex_unlock(&rt->usage_lock);
+}
+
 int swipterm_start_init(swipterm_runtime *rt, const char *path,
                         size_t argc, const char *const *argv, const char *const *envp) {
     if (!rt || argc > UINT32_MAX) {
         return -LINUX_EINVAL;
     }
+    reset_usage_baseline(rt);
     uint32_t mode = path ? SWIPTERMD_INIT_PROCESS : SWIPTERMD_INIT_MANAGED;
     uint8_t has_console = (mode == SWIPTERMD_INIT_PROCESS && rt->callbacks.console_output != NULL) ? 1 : 0;
     uint64_t console_token = has_console ? (atomic_fetch_add(&rt->next_token, 1) + 1) : 0;
@@ -3583,3 +3623,138 @@ int swipterm_set_clipboard_offers(swipterm_runtime *rt, size_t count, const char
     return ok ? 0 : -LINUX_EIO;
 }
 
+int swipterm_collect_usage(swipterm_runtime *rt, uint64_t min_vcpu_ns, void *context,
+                           swipterm_usage_handler handler) {
+    if (!rt || !rt->vm || !handler) {
+        return -LINUX_EINVAL;
+    }
+    if (!guest_has_capability(rt, SWIPTERMD_CAP_USAGE)) {
+        return 0;
+    }
+
+    pthread_mutex_lock(&rt->usage_lock);
+    if (atomic_load(&rt->shutting_down) || atomic_load(&rt->halted) || atomic_load(&rt->vm_powered_off)) {
+        pthread_mutex_unlock(&rt->usage_lock);
+        return 0;
+    }
+
+    uint64_t vcpu_ns = vmm_sample_cpu_time_ns(rt->vm);
+    uint64_t delta_vcpu_ns = vcpu_ns >= rt->last_vcpu_cpu_ns ? vcpu_ns - rt->last_vcpu_cpu_ns : 0;
+    if (delta_vcpu_ns < min_vcpu_ns || (delta_vcpu_ns == 0 && rt->carry_energy_nj == 0)) {
+        pthread_mutex_unlock(&rt->usage_lock);
+        return 0;
+    }
+
+    uint64_t task_cpu_ns = 0;
+    uint64_t task_energy_nj = 0;
+    uint64_t attributed_nj = 0;
+    if (sample_task_power(&task_cpu_ns, &task_energy_nj)) {
+        uint64_t delta_task_ns = task_cpu_ns >= rt->last_task_cpu_ns ? task_cpu_ns - rt->last_task_cpu_ns : 0;
+        uint64_t delta_energy_nj = task_energy_nj >= rt->last_task_energy_nj ? task_energy_nj - rt->last_task_energy_nj : 0;
+        if (delta_energy_nj > 0 && delta_vcpu_ns > 0) {
+            if (delta_task_ns <= delta_vcpu_ns) {
+                attributed_nj = delta_energy_nj;
+            } else {
+                attributed_nj = (uint64_t)(((__uint128_t)delta_energy_nj * delta_vcpu_ns) / delta_task_ns);
+            }
+        }
+        rt->last_task_cpu_ns = task_cpu_ns;
+        rt->last_task_energy_nj = task_energy_nj;
+    }
+    rt->last_vcpu_cpu_ns = vcpu_ns;
+    uint64_t pool_nj = rt->carry_energy_nj + attributed_nj;
+
+    struct timespec deadline;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 5;
+
+    uint8_t *reply = NULL;
+    uint32_t rlen = 0;
+    int rc = control_rpc(rt, SWIPTERMD_OP_READ_USAGE, NULL, 0, &reply, &rlen, &deadline);
+    if (rc < 0) {
+        rt->carry_energy_nj = pool_nj;
+        pthread_mutex_unlock(&rt->usage_lock);
+        return rc;
+    }
+
+    swiptermd_buf_r_t r = {.data = reply, .len = rlen};
+    int32_t guest_err = (int32_t)swiptermd_r_u32(&r);
+    if (r.underflow || guest_err < 0) {
+        free(reply);
+        rt->carry_energy_nj = pool_nj;
+        pthread_mutex_unlock(&rt->usage_lock);
+        return guest_err < 0 ? guest_err : -LINUX_EIO;
+    }
+
+    uint32_t count = swiptermd_r_u32(&r);
+    if (r.underflow || count > 4096U) {
+        free(reply);
+        rt->carry_energy_nj = pool_nj;
+        pthread_mutex_unlock(&rt->usage_lock);
+        return -LINUX_EIO;
+    }
+    if (count == 0) {
+        free(reply);
+        rt->carry_energy_nj = 0;
+        pthread_mutex_unlock(&rt->usage_lock);
+        return 0;
+    }
+
+    char **names = calloc(count, sizeof(*names));
+    uint64_t *cpu_usec = calloc(count, sizeof(*cpu_usec));
+    uint64_t *energy_nj = calloc(count, sizeof(*energy_nj));
+    if (!names || !cpu_usec || !energy_nj) {
+        free(names);
+        free(cpu_usec);
+        free(energy_nj);
+        free(reply);
+        rt->carry_energy_nj = pool_nj;
+        pthread_mutex_unlock(&rt->usage_lock);
+        return -LINUX_ENOMEM;
+    }
+
+    uint64_t total_usec = 0;
+    bool ok = true;
+    size_t parsed_names = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        if (!rpc_r_str_dup(&r, &names[i])) {
+            ok = false;
+            break;
+        }
+        parsed_names = i + 1;
+        cpu_usec[i] = swiptermd_r_u64(&r);
+        if (r.underflow) {
+            ok = false;
+            break;
+        }
+        total_usec += cpu_usec[i];
+    }
+    free(reply);
+
+    if (!ok || total_usec == 0) {
+        swipterm_free_strings(names, parsed_names);
+        free(cpu_usec);
+        free(energy_nj);
+        rt->carry_energy_nj = ok ? 0 : pool_nj;
+        pthread_mutex_unlock(&rt->usage_lock);
+        return ok ? 0 : -LINUX_EIO;
+    }
+
+    rt->carry_energy_nj = 0;
+    uint64_t assigned_nj = 0;
+    for (uint32_t i = 0; i < count; i++) {
+        energy_nj[i] = (uint64_t)(((__uint128_t)pool_nj * cpu_usec[i]) / total_usec);
+        assigned_nj += energy_nj[i];
+    }
+    if (pool_nj > assigned_nj) {
+        energy_nj[0] += pool_nj - assigned_nj;
+    }
+    pthread_mutex_unlock(&rt->usage_lock);
+
+    handler(context, count, (const char *const *)names, energy_nj, cpu_usec);
+
+    swipterm_free_strings(names, count);
+    free(cpu_usec);
+    free(energy_nj);
+    return 0;
+}
