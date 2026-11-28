@@ -455,16 +455,14 @@ BITFIELD sbfiz64, x, asr, 1
 
 .macro TLB bank, bytes, alignment, cold=Lcold
 .if \bytes > 1
-    add x9, x12, #(\bytes - 1)
-    eor x9, x9, x12
-    tbnz x9, #12, \cold
-    tbz x23, #SALT_ALIGN, 1f
-    and x9, x12, #(\alignment - 1)
-    cbnz x9, \cold
-1:
-.endif
+    tbnz x23, #SALT_ALIGN, \cold
+    add x10, x12, #(\bytes - 1)
+    lsr x11, x10, #48
+    and x10, x10, #0x0000fffffffff000
+.else
     lsr x11, x12, #48
     and x10, x12, #0x0000fffffffff000
+.endif
     cbnz x11, 2f
     eor x9, x23, x12, lsr #12
     orr x10, x10, x27

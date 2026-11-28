@@ -251,9 +251,8 @@ typedef struct cpu_jit_segment {
 } cpu_jit_segment_t;
 
 enum : uint32_t {
-    JIT_BUCKETS = 4096,
-    JIT_BLOCKS = 65536,
-    JIT_PATCHES = 65536,
+    JIT_BLOCK_BYTES = 512,
+    JIT_BUCKET_BYTES = 8192,
     JIT_SEGMENT_BYTES = 1U << 20,
     JIT_CHUNK_BYTES = 128U << 10,
     JIT_RETIRE_AHEAD = 2,
@@ -271,6 +270,8 @@ typedef struct cpu_jit_pool {
     alignas(128) _Atomic uint64_t pend_epoch;
     cpu_jit_arena_t arena;
     uint32_t segments;
+    uint32_t block_count;
+    uint32_t buckets;
     uint32_t open;
     uint32_t carve;
     uint32_t gen;

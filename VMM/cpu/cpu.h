@@ -198,5 +198,6 @@ struct vcpu {
 };
 
 void vcpu_update_counter_bases(vcpu_t *cpu);
+size_t cpu_jit_footprint(void);
 
 #endif

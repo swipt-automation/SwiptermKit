@@ -397,6 +397,9 @@ static void jit_patch(jit_t *j, uint32_t site, uint32_t target) {
     if ((word & 0x7C000000U) == 0x14000000U) {
         word = (word & 0xFC000000U) | ((uint32_t)offset & 0x3FFFFFFU);
     } else if ((word & 0x7E000000U) == 0x36000000U) {
+        if (offset < -8192 || offset > 8191) {
+            j->overflow = true;
+        }
         word = (word & 0xFFF8001FU) | (((uint32_t)offset & 0x3FFFU) << 5);
     } else {
         word = (word & 0xFF00001FU) | (((uint32_t)offset & 0x7FFFFU) << 5);
@@ -831,10 +834,7 @@ static void jit_fp(jit_t *j, uint8_t level) {
 static void jit_sp_check(jit_t *j, uint32_t base) {
     uint32_t cold = jit_cold(j);
     jit_emit(j, A_ANDI(X_TMP2, base, 15));
-    jit_emit(j, A_CBZ(X_TMP2, true, false, 4));
-    jit_emit(j, A_LDRX(X_TMP2, X_CPU, CPU_SCTLR));
-    jit_emit(j, A_TBZ(X_TMP2, j->pg->el == 0 ? 4 : 3, false, 2));
-    jit_to_stub(j, A_B(0), cold);
+    jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
 }
 
 static void jit_el0_check(jit_t *j, uint32_t offset, uint32_t bit) {
@@ -846,47 +846,43 @@ static void jit_el0_check(jit_t *j, uint32_t offset, uint32_t bit) {
 
 static void jit_tlb(jit_t *j, uint32_t bank, uint32_t bytes, uint32_t align, bool strict) {
     uint32_t cold = jit_cold(j);
+    uint32_t last = X_ADDR;
     if (strict) {
         if (align > 1) {
             jit_emit(j, A_ANDI(X_TMP2, X_ADDR, align - 1U));
             jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
         }
     } else if (bytes > 1) {
-        jit_emit(j, A_ADDI(X_TMP2, X_ADDR, bytes - 1U, 0));
-        jit_emit(j, A_EOR(X_TMP2, X_TMP2, X_ADDR));
-        jit_cold_unless_bit(j, X_TMP2, 12, false);
         if (align > 1) {
-            jit_emit(j, A_TBZ(X_SALT, SALT_ALIGN, false, 3));
-            jit_emit(j, A_ANDI(X_TMP2, X_ADDR, align - 1U));
-            jit_to_stub(j, A_CBZ(X_TMP2, true, true, 0), cold);
+            jit_to_stub(j, A_TBZ(X_SALT, SALT_ALIGN, true, 0), cold);
         }
+        jit_emit(j, A_ADDI(X_TMP, X_ADDR, bytes - 1U, 0));
+        last = X_TMP;
     }
-    jit_emit(j, A_LSRI(X_LR, X_ADDR, 48));
-    uint32_t split = j->n;
-    jit_emit(j, A_CBZ(X_LR, true, j->pg->el == 0, 0));
-    for (uint32_t pass = 0; pass < 2; ++pass) {
-        bool user = (pass == 0) == (j->pg->el == 0);
-        if (user) {
-            jit_emit(j, A_EOR_LSR(X_TMP2, X_SALT, X_ADDR, 12));
-            jit_emit(j, A_ANDI(X_TMP, X_ADDR, 0x0000FFFFFFFFF000ULL));
-            jit_emit(j, A_ORR(X_TMP, X_TMP, X_USER_TAG, 0));
-        } else {
-            jit_emit(j, A_EORWI(X_LR, X_LR, 0xFFFFU));
-            jit_to_stub(j, A_CBZ(X_LR, false, true, 0), jit_cold(j));
-            jit_emit(j, A_LSRI(X_TMP2, X_ADDR, 12));
-            jit_emit(j, A_ANDI(X_TMP, X_ADDR, 0x0000FFFFFFFFF000ULL));
-            jit_emit(j, A_ANDI(X_LR, X_SALT, MMU_SALT_MMU_OFF));
-            jit_emit(j, A_ORR(X_TMP, X_TMP, X_LR, 0));
-            jit_emit(j, A_ORRI(X_TMP, X_TMP, SOFTTLB_TAG_GLOBAL));
-        }
-        if (pass == 0) {
-            uint32_t join = j->n;
-            jit_emit(j, A_B(0));
-            jit_patch(j, split, j->n);
-            split = join;
-        }
+    jit_emit(j, A_LSRI(X_LR, last, 48));
+    if (j->pg->el == 0) {
+        jit_to_stub(j, A_CBZ(X_LR, true, true, 0), cold);
+        jit_emit(j, A_EOR_LSR(X_TMP2, X_SALT, X_ADDR, 12));
+        jit_emit(j, A_ANDI(X_TMP, last, 0x0000FFFFFFFFF000ULL));
+        jit_emit(j, A_ORR(X_TMP, X_TMP, X_USER_TAG, 0));
+    } else {
+        uint32_t kernel = j->n;
+        jit_emit(j, A_CBZ(X_LR, true, true, 0));
+        jit_emit(j, A_EOR_LSR(X_TMP2, X_SALT, X_ADDR, 12));
+        jit_emit(j, A_ANDI(X_TMP, last, 0x0000FFFFFFFFF000ULL));
+        jit_emit(j, A_ORR(X_TMP, X_TMP, X_USER_TAG, 0));
+        uint32_t join = j->n;
+        jit_emit(j, A_B(0));
+        jit_patch(j, kernel, j->n);
+        jit_emit(j, A_EORWI(X_LR, X_LR, 0xFFFFU));
+        jit_to_stub(j, A_CBZ(X_LR, false, true, 0), cold);
+        jit_emit(j, A_LSRI(X_TMP2, X_ADDR, 12));
+        jit_emit(j, A_ANDI(X_TMP, last, 0x0000FFFFFFFFF000ULL));
+        jit_emit(j, A_ANDI(X_LR, X_SALT, MMU_SALT_MMU_OFF));
+        jit_emit(j, A_ORR(X_TMP, X_TMP, X_LR, 0));
+        jit_emit(j, A_ORRI(X_TMP, X_TMP, SOFTTLB_TAG_GLOBAL));
+        jit_patch(j, join, j->n);
     }
-    jit_patch(j, split, j->n);
     jit_emit(j, A_ANDI(X_TMP2, X_TMP2, SOFTTLB_MASK));
     jit_emit(j, A_ADDR(X_TMP2, bank, X_TMP2, 4));
     jit_emit(j, A_LDPX(X_TMP2, X_LR, X_TMP2, 0));
@@ -2421,13 +2417,13 @@ static uint32_t jit_compile(jit_t *j) {
     return jit_pass(j);
 }
 
-static uint32_t jit_patch_bucket(uint64_t pa_page, uint32_t index) {
-    return (uint32_t)(((pa_page + index * 4ULL) >> 2) * 0x9E3779B97F4A7C15ULL >> 40) & (JIT_BUCKETS - 1U);
+static uint32_t jit_patch_bucket(const cpu_jit_pool_t *jp, uint64_t pa_page, uint32_t index) {
+    return (uint32_t)(((pa_page + index * 4ULL) >> 2) * 0x9E3779B97F4A7C15ULL >> 40) & (jp->buckets - 1U);
 }
 
 static void jit_unhash_patch(cpu_jit_pool_t *jp, uint32_t p) {
     cpu_jit_patch_t *patch = &jp->patches[p];
-    uint32_t *link = &jp->patch_heads[jit_patch_bucket(patch->pa_page, patch->index)];
+    uint32_t *link = &jp->patch_heads[jit_patch_bucket(jp, patch->pa_page, patch->index)];
     while (*link != p) {
         link = &jp->patches[*link].next;
     }
@@ -2436,7 +2432,7 @@ static void jit_unhash_patch(cpu_jit_pool_t *jp, uint32_t p) {
 }
 
 static void jit_unhash_block(cpu_jit_pool_t *jp, uint32_t b) {
-    uint32_t *link = &jp->heads[cpu_pa_bucket(jp->blocks[b].pa_page, JIT_BUCKETS)];
+    uint32_t *link = &jp->heads[cpu_pa_bucket(jp->blocks[b].pa_page, jp->buckets)];
     while (*link != b) {
         link = &jp->blocks[*link].next;
     }
@@ -2444,7 +2440,7 @@ static void jit_unhash_block(cpu_jit_pool_t *jp, uint32_t b) {
 }
 
 static void jit_backfill(cpu_jit_pool_t *jp, const cpu_jit_block_t *block) {
-    uint32_t *link = &jp->patch_heads[jit_patch_bucket(block->pa_page, block->index)];
+    uint32_t *link = &jp->patch_heads[jit_patch_bucket(jp, block->pa_page, block->index)];
     while (*link != POOL_NONE) {
         uint32_t p = *link;
         cpu_jit_patch_t *patch = &jp->patches[p];
@@ -2481,7 +2477,7 @@ static void jit_publish_block(cpu_pool_t *pool, uint32_t b) {
         return;
     }
     block->state = JIT_BLOCK_LIVE;
-    uint32_t *head = &jp->heads[cpu_pa_bucket(block->pa_page, JIT_BUCKETS)];
+    uint32_t *head = &jp->heads[cpu_pa_bucket(block->pa_page, jp->buckets)];
     block->next = *head;
     *head = b;
     jit_backfill(jp, block);
@@ -2688,7 +2684,7 @@ static bool jit_record_locked(cpu_pool_t *pool, jit_t *j, uint32_t entry, uint32
         uint32_t p = jp->patch_free;
         cpu_jit_patch_t *patch = &jp->patches[p];
         jp->patch_free = patch->next;
-        uint32_t *head = &jp->patch_heads[jit_patch_bucket(pg->pa_page, w->sites[s].stub)];
+        uint32_t *head = &jp->patch_heads[jit_patch_bucket(jp, pg->pa_page, w->sites[s].stub)];
         *patch = (cpu_jit_patch_t){
             .pa_page = pg->pa_page,
             .traps = pg->traps,
@@ -2793,6 +2789,8 @@ static void jit_pool_activate(cpu_pool_t *pool) {
         return;
     }
     jp->segments = jp->arena.size / JIT_SEGMENT_BYTES;
+    jp->block_count = jp->arena.size / JIT_BLOCK_BYTES;
+    jp->buckets = jp->arena.size / JIT_BUCKET_BYTES;
     jp->open = POOL_NONE;
     jp->carve = 0;
     jp->seq = 0;
@@ -2800,23 +2798,23 @@ static void jit_pool_activate(cpu_pool_t *pool) {
     for (uint32_t i = 0; i < jp->segments; ++i) {
         jp->seg[i] = (cpu_jit_segment_t){.blocks = POOL_NONE, .patches = POOL_NONE, .gen = ++jp->gen};
     }
-    jp->blocks = malloc(JIT_BLOCKS * sizeof(*jp->blocks));
-    for (uint32_t i = 0; i < JIT_BLOCKS; ++i) {
-        jp->blocks[i].next = i + 1U < JIT_BLOCKS ? i + 1U : POOL_NONE;
+    jp->blocks = malloc(jp->block_count * sizeof(*jp->blocks));
+    for (uint32_t i = 0; i < jp->block_count; ++i) {
+        jp->blocks[i].next = i + 1U < jp->block_count ? i + 1U : POOL_NONE;
         jp->blocks[i].state = JIT_BLOCK_FREE;
     }
     jp->block_free = 0;
-    jp->block_avail = JIT_BLOCKS;
+    jp->block_avail = jp->block_count;
     jp->pend_head = POOL_NONE;
     jp->pend_tail = POOL_NONE;
-    jp->patches = malloc(JIT_PATCHES * sizeof(*jp->patches));
-    for (uint32_t i = 0; i < JIT_PATCHES; ++i) {
-        jp->patches[i].next = i + 1U < JIT_PATCHES ? i + 1U : POOL_NONE;
+    jp->patches = malloc(jp->block_count * sizeof(*jp->patches));
+    for (uint32_t i = 0; i < jp->block_count; ++i) {
+        jp->patches[i].next = i + 1U < jp->block_count ? i + 1U : POOL_NONE;
     }
     jp->patch_free = 0;
-    jp->heads = malloc(JIT_BUCKETS * sizeof(*jp->heads));
-    jp->patch_heads = malloc(JIT_BUCKETS * sizeof(*jp->patch_heads));
-    for (uint32_t i = 0; i < JIT_BUCKETS; ++i) {
+    jp->heads = malloc(jp->buckets * sizeof(*jp->heads));
+    jp->patch_heads = malloc(jp->buckets * sizeof(*jp->patch_heads));
+    for (uint32_t i = 0; i < jp->buckets; ++i) {
         jp->heads[i] = POOL_NONE;
         jp->patch_heads[i] = POOL_NONE;
     }

@@ -19,7 +19,7 @@
 #include <unistd.h>
 
 enum : uint32_t {
-    JIT_REGION_MAX = 32U << 20,
+    JIT_REGION_MAX = 128U << 20,
     JIT_REGION_MIN = 16U << 20,
     JIT_PAGE_SIZE = 16U << 10,
     JIT_PROBE_STEP = 1U << 20,
@@ -45,6 +45,7 @@ extern const uint32_t cpu_fast_base_offset;
 
 static struct {
     pthread_mutex_t prepare_lock;
+    _Atomic bool available;
     _Atomic bool prepared;
     _Atomic bool enabled;
     uintptr_t reserved;
@@ -316,6 +317,15 @@ static bool jit_prepare_region(char **error_message) {
 }
 #endif
 
+size_t cpu_jit_footprint(void) {
+    if (!atomic_load_explicit(&jit_region.available, memory_order_relaxed)) {
+        return 0;
+    }
+    return JIT_REGION_MAX +
+           (size_t)(JIT_REGION_MAX / JIT_BLOCK_BYTES) * (sizeof(cpu_jit_block_t) + sizeof(cpu_jit_patch_t)) +
+           (size_t)(JIT_REGION_MAX / JIT_BUCKET_BYTES) * 2U * sizeof(uint32_t);
+}
+
 bool swipterm_jit_is_prepared(void) {
     return atomic_load_explicit(&jit_region.prepared, memory_order_acquire);
 }
@@ -325,6 +335,7 @@ bool swipterm_jit_is_enabled(void) {
 }
 
 void swipterm_jit_set_enabled(bool enabled) {
+    atomic_store_explicit(&jit_region.available, true, memory_order_relaxed);
     if (atomic_exchange_explicit(&jit_region.enabled, enabled, memory_order_acq_rel) != enabled) {
         atomic_fetch_add_explicit(&cpu_jit_generation, 1, memory_order_release);
     }
@@ -334,6 +345,7 @@ bool swipterm_jit_prepare(char **error_message) {
     if (error_message != nullptr) {
         *error_message = nullptr;
     }
+    atomic_store_explicit(&jit_region.available, true, memory_order_relaxed);
     pthread_mutex_lock(&jit_region.prepare_lock);
     bool prepared = atomic_load_explicit(&jit_region.prepared, memory_order_relaxed);
     if (!prepared && jit_prepare_region(error_message)) {

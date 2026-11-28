@@ -312,7 +312,7 @@ static void pool_relink(cpu_pool_t *pool, ir_page_t *pg) {
     if (!jit->active) {
         return;
     }
-    for (uint32_t b = jit->heads[cpu_pa_bucket(pg->pa_page, JIT_BUCKETS)]; b != POOL_NONE; b = jit->blocks[b].next) {
+    for (uint32_t b = jit->heads[cpu_pa_bucket(pg->pa_page, jit->buckets)]; b != POOL_NONE; b = jit->blocks[b].next) {
         const cpu_jit_block_t *block = &jit->blocks[b];
         if (block->pa_page == pg->pa_page && block->el == pg->el && block->world == pg->world &&
             block->traps == pg->traps && block->pfn_gen == pg->pfn_gen && block->code_gen == pg->code_gen &&

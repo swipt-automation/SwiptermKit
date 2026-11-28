@@ -1849,7 +1849,7 @@ static void vmm_on_halt(void *ctx) {
 static size_t default_ram_size(void) {
     const uint64_t step = 16ULL << 20;
     const uint64_t min_size = 256ULL << 20;
-    const uint64_t host_reserve = 512ULL << 20;
+    const uint64_t host_reserve = (480ULL << 20) + cpu_jit_footprint();
     task_vm_info_data_t info = {0};
     mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
     (void)task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count);
