@@ -224,9 +224,6 @@ int login_exec(const char *user, char *const envp[], bool managed) {
     rc = identity_environment(user, &account, env, &count);
     if (rc < 0)
         return rc;
-    static char gpu_env[] = GPU_VENUS_ENV;
-    if (g_daemon.gpu)
-        env[count++] = gpu_env;
     if (ensure_runtime_dir(&account, runtime_dir, sizeof(runtime_dir)) && managed &&
         snprintf(runtime_env, sizeof(runtime_env), "XDG_RUNTIME_DIR=%s", runtime_dir) < (int)sizeof(runtime_env))
         env[count++] = runtime_env;

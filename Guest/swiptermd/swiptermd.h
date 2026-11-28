@@ -30,9 +30,6 @@
 #define SESSIONS_READY_MESSAGE "X_SWIPTERM_SESSIONS=1"
 #define MANAGED_INIT_NAME "init"
 #define TRUSTED_PATH "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/run/current-system/sw/bin"
-#define GPU_VENUS_ENV_NAME "VN_DEBUG"
-#define GPU_VENUS_ENV_VALUE "no_abort"
-#define GPU_VENUS_ENV GPU_VENUS_ENV_NAME "=" GPU_VENUS_ENV_VALUE
 #define LOGIN_USER_CAP 33
 #define VIRTIO_MMIO_ADDR(slot) (0x0a000000U + (unsigned)(slot) * 0x200U)
 
@@ -43,7 +40,6 @@ enum {
     VIRTIO_SLOT_FS_COUNT = 4,
     VIRTIO_SLOT_DISK_BASE = 9,
     VIRTIO_SLOT_DISK_COUNT = 4,
-    VIRTIO_SLOT_GPU = 13,
 };
 
 typedef struct ev_node ev_node_t;
@@ -70,7 +66,6 @@ typedef struct daemon_state {
     char host_cmd_dir[512];
 
     bool init_started;
-    bool gpu;
     bool stopping;
     bool shutdown_requested;
     bool reboot_requested;

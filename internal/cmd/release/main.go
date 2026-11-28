@@ -27,14 +27,12 @@ const manifestPath = "Package.swift"
 var (
 	binaryInputs = []string{
 		"VMM", "Guest/swiptermd/protocol.h", "Guest/swiptermd/wire_format.h", "go.mod", "go.sum", "internal", "libswipterm",
-		":(exclude)internal/cmd/build_guest", ":(exclude)internal/cmd/build_vulkan", ":(exclude)internal/cmd/release",
+		":(exclude)internal/cmd/build_guest", ":(exclude)internal/cmd/release",
 		":(exclude)internal/tool",
 	}
-	vulkanInputs     = []string{"internal/cmd/build_vulkan", "internal/tool"}
 	binaryFrameworks = []string{"LibSwipterm"}
-	vulkanFrameworks = []string{"KosmicKrisp", "MoltenVK"}
 	versionPattern   = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
-	errUsage         = E.New("usage: release resolve [VERSION] | release manifest [-repository OWNER/NAME -binary-tag BINARY_TAG -vulkan-tag VULKAN_TAG]")
+	errUsage         = E.New("usage: release resolve [VERSION] | release manifest [-repository OWNER/NAME -binary-tag BINARY_TAG]")
 )
 
 type version [3]int64
@@ -103,7 +101,6 @@ func resolve(arguments []string) error {
 		inputs []string
 	}{
 		{"binary", binaryInputs},
-		{"vulkan", vulkanInputs},
 	} {
 		files, err := tool.Output(exec.Command("git", append([]string{"ls-files", "-s", "--"}, artifact.inputs...)...))
 		if err != nil {
@@ -177,12 +174,11 @@ func manifest(arguments []string) error {
 	flags := flag.NewFlagSet("manifest", flag.ContinueOnError)
 	repository := flags.String("repository", "", "GitHub repository that publishes the binaries")
 	binaryTag := flags.String("binary-tag", "", "release tag of LibSwipterm")
-	vulkanTag := flags.String("vulkan-tag", "", "release tag of the Vulkan backends")
 	err := flags.Parse(arguments)
 	if err != nil {
 		return err
 	}
-	if flags.NArg() != 0 || (*repository == "") != (*binaryTag == "") || (*binaryTag == "") != (*vulkanTag == "") {
+	if flags.NArg() != 0 || (*repository == "") != (*binaryTag == "") {
 		return errUsage
 	}
 	content, err := os.ReadFile(manifestPath)
@@ -194,7 +190,6 @@ func manifest(arguments []string) error {
 		frameworks []string
 	}{
 		{*binaryTag, binaryFrameworks},
-		{*vulkanTag, vulkanFrameworks},
 	} {
 		for _, name := range release.frameworks {
 			frameworkPath := "Frameworks/" + name + ".xcframework"

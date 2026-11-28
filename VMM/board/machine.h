@@ -21,7 +21,6 @@ typedef struct vmm_config {
     const char *snapshot_path;
     uint8_t snapshot_key[32];
     const char *cmdline;
-    bool gpu;
     swipterm_network *network;
     void *callback_ctx;
     void (*on_halt)(void *ctx);
@@ -30,12 +29,6 @@ typedef struct vmm_config {
 enum {
     VMM_TLB_RING = 64,
 };
-
-typedef struct vmm_shm_window {
-    uint64_t base;
-    uint64_t size;
-    _Atomic uintptr_t *pages;
-} vmm_shm_window_t;
 
 struct vmm_machine {
     uint8_t *ram;
@@ -52,7 +45,6 @@ struct vmm_machine {
     _Atomic uint64_t timer_base;
 
     virtio_dev_t *virtio_devs[VMM_VIRTIO_MMIO_SLOTS];
-    vmm_shm_window_t gpu_shm;
 
     void *callback_ctx;
     void (*on_halt)(void *ctx);

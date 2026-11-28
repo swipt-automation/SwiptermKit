@@ -81,17 +81,6 @@ typedef enum {
     SWIPTERM_KERNEL_RELEASE = 1,
 } swipterm_kernel_selection;
 
-typedef enum {
-    SWIPTERM_GPU_BACKEND_AUTOMATIC = 0,
-    SWIPTERM_GPU_BACKEND_MOLTENVK = 1,
-    SWIPTERM_GPU_BACKEND_KOSMICKRISP = 2,
-} swipterm_gpu_backend;
-
-typedef struct {
-    bool enabled;
-    swipterm_gpu_backend backend;
-} swipterm_gpu_options;
-
 typedef struct {
     const char *root_path;
     const char *hostname;
@@ -100,17 +89,12 @@ typedef struct {
     swipterm_kernel_selection kernel;
     const char *kernel_release;
     swipterm_network *network;
-    swipterm_gpu_options gpu;
 } swipterm_options;
 
 bool swipterm_jit_is_prepared(void);
 bool swipterm_jit_is_enabled(void);
 void swipterm_jit_set_enabled(bool enabled);
 bool swipterm_jit_prepare(char **error_message);
-
-uint32_t swipterm_gpu_available_backends(void);
-void swipterm_gpu_suspend(void);
-void swipterm_gpu_resume(void);
 
 int swipterm_root_kernels(const char *root_path, char ***releases_out, size_t *count_out);
 void swipterm_free_strings(char **strings, size_t count);

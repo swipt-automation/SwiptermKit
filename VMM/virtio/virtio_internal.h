@@ -17,7 +17,6 @@ enum : uint32_t {
     VIRTIO_ID_BLOCK = 2,
     VIRTIO_ID_RNG = 4,
     VIRTIO_ID_BALLOON = 5,
-    VIRTIO_ID_GPU = 16,
     VIRTIO_ID_VSOCK = 19,
     VIRTIO_ID_FS = 26,
 };
@@ -61,7 +60,6 @@ typedef struct virtio_dev_ops {
     void (*queue_notify)(virtio_dev_t *dev, uint32_t queue_idx);
     void (*reset)(virtio_dev_t *dev);
     void (*destroy)(virtio_dev_t *dev);
-    bool (*shm_region)(virtio_dev_t *dev, uint32_t id, uint64_t *base, uint64_t *len);
 } virtio_dev_ops_t;
 
 struct virtio_dev {
@@ -73,7 +71,6 @@ struct virtio_dev {
     uint32_t driver_features_sel;
     uint64_t driver_features;
     uint32_t queue_sel;
-    uint32_t shm_sel;
     uint32_t num_queues;
     virtqueue_t *queues;
     pthread_mutex_t irq_lock;

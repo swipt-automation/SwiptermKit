@@ -460,8 +460,7 @@ static int container_init_entry(void *arg) {
 
     extern char **environ;
     environ = a->envp;
-    if (setenv("container", "lxc", 1) < 0 || setenv("NOTIFY_SOCKET", GUEST_NOTIFY_SOCKET, 1) < 0 ||
-        (g_daemon.gpu && setenv(GPU_VENUS_ENV_NAME, GPU_VENUS_ENV_VALUE, 0) < 0))
+    if (setenv("container", "lxc", 1) < 0 || setenv("NOTIFY_SOCKET", GUEST_NOTIFY_SOCKET, 1) < 0)
         child_exit_error(a->err_wr, -errno);
     umask(0022);
     execve(a->path, a->argv, environ);

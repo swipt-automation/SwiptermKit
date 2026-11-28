@@ -26,7 +26,6 @@ virtio_dev_t *virtio_balloon_create(vmm_machine_t *vm, uint32_t slot);
 virtio_dev_t *virtio_rng_create(vmm_machine_t *vm, uint32_t slot);
 virtio_dev_t *virtio_fs_create(vmm_machine_t *vm, uint32_t slot,
                                const char *tag, const char *host_root, bool read_only);
-virtio_dev_t *virtio_gpu_create(vmm_machine_t *vm, uint32_t slot);
 
 typedef void (*virtio_vsock_accept_cb)(void *ctx, int host_fd);
 

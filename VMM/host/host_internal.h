@@ -276,10 +276,8 @@ int module_index_build(ext4_writer_t *w, vfs_node_t *root);
 
 typedef struct boot_plan boot_plan_t;
 
-int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, bool gpu,
-                      boot_plan_t **plan_out);
+int boot_plan_resolve(int disk_fd, swipterm_kernel_selection selection, const char *release, boot_plan_t **plan_out);
 int boot_list_kernels(int disk_fd, char ***releases_out, size_t *count_out);
-bool boot_plan_gpu(const boot_plan_t *plan);
 const char *boot_plan_reason(const boot_plan_t *plan);
 const uint8_t *boot_plan_identity(const boot_plan_t *plan);
 uint32_t boot_plan_page_size(const boot_plan_t *plan);

@@ -19,7 +19,6 @@ public final class LinuxRuntime: @unchecked Sendable {
         let initMode: InitMode
         let kernel: Kernel
         let hostname: String
-        let gpu: GPUConfiguration?
         let consoleOutput: (@Sendable (Data) -> Void)?
         let haltHandler: (@Sendable (HaltReason) -> Void)?
         let clipboard: (any LinuxClipboard)?
@@ -29,7 +28,6 @@ public final class LinuxRuntime: @unchecked Sendable {
             initMode: InitMode = .system,
             kernel: Kernel = .installed,
             hostname: String,
-            gpu: GPUConfiguration? = nil,
             consoleOutput: (@Sendable (Data) -> Void)? = nil,
             haltHandler: (@Sendable (HaltReason) -> Void)? = nil,
             clipboard: (any LinuxClipboard)? = nil
@@ -38,7 +36,6 @@ public final class LinuxRuntime: @unchecked Sendable {
             self.initMode = initMode
             self.kernel = kernel
             self.hostname = hostname
-            self.gpu = gpu
             self.consoleOutput = consoleOutput
             self.haltHandler = haltHandler
             self.clipboard = clipboard
@@ -307,8 +304,7 @@ public final class LinuxRuntime: @unchecked Sendable {
                             initramfs_path: initramfsPath,
                             kernel: selection,
                             kernel_release: release,
-                            network: OpaquePointer(bitPattern: Int(network.handle())),
-                            gpu: configuration.gpu?.cValue ?? swipterm_gpu_options()
+                            network: OpaquePointer(bitPattern: Int(network.handle()))
                         )
                         return swipterm_boot(&options, &handle, &message)
                     }

@@ -21,7 +21,7 @@ env:
 jobs:
   release:
     runs-on: macos-26
-    timeout-minutes: 180
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -52,23 +52,6 @@ jobs:
         env:
           BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
 
-      - name: Install Vulkan Build Dependencies
-        if: steps.release.outputs.vulkan-exists != 'true'
-        run: brew install llvm@23 cmake ninja pkg-config
-
-      - name: Build Vulkan Backends
-        if: steps.release.outputs.vulkan-exists != 'true'
-        run: go run ./internal/cmd/build_vulkan
-
-      - name: Download Vulkan Backends
-        if: steps.release.outputs.vulkan-exists == 'true'
-        run: |
-          gh release download "$VULKAN_TAG" --pattern '*.xcframework.zip' --dir build
-          ditto -x -k build/KosmicKrisp.xcframework.zip Frameworks
-          ditto -x -k build/MoltenVK.xcframework.zip Frameworks
-        env:
-          VULKAN_TAG: ${{ steps.release.outputs.vulkan-tag }}
-
       - name: Test Package
         run: |
           swift build
@@ -83,17 +66,9 @@ jobs:
         env:
           BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
 
-      - name: Publish Vulkan Backends
-        if: steps.release.outputs.vulkan-exists != 'true'
-        run: |
-          gh release create "$VULKAN_TAG" build/KosmicKrisp.xcframework.zip build/MoltenVK.xcframework.zip --target "$GITHUB_SHA" \
-            --title "$VULKAN_TAG" --notes "KosmicKrisp and MoltenVK $(git rev-parse --short HEAD)" --prerelease
-        env:
-          VULKAN_TAG: ${{ steps.release.outputs.vulkan-tag }}
-
       - name: Publish
         run: |
-          go run ./internal/cmd/release manifest -repository "$GITHUB_REPOSITORY" -binary-tag "$BINARY_TAG" -vulkan-tag "$VULKAN_TAG"
+          go run ./internal/cmd/release manifest -repository "$GITHUB_REPOSITORY" -binary-tag "$BINARY_TAG"
           git diff Package.swift
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -106,4 +81,3 @@ jobs:
         env:
           VERSION: ${{ steps.release.outputs.version }}
           BINARY_TAG: ${{ steps.release.outputs.binary-tag }}
-          VULKAN_TAG: ${{ steps.release.outputs.vulkan-tag }}

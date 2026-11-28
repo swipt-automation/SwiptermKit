@@ -91,8 +91,5 @@ void mmu_tlbi(vcpu_t *cpu, vmm_tlbi_t op, bool inner_shareable);
 bool mmu_poll_shootdown(vcpu_t *cpu);
 bool mmu_icache_sync(vcpu_t *cpu);
 void *mmu_gpa_to_hva(const vmm_machine_t *vm, uint64_t gpa, size_t len);
-void mmu_shm_map(vmm_machine_t *vm, uint64_t offset, void *hva, uint64_t size);
-void mmu_shm_unmap(vmm_machine_t *vm, uint64_t offset, uint64_t size);
-void mmu_host_flush(vmm_machine_t *vm);
 
 #endif

@@ -1,7 +1,6 @@
 #define _DARWIN_C_SOURCE
 
 #include "../../Guest/swiptermd/wire_format.h"
-#include "gpu.h"
 #include "host_internal.h"
 #include "network.h"
 #include "../board/machine.h"
@@ -353,7 +352,6 @@ struct swipterm_runtime {
     uint64_t session_nonce;
     uint32_t guest_caps;
     halt_info_t halt_info;
-    bool gpu_active;
 
     pending_req_t *pending_reqs;
     stream_route_t *routes;
@@ -2159,7 +2157,6 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
     atomic_store(&rt->booting, true);
     for (;;) {
         vmm_config_t cfg = base;
-        cfg.gpu = rt->gpu_active && boot_plan_gpu(plan);
         int err = 0;
         bool restored = false;
         if (snapshot_path && restore_snapshot) {
@@ -2217,7 +2214,6 @@ static int boot_machine(swipterm_runtime *rt, const swipterm_options *options, b
             rc = connect_guest(rt);
         }
         if (rc == 0) {
-            rt->gpu_active = cfg.gpu;
             atomic_store(&rt->booting, false);
             return 0;
         }
@@ -2286,10 +2282,8 @@ int swipterm_boot(const swipterm_options *options, swipterm_runtime **runtime_ou
         swipterm_shutdown(rt);
         return rc;
     }
-    rt->gpu_active = options->gpu.enabled && gpu_acquire(options->gpu.backend);
-
     boot_plan_t *plan = NULL;
-    rc = host_error(boot_plan_resolve(disk_fd, options->kernel, options->kernel_release, rt->gpu_active, &plan));
+    rc = host_error(boot_plan_resolve(disk_fd, options->kernel, options->kernel_release, &plan));
     char cmdline[2048];
     if (rc == 0) {
         snprintf(cmdline, sizeof(cmdline), "console=ttyAMA0 earlycon quiet panic=-1%s",
