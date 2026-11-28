@@ -11,7 +11,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "LibSwipterm",
-            path: "Frameworks/LibSwipterm.xcframework"
+            url: "https://github.com/swipt-automation/SwiptermKit/releases/download/binary.d7ac99c7c0b5/LibSwipterm.xcframework.zip",
+            checksum: "8ebb2b51ea98f4695d91ff18ef971e24f38fe0b5cf403ce5e5aa023c85929521"
         ),
         .target(
             name: "CSwiptermKit",
